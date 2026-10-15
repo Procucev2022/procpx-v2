@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Next.js build output
+.next/
+**/.next/
+out/
+**/out/
+build/
+**/build/
+
+# Temporary and test artifacts
+.chrome-tmp/
+**/.chrome-tmp/
+temp-edge-profile*/
+**/temp-edge-profile*/
+scratch/
+**/scratch/
+
+# Database backups (keep dev.db and latest-integrity-snapshot.json)
+*.bak
+**/*.bak
+**/prisma/backups/*.db*
+**/prisma/backups/*.bak*
+
+# Dynamic user uploads (keep templates and sample files)
+procpx/uploads/*/
+!procpx/uploads/sample_boq_upload.xlsx
+
+# Environment files
+.env*.local
+procpx/.env
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

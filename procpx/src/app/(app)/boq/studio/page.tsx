@@ -1,0 +1,3750 @@
+'use client';
+// src/app/(app)/boq/studio/page.tsx - Consolidated BOQ Creation, Generation, Edit, AI Cost & Review Workspace
+import { useState, useEffect, useRef, useTransition, useMemo, Fragment } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import {
+  Sparkles,
+  FileSpreadsheet,
+  Upload,
+  BookOpen,
+  Image as ImageIcon,
+  PenTool,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Clock,
+  Layers,
+  Building2,
+  Download,
+  Send,
+  Landmark,
+  Plus,
+  Trash2,
+  Copy,
+  Filter,
+  Check,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+  ShieldCheck,
+  RefreshCw,
+  Eye,
+  Info,
+  Search,
+  ArrowRight,
+  ArrowLeft,
+  X,
+  FileText,
+  CheckSquare,
+  ExternalLink,
+  FolderKanban,
+} from 'lucide-react';
+import SpecificationCell from '@/components/ui/SpecificationCell';
+import StatusBadge from '@/components/ui/StatusBadge';
+import { useToast } from '@/components/ui/Toast';
+import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
+
+const SECTOR_PROJECT_TYPES: Record<string, string[]> = {
+  RETAIL: [
+    'Retail Store Fitout',
+    'QSR',
+    'Supermarket',
+    'Hypermarket',
+    'Lifestyle Store',
+    'Department Store',
+    'Convenience Store',
+  ],
+  HOSPITALITY: [
+    'Hotel',
+    'Restaurant',
+    'Cafe',
+    'QSR',
+    'Banquet',
+    'Guest Room',
+    'Kitchen',
+    'Back-of-House',
+  ],
+  BANKING: [
+    'Branch',
+    'ATM',
+    'Back Office',
+    'Corporate Office',
+    'Customer Area',
+    'Vault / Strong Room',
+  ],
+  INSURANCE: [
+    'Branch Office',
+    'Customer Service Centre',
+    'Operations Hub',
+  ],
+  OFFICE: [
+    'Office',
+    'Service Centre',
+    'Corporate Facility',
+    'Training Centre',
+  ],
+  SERVICES: [
+    'Service Centre',
+    'Corporate Facility',
+    'Training Centre',
+  ],
+};
+
+const ALL_STANDARD_CATEGORIES = [
+  'Civil & Interior',
+  'Electrical',
+  'HVAC',
+  'Plumbing',
+  'Fire Fighting',
+  'ELV / IT',
+  'Furniture',
+  'Signage & Branding',
+  'Kitchen / F&B Equipment',
+  'Security',
+  'External Development',
+];
+
+export default function BoqStudioPage() {
+  const toast = useToast();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [savingParameters, setSavingParameters] = useState(false);
+
+  const paramProjectId = searchParams.get('projectId') || '';
+  const paramCostCentreId = searchParams.get('costCentreId') || '';
+  const paramBoqId = searchParams.get('boqId') || '';
+
+  // Core Data
+  const [projects, setProjects] = useState<any[]>([]);
+  const [costCentres, setCostCentres] = useState<any[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState(paramProjectId);
+  const [selectedCostCentreId, setSelectedCostCentreId] = useState(paramCostCentreId);
+
+  // All BOQs List
+  const [boqs, setBoqs] = useState<any[]>([]);
+  const [loadingBoqs, setLoadingBoqs] = useState(true);
+
+  // Dynamic Master Categories
+  const [masterCategories, setMasterCategories] = useState<string[]>(ALL_STANDARD_CATEGORIES);
+
+  useEffect(() => {
+    fetch('/api/masters/categories')
+      .then(r => r.json())
+      .then(d => {
+        const cats = d.data || d || [];
+        if (Array.isArray(cats) && cats.length > 0) {
+          const names = cats.map((c: any) => c.name);
+          const merged = Array.from(new Set([...names, ...ALL_STANDARD_CATEGORIES]));
+          setMasterCategories(merged);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Active BOQ & Revision in Workspace
+  const [activeBoq, setActiveBoq] = useState<any | null>(null);
+  const [activeRevision, setActiveRevision] = useState<any | null>(null);
+  const [lines, setLines] = useState<any[]>([]);
+  const [loadingLines, setLoadingLines] = useState(false);
+
+  // BOQ Creation Context / Parameters (Top Setup Bar)
+  const [setupProject, setSetupProject] = useState(paramProjectId);
+  const [setupCostCentre, setSetupCostCentre] = useState(paramCostCentreId);
+  const [setupTitle, setSetupTitle] = useState('');
+  const [userEditedTitle, setUserEditedTitle] = useState(false);
+  const [setupDescription, setSetupDescription] = useState('');
+  const [setupPurpose, setSetupPurpose] = useState<'BUDGET' | 'PR'>('BUDGET');
+  const [setupSector, setSetupSector] = useState('RETAIL');
+  const [setupProjectType, setSetupProjectType] = useState('Retail Store Fitout');
+  const [setupArea, setSetupArea] = useState('10,000');
+  const [setupCategories, setSetupCategories] = useState<string[]>(['Civil & Interior', 'Electrical']);
+
+  // Method 1: Upload Existing BOQ
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [uploadingMethod1, setUploadingMethod1] = useState(false);
+  const fileInputMethod1Ref = useRef<HTMLInputElement | null>(null);
+
+  // Method 2: Download Standard BOQ
+  const [stdSector, setStdSector] = useState('RETAIL');
+  const [stdProjectType, setStdProjectType] = useState('Retail Store Fitout');
+  const [stdCategories, setStdCategories] = useState<string[]>(['Civil & Interior', 'Electrical']);
+  const [downloadingStd, setDownloadingStd] = useState(false);
+  const [stdDownloaded, setStdDownloaded] = useState(false);
+  const [uploadingMethod2, setUploadingMethod2] = useState(false);
+  const fileInputMethod2Ref = useRef<HTMLInputElement | null>(null);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+
+  // Expandable Line-Item AI Cost Breakdown
+  const [expandedCostLineId, setExpandedCostLineId] = useState<string | null>(null);
+
+  // Method 3: Drawing to BOQ
+  const [drawingFile, setDrawingFile] = useState<File | null>(null);
+  const [drawingNumber, setDrawingNumber] = useState('DWG-A-101');
+  const [extractingDrawing, setExtractingDrawing] = useState(false);
+
+  // Method 4: Manual Entry
+  const [manualRows, setManualRows] = useState<any[]>([
+    { lineNumber: '1', originalDescription: '600x600 vitrified tile', specification: 'Commercial grade matte finish', category: 'Civil & Interior', uom: 'SQFT', quantity: 2500, aiUnitCost: 125 },
+    { lineNumber: '2', originalDescription: '2.5 SQMM FRLS copper cable', specification: '1100V copper wire in PVC conduit', category: 'Electrical', uom: 'MTR', quantity: 1200, aiUnitCost: 65 },
+  ]);
+  const [savingManual, setSavingManual] = useState(false);
+
+  // Active Creation Method Card Selection: 1 | 2 | 3 | 4
+  const [selectedMethod, setSelectedMethod] = useState<number | null>(2);
+
+  // Status & Notification Banners
+  const [statusMessage, setStatusMessage] = useState<string>('');
+  const [statusType, setStatusType] = useState<'success' | 'error' | 'info'>('info');
+
+  // Import Result Card State (Section 6)
+  const [importResult, setImportResult] = useState<{
+    totalImported: number;
+    quantitiesValid: number;
+    uomsRecognised: number;
+    warningsCount: number;
+    issues: any[];
+  } | null>(null);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+
+  // Edit BOQ In-Place State (Section 9)
+  const [isEditingBoq, setIsEditingBoq] = useState(false);
+  const [editableLines, setEditableLines] = useState<any[]>([]);
+  const [savingEditChanges, setSavingEditChanges] = useState(false);
+
+  // Single Line Edit Modal & Add Line Modal
+  const [editingLineModal, setEditingLineModal] = useState<any | null>(null);
+  const [addLineModalOpen, setAddLineModalOpen] = useState(false);
+  const [newLineData, setNewLineData] = useState({
+    description: '',
+    specification: '',
+    category: 'Civil & Interior',
+    uom: 'NOS',
+    quantity: 1,
+    location: '',
+    brand: '',
+    remarks: '',
+    aiUnitCost: 150,
+  });
+
+  // AI Refine & AI Cost Engine State (Sections 10 & 11)
+  const [refiningAi, setRefiningAi] = useState(false);
+  const [refiningLineId, setRefiningLineId] = useState<string | null>(null);
+  const [proposedRefinements, setProposedRefinements] = useState<Record<string, {
+    suggestedDescription: string;
+    suggestedSpec: string;
+    reason: string;
+    confidence: number;
+  }>>({});
+  const [estimatingCost, setEstimatingCost] = useState(false);
+  const [validatingQuality, setValidatingQuality] = useState(false);
+
+  // Cost Summary & Unestimated Items (Section 11)
+  const [costSummary, setCostSummary] = useState<{
+    categoryBreakdown: Record<string, number>;
+    totalCost: number;
+    costPerSqFt: number | null;
+  } | null>(null);
+  const [unestimatedItems, setUnestimatedItems] = useState<any[]>([]);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
+
+  // Modals for Dual Purpose Actions (Sections 13 & 14)
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [addingToBudget, setAddingToBudget] = useState(false);
+  const [prModalOpen, setPrModalOpen] = useState(false);
+  const [creatingPr, setCreatingPr] = useState(false);
+
+  // Existing BOQs Filtering (Section 21)
+  const [filterProject, setFilterProject] = useState('');
+  const [filterCostCentre, setFilterCostCentre] = useState('');
+  const [filterPurpose, setFilterPurpose] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+
+  // Search filter for lines within workspace
+  const [linesSearch, setLinesSearch] = useState('');
+
+  // Workspace Ref for smooth auto-scroll
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+
+  // -------------------------------------------------------------
+  // INITIAL DATA LOADING & URL REFRESH RESTORATION (Section 22)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    loadInitial();
+  }, []);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      loadCostCentres(selectedProjectId);
+    }
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (setupProject) {
+      loadCostCentres(setupProject);
+      const prj = projects.find(p => p.id === setupProject);
+      if (prj) {
+        if (prj.sector) {
+          setSetupSector(prj.sector.toUpperCase());
+          setStdSector(prj.sector.toUpperCase());
+        }
+        if (prj.projectType) {
+          setSetupProjectType(prj.projectType);
+          setStdProjectType(prj.projectType);
+        }
+        if (prj.areaSqFt) {
+          setSetupArea(prj.areaSqFt.toLocaleString());
+        }
+      }
+    }
+  }, [setupProject, projects]);
+
+  useEffect(() => {
+    if (setupCostCentre) {
+      const cc = costCentres.find(c => c.id === setupCostCentre);
+      if (cc && cc.areaSqFt) {
+        setSetupArea(cc.areaSqFt.toLocaleString());
+      }
+    }
+  }, [setupCostCentre, costCentres]);
+
+  // Auto-generate BOQ Title: Category Name + Project Name (Requirement 5)
+  const computeSuggestedTitle = (cats: string[], projId: string, ccId: string) => {
+    let projName = '';
+    const prj = projects.find(p => p.id === projId);
+    if (prj?.name) {
+      projName = prj.name;
+    } else if (ccId) {
+      const cc = costCentres.find(c => c.id === ccId);
+      if (cc?.project?.name) {
+        projName = cc.project.name;
+      } else if (cc?.projectId) {
+        const parentP = projects.find(p => p.id === cc.projectId);
+        if (parentP?.name) projName = parentP.name;
+      }
+      if (!projName && cc?.name) {
+        projName = cc.name;
+      }
+    }
+
+    const catName = cats && cats.length > 0 ? (cats.length === 1 ? cats[0] : cats.slice(0, 2).join(' & ')) : '';
+
+    if (catName && projName) {
+      return `${catName} — ${projName}`;
+    } else if (catName) {
+      return `${catName} BOQ`;
+    } else if (projName) {
+      return `${projName} BOQ`;
+    }
+    return '';
+  };
+
+  useEffect(() => {
+    // Only auto-update suggested title if the user has not deliberately typed their own custom title and no existing BOQ with title is loaded
+    if (!userEditedTitle && (!activeBoq || !activeBoq.title)) {
+      const activeCats = stdCategories.length > 0 ? stdCategories : setupCategories;
+      const suggested = computeSuggestedTitle(activeCats, setupProject, setupCostCentre);
+      if (suggested) {
+        setSetupTitle(suggested);
+      }
+    }
+  }, [setupProject, setupCostCentre, stdCategories, setupCategories, projects, costCentres, userEditedTitle, activeBoq]);
+
+  const loadInitial = async () => {
+    setLoadingBoqs(true);
+    try {
+      const [pRes, bRes] = await Promise.all([
+        fetch('/api/projects'),
+        fetch('/api/boq'),
+      ]);
+
+      let loadedProjects: any[] = [];
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        loadedProjects = pData.data || pData || [];
+        setProjects(loadedProjects);
+
+        // Find Kundanahalli or first project
+        const kundanahalli = loadedProjects.find(p => p.name?.toLowerCase().includes('kundanahalli'));
+        const defaultProjId = paramProjectId || (kundanahalli ? kundanahalli.id : loadedProjects[0]?.id || '');
+        setSelectedProjectId(defaultProjId);
+        setSetupProject(defaultProjId);
+        if (defaultProjId) {
+          loadCostCentres(defaultProjId);
+        }
+      }
+
+      if (bRes.ok) {
+        const bData = await bRes.json();
+        const bList = bData.data || bData || [];
+        setBoqs(bList);
+
+        // Resolve active BOQ from URL or localStorage
+        const storedBoqId = typeof window !== 'undefined' ? localStorage.getItem('procpx_active_boq_id') : null;
+        const targetBoqId = paramBoqId || storedBoqId;
+
+        if (targetBoqId) {
+          await loadBoqDetails(targetBoqId);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading initial data:', e);
+    } finally {
+      setLoadingBoqs(false);
+    }
+  };
+
+  const loadCostCentres = async (pId: string) => {
+    try {
+      const res = await fetch(`/api/cost-centres?projectId=${pId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCostCentres(data);
+        if (data.length > 0 && !setupCostCentre) {
+          // If cc45 exists, prefer it
+          const cc45 = data.find((c: any) => c.code?.toLowerCase().includes('cc45') || c.name?.toLowerCase().includes('cc45'));
+          const defaultCc = cc45 ? cc45.id : data[0].id;
+          setSetupCostCentre(defaultCc);
+          setSelectedCostCentreId(defaultCc);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loadAllBoqs = async () => {
+    try {
+      const res = await fetch('/api/boq');
+      if (res.ok) {
+        const data = await res.json();
+        setBoqs(data.data || data || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const syncActiveBoqUrl = (boqId: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('procpx_active_boq_id', boqId);
+      const url = new URL(window.location.href);
+      url.searchParams.set('boqId', boqId);
+      window.history.replaceState(null, '', url.toString());
+    }
+  };
+
+  const loadBoqDetails = async (boqId: string) => {
+    setLoadingLines(true);
+    try {
+      const res = await fetch(`/api/boq/${boqId}`);
+      if (res.ok) {
+        const d = await res.json();
+        const boqData = d.boq || d.data?.boq;
+        const revData = d.revision || d.data?.revision;
+        const lineItems = d.lines || d.data?.lines || [];
+
+        if (boqData) {
+          setActiveBoq(boqData);
+          setSelectedProjectId(boqData.projectId);
+          setSelectedCostCentreId(boqData.costCentreId || '');
+          setSetupProject(boqData.projectId);
+          setSetupCostCentre(boqData.costCentreId || '');
+          setSetupTitle(boqData.title || '');
+          setUserEditedTitle(true); // Preserve existing title in saved records
+          setSetupDescription(boqData.description || '');
+          const boqPurpose = (boqData.purpose === 'PR' ? 'PR' : 'BUDGET') as 'BUDGET' | 'PR';
+          setSetupPurpose(boqPurpose);
+          syncActiveBoqUrl(boqData.id);
+        }
+
+        if (revData) {
+          setActiveRevision(revData);
+        }
+
+        setLines(lineItems);
+        setEditableLines(lineItems.map((l: any) => ({ ...l })));
+
+        // Precompute category breakdown and totals
+        computeCostSummary(lineItems, boqData);
+      }
+    } catch (e) {
+      console.error('Error loading BOQ details:', e);
+    } finally {
+      setLoadingLines(false);
+    }
+  };
+
+  const handlePurposeChange = (newPurpose: 'BUDGET' | 'PR') => {
+    setSetupPurpose(newPurpose);
+    if (activeBoq?.id) {
+      setActiveBoq((prev: any) => ({ ...prev, purpose: newPurpose }));
+      setBoqs((prev: any[]) => prev.map(b => b.id === activeBoq.id ? { ...b, purpose: newPurpose } : b));
+    }
+  };
+
+  const handleSaveParameters = async () => {
+    if (!activeBoq?.id) {
+      toast.info('Target parameters configured for new BOQ creation.');
+      return;
+    }
+    setSavingParameters(true);
+    try {
+      const res = await fetch(`/api/boq/${activeBoq.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: setupProject || undefined,
+          costCentreId: setupCostCentre || undefined,
+          category: stdCategories[0] || 'Standard',
+          purpose: setupPurpose,
+          title: setupTitle,
+          description: setupDescription,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save parameters');
+      }
+      toast.success('Target parameters saved successfully.');
+      setStatusType('success');
+      setStatusMessage('Target parameters saved successfully.');
+      await loadBoqDetails(activeBoq.id);
+      await loadAllBoqs();
+    } catch (e: any) {
+      toast.error(e.message || 'Error saving parameters');
+      setStatusType('error');
+      setStatusMessage(`Error saving parameters: ${e.message}`);
+    } finally {
+      setSavingParameters(false);
+    }
+  };
+
+  const computeCostSummary = (lineItems: any[], boqData: any) => {
+    if (!lineItems || lineItems.length === 0) {
+      setCostSummary(null);
+      return;
+    }
+
+    const catBreakdown: Record<string, number> = {
+      Material: 0,
+      Electrical: 0,
+      Civil: 0,
+      Interior: 0,
+      Other: 0,
+    };
+
+    let totalEst = 0;
+    for (const l of lineItems) {
+      const lineCost = l.aiTotalCost || ((l.aiUnitCost || 0) * (l.quantity || 1));
+      totalEst += lineCost;
+
+      const cName = (l.category?.name || l.category || '').toLowerCase();
+      if (cName.includes('electrical')) catBreakdown.Electrical += lineCost;
+      else if (cName.includes('civil')) catBreakdown.Civil += lineCost;
+      else if (cName.includes('interior')) catBreakdown.Interior += lineCost;
+      else if (cName.includes('material')) catBreakdown.Material += lineCost;
+      else catBreakdown.Other += lineCost;
+    }
+
+    const area = boqData?.costCentre?.areaSqFt || boqData?.project?.areaSqFt || parseFloat(setupArea.replace(/,/g, '')) || null;
+    setCostSummary({
+      categoryBreakdown: catBreakdown,
+      totalCost: Math.round(totalEst * 100) / 100,
+      costPerSqFt: area ? Math.round((totalEst / area) * 100) / 100 : null,
+    });
+  };
+
+  // Helper to ensure an active BOQ record exists before generating lines
+  const ensureActiveBoqRecord = async (): Promise<any> => {
+    if (activeBoq) return activeBoq;
+
+    const projId = setupProject || selectedProjectId || projects[0]?.id;
+    const ccId = setupCostCentre || selectedCostCentreId || costCentres[0]?.id;
+    const proj = projects.find(p => p.id === projId);
+
+    const title = setupTitle.trim() || `${proj?.name || 'Project'} - Standard Fitout BOQ`;
+
+    const res = await fetch('/api/boq', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: projId,
+        costCentreId: ccId,
+        title,
+        description: setupDescription.trim() || null,
+        category: setupCategories,
+        purpose: setupPurpose,
+        sector: setupSector,
+        projectType: setupProjectType,
+        areaSqFt: parseFloat(setupArea.replace(/,/g, '')) || 10000,
+        remarks: 'Created via BOQ Studio',
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to initialize BOQ');
+    }
+
+    const data = await res.json();
+    const createdBoq = data.data?.boq || data.boq;
+    const rev = createdBoq?.latestRevision;
+
+    setActiveBoq(createdBoq);
+    setActiveRevision(rev);
+    syncActiveBoqUrl(createdBoq.id);
+    await loadAllBoqs();
+    return createdBoq;
+  };
+
+  // -------------------------------------------------------------
+  // METHOD 1: UPLOAD EXISTING BOQ (Section 3)
+  // -------------------------------------------------------------
+  const handleDownloadSimpleTemplate = () => {
+    window.location.href = '/api/boq/simple-template/download';
+    setStatusType('success');
+    setStatusMessage('✓ Simple BOQ template downloaded successfully.');
+  };
+
+  const handleUploadExistingBoq = async (file: File) => {
+    if (!file) return;
+    setUploadingMethod1(true);
+    setStatusMessage('');
+
+    try {
+      const currentBoq = await ensureActiveBoqRecord();
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('projectId', currentBoq.projectId);
+      fd.append('costCentreId', currentBoq.costCentreId || '');
+      fd.append('boqId', currentBoq.id);
+      fd.append('purpose', setupPurpose);
+      if (setupTitle.trim()) fd.append('title', setupTitle.trim());
+      if (stdCategories.length > 0) fd.append('category', stdCategories[0]);
+      if (setupDescription.trim()) fd.append('description', setupDescription.trim());
+
+      const res = await fetch('/api/boq/upload-template', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to upload existing BOQ');
+      }
+
+      const data = await res.json();
+      const payload = data.data || data;
+
+      setImportResult({
+        totalImported: payload.totalLines || payload.validLines || 0,
+        quantitiesValid: payload.validLines || 0,
+        uomsRecognised: payload.validLines || 0,
+        warningsCount: payload.warningLines || 0,
+        issues: payload.exceptions || [],
+      });
+
+      setStatusType('success');
+      setStatusMessage(`✓ BOQ uploaded successfully. ✓ ${payload.totalLines || payload.validLines || 0} line items imported.`);
+
+      await loadAllBoqs();
+      await loadBoqDetails(currentBoq.id);
+
+      // Smooth scroll to BOQ workspace
+      workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Upload Error: ${e.message}`);
+    } finally {
+      setUploadingMethod1(false);
+      if (fileInputMethod1Ref.current) fileInputMethod1Ref.current.value = '';
+    }
+  };
+
+  // -------------------------------------------------------------
+  // METHOD 2: DOWNLOAD STANDARD BOQ → UPLOAD (Section 4 & 5)
+  // -------------------------------------------------------------
+  const handleDownloadStandardBoq = async () => {
+    setDownloadingStd(true);
+    setStatusMessage('');
+    try {
+      const q = new URLSearchParams({
+        sector: stdSector,
+        projectType: stdProjectType,
+        projectId: activeBoq?.projectId || setupProject || selectedProjectId,
+        costCentreId: activeBoq?.costCentreId || setupCostCentre || selectedCostCentreId,
+        categories: stdCategories.join(','),
+      });
+
+      const res = await fetch(`/api/boq/standard/download?${q.toString()}`);
+      if (!res.ok) throw new Error('Failed to generate standard BOQ download');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Standard_BOQ_${stdSector}_${stdProjectType.replace(/\s+/g, '_')}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setStdDownloaded(true);
+      setStatusType('success');
+      setStatusMessage('✓ Standard BOQ downloaded successfully.');
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Download Error: ${e.message}`);
+    } finally {
+      setDownloadingStd(false);
+    }
+  };
+
+  const handleUploadCompletedStandardBoq = async (file: File) => {
+    if (!file) return;
+    setUploadingMethod2(true);
+    setStatusMessage('');
+
+    try {
+      const currentBoq = await ensureActiveBoqRecord();
+
+      // Step 1: Validate Excel in background
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('projectId', currentBoq.projectId);
+      fd.append('costCentreId', currentBoq.costCentreId || '');
+      fd.append('sector', stdSector);
+      fd.append('projectType', stdProjectType);
+      fd.append('purpose', setupPurpose);
+
+      const valRes = await fetch('/api/boq/standard/upload-validate', { method: 'POST', body: fd });
+      const valData = await valRes.json();
+      if (!valRes.ok) {
+        throw new Error(valData.error || 'Failed to validate uploaded file');
+      }
+
+      const valPayload = valData.data || valData;
+      const validLines = valPayload.validLines || [];
+
+      if (validLines.length === 0) {
+        // Fallback: try uploading through template parser in case file is in alternative format
+        const fbFd = new FormData();
+        fbFd.append('file', file);
+        fbFd.append('projectId', currentBoq.projectId);
+        fbFd.append('costCentreId', currentBoq.costCentreId || '');
+        fbFd.append('boqId', currentBoq.id);
+        fbFd.append('purpose', setupPurpose);
+        if (setupTitle.trim()) fbFd.append('title', setupTitle.trim());
+
+        const fbRes = await fetch('/api/boq/upload-template', { method: 'POST', body: fbFd });
+        if (fbRes.ok) {
+          const fbData = await fbRes.json();
+          const fbPayload = fbData.data || fbData;
+          if (fbPayload.totalLines > 0) {
+            setImportResult({
+              totalImported: fbPayload.totalLines,
+              quantitiesValid: fbPayload.validLines || fbPayload.totalLines,
+              uomsRecognised: fbPayload.validLines || fbPayload.totalLines,
+              warningsCount: fbPayload.warningLines || 0,
+              issues: fbPayload.exceptions || [],
+            });
+            setStatusType('success');
+            setStatusMessage(`✓ BOQ uploaded successfully. ✓ ${fbPayload.totalLines} line items imported.`);
+            await loadAllBoqs();
+            await loadBoqDetails(currentBoq.id);
+            workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+            return;
+          }
+        }
+        throw new Error('The uploaded Excel file does not contain any recognizable item rows. Please ensure your file contains item descriptions.');
+      }
+
+      // Step 2: Auto Generate into Draft BOQ
+      const genRes = await fetch('/api/boq/standard/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boqId: currentBoq.id,
+          projectId: currentBoq.projectId,
+          costCentreId: currentBoq.costCentreId || null,
+          sector: stdSector,
+          projectType: stdProjectType,
+          validLines,
+          fileName: file.name,
+          title: setupTitle.trim() || undefined,
+          purpose: setupPurpose,
+          categories: stdCategories,
+          description: setupDescription.trim() || undefined,
+        }),
+      });
+
+      const genData = await genRes.json();
+      if (!genRes.ok) {
+        throw new Error(genData.error || 'Failed to populate BOQ with lines');
+      }
+
+      const genPayload = genData.data || genData;
+
+      const pendingCount = valPayload.pendingQuantityCount !== undefined ? valPayload.pendingQuantityCount : (genPayload.warningLines || 0);
+
+      // Set Import Result for display (Section 6)
+      setImportResult({
+        totalImported: genPayload.totalLines || validLines.length,
+        quantitiesValid: valPayload.validQuantityCount !== undefined ? valPayload.validQuantityCount : (validLines.length - pendingCount),
+        uomsRecognised: valPayload.validRows || validLines.length,
+        warningsCount: pendingCount,
+        issues: valPayload.issues || [],
+      });
+
+      if (pendingCount > 0) {
+        setStatusType('info');
+        setStatusMessage(`✓ Standard BOQ uploaded successfully. ${genPayload.totalLines || validLines.length} standard items imported. ⚠ ${pendingCount} items require quantity.`);
+      } else {
+        setStatusType('success');
+        setStatusMessage(`✓ Standard BOQ uploaded successfully. ✓ ${genPayload.totalLines || validLines.length} line items imported.`);
+      }
+
+      await loadAllBoqs();
+      await loadBoqDetails(currentBoq.id);
+
+      // Smooth scroll to workspace
+      workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Upload Error: ${e.message}`);
+    } finally {
+      setUploadingMethod2(false);
+      if (fileInputMethod2Ref.current) fileInputMethod2Ref.current.value = '';
+    }
+  };
+
+  // -------------------------------------------------------------
+  // METHOD 3: DRAWING TO BOQ
+  // -------------------------------------------------------------
+  const handleDrawingExtract = async () => {
+    if (!drawingFile) return;
+    setExtractingDrawing(true);
+    setStatusMessage('');
+
+    try {
+      const currentBoq = await ensureActiveBoqRecord();
+      const fd = new FormData();
+      fd.append('file', drawingFile);
+      fd.append('projectId', currentBoq.projectId);
+      fd.append('costCentreId', currentBoq.costCentreId || '');
+      fd.append('boqId', currentBoq.id);
+      fd.append('drawingNumber', drawingNumber);
+      fd.append('purpose', setupPurpose);
+      if (setupTitle.trim()) fd.append('title', setupTitle.trim());
+      if (setupDescription.trim()) fd.append('description', setupDescription.trim());
+
+      const res = await fetch('/api/boq/drawing-extract', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Drawing extraction failed');
+      }
+
+      const data = await res.json();
+      setStatusType('success');
+      setStatusMessage(`✓ Drawing analyzed! BOQ ${currentBoq.boqCode} updated with extracted items.`);
+
+      await loadAllBoqs();
+      await loadBoqDetails(currentBoq.id);
+      workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    } finally {
+      setExtractingDrawing(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // METHOD 4: MANUAL ENTRY
+  // -------------------------------------------------------------
+  const handleSaveManual = async () => {
+    setSavingManual(true);
+    setStatusMessage('');
+
+    try {
+      const currentBoq = await ensureActiveBoqRecord();
+      const res = await fetch('/api/boq/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: currentBoq.projectId,
+          costCentreId: currentBoq.costCentreId,
+          boqId: currentBoq.id,
+          purpose: setupPurpose,
+          title: setupTitle.trim() || undefined,
+          description: setupDescription.trim() || undefined,
+          lines: manualRows,
+          action: 'REPLACE_ALL',
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save manual lines');
+      }
+
+      const data = await res.json();
+      setStatusType('success');
+      setStatusMessage(`✓ Manual BOQ ${currentBoq.boqCode} updated with ${data.totalLines || manualRows.length} lines.`);
+
+      await loadAllBoqs();
+      await loadBoqDetails(currentBoq.id);
+      workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // BOQ EDIT ACTIONS (Section 9)
+  // -------------------------------------------------------------
+  const handleToggleEditMode = () => {
+    if (!isEditingBoq) {
+      if (activeBoq?.status === 'APPROVED') {
+        setStatusType('error');
+        setStatusMessage('Approved BOQ revisions are locked and cannot be edited. Please create a new revision.');
+        return;
+      }
+      setEditableLines(lines.map((l: any) => ({ ...l })));
+      setIsEditingBoq(true);
+    } else {
+      setIsEditingBoq(false);
+    }
+  };
+
+  const handleUpdateEditableLineField = (index: number, field: string, value: any) => {
+    setEditableLines(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleSaveEditableChanges = async () => {
+    if (!activeRevision) return;
+    setSavingEditChanges(true);
+    setStatusMessage('');
+
+    try {
+      const res = await fetch(`/api/boq/${activeRevision.id}/lines`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lines: editableLines.map((l: any) => ({
+            id: l.id,
+            standardDescription: l.standardDescription || l.originalDescription,
+            originalDescription: l.originalDescription,
+            specification: l.specification,
+            quantity: l.quantity,
+            uomRaw: l.uomRaw || l.uom?.code || 'NOS',
+            location: l.location,
+            brand: l.brand,
+            remarks: l.remarks,
+            aiUnitCost: l.aiUnitCost,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save changes');
+      }
+
+      setIsEditingBoq(false);
+      setStatusType('success');
+      setStatusMessage('✓ BOQ updated successfully.');
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    } finally {
+      setSavingEditChanges(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // AI REFINE AT LINE-ITEM LEVEL (Section 10 - Requirement 2)
+  // -------------------------------------------------------------
+  const handleRequestRefineLine = async (line: any) => {
+    if (!activeRevision || !line.id) return;
+    setRefiningLineId(line.id);
+    setStatusMessage('');
+
+    try {
+      const res = await fetch('/api/boq/refine-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boqRevisionId: activeRevision.id,
+          lineIds: [line.id],
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to refine line description');
+      }
+
+      const data = await res.json();
+      const refinedLine = data.data?.lines?.[0] || data.lines?.[0];
+
+      if (refinedLine) {
+        setProposedRefinements(prev => ({
+          ...prev,
+          [line.id]: {
+            suggestedDescription: refinedLine.aiSuggestedDescription,
+            suggestedSpec: refinedLine.aiSuggestedSpec || refinedLine.aiSuggestedDescription,
+            reason: refinedLine.aiReason || 'Standardized against catalogue benchmarks',
+            confidence: refinedLine.aiConfidence || 0.9,
+          },
+        }));
+        setStatusType('info');
+        setStatusMessage(`Proposed description ready for line ${line.lineNumber}. Review and click [Apply Description] to confirm.`);
+      }
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`AI Refine Error: ${e.message}`);
+    } finally {
+      setRefiningLineId(null);
+    }
+  };
+
+  const handleApplyProposedDescription = async (line: any, proposal: any) => {
+    if (!activeRevision || !line.id) return;
+    try {
+      const res = await fetch(`/api/boq/${activeRevision.id}/lines`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineId: line.id,
+          updates: {
+            specification: proposal.suggestedSpec || proposal.suggestedDescription,
+            standardDescription: proposal.suggestedDescription,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to apply description');
+      }
+
+      // Clear the proposal for this line
+      setProposedRefinements(prev => {
+        const next = { ...prev };
+        delete next[line.id];
+        return next;
+      });
+
+      setStatusType('success');
+      setStatusMessage(`✓ Applied refined BOQ Description for line ${line.lineNumber}. Original content preserved in history.`);
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    }
+  };
+
+  const handleRefineAi = async () => {
+    if (!activeRevision) return;
+    setRefiningAi(true);
+    setStatusMessage('');
+
+    try {
+      const res = await fetch('/api/boq/refine-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boqRevisionId: activeRevision.id }),
+      });
+
+      if (!res.ok) throw new Error('AI Refinement failed');
+      const data = await res.json();
+
+      setStatusType('success');
+      setStatusMessage(`✓ AI refinement complete! Standardized ${data.totalRefined} lines.`);
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    } finally {
+      setRefiningAi(false);
+    }
+  };
+
+  const handleAcceptAiSuggestion = async (line: any) => {
+    if (!activeRevision) return;
+    try {
+      await fetch(`/api/boq/${activeRevision.id}/lines`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineId: line.id,
+          updates: {
+            standardDescription: line.aiSuggestedDescription || line.standardDescription,
+          },
+        }),
+      });
+      setStatusType('success');
+      setStatusMessage(`✓ Accepted AI suggestion for line ${line.lineNumber}`);
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    }
+  };
+
+  const handleRejectAiSuggestion = async (line: any) => {
+    if (!activeRevision) return;
+    try {
+      await fetch(`/api/boq/${activeRevision.id}/lines`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineId: line.id,
+          updates: {
+            standardDescription: line.originalDescription,
+          },
+        }),
+      });
+      setStatusType('info');
+      setStatusMessage(`Retained original description for line ${line.lineNumber}`);
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // GENERATE AI COST (Section 11)
+  // -------------------------------------------------------------
+  const handleGenerateAiCost = async () => {
+    if (!activeRevision) return;
+    setEstimatingCost(true);
+    setStatusMessage('');
+
+    try {
+      const unestimated = lines.filter(l => !l.aiUnitCost || l.aiTotalCost === null);
+      const payload: any = { boqRevisionId: activeRevision.id };
+      if (unestimated.length > 0 && unestimated.length < lines.length) {
+        payload.lineIds = unestimated.map(l => l.id);
+      }
+
+      const res = await fetch('/api/boq/estimate-cost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error('AI Cost Estimation failed');
+      const rawData = await res.json();
+      const resData = rawData.data || rawData;
+
+      if (resData.categoryBreakdown) {
+        setCostSummary({
+          categoryBreakdown: resData.categoryBreakdown,
+          totalCost: resData.totalEstimatedBenchmarkValue || resData.totalCost || 0,
+          costPerSqFt: resData.costPerSqFt || null,
+        });
+      }
+
+      if (resData.unestimatedItems) {
+        setUnestimatedItems(resData.unestimatedItems);
+      }
+
+      setStatusType('success');
+      setStatusMessage(`✓ AI Cost generated successfully: ₹ ${(resData.totalEstimatedBenchmarkValue || 0).toLocaleString('en-IN')}`);
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Cost Generation Error: ${e.message}`);
+    } finally {
+      setEstimatingCost(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // VALIDATE BOQ QUALITY
+  // -------------------------------------------------------------
+  const handleValidateBoq = async () => {
+    if (!activeRevision) return;
+    setValidatingQuality(true);
+    setStatusMessage('');
+
+    try {
+      const res = await fetch(`/api/boq/${activeRevision.id}/validate`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Validation failed');
+
+      setStatusType('success');
+      setStatusMessage('✓ BOQ validation complete. All specifications and quantities verified.');
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Validation Error: ${e.message}`);
+    } finally {
+      setValidatingQuality(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // ADD TO BUDGET (Section 13)
+  // -------------------------------------------------------------
+  const handleAddToBudget = async () => {
+    if (!activeRevision || !activeBoq) return;
+    setAddingToBudget(true);
+    setStatusMessage('');
+
+    try {
+      const res = await fetch('/api/boq/add-to-budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boqRevisionId: activeRevision.id,
+          costCentreId: activeBoq.costCentreId,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to add to budget');
+      }
+
+      const data = await res.json();
+      setBudgetModalOpen(false);
+      setStatusType('success');
+      setStatusMessage(
+        data.alreadySubmitted
+          ? `ℹ Budget Contribution ${data.transactionCode || ''} is already recorded with status Under Approval.`
+          : `✓ Budget Contribution ${data.transactionCode || 'BTX-000001'} recorded with status Under Approval! Routed to Project Approver.`
+      );
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+      await loadAllBoqs();
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error adding to budget: ${e.message}`);
+    } finally {
+      setAddingToBudget(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // CREATE PR (Section 14)
+  // -------------------------------------------------------------
+  const handleCreatePR = async () => {
+    if (!activeRevision || !activeBoq) return;
+    setCreatingPr(true);
+    setStatusMessage('');
+
+    try {
+      const res = await fetch('/api/boq/create-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boqRevisionId: activeRevision.id,
+          costCentreId: activeBoq.costCentreId,
+          autoSubmit: true,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to submit BOQ');
+      }
+
+      const data = await res.json();
+      setPrModalOpen(false);
+      setStatusType('success');
+      setStatusMessage('BOQ submitted successfully.');
+      toast.success('BOQ submitted successfully.', data.prNumber || activeBoq.boqCode, 'Awaiting Project Approver');
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+      await loadAllBoqs();
+    } catch (e: any) {
+      toast.error(e.message || 'Error submitting BOQ');
+      setStatusType('error');
+      setStatusMessage(`Error submitting BOQ: ${e.message}`);
+    } finally {
+      setCreatingPr(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // LINE ACTIONS (Add, Delete, Save Single Edit)
+  // -------------------------------------------------------------
+  const handleDeleteLine = async (lineId: string) => {
+    if (!activeRevision || !confirm('Are you sure you want to delete this line?')) return;
+    try {
+      await fetch(`/api/boq/${activeRevision.id}/lines?lineId=${lineId}`, { method: 'DELETE' });
+      setStatusType('info');
+      setStatusMessage('Line item deleted.');
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    }
+  };
+
+  const handleSaveSingleLineEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLineModal || !activeRevision) return;
+
+    try {
+      const res = await fetch(`/api/boq/${activeRevision.id}/lines`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineId: editingLineModal.id,
+          updates: {
+            standardDescription: editingLineModal.standardDescription,
+            originalDescription: editingLineModal.originalDescription,
+            specification: editingLineModal.specification,
+            quantity: editingLineModal.quantity,
+            uomRaw: editingLineModal.uomRaw || editingLineModal.uom?.code || 'NOS',
+            location: editingLineModal.location,
+            brand: editingLineModal.brand,
+            remarks: editingLineModal.remarks,
+            aiUnitCost: editingLineModal.aiUnitCost,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save changes');
+      }
+
+      setEditingLineModal(null);
+      setStatusType('success');
+      setStatusMessage('✓ Line item updated successfully.');
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    }
+  };
+
+  const handleAddLine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeRevision) return;
+
+    try {
+      const res = await fetch(`/api/boq/${activeRevision.id}/lines`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: newLineData.description,
+          specification: newLineData.specification,
+          uomRaw: newLineData.uom,
+          quantity: newLineData.quantity,
+          location: newLineData.location,
+          brand: newLineData.brand,
+          remarks: newLineData.remarks,
+          aiUnitCost: newLineData.aiUnitCost,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to add line');
+      }
+
+      setAddLineModalOpen(false);
+      setNewLineData({
+        description: '',
+        specification: '',
+        category: 'Civil & Interior',
+        uom: 'NOS',
+        quantity: 1,
+        location: '',
+        brand: '',
+        remarks: '',
+        aiUnitCost: 150,
+      });
+
+      setStatusType('success');
+      setStatusMessage('✓ Line item added successfully.');
+      if (activeBoq) await loadBoqDetails(activeBoq.id);
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    }
+  };
+
+  const handleDuplicateBoq = async (boqId: string) => {
+    setDuplicatingId(boqId);
+    try {
+      const res = await fetch('/api/boq/duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boqId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to duplicate BOQ');
+      }
+      const data = await res.json();
+      setStatusType('success');
+      setStatusMessage(`✓ BOQ duplicated successfully as ${data.boqCode}`);
+      await loadAllBoqs();
+    } catch (e: any) {
+      setStatusType('error');
+      setStatusMessage(`Error: ${e.message}`);
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  // Helper metadata values
+  const activeProjectObj = projects.find(p => p.id === (activeBoq?.projectId || setupProject || selectedProjectId));
+  const activeCostCentreObj = costCentres.find(cc => cc.id === (activeBoq?.costCentreId || setupCostCentre || selectedCostCentreId));
+
+  const filteredLines = (isEditingBoq ? editableLines : lines).filter(l => {
+    if (!linesSearch) return true;
+    const q = linesSearch.toLowerCase();
+    return (
+      (l.lineNumber && String(l.lineNumber).toLowerCase().includes(q)) ||
+      (l.originalDescription && l.originalDescription.toLowerCase().includes(q)) ||
+      (l.standardDescription && l.standardDescription.toLowerCase().includes(q)) ||
+      (l.specification && l.specification.toLowerCase().includes(q))
+    );
+  });
+
+  // Section 3: Comprehensive integrated financial summary
+  const financialSummary = useMemo(() => {
+    const currentLines = isEditingBoq ? editableLines : lines;
+    const totalLines = currentLines.length;
+
+    let validQuantityLines = 0;
+    let missingQuantityLines = 0;
+    let missingRateLines = 0;
+    let validationErrorLines = 0;
+
+    let totalAiEstimate = 0;
+    let hasAiEstimates = false;
+
+    const categoryTotals: Record<string, number> = {
+      Material: 0,
+      Electrical: 0,
+      Civil: 0,
+      Interior: 0,
+      Other: 0,
+    };
+
+    for (const l of currentLines) {
+      const qty = (l.quantity !== null && l.quantity !== undefined && !isNaN(Number(l.quantity)) && Number(l.quantity) > 0)
+        ? Number(l.quantity)
+        : null;
+
+      if (qty === null) {
+        missingQuantityLines++;
+      } else {
+        validQuantityLines++;
+      }
+
+      const unitCost = (l.aiUnitCost !== null && l.aiUnitCost !== undefined && !isNaN(Number(l.aiUnitCost)) && Number(l.aiUnitCost) > 0)
+        ? Number(l.aiUnitCost)
+        : null;
+
+      if (!unitCost) {
+        missingRateLines++;
+      }
+
+      if (l.validationStatus === 'ERROR' || l.validationStatus === 'QUANTITY_REQUIRED') {
+        validationErrorLines++;
+      }
+
+      // Crucial rule: Do not calculate a line total where the quantity is missing or invalid.
+      if (qty !== null && unitCost !== null) {
+        const lineCost = l.aiTotalCost !== null && l.aiTotalCost !== undefined ? Number(l.aiTotalCost) : (unitCost * qty);
+        totalAiEstimate += lineCost;
+        hasAiEstimates = true;
+
+        const cName = (l.category?.name || l.category || '').toLowerCase();
+        if (cName.includes('electrical')) categoryTotals.Electrical += lineCost;
+        else if (cName.includes('civil')) categoryTotals.Civil += lineCost;
+        else if (cName.includes('interior')) categoryTotals.Interior += lineCost;
+        else if (cName.includes('material')) categoryTotals.Material += lineCost;
+        else categoryTotals.Other += lineCost;
+      }
+    }
+
+    // Cost per SqFt
+    const rawArea = activeCostCentreObj?.areaSqFt || activeProjectObj?.areaSqFt || (setupArea ? parseFloat(setupArea.replace(/,/g, '')) : null);
+    const areaSqFt = rawArea && !isNaN(rawArea) && rawArea > 0 ? rawArea : null;
+    const costPerSqFt = (areaSqFt && hasAiEstimates && totalAiEstimate > 0)
+      ? Math.round((totalAiEstimate / areaSqFt) * 100) / 100
+      : null;
+
+    return {
+      totalLines,
+      validQuantityLines,
+      missingQuantityLines,
+      missingRateLines,
+      validationErrorLines,
+      hasAiEstimates,
+      totalAiEstimate: Math.round(totalAiEstimate * 100) / 100,
+      areaSqFt,
+      costPerSqFt,
+      categoryTotals,
+    };
+  }, [isEditingBoq, editableLines, lines, activeCostCentreObj, activeProjectObj, setupArea]);
+
+  const pendingQuantityCount = financialSummary.missingQuantityLines;
+  const validQuantityCount = financialSummary.validQuantityLines;
+  const totalRevValue = financialSummary.totalAiEstimate;
+
+  // Filtered BOQs for bottom list
+  const filteredExistingBoqs = boqs.filter(b => {
+    if (filterProject && b.projectId !== filterProject) return false;
+    if (filterCostCentre && b.costCentreId !== filterCostCentre) return false;
+    if (filterPurpose && b.purpose !== filterPurpose) return false;
+    if (filterStatus && b.status !== filterStatus) return false;
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      return (
+        b.boqCode?.toLowerCase().includes(q) ||
+        b.title?.toLowerCase().includes(q) ||
+        b.category?.toLowerCase().includes(q) ||
+        b.project?.name?.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  return (
+    <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
+      {/* =========================================================================
+          TOP SECTION: BOQ CREATION HEADER & SETUP BAR
+      ========================================================================= */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e40af' }}>
+              <Sparkles size={18} />
+            </div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: -0.3 }}>
+              BOQ CREATION
+            </h1>
+          </div>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+            Unified BOQ generation, import, line standardization, and AI market cost estimation workspace.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => {
+              setActiveBoq(null);
+              setActiveRevision(null);
+              setLines([]);
+              setEditableLines([]);
+              setImportResult(null);
+              setCostSummary(null);
+              setSetupTitle('');
+              setSetupDescription('');
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('procpx_active_boq_id');
+                const url = new URL(window.location.href);
+                url.searchParams.delete('boqId');
+                window.history.replaceState(null, '', url.toString());
+              }
+              setStatusType('info');
+              setStatusMessage('Ready to create a new BOQ. Select your project parameters and choose a generation method.');
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, padding: '8px 16px', fontSize: 12 }}
+          >
+            <Plus size={14} /> + CREATE NEW BOQ
+          </button>
+        </div>
+      </div>
+
+      {/* SETUP CONTEXT BAR (Project, Cost Centre, Sector, Area, Purpose) */}
+      <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: '16px 20px', marginBottom: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 0.5, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FolderKanban size={16} color="#2563eb" />
+            Project & Target Parameters
+          </h3>
+          <span style={{ fontSize: 11, color: '#64748b' }}>Define scope, cost centre and target categories for this BOQ</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14, alignItems: 'center' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              Project *
+            </label>
+            <select
+              className="select-field"
+              value={setupProject}
+              onChange={e => {
+                setSetupProject(e.target.value);
+                setSetupCostCentre('');
+              }}
+              style={{ width: '100%', height: 36, fontSize: 12 }}
+            >
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.projectCode})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              Cost Centre *
+            </label>
+            <select
+              className="select-field"
+              value={setupCostCentre}
+              onChange={e => setSetupCostCentre(e.target.value)}
+              style={{ width: '100%', height: 36, fontSize: 12 }}
+            >
+              {costCentres.map(cc => (
+                <option key={cc.id} value={cc.id}>{cc.code} — {cc.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Selection directly under Project & Target Parameters (Requirement 1) */}
+          <div style={{ position: 'relative' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              Categories * ({stdCategories.length})
+            </label>
+            <button
+              type="button"
+              className="select-field"
+              onClick={() => setCategoryDropdownOpen(prev => !prev)}
+              style={{
+                width: '100%',
+                height: 36,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#ffffff',
+                cursor: 'pointer',
+                textAlign: 'left',
+                padding: '0 10px',
+                border: '1px solid #cbd5e1',
+                borderRadius: 6,
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>
+                {stdCategories.length === 0
+                  ? 'Select Categories...'
+                  : stdCategories.length === masterCategories.length
+                  ? 'All Categories'
+                  : stdCategories.join(', ')}
+              </span>
+              {categoryDropdownOpen ? <ChevronUp size={14} color="#64748b" /> : <ChevronDown size={14} color="#64748b" />}
+            </button>
+
+            {categoryDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 42,
+                  left: 0,
+                  zIndex: 50,
+                  width: 300,
+                  padding: 12,
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 6,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                }}
+              >
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Search size={13} color="#94a3b8" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      className="input-field"
+                      value={categorySearchQuery}
+                      onChange={e => setCategorySearchQuery(e.target.value)}
+                      placeholder="Search categories..."
+                      style={{ width: '100%', height: 28, fontSize: 11, paddingLeft: 26 }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStdCategories([...masterCategories]);
+                      setSetupCategories([...masterCategories]);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    All
+                  </button>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStdCategories([]);
+                      setSetupCategories([]);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div style={{ maxHeight: 200, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: 4 }}>
+                  {masterCategories
+                    .filter(cat => cat.toLowerCase().includes(categorySearchQuery.toLowerCase()))
+                    .map(cat => {
+                      const checked = stdCategories.includes(cat);
+                      return (
+                        <label
+                          key={cat}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            padding: '4px 6px',
+                            borderRadius: 4,
+                            background: checked ? '#eff6ff' : 'transparent',
+                            color: checked ? '#1e40af' : '#475569',
+                            fontWeight: checked ? 600 : 400,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={e => {
+                              const next = e.target.checked
+                                ? [...stdCategories, cat]
+                                : stdCategories.filter(c => c !== cat);
+                              setStdCategories(next);
+                              setSetupCategories(next);
+                            }}
+                          />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat}</span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              Sector & Project Type
+            </label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select
+                className="select-field"
+                value={setupSector}
+                onChange={e => {
+                  const s = e.target.value;
+                  setSetupSector(s);
+                  setStdSector(s);
+                  const av = SECTOR_PROJECT_TYPES[s] || [];
+                  if (av.length > 0) {
+                    setSetupProjectType(av[0]);
+                    setStdProjectType(av[0]);
+                  }
+                }}
+                style={{ width: '45%', height: 36, fontSize: 12 }}
+              >
+                <option value="RETAIL">Retail</option>
+                <option value="HOSPITALITY">Hospitality</option>
+                <option value="BANKING">Banking</option>
+                <option value="INSURANCE">Insurance</option>
+                <option value="OFFICE">Office</option>
+                <option value="SERVICES">Services</option>
+              </select>
+              <select
+                className="select-field"
+                value={setupProjectType}
+                onChange={e => {
+                  setSetupProjectType(e.target.value);
+                  setStdProjectType(e.target.value);
+                }}
+                style={{ width: '55%', height: 36, fontSize: 12 }}
+              >
+                {(SECTOR_PROJECT_TYPES[setupSector] || ['Retail Store Fitout']).map(pt => (
+                  <option key={pt} value={pt}>{pt}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              Area / Sqft *
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              value={setupArea}
+              onChange={e => setSetupArea(e.target.value)}
+              placeholder="10,000"
+              style={{ width: '100%', height: 36, fontSize: 12 }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              BOQ Purpose *
+            </label>
+            <select
+              className="select-field"
+              value={setupPurpose}
+              onChange={e => handlePurposeChange(e.target.value as any)}
+              style={{ width: '100%', height: 36, fontSize: 12, fontWeight: 600, color: setupPurpose === 'BUDGET' ? '#047857' : '#1e40af' }}
+            >
+              <option value="BUDGET">BUILD PROJECT BUDGET</option>
+              <option value="PR">BOQ SUBMISSION (PROCUREMENT)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Row 2: BOQ Title and BOQ Description */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 14, alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+                BOQ Title / Name
+              </label>
+              <span style={{ fontSize: 10, color: userEditedTitle ? '#475569' : '#2563eb', fontWeight: 600 }}>
+                {userEditedTitle ? 'Custom Title' : 'Auto: Category + Project'}
+              </span>
+            </div>
+            <input
+              type="text"
+              className="input-field"
+              value={setupTitle}
+              onChange={e => {
+                setSetupTitle(e.target.value);
+                setUserEditedTitle(true);
+              }}
+              placeholder="e.g. Civil & Interior — Kundanahalli Project"
+              style={{ width: '100%', height: 36, fontSize: 12 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+              BOQ Description
+            </label>
+            <textarea
+              className="input-field"
+              rows={2}
+              value={setupDescription}
+              onChange={e => setSetupDescription(e.target.value)}
+              placeholder="Describe the purpose, scope, or specific requirements of this BOQ."
+              style={{ width: '100%', fontSize: 12, padding: '7px 10px', resize: 'vertical' }}
+            />
+          </div>
+        </div>
+
+        {/* Row 3: Action Button to Explicitly Save/Apply Target Parameters */}
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>
+            {activeBoq ? `Active BOQ: ${activeBoq.boqCode}` : 'Configure parameters before generating BOQ'}
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleSaveParameters}
+            disabled={savingParameters}
+            style={{ fontWeight: 700, fontSize: 11, padding: '6px 16px' }}
+          >
+            {savingParameters ? 'Saving Parameters...' : '[ SAVE TARGET PARAMETERS ]'}
+          </button>
+        </div>
+      </div>
+
+      {/* STATUS & FEEDBACK BANNER */}
+      {statusMessage && (
+        <div
+          style={{
+            background: statusType === 'success' ? '#f0fdf4' : statusType === 'error' ? '#fef2f2' : '#eff6ff',
+            border: `1px solid ${statusType === 'success' ? '#bbf7d0' : statusType === 'error' ? '#fecaca' : '#bfdbfe'}`,
+            color: statusType === 'success' ? '#166534' : statusType === 'error' ? '#991b1b' : '#1e40af',
+            padding: '12px 18px',
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {statusType === 'success' ? <CheckCircle2 size={18} /> : statusType === 'error' ? <AlertTriangle size={18} /> : <Info size={18} />}
+            <span>{statusMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStatusMessage('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 16 }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* =========================================================================
+          HOW WOULD YOU LIKE TO CREATE THIS BOQ? (ENTRY POINTS ONLY)
+      ========================================================================= */}
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          HOW WOULD YOU LIKE TO CREATE THIS BOQ?
+        </h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          {/* Card 1: Upload Existing BOQ */}
+          <div
+            onClick={() => setSelectedMethod(1)}
+            style={{
+              padding: 16,
+              borderRadius: 8,
+              border: selectedMethod === 1 ? '2px solid #2563eb' : '1px solid #cbd5e1',
+              background: selectedMethod === 1 ? '#eff6ff' : '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: selectedMethod === 1 ? '0 4px 6px -1px rgba(37,99,235,0.1)' : 'none',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Upload size={18} color="#2563eb" />
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  1. Upload Existing BOQ
+                </h3>
+              </div>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                Upload an existing BOQ using the simple proCPX Excel format.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadSimpleTemplate();
+                }}
+                style={{ fontSize: 11, padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, background: '#ffffff' }}
+              >
+                <Download size={13} /> [ DOWNLOAD SIMPLE BOQ TEMPLATE ]
+              </button>
+
+              <input
+                type="file"
+                ref={fileInputMethod1Ref}
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleUploadExistingBoq(e.target.files[0]);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={uploadingMethod1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputMethod1Ref.current?.click();
+                }}
+                style={{ fontSize: 11, padding: '7px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 700 }}
+              >
+                <Upload size={13} />
+                {uploadingMethod1 ? 'Uploading...' : '[ UPLOAD EXISTING BOQ ]'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Download Standard BOQ */}
+          <div
+            onClick={() => setSelectedMethod(2)}
+            style={{
+              padding: 16,
+              borderRadius: 8,
+              border: selectedMethod === 2 ? '2px solid #2563eb' : '1px solid #cbd5e1',
+              background: selectedMethod === 2 ? '#eff6ff' : '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: selectedMethod === 2 ? '0 4px 6px -1px rgba(37,99,235,0.1)' : 'none',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <FileSpreadsheet size={18} color="#2563eb" />
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  2. Download Standard BOQ
+                </h3>
+              </div>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                Download a category-specific standard BOQ, enter quantities and project requirements, then upload the completed file.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={downloadingStd}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadStandardBoq();
+                }}
+                style={{ fontSize: 11, padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, background: '#ffffff' }}
+              >
+                <Download size={13} />
+                {downloadingStd ? 'Downloading...' : '[ DOWNLOAD STANDARD BOQ ]'}
+              </button>
+
+              <input
+                type="file"
+                ref={fileInputMethod2Ref}
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleUploadCompletedStandardBoq(e.target.files[0]);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={uploadingMethod2}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputMethod2Ref.current?.click();
+                }}
+                style={{
+                  fontSize: 11,
+                  padding: '7px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  fontWeight: 700,
+                  background: stdDownloaded ? '#16a34a' : '#2563eb',
+                  borderColor: stdDownloaded ? '#16a34a' : '#2563eb',
+                }}
+              >
+                <Upload size={13} />
+                {uploadingMethod2 ? 'Uploading & Populating...' : '[ UPLOAD COMPLETED BOQ ]'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Drawing to BOQ */}
+          <div
+            onClick={() => setSelectedMethod(3)}
+            style={{
+              padding: 16,
+              borderRadius: 8,
+              border: selectedMethod === 3 ? '2px solid #2563eb' : '1px solid #cbd5e1',
+              background: selectedMethod === 3 ? '#eff6ff' : '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: selectedMethod === 3 ? '0 4px 6px -1px rgba(37,99,235,0.1)' : 'none',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ImageIcon size={18} color="#2563eb" />
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  3. Drawing to BOQ
+                </h3>
+              </div>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                Upload architectural drawings and generate a draft BOQ using AI-assisted extraction.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Drawing Ref (e.g. DWG-A-101)"
+                value={drawingNumber}
+                onChange={e => setDrawingNumber(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                style={{ height: 32, fontSize: 11 }}
+              />
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '7px 8px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: '#2563eb',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                }}
+              >
+                <Upload size={13} />
+                {extractingDrawing ? 'Extracting...' : '[ UPLOAD DRAWING ]'}
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.dxf"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    if (e.target.files && e.target.files[0]) {
+                      setDrawingFile(e.target.files[0]);
+                      handleDrawingExtract();
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Card 4: Manual Entry */}
+          <div
+            onClick={() => setSelectedMethod(4)}
+            style={{
+              padding: 16,
+              borderRadius: 8,
+              border: selectedMethod === 4 ? '2px solid #2563eb' : '1px solid #cbd5e1',
+              background: selectedMethod === 4 ? '#eff6ff' : '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: selectedMethod === 4 ? '0 4px 6px -1px rgba(37,99,235,0.1)' : 'none',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <PenTool size={18} color="#2563eb" />
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  4. Manual Entry
+                </h3>
+              </div>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+                Create a BOQ manually using standard item and catalogue suggestions.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedMethod(4);
+                }}
+                style={{ fontSize: 11, padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, background: '#ffffff' }}
+              >
+                Configure {manualRows.length} Lines
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={savingManual}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSaveManual();
+                }}
+                style={{ fontSize: 11, padding: '7px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 700 }}
+              >
+                <Plus size={13} />
+                {savingManual ? 'Saving...' : '[ CREATE MANUAL BOQ ]'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* =========================================================================
+          BELOW THE FOUR OPTIONS: CENTRAL BOQ WORKSPACE (Section 2, 7, 8, 9, 10, 11)
+      ========================================================================= */}
+      <div ref={workspaceRef} style={{ marginTop: 32, marginBottom: 36 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: -0.2 }}>
+            BOQ WORKSPACE
+          </h2>
+          {activeBoq && (
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              Working document — all changes and AI costs operate in-place below.
+            </span>
+          )}
+        </div>
+
+        {!activeBoq || lines.length === 0 ? (
+          /* Initial Empty State */
+          <div className="card" style={{ background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: 8, padding: '48px 24px', textAlign: 'center' }}>
+            <FileSpreadsheet size={44} color="#94a3b8" style={{ margin: '0 auto 12px auto' }} />
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#334155', margin: '0 0 6px 0' }}>
+              BOQ WORKSPACE IS CURRENTLY EMPTY
+            </h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 auto 16px auto', maxWidth: 500 }}>
+              Complete ANY one of the four methods above to generate or upload your BOQ, or select an existing BOQ from the list below. The active BOQ will appear immediately right here.
+            </p>
+          </div>
+        ) : (
+          /* Active Central BOQ Workspace - Compact Self-Contained Document */
+          <div
+            className="card boq-workspace-container"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              padding: '16px 20px',
+              marginBottom: 24,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+            }}
+          >
+            {/* 1. COMPACT BOQ HEADER */}
+            <div style={{ paddingBottom: 12, borderBottom: '1px solid #f1f5f9', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1e40af', background: '#eff6ff', padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
+                    {activeBoq.boqCode}
+                  </span>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    {activeBoq.title || activeBoq.boqCode}
+                  </h3>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span style={{ fontSize: 12, color: '#475569' }}>
+                    <strong>Cost Centre:</strong> {activeCostCentreObj?.code || 'CC'} — {activeCostCentreObj?.name || 'Cost Centre'}
+                  </span>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <span style={{ fontSize: 12, color: '#475569' }}>
+                    <strong>Category:</strong> {activeBoq.category || 'Standard'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', background: '#f1f5f9', padding: '2px 7px', borderRadius: 4 }}>
+                    {activeRevision?.revisionCode || 'R0'}
+                  </span>
+                  <StatusBadge status={activeBoq.status || 'DRAFT'} />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(prev => !prev)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 11,
+                    color: '#64748b',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                  title="Toggle Project, Area, and Scope details"
+                >
+                  <Info size={12} />
+                  {showDetails ? 'Hide Details' : 'Details'}
+                  {showDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+              </div>
+
+              {/* Collapsible Secondary Metadata Row */}
+              {showDetails && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: 6 }}>
+                  <div>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Project: </span>
+                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{activeProjectObj?.name || 'Project'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Area: </span>
+                    <span style={{ fontWeight: 700, color: '#1e293b' }}>
+                      {activeCostCentreObj?.areaSqFt ? `${activeCostCentreObj.areaSqFt.toLocaleString()} Sqft` : (setupArea ? `${setupArea} Sqft` : '—')}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Purpose: </span>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '1px 6px',
+                      borderRadius: 3,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: activeBoq.purpose === 'BUDGET' ? '#ecfdf5' : '#eff6ff',
+                      color: activeBoq.purpose === 'BUDGET' ? '#047857' : '#1e40af',
+                    }}>
+                      {activeBoq.purpose === 'BUDGET' ? 'Budget Baseline' : 'BOQ Submission (Procurement)'}
+                    </span>
+                  </div>
+                  {activeBoq.description && (
+                    <div style={{ width: '100%', marginTop: 2, paddingTop: 6, borderTop: '1px solid #f1f5f9', color: '#334155', fontStyle: 'italic', fontSize: 11 }}>
+                      <span style={{ fontWeight: 600, fontStyle: 'normal', color: '#64748b' }}>Scope: </span>
+                      {activeBoq.description}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 2. SIMPLIFIED ACTION BAR */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 14,
+                flexWrap: 'wrap',
+                gap: 8,
+                paddingBottom: 12,
+                borderBottom: '1px solid #f1f5f9',
+              }}
+            >
+              {/* Secondary Actions Left */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleToggleEditMode}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontWeight: 600,
+                    fontSize: 12,
+                    padding: '5px 10px',
+                    background: isEditingBoq ? '#eff6ff' : '#ffffff',
+                    borderColor: isEditingBoq ? '#2563eb' : '#cbd5e1',
+                    color: isEditingBoq ? '#1e40af' : '#334155',
+                  }}
+                >
+                  <PenTool size={13} />
+                  {isEditingBoq ? 'Exit Edit Mode' : 'Edit BOQ'}
+                </button>
+
+
+
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleGenerateAiCost}
+                  disabled={estimatingCost || lines.length === 0}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontWeight: 600,
+                    fontSize: 12,
+                    padding: '5px 10px',
+                    color: '#059669',
+                  }}
+                  title="Generate indicative benchmark estimates for unestimated lines"
+                >
+                  <TrendingUp size={13} color="#059669" />
+                  {estimatingCost ? 'Calculating...' : 'Generate AI Cost'}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleValidateBoq}
+                  disabled={validatingQuality || lines.length === 0}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontWeight: 600,
+                    fontSize: 12,
+                    padding: '5px 10px',
+                    color: '#2563eb',
+                  }}
+                >
+                  <ShieldCheck size={13} color="#2563eb" />
+                  {validatingQuality ? 'Validating...' : 'Validate'}
+                </button>
+              </div>
+
+              {/* Primary Action Right */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {activeBoq.purpose === 'PR' ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      if (pendingQuantityCount > 0) {
+                        setStatusType('error');
+                        setStatusMessage(`Quantity required for ${pendingQuantityCount} item${pendingQuantityCount > 1 ? 's' : ''} before BOQ submission.`);
+                        return;
+                      }
+                      setPrModalOpen(true);
+                    }}
+                    disabled={lines.length === 0}
+                    title={pendingQuantityCount > 0 ? `Quantity required for ${pendingQuantityCount} items before BOQ submission` : undefined}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontWeight: 700,
+                      fontSize: 12,
+                      padding: '6px 14px',
+                      background: pendingQuantityCount > 0 ? '#94a3b8' : '#2563eb',
+                      borderColor: pendingQuantityCount > 0 ? '#94a3b8' : '#2563eb',
+                      cursor: pendingQuantityCount > 0 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <Send size={13} />
+                    Submit BOQ
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      if (pendingQuantityCount > 0) {
+                        setStatusType('error');
+                        setStatusMessage(`${pendingQuantityCount} BOQ line${pendingQuantityCount > 1 ? 's' : ''} require quantity before this BOQ can be added to Budget.`);
+                        return;
+                      }
+                      setBudgetModalOpen(true);
+                    }}
+                    disabled={lines.length === 0}
+                    title={pendingQuantityCount > 0 ? `${pendingQuantityCount} BOQ lines require quantity before adding to Budget` : undefined}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontWeight: 700,
+                      fontSize: 12,
+                      padding: '6px 14px',
+                      background: pendingQuantityCount > 0 ? '#94a3b8' : '#059669',
+                      borderColor: pendingQuantityCount > 0 ? '#94a3b8' : '#059669',
+                      cursor: pendingQuantityCount > 0 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <Landmark size={13} />
+                    Add to Budget
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 3. INTEGRATED FINANCIAL SUMMARY */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px', marginBottom: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, alignItems: 'stretch' }}>
+                {/* Metric 1: Line Items */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 5, padding: '8px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>BOQ Line Items</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginTop: 2 }}>
+                    {financialSummary.totalLines} <span style={{ fontSize: 11, fontWeight: 500, color: '#64748b' }}>lines</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
+                    {financialSummary.validQuantityLines} with qty · {financialSummary.missingQuantityLines > 0 ? (
+                      <span style={{ color: '#b45309', fontWeight: 600 }}>{financialSummary.missingQuantityLines} missing</span>
+                    ) : (
+                      <span style={{ color: '#059669', fontWeight: 600 }}>all complete</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Metric 2: AI Estimated Value (Benchmark) */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 5, padding: '8px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>AI Estimated Value</span>
+                    <span style={{ fontSize: 9, background: '#eff6ff', color: '#1e40af', padding: '1px 4px', borderRadius: 3, fontWeight: 600 }}>Benchmark</span>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: financialSummary.hasAiEstimates ? '#047857' : '#94a3b8', marginTop: 2 }}>
+                    {financialSummary.hasAiEstimates ? `₹ ${financialSummary.totalAiEstimate.toLocaleString('en-IN')}` : '—'}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                    Indicative benchmark · not approved budget
+                  </div>
+                </div>
+
+                {/* Metric 3: Cost per Sqft */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 5, padding: '8px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Cost per Sqft</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: financialSummary.costPerSqFt !== null ? '#1e40af' : '#94a3b8', marginTop: 2 }}>
+                    {financialSummary.costPerSqFt !== null ? `₹ ${financialSummary.costPerSqFt.toLocaleString('en-IN')}` : '—'}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                    {financialSummary.areaSqFt ? `${financialSummary.areaSqFt.toLocaleString()} sqft area` : 'Area required'}
+                  </div>
+                </div>
+
+                {/* Metric 4: Data Readiness */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 5, padding: '8px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Data Readiness</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: financialSummary.missingQuantityLines === 0 && financialSummary.validationErrorLines === 0 ? '#059669' : '#b45309', marginTop: 2 }}>
+                    {financialSummary.missingQuantityLines === 0 && financialSummary.validationErrorLines === 0
+                      ? 'Ready to Submit'
+                      : `${financialSummary.missingQuantityLines + financialSummary.validationErrorLines} Items Attention`}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                    {financialSummary.missingRateLines > 0 ? `${financialSummary.missingRateLines} unrated · ` : ''}
+                    {financialSummary.validationErrorLines > 0 ? `${financialSummary.validationErrorLines} validation issues` : 'Validation clean'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Breakdown Toggle */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryBreakdown(prev => !prev)}
+                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, padding: 0 }}
+                >
+                  {showCategoryBreakdown ? 'Hide Category Distribution' : 'Show Category Distribution'}
+                  {showCategoryBreakdown ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                </button>
+              </div>
+
+              {/* Collapsible Category Breakdown Strip */}
+              {showCategoryBreakdown && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                  {['Material', 'Electrical', 'Civil', 'Interior', 'Other'].map(cat => (
+                    <div key={cat} style={{ background: '#ffffff', padding: '6px 10px', borderRadius: 4, border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{cat}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                        {financialSummary.categoryTotals[cat] > 0 ? `₹ ${financialSummary.categoryTotals[cat].toLocaleString('en-IN')}` : '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 4. QUANTITY REQUIRED ALERT (if any) */}
+            {pendingQuantityCount > 0 && (
+              <div
+                style={{
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  marginBottom: 12,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#92400e' }}>
+                  <AlertTriangle size={15} color="#d97706" />
+                  <span>
+                    <strong>{pendingQuantityCount}</strong> line{pendingQuantityCount > 1 ? 's' : ''} require quantity. Enter quantities before adding to budget or submitting BOQ.
+                  </span>
+                </div>
+                {!isEditingBoq && (
+                  <button
+                    type="button"
+                    onClick={handleToggleEditMode}
+                    style={{ background: '#ffffff', border: '1px solid #f59e0b', color: '#b45309', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Edit Quantities
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 5. IMPORT RESULT BANNER (if any) */}
+            {importResult && (
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  marginBottom: 12,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#15803d' }}>
+                  <span>✓ <strong>{importResult.totalImported}</strong> imported</span>
+                  <span>•</span>
+                  <span>✓ <strong>{importResult.quantitiesValid}</strong> qty valid</span>
+                  {importResult.warningsCount > 0 && (
+                    <>
+                      <span>•</span>
+                      <span style={{ color: '#b45309', fontWeight: 600 }}>⚠ {importResult.warningsCount} warnings</span>
+                    </>
+                  )}
+                </div>
+                {importResult.warningsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowWarningModal(true)}
+                    style={{ background: '#ffffff', border: '1px solid #fde68a', color: '#b45309', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Review Warnings
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 6. IN-PLACE EDIT MODE BAR (When Edit Mode active) */}
+            {isEditingBoq && (
+              <div
+                style={{
+                  background: '#eff6ff',
+                  border: '1px solid #93c5fd',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  marginBottom: 12,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e40af' }}>
+                  ✎ In-place Edit Mode Active — Modify quantities, descriptions, or rates directly in the table.
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setAddLineModalOpen(true)}
+                    style={{ background: '#ffffff', fontWeight: 600, fontSize: 11, padding: '4px 8px' }}
+                  >
+                    <Plus size={12} style={{ marginRight: 4 }} /> Add Line
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={savingEditChanges}
+                    onClick={handleSaveEditableChanges}
+                    style={{ fontWeight: 700, fontSize: 11, padding: '4px 10px' }}
+                  >
+                    {savingEditChanges ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setEditableLines(lines.map(l => ({ ...l })));
+                      setIsEditingBoq(false);
+                    }}
+                    style={{ background: '#ffffff', fontSize: 11, padding: '4px 8px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 7. BOQ LINE ITEMS TABLE */}
+            <div style={{ marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    BOQ LINE ITEMS ({lines.length})
+                  </h4>
+                  {pendingQuantityCount > 0 && (
+                    <span style={{ fontSize: 11, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                      ⚠ {pendingQuantityCount} require quantity
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={13} color="#94a3b8" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      placeholder="Search line items..."
+                      value={linesSearch}
+                      onChange={e => setLinesSearch(e.target.value)}
+                      className="input-field"
+                      style={{ height: 28, fontSize: 12, width: 200, paddingLeft: 26 }}
+                    />
+                  </div>
+                  {!isEditingBoq && (
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => setAddLineModalOpen(true)}
+                      style={{ fontSize: 11, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, height: 28 }}
+                    >
+                      <Plus size={12} /> Add Line
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="table-container" style={{ overflowX: 'auto', width: '100%', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+                <table className="table enterprise-table" style={{ width: '100%', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', height: 38, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                      <th style={{ padding: '0 8px', width: 40 }}>#</th>
+                      <th style={{ padding: '0 10px', minWidth: 160 }}>Original Description</th>
+                      <th style={{ padding: '0 10px', minWidth: 180 }}>Standard Description</th>
+                      <th style={{ padding: '0 10px', minWidth: 180 }}>BOQ Description</th>
+                      <th style={{ padding: '0 8px', width: 70 }}>UOM</th>
+                      <th style={{ padding: '0 8px', width: 90, textAlign: 'right' }}>Qty</th>
+                      <th style={{ padding: '0 8px', width: 90 }}>Location</th>
+                      <th style={{ padding: '0 8px', width: 90 }}>Brand</th>
+                      <th style={{ padding: '0 8px', width: 95, textAlign: 'right' }}>AI Unit Cost</th>
+                      <th style={{ padding: '0 8px', width: 105, textAlign: 'right' }}>AI Total</th>
+                      <th style={{ padding: '0 8px', width: 130, textAlign: 'center' }}>Status</th>
+                      {!isEditingBoq && <th style={{ padding: '0 8px', width: 90, textAlign: 'center' }}>Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLines.map((l, idx) => {
+                      const hasAiSuggestion = l.aiSuggestedDescription && l.aiSuggestedDescription !== l.standardDescription;
+                      const unitCost = l.aiUnitCost || 0;
+                      const totalCost = (l.quantity !== null && l.quantity !== undefined && l.quantity > 0)
+                        ? (l.aiTotalCost !== null && l.aiTotalCost !== undefined ? l.aiTotalCost : (unitCost ? unitCost * l.quantity : null))
+                        : null;
+
+                      if (isEditingBoq) {
+                        return (
+                          <tr key={l.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '6px 8px', fontWeight: 600 }}>{l.lineNumber || idx + 1}</td>
+                            <td style={{ padding: '6px 10px', color: '#64748b' }}>
+                              {l.originalDescription}
+                            </td>
+                            <td style={{ padding: '6px 10px' }}>
+                              <input
+                                type="text"
+                                className="input-field"
+                                value={l.standardDescription || l.originalDescription || ''}
+                                onChange={e => handleUpdateEditableLineField(idx, 'standardDescription', e.target.value)}
+                                style={{ width: '100%', height: 28, fontSize: 12 }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 10px' }}>
+                              <input
+                                type="text"
+                                className="input-field"
+                                value={l.specification || ''}
+                                onChange={e => handleUpdateEditableLineField(idx, 'specification', e.target.value)}
+                                style={{ width: '100%', height: 28, fontSize: 12 }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                type="text"
+                                className="input-field"
+                                value={l.uomRaw || l.uom?.code || 'NOS'}
+                                onChange={e => handleUpdateEditableLineField(idx, 'uomRaw', e.target.value)}
+                                style={{ width: '100%', height: 28, fontSize: 12 }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                type="number"
+                                className="input-field"
+                                placeholder="Enter Qty"
+                                value={l.quantity === null || l.quantity === undefined ? '' : l.quantity}
+                                onChange={e => {
+                                  const val = e.target.value.trim();
+                                  handleUpdateEditableLineField(idx, 'quantity', val === '' ? null : parseFloat(val));
+                                }}
+                                style={{ width: '100%', height: 28, fontSize: 12, textAlign: 'right' }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                type="text"
+                                className="input-field"
+                                value={l.location || ''}
+                                onChange={e => handleUpdateEditableLineField(idx, 'location', e.target.value)}
+                                style={{ width: '100%', height: 28, fontSize: 12 }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                type="text"
+                                className="input-field"
+                                value={l.brand || ''}
+                                onChange={e => handleUpdateEditableLineField(idx, 'brand', e.target.value)}
+                                style={{ width: '100%', height: 28, fontSize: 12 }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                type="number"
+                                className="input-field"
+                                value={l.aiUnitCost || ''}
+                                onChange={e => handleUpdateEditableLineField(idx, 'aiUnitCost', parseFloat(e.target.value) || 0)}
+                                style={{ width: '100%', height: 28, fontSize: 12, textAlign: 'right' }}
+                              />
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: (l.quantity && l.quantity > 0) ? '#047857' : '#94a3b8' }}>
+                              {l.quantity && l.quantity > 0 && l.aiUnitCost ? `₹ ${(l.aiUnitCost * l.quantity).toLocaleString()}` : '—'}
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                              {l.quantity === null || l.quantity === undefined ? (
+                                <span style={{ background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                                  QUANTITY REQUIRED
+                                </span>
+                              ) : (
+                                <span style={{ background: '#ecfdf5', color: '#047857', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                                  VALID
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return (
+                        <Fragment key={l.id || idx}>
+                          <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '8px 8px', fontWeight: 600 }}>{l.lineNumber || idx + 1}</td>
+                          <td style={{ padding: '8px 10px', color: '#334155', fontWeight: 600 }}>
+                            {l.originalDescription}
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                              {l.standardDescription || l.originalDescription}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              {l.category?.name || l.category ? (
+                                <span style={{ fontSize: 10, color: '#475569', background: '#f1f5f9', padding: '1px 5px', borderRadius: 3, fontWeight: 500 }}>
+                                  {l.category?.name || l.category}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 10, color: '#b91c1c', background: '#fef2f2', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>
+                                  ⚠ Category Mapping Required
+                                </span>
+                              )}
+                            </div>
+                            {/* AI REFINE INLINE ACTIONS (Section 10) */}
+                            {hasAiSuggestion && (
+                              <div style={{ marginTop: 4, padding: 6, background: '#eff6ff', borderRadius: 4, border: '1px dashed #93c5fd' }}>
+                                <div style={{ fontSize: 11, color: '#1e40af', fontWeight: 600, marginBottom: 4 }}>
+                                  AI Suggested: {l.aiSuggestedDescription}
+                                </div>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcceptAiSuggestion(l)}
+                                    style={{ fontSize: 10, padding: '2px 8px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700 }}
+                                  >
+                                    [ ACCEPT ]
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingLineModal({ ...l })}
+                                    style={{ fontSize: 10, padding: '2px 8px', background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 600 }}
+                                  >
+                                    [ EDIT ]
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectAiSuggestion(l)}
+                                    style={{ fontSize: 10, padding: '2px 8px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 600 }}
+                                  >
+                                    [ REJECT ]
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 10px', color: '#64748b' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <SpecificationCell
+                                specification={l.specification || 'Commercial grade'}
+                                lineNumber={l.lineNumber || idx + 1}
+                                itemDescription={l.standardDescription || l.originalDescription}
+                                lineId={l.id}
+                                maxWidth={220}
+                              />
+                              {!isEditingBoq && l.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRequestRefineLine(l)}
+                                  disabled={refiningLineId === l.id}
+                                  className="btn btn-outline"
+                                  title="AI Support to Refine this line's BOQ Description"
+                                  style={{
+                                    fontSize: 10,
+                                    padding: '2px 8px',
+                                    height: 22,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    color: '#4f46e5',
+                                    borderColor: '#c7d2fe',
+                                    background: '#eef2ff',
+                                    fontWeight: 600,
+                                    width: 'fit-content',
+                                    borderRadius: 4,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <Sparkles size={11} color="#6366f1" />
+                                  {refiningLineId === l.id ? 'Refining...' : '✨ AI Support to Refine'}
+                                </button>
+                              )}
+
+                              {/* PROPOSED REFINEMENT BADGE WITH USER-CONFIRMED ACTION */}
+                              {proposedRefinements[l.id] && (
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    padding: 8,
+                                    background: '#f0fdf4',
+                                    border: '1px solid #86efac',
+                                    borderRadius: 6,
+                                    boxShadow: '0 2px 6px rgba(22,101,52,0.08)',
+                                    minWidth: 220,
+                                  }}
+                                >
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                                    <Sparkles size={11} color="#15803d" /> Proposed BOQ Description:
+                                  </div>
+                                  <div style={{ fontSize: 11, color: '#0f172a', fontWeight: 600, marginBottom: 3, lineHeight: 1.3 }}>
+                                    {proposedRefinements[l.id].suggestedSpec || proposedRefinements[l.id].suggestedDescription}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: '#475569', fontStyle: 'italic', marginBottom: 6 }}>
+                                    {proposedRefinements[l.id].reason}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyProposedDescription(l, proposedRefinements[l.id])}
+                                      style={{
+                                        fontSize: 10,
+                                        padding: '2px 8px',
+                                        background: '#16a34a',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: 3,
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      [ Apply Description ]
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setProposedRefinements(prev => {
+                                          const next = { ...prev };
+                                          delete next[l.id];
+                                          return next;
+                                        });
+                                      }}
+                                      style={{
+                                        fontSize: 10,
+                                        padding: '2px 6px',
+                                        background: '#f1f5f9',
+                                        color: '#64748b',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 3,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      Discard
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 8px', fontWeight: 600 }}>
+                            {l.uom?.code || l.uomRaw || 'NOS'}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700 }}>
+                            {l.quantity !== null && l.quantity !== undefined && l.quantity > 0 ? (
+                              <span style={{ color: '#0f172a' }}>{Number(l.quantity).toLocaleString()}</span>
+                            ) : l.quantity === 0 ? (
+                              <span style={{ color: '#d97706', fontSize: 11 }}>0 (⚠ &gt;0 req)</span>
+                            ) : (
+                              <span style={{ background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                Enter Qty
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 8px', color: '#64748b' }}>
+                            {l.location || '—'}
+                          </td>
+                          <td style={{ padding: '8px 8px', color: '#64748b' }}>
+                            {l.brand || '—'}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right', color: '#047857', fontWeight: 600 }}>
+                            {unitCost ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                                <span>₹ {unitCost.toLocaleString()}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedCostLineId(expandedCostLineId === (l.id || String(idx)) ? null : (l.id || String(idx)))}
+                                  title="View Line-Item Cost Breakdown"
+                                  style={{
+                                    background: expandedCostLineId === (l.id || String(idx)) ? '#dcfce7' : '#f1f5f9',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 3,
+                                    padding: '1px 4px',
+                                    fontSize: 9,
+                                    cursor: 'pointer',
+                                    color: '#0f172a',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {expandedCostLineId === (l.id || String(idx)) ? '▲' : '▼ Breakdown'}
+                                </button>
+                              </div>
+                            ) : '—'}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, color: (l.quantity && l.quantity > 0 && totalCost) ? '#047857' : '#94a3b8' }}>
+                            {(l.quantity && l.quantity > 0 && totalCost) ? `₹ ${totalCost.toLocaleString()}` : '—'}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                            {l.quantity === null || l.quantity === undefined ? (
+                              <span style={{ background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                                QUANTITY REQUIRED
+                              </span>
+                            ) : (l.aiTotalCost !== null && l.aiTotalCost !== undefined) || (l.validationStatus === 'COST GENERATED') ? (
+                              <span style={{ background: '#ecfdf5', color: '#047857', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                                COST GENERATED
+                              </span>
+                            ) : (!l.specification || l.specification.trim() === '') ? (
+                              <span style={{ background: '#eff6ff', color: '#1e40af', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                                SPECIFICATION REQUIRED
+                              </span>
+                            ) : (
+                              <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                                {l.validationStatus || 'VALID'}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
+                              {l.id && (
+                                <a
+                                  href={`/boq/line/${l.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Open Details (Dedicated Line Item View)"
+                                  style={{ color: '#0284c7', display: 'inline-flex', alignItems: 'center', padding: 2 }}
+                                >
+                                  <ExternalLink size={13} />
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setEditingLineModal({ ...l })}
+                                title="Edit Line"
+                                style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 2 }}
+                              >
+                                <PenTool size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLine(l.id)}
+                                title="Delete Line"
+                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedCostLineId === (l.id || String(idx)) && (() => {
+                          const bd = l.costBreakdown || computeLineCostBreakdown(l);
+                          return (
+                            <tr key={`bd-${l.id || idx}`} style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                              <td colSpan={isEditingBoq ? 11 : 12} style={{ padding: '10px 14px' }}>
+                                <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
+                                        Item #{l.lineNumber || idx + 1} AI Cost Breakdown: {l.standardDescription || l.originalDescription}
+                                      </span>
+                                      <span style={{ fontSize: 10, background: '#eff6ff', color: '#1e40af', padding: '1px 6px', borderRadius: 4, fontWeight: 700, border: '1px solid #bfdbfe' }}>
+                                        ESTIMATE · BENCHMARK
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: 10, color: '#64748b' }}>
+                                      Reconciled per {l.uom?.code || l.uomRaw || 'Unit'} (Direct Base + 10% Contractor Margin)
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, marginBottom: 8 }}>
+                                    <div style={{ padding: '6px 8px', background: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Material Cost ({bd.materialPercent}%)</div>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>₹ {bd.materialCost.toFixed(2)}</div>
+                                      <div style={{ fontSize: 9, color: '#94a3b8' }}>per {l.uom?.code || l.uomRaw || 'Unit'}</div>
+                                    </div>
+                                    <div style={{ padding: '6px 8px', background: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Labour Cost ({bd.labourPercent}%)</div>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>₹ {bd.labourCost.toFixed(2)}</div>
+                                      <div style={{ fontSize: 9, color: '#94a3b8' }}>per {l.uom?.code || l.uomRaw || 'Unit'}</div>
+                                    </div>
+                                    <div style={{ padding: '6px 8px', background: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Other Charges ({bd.otherChargesPercent}%)</div>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>₹ {bd.otherCharges.toFixed(2)}</div>
+                                      <div style={{ fontSize: 9, color: '#94a3b8' }}>equip / logistics / waste</div>
+                                    </div>
+                                    <div style={{ padding: '6px 8px', background: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Contractor Margin ({bd.contractorMarginPercent}%)</div>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>₹ {bd.contractorMargin.toFixed(2)}</div>
+                                      <div style={{ fontSize: 9, color: '#94a3b8' }}>10% on direct base</div>
+                                    </div>
+                                    <div style={{ padding: '6px 8px', background: '#ecfdf5', borderRadius: 4, border: '1px solid #a7f3d0' }}>
+                                      <div style={{ fontSize: 10, color: '#047857', fontWeight: 700 }}>Total AI Unit Cost</div>
+                                      <div style={{ fontSize: 12, fontWeight: 800, color: '#047857', marginTop: 2 }}>₹ {bd.aiUnitCost.toFixed(2)}</div>
+                                      <div style={{ fontSize: 9, color: '#059669' }}>Sum reconciled</div>
+                                    </div>
+                                    <div style={{ padding: '6px 8px', background: bd.aiLineTotal ? '#eff6ff' : '#fffbeb', borderRadius: 4, border: `1px solid ${bd.aiLineTotal ? '#bfdbfe' : '#fde68a'}` }}>
+                                      <div style={{ fontSize: 10, color: bd.aiLineTotal ? '#1e40af' : '#b45309', fontWeight: 700 }}>AI Line Total</div>
+                                      <div style={{ fontSize: 12, fontWeight: 800, color: bd.aiLineTotal ? '#1e40af' : '#b45309', marginTop: 2 }}>
+                                        {bd.aiLineTotal ? `₹ ${bd.aiLineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                      </div>
+                                      <div style={{ fontSize: 9, color: '#64748b' }}>
+                                        {l.quantity && l.quantity > 0 ? `× ${l.quantity} ${l.uom?.code || l.uomRaw || 'Unit'}` : 'Quantity required'}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div style={{ fontSize: 11, color: '#64748b', background: '#f8fafc', padding: '5px 8px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                    <strong>Engineering Basis & Assumptions:</strong> {bd.engineeringBasis}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })()}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* =========================================================================
+          BOTTOM SECTION: MY PROJECT BOQS (Section 21)
+      ========================================================================= */}
+      <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: 24, marginTop: 40 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: '0 0 2px 0' }}>
+              EXISTING PROJECT BOQS
+            </h3>
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              Click Open on any BOQ to load it immediately into the BOQ Workspace above.
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              type="text"
+              placeholder="Filter by code, title, category..."
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              className="input-field"
+              style={{ height: 34, fontSize: 12, width: 220 }}
+            />
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={loadAllBoqs}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+            >
+              <RefreshCw size={13} /> Refresh
+            </button>
+          </div>
+        </div>
+
+        {loadingBoqs ? (
+          <div style={{ padding: '32px 0', textAlign: 'center', color: '#64748b' }}>Loading BOQs...</div>
+        ) : filteredExistingBoqs.length === 0 ? (
+          <div style={{ padding: '32px 0', textAlign: 'center', color: '#64748b' }}>No BOQs found.</div>
+        ) : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table" style={{ width: '100%', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', height: 38, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                    <th style={{ padding: '0 12px', width: 140 }}>BOQ No.</th>
+                    <th style={{ padding: '0 12px' }}>BOQ Title</th>
+                    <th style={{ padding: '0 12px', width: 140 }}>Category</th>
+                    <th style={{ padding: '0 12px', width: 110 }}>Status</th>
+                    <th style={{ padding: '0 12px', textAlign: 'right', width: 100 }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredExistingBoqs.slice(0, 3).map(b => (
+                    <tr
+                      key={b.id}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        height: 44,
+                        background: activeBoq?.id === b.id ? '#eff6ff' : 'transparent',
+                      }}
+                    >
+                      <td style={{ padding: '0 12px', fontWeight: 800, color: '#1e40af' }}>
+                        {b.boqCode}
+                      </td>
+                      <td style={{ padding: '0 12px', fontWeight: 600, color: '#0f172a' }}>
+                        <div>{b.title || b.boqCode}</div>
+                        {b.description && (
+                          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 2, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.description}>
+                            {b.description}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '0 12px', color: '#64748b' }}>
+                        {b.category || 'Standard'}
+                      </td>
+                      <td style={{ padding: '0 12px' }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            background: b.status === 'APPROVED' ? '#ecfdf5' : '#f1f5f9',
+                            color: b.status === 'APPROVED' ? '#047857' : '#334155',
+                          }}
+                        >
+                          {b.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0 12px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          onClick={() => {
+                            loadBoqDetails(b.id);
+                            workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          style={{
+                            padding: '4px 12px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: activeBoq?.id === b.id ? '#2563eb' : '#ffffff',
+                            color: activeBoq?.id === b.id ? '#ffffff' : '#1e40af',
+                            borderColor: '#2563eb',
+                          }}
+                        >
+                          [ OPEN ]
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {filteredExistingBoqs.length > 3 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: '10px 14px',
+                  background: '#f8fafc',
+                  borderRadius: 6,
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Showing 3 recent BOQs.</span>
+                <button
+                  type="button"
+                  onClick={() => router.push('/boq')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#2563eb',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  View All ({filteredExistingBoqs.length}) →
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* =========================================================================
+          MODALS: ADD TO BUDGET & CREATE PR
+      ========================================================================= */}
+      {/* CONFIRMATION MODAL: ADD TO BUDGET (Section 13) */}
+      {budgetModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 520, padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <Landmark size={22} color="#059669" />
+              <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#065f46' }}>
+                Confirm Budget Contribution
+              </h3>
+            </div>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              Add this BOQ to the project budget baseline. All parameters inherit automatically from the active BOQ record.
+            </p>
+            <div style={{ background: '#f8fafc', padding: 14, borderRadius: 6, fontSize: 13, marginBottom: 20, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>BOQ:</span>
+                <strong>{activeBoq?.boqCode}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Project:</span>
+                <strong>{activeProjectObj?.name}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Cost Centre:</span>
+                <strong>{activeCostCentreObj?.code} — {activeCostCentreObj?.name}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Category:</span>
+                <strong>{activeBoq?.category || 'Standard'}</strong>
+              </div>
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#334155', fontWeight: 600 }}>BOQ Estimated Value:</span>
+                <strong style={{ color: '#047857', fontSize: 15 }}>₹ {totalRevValue.toLocaleString('en-IN')}</strong>
+              </div>
+              {pendingQuantityCount > 0 && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '10px 12px', fontSize: 12, color: '#92400e', fontWeight: 600 }}>
+                  ⚠ {pendingQuantityCount} BOQ lines require quantity before this BOQ can be added to Budget. Please click Edit BOQ to enter quantities.
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-outline" onClick={() => setBudgetModalOpen(false)}>
+                [ CANCEL ]
+              </button>
+              {pendingQuantityCount > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    setBudgetModalOpen(false);
+                    handleToggleEditMode();
+                  }}
+                  style={{ background: '#ffffff', borderColor: '#f59e0b', color: '#b45309', fontWeight: 700 }}
+                >
+                  [ EDIT BOQ ]
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleAddToBudget}
+                  disabled={addingToBudget}
+                  style={{ background: '#059669', borderColor: '#059669', fontWeight: 700 }}
+                >
+                  {addingToBudget ? 'Adding...' : '[ ADD TO BUDGET ]'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL: BOQ SUBMISSION (Requirement 3) */}
+      {prModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 520, padding: 24, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <Send size={22} color="#2563eb" />
+              <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#1e40af' }}>
+                Confirm BOQ Submission
+              </h3>
+            </div>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              Submit this commercial BOQ for Project Approver review and subsequent release to Category Manager.
+            </p>
+            <div style={{ background: '#f8fafc', padding: 14, borderRadius: 6, fontSize: 13, marginBottom: 20, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>BOQ:</span>
+                <strong>{activeBoq?.boqCode}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Project:</span>
+                <strong>{activeProjectObj?.name}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Cost Centre:</span>
+                <strong>{activeCostCentreObj?.code} — {activeCostCentreObj?.name}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Category:</span>
+                <strong>{activeBoq?.category || 'Standard'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>BOQ Lines:</span>
+                <strong>{lines.length} lines</strong>
+              </div>
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#334155', fontWeight: 600 }}>Estimated Cost:</span>
+                <strong style={{ color: '#1e40af', fontSize: 15 }}>₹ {totalRevValue.toLocaleString('en-IN')}</strong>
+              </div>
+              {pendingQuantityCount > 0 && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '10px 12px', fontSize: 12, color: '#92400e', fontWeight: 600 }}>
+                  ⚠ Quantity required for {pendingQuantityCount} items before BOQ submission. Please click Edit BOQ to enter quantities.
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-outline" onClick={() => setPrModalOpen(false)}>
+                [ CANCEL ]
+              </button>
+              {pendingQuantityCount > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    setPrModalOpen(false);
+                    handleToggleEditMode();
+                  }}
+                  style={{ background: '#ffffff', borderColor: '#f59e0b', color: '#b45309', fontWeight: 700 }}
+                >
+                  [ EDIT BOQ ]
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCreatePR}
+                  disabled={creatingPr}
+                  style={{ fontWeight: 700 }}
+                >
+                  {creatingPr ? 'Submitting BOQ...' : '[ SUBMIT BOQ ]'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SINGLE LINE EDIT MODAL */}
+      {editingLineModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 560, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                Edit Line Item ({editingLineModal.lineNumber})
+              </h3>
+              <button type="button" onClick={() => setEditingLineModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            <form onSubmit={handleSaveSingleLineEdit}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  Standard Description *
+                </label>
+                <input
+                  type="text"
+                  className="input-field"
+                  required
+                  value={editingLineModal.standardDescription || editingLineModal.originalDescription || ''}
+                  onChange={e => setEditingLineModal({ ...editingLineModal, standardDescription: e.target.value })}
+                  style={{ width: '100%', height: 36 }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  BOQ Description
+                </label>
+                <textarea
+                  className="input-field"
+                  rows={2}
+                  value={editingLineModal.specification || ''}
+                  onChange={e => setEditingLineModal({ ...editingLineModal, specification: e.target.value })}
+                  style={{ width: '100%', padding: 8, fontSize: 12 }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    Quantity *
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    required
+                    className="input-field"
+                    placeholder="Enter Qty"
+                    value={editingLineModal.quantity !== null && editingLineModal.quantity !== undefined ? editingLineModal.quantity : ''}
+                    onChange={e => {
+                      const v = e.target.value.trim();
+                      setEditingLineModal({ ...editingLineModal, quantity: v === '' ? null : parseFloat(v) });
+                    }}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    UOM *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="input-field"
+                    value={editingLineModal.uomRaw || editingLineModal.uom?.code || 'NOS'}
+                    onChange={e => setEditingLineModal({ ...editingLineModal, uomRaw: e.target.value })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    Location / Area
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingLineModal.location || ''}
+                    onChange={e => setEditingLineModal({ ...editingLineModal, location: e.target.value })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    Brand / Make
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingLineModal.brand || ''}
+                    onChange={e => setEditingLineModal({ ...editingLineModal, brand: e.target.value })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  Estimated Unit Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="input-field"
+                  value={editingLineModal.aiUnitCost || ''}
+                  onChange={e => setEditingLineModal({ ...editingLineModal, aiUnitCost: parseFloat(e.target.value) || 0 })}
+                  style={{ width: '100%', height: 36 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingLineModal(null)}>
+                  [ CANCEL ]
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ fontWeight: 700 }}>
+                  [ SAVE CHANGES ]
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD LINE MODAL */}
+      {addLineModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 560, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                + Add New BOQ Line
+              </h3>
+              <button type="button" onClick={() => setAddLineModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            <form onSubmit={handleAddLine}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  Description *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 2.5 SQMM Copper Armoured Cable"
+                  className="input-field"
+                  value={newLineData.description}
+                  onChange={e => setNewLineData({ ...newLineData, description: e.target.value })}
+                  style={{ width: '100%', height: 36 }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  BOQ Description
+                </label>
+                <textarea
+                  className="input-field"
+                  rows={2}
+                  placeholder="e.g. 1100V grade heavy-duty copper conductor with FRLS sheath"
+                  value={newLineData.specification}
+                  onChange={e => setNewLineData({ ...newLineData, specification: e.target.value })}
+                  style={{ width: '100%', padding: 8, fontSize: 12 }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    Quantity *
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    required
+                    className="input-field"
+                    value={newLineData.quantity}
+                    onChange={e => setNewLineData({ ...newLineData, quantity: parseFloat(e.target.value) || 0 })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    UOM *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="MTR, SQFT, NOS, LOT..."
+                    className="input-field"
+                    value={newLineData.uom}
+                    onChange={e => setNewLineData({ ...newLineData, uom: e.target.value })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    Location / Area
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Retail Floor, Server Room"
+                    className="input-field"
+                    value={newLineData.location}
+                    onChange={e => setNewLineData({ ...newLineData, location: e.target.value })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                    Brand / Make
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Polycab, Havells, Schneider"
+                    className="input-field"
+                    value={newLineData.brand}
+                    onChange={e => setNewLineData({ ...newLineData, brand: e.target.value })}
+                    style={{ width: '100%', height: 36 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  Estimated Unit Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="input-field"
+                  value={newLineData.aiUnitCost}
+                  onChange={e => setNewLineData({ ...newLineData, aiUnitCost: parseFloat(e.target.value) || 0 })}
+                  style={{ width: '100%', height: 36 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setAddLineModalOpen(false)}>
+                  [ CANCEL ]
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ fontWeight: 700 }}>
+                  [ ADD LINE ]
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* WARNINGS REVIEW MODAL */}
+      {showWarningModal && importResult && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 600, padding: 24, maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={18} color="#d97706" />
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  Import Warnings Review ({importResult.issues.length})
+                </h3>
+              </div>
+              <button type="button" onClick={() => setShowWarningModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+
+            <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+              <table className="table" style={{ width: '100%', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px' }}>Row</th>
+                    <th style={{ padding: '6px 8px' }}>Item</th>
+                    <th style={{ padding: '6px 8px' }}>Warning</th>
+                    <th style={{ padding: '6px 8px' }}>Action Taken</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importResult.issues.map((iss, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 600 }}>{iss.rowNumber || i + 1}</td>
+                      <td style={{ padding: '6px 8px' }}>{iss.description || iss.itemCode || 'Item'}</td>
+                      <td style={{ padding: '6px 8px', color: '#b45309' }}>{iss.issue}</td>
+                      <td style={{ padding: '6px 8px', color: '#15803d' }}>{iss.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-primary" onClick={() => setShowWarningModal(false)}>
+                Close Review
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
