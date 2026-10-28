@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   // Sheet 2: Main BOQ Data with Sample Data
   const sampleData = [
     {
+      'S.No.': 1,
       'Project ID *': 'CPX-P-000001',
       'Project Name': 'Premium Retail Flagship Store – Bengaluru',
       'Cost Centre Code *': 'CC-001',
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
       'Remarks': 'Sample line for retail customer area flooring',
     },
     {
+      'S.No.': 2,
       'Project ID *': 'CPX-P-000001',
       'Project Name': 'Premium Retail Flagship Store – Bengaluru',
       'Cost Centre Code *': 'CC-001',
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest) {
       'Remarks': 'Primary power delivery wiring',
     },
     {
+      'S.No.': 3,
       'Project ID *': 'CPX-P-000001',
       'Project Name': 'Premium Retail Flagship Store – Bengaluru',
       'Cost Centre Code *': 'CC-001',

@@ -89,3 +89,11 @@ Do not claim data persistence merely because TypeScript or the production build 
 ### 8. Strict Prohibition
 Never reset, wipe, truncate, reseed or recreate the development database as a routine response to code changes or test failures.
 Any proposed destructive database operation requires explicit authorisation after its consequences have been explained.
+
+### 9. Dashboard and Register Summary vs. Details UI Standard
+"Dashboard and register rows are concise summaries, not full-detail screens. Show only the fields needed to identify a record, understand its amount/status/stage, and take the next action. Put secondary descriptions, references, line items, and audit information in the existing View Details experience. Avoid cramped columns, repeated metadata, and duplicate actions."
+
+Summary rows must maintain clean spacing without wrapping or crowding:
+1. Show only: PR Number, Short Package/PR Description, Item Count, Cost Centre code, PR Amount, PR Approval Status, Current Procurement Stage, RFQ Count, and One View Details action.
+2. Put secondary descriptions, project/BOQ references, line-item specifications, approvals, and audit information in View Details.
+3. Keep the identifier prominent, maintain consistent horizontal alignment, and prevent badges from competing with descriptions.

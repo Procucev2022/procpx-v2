@@ -1,7 +1,7 @@
 'use client';
 // app/(app)/procurement/rfqs/[id]/page.tsx
 // proCPX Consolidated Procurement Workspace: RFQ -> Negotiation -> Awarding -> PPO
-import { useEffect, useState, useMemo, use } from 'react';
+import { useEffect, useState, useMemo, use, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
@@ -10,6 +10,7 @@ import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import SpecificationCell from '@/components/ui/SpecificationCell';
+import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import {
   Send,
   RotateCcw,
@@ -38,6 +39,8 @@ import {
   TrendingDown,
   Tag,
   Eye,
+  FileSpreadsheet,
+  Gavel,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
@@ -52,7 +55,7 @@ import {
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import ProcurementCommercialWorkspace from '@/components/ProcurementCommercialWorkspace';
 
-export default function RfqDetailPage({ params }: { params: Promise<{ id: string }> }) {
+function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1306,7 +1309,7 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
 
   return (
     <div className="page-content">
-      {/* 1. Consolidated Compact Enterprise Header */}
+      {/* 1. RFQ Header with Metadata & Compact Cards */}
       <div
         className="card mb-3"
         style={{
@@ -1314,11 +1317,11 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
           border: '1px solid #e2e8f0',
           borderRadius: 8,
           padding: '12px 18px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
         }}
       >
         {/* Top Line: RFQ Ref, Title, Status & Actions */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span
               className="font-mono font-bold"
@@ -1327,8 +1330,8 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
                 background: '#eff6ff',
                 color: '#1d4ed8',
                 border: '1px solid #bfdbfe',
-                padding: '2px 8px',
-                borderRadius: 4,
+                padding: '3px 12px',
+                borderRadius: 9999,
               }}
             >
               {rfq.rfqNumber}
@@ -1339,8 +1342,8 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
             <StatusBadge status={rfq.status} />
           </div>
 
-          {rfq.status === 'DRAFT' && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {rfq.status === 'DRAFT' && (
               <button
                 type="button"
                 onClick={handleReleaseRfq}
@@ -1350,63 +1353,109 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
               >
                 <Send size={13} style={{ marginRight: 5 }} /> Release RFQ
               </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={() => setRfqChatDrawerOpen(true)}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: 12 }}
+              title="Open persistent RFQ message and query drawer"
+            >
+              <MessageSquare size={13} style={{ marginRight: 5 }} /> Clarifications / Chat
+            </button>
+          </div>
         </div>
 
-        {/* Bottom Line: Consolidated Metadata Details (Project, Package, Cost Centre, PR Ref, BOQ Rev, Deadline) */}
+        {/* Compact Metadata Cards */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            flexWrap: 'wrap',
-            fontSize: 12,
-            color: '#475569',
-            marginTop: 8,
-            paddingTop: 8,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: 10,
+            paddingTop: 10,
             borderTop: '1px solid #f1f5f9',
           }}
         >
-          <div>
-            <span className="text-muted" style={{ fontWeight: 600 }}>Project:</span>{' '}
-            <span className="font-semibold text-slate-800">{rfq.project?.name} ({rfq.project?.projectCode})</span>
+          {/* Project */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #2563eb', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <FileText size={18} color="#2563eb" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Project</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }} title={rfq.project?.name}>
+                {rfq.project?.name || 'Project'}
+              </div>
+            </div>
           </div>
-          <span style={{ color: '#cbd5e1' }}>•</span>
-          <div>
-            <span className="text-muted" style={{ fontWeight: 600 }}>Package:</span>{' '}
-            <span className="font-medium text-slate-800">{rfq.packageName || 'Civil & Commercial Package'}</span>
+
+          {/* Category */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #0d9488', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <Layers size={18} color="#0d9488" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Category</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }} title={rfq.category?.name || rfq.packageName}>
+                {rfq.category?.name || rfq.categoryName || rfq.packageName || 'Civil & Commercial'}
+              </div>
+            </div>
           </div>
-          <span style={{ color: '#cbd5e1' }}>•</span>
-          <div>
-            <span className="text-muted" style={{ fontWeight: 600 }}>Cost Centre:</span>{' '}
-            <span className="font-semibold text-slate-800">
-              {rfq.pr?.costCentre ? `${rfq.pr.costCentre.code} - ${rfq.pr.costCentre.name}` : rfq.costCentre || 'CC45 - Fitout'}
-            </span>
+
+          {/* RFQ Date */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #ea580c', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <Calendar size={18} color="#ea580c" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>RFQ Date</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+                {rfq.createdAt && !isNaN(new Date(rfq.createdAt).getTime())
+                  ? new Date(rfq.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '13 Oct 2026'}
+              </div>
+            </div>
           </div>
-          <span style={{ color: '#cbd5e1' }}>•</span>
-          <div>
-            <span className="text-muted" style={{ fontWeight: 600 }}>PR Ref:</span>{' '}
-            <span className="font-mono font-bold text-blue-700">{rfq.pr?.prNumber || rfq.prNumber || 'PR-DEMO-001'}</span>
+
+          {/* Total Line Items */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #123B7A', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <FileSpreadsheet size={18} color="#123B7A" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Total Line Items</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', marginTop: 2 }}>
+                {rfq.lines?.length || 0}
+              </div>
+            </div>
           </div>
-          <span style={{ color: '#cbd5e1' }}>•</span>
-          <div>
-            <span className="text-muted" style={{ fontWeight: 600 }}>BOQ:</span>{' '}
-            <span className="badge badge-approved" style={{ fontSize: 10, padding: '1px 6px', marginLeft: 4 }}>
-              {rfq.boqRevision?.revisionCode || 'BOQ-R1'}
-            </span>
+
+          {/* Vendors Invited */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #2563eb', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <Users size={18} color="#2563eb" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Vendors Invited</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', marginTop: 2 }}>
+                {rfq.invitedVendors?.length || 0}
+              </div>
+            </div>
           </div>
-          <span style={{ color: '#cbd5e1' }}>•</span>
-          <div>
-            <span className="text-muted" style={{ fontWeight: 600 }}>Deadline:</span>{' '}
-            <span className="font-medium text-slate-800">
-              {rfq.submissionDeadline ? new Date(rfq.submissionDeadline).toLocaleDateString() : 'Open'}
-            </span>
+
+          {/* Quotes Received */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #0d9488', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <FileCheck size={18} color="#0d9488" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Quotes Received</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0d9488', fontFamily: 'monospace', marginTop: 2 }}>
+                {submittedQuotes.length}
+              </div>
+            </div>
+          </div>
+
+          {/* Negotiation Round */}
+          <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #ea580c', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
+            <MessageSquare size={18} color="#ea580c" style={{ flexShrink: 0 }} />
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Negotiation Round</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+                {rfq.negotiations?.[0]?.currentRound ? `Round ${rfq.negotiations[0].currentRound}` : 'Round 1'}
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-
 
       {/* Inline Feedback Banner */}
       {msg && (
@@ -1436,15 +1485,15 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
           className={`tab-btn ${activeTab === 'quotes' ? 'active' : ''}`}
           style={{
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: activeTab === 'quotes' ? 700 : 600,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
             padding: '8px 18px',
             borderRadius: 6,
-            border: activeTab === 'quotes' ? '1px solid #2563eb' : '1px solid #e2e8f0',
-            background: activeTab === 'quotes' ? '#eff6ff' : '#ffffff',
-            color: activeTab === 'quotes' ? '#1d4ed8' : '#64748b',
+            border: activeTab === 'quotes' ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
+            background: '#ffffff',
+            color: activeTab === 'quotes' ? '#0f172a' : '#475569',
             boxShadow: activeTab === 'quotes' ? '0 1px 2px rgba(37,99,235,0.08)' : 'none',
             cursor: 'pointer',
           }}
@@ -1471,15 +1520,15 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
           className={`tab-btn ${activeTab === 'negotiation' ? 'active' : ''}`}
           style={{
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: activeTab === 'negotiation' ? 700 : 600,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
             padding: '8px 18px',
             borderRadius: 6,
-            border: activeTab === 'negotiation' ? '1px solid #2563eb' : '1px solid #e2e8f0',
-            background: activeTab === 'negotiation' ? '#eff6ff' : '#ffffff',
-            color: activeTab === 'negotiation' ? '#1d4ed8' : '#64748b',
+            border: activeTab === 'negotiation' ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
+            background: '#ffffff',
+            color: activeTab === 'negotiation' ? '#0f172a' : '#475569',
             boxShadow: activeTab === 'negotiation' ? '0 1px 2px rgba(37,99,235,0.08)' : 'none',
             cursor: 'pointer',
           }}
@@ -1508,15 +1557,15 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
           className={`tab-btn ${activeTab === 'awarding' ? 'active' : ''}`}
           style={{
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: activeTab === 'awarding' ? 700 : 600,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
             padding: '8px 18px',
             borderRadius: 6,
-            border: activeTab === 'awarding' ? '1px solid #2563eb' : '1px solid #e2e8f0',
-            background: activeTab === 'awarding' ? '#eff6ff' : '#ffffff',
-            color: activeTab === 'awarding' ? '#1d4ed8' : '#64748b',
+            border: activeTab === 'awarding' ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
+            background: '#ffffff',
+            color: activeTab === 'awarding' ? '#0f172a' : '#475569',
             boxShadow: activeTab === 'awarding' ? '0 1px 2px rgba(37,99,235,0.08)' : 'none',
             cursor: 'pointer',
           }}
@@ -1579,271 +1628,232 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
               </div>
             </Card>
           ) : (
-            <>
-              {/* 11-Column Enterprise Quotation Register Table */}
-              <Card
-                title="Enterprise Quotation Register"
-                subtitle="Formal commercial register of all submitted vendor quotations and baseline compliance parameters"
-                action={
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuoteVendorId(rfq.invitedVendors?.[0]?.vendorId || '');
-                        setShowRecordQuoteModal(true);
-                      }}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      <Plus size={13} style={{ marginRight: 5 }} /> Record New Quote
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('negotiation')}
-                      className="btn btn-primary btn-sm"
-                      style={{ background: '#2563eb' }}
-                    >
-                      Open Negotiation Workspace <ArrowRight size={13} style={{ marginLeft: 5 }} />
-                    </button>
-                  </div>
-                }
-                noPadding
-              >
-                <div style={{ overflowX: 'auto', width: '100%' }}>
-                  <table className="table enterprise-table" style={{ fontSize: 12, minWidth: 1080 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ width: 180 }}>Vendor Name</th>
-                        <th style={{ width: 120 }}>Quote Reference</th>
-                        <th style={{ width: 110 }}>RFQ Reference</th>
-                        <th style={{ width: 140 }}>Quotation Received Date and Time</th>
-                        <th style={{ textAlign: 'right', width: 130 }}>Quoted Total Value</th>
-                        <th style={{ textAlign: 'center', width: 110 }}>Number of Items Quoted</th>
-                        <th style={{ width: 110 }}>Quote Validity</th>
-                        <th style={{ width: 140 }}>Commercial Terms Status</th>
-                        <th style={{ width: 140 }}>Technical Compliance Status</th>
-                        <th style={{ width: 110 }}>Quotation Status</th>
-                        <th style={{ textAlign: 'right', width: 100 }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {submittedQuotes.map((q: any) => {
-                        const vendorName =
-                          rfq.invitedVendors?.find((iv: any) => iv.vendorId === q.vendorId)?.vendor?.name ||
-                          q.vendor?.name ||
-                          'Vendor';
-                        const totalLines = rfq.lines?.length || 0;
-                        const quotedLinesCount = q.lines?.filter((l: any) => l.unitRate > 0).length || q.lines?.length || 0;
-                        const rankInfo = quoteRankMap[q.vendorId];
-                        const dateFormatted = q.submittedAt
-                          ? new Date(q.submittedAt).toLocaleString(undefined, {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
-                          : 'Recorded';
-
-                        return (
-                          <tr key={q.id}>
-                            <td>
-                              <div style={{ fontWeight: 700, color: '#0f172a' }}>{vendorName}</div>
-                              {rankInfo && (
-                                <div style={{ marginTop: 2 }}>
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: 600,
-                                      padding: '1px 6px',
-                                      borderRadius: 3,
-                                      display: 'inline-block',
-                                      background: rankInfo.rankNumber === 1 ? '#dcfce7' : rankInfo.rankNumber === 2 ? '#fef3c7' : '#f1f5f9',
-                                      color: rankInfo.rankNumber === 1 ? '#166534' : rankInfo.rankNumber === 2 ? '#92400e' : '#475569',
-                                      border: `1px solid ${rankInfo.rankNumber === 1 ? '#bbf7d0' : rankInfo.rankNumber === 2 ? '#fde68a' : '#e2e8f0'}`,
-                                    }}
-                                  >
-                                    {rankInfo.rankLabel}
-                                  </span>
-                                </div>
-                              )}
-                            </td>
-                            <td>
-                              <span className="font-mono" style={{ fontWeight: 600, color: '#1e40af' }}>
-                                {q.quoteNumber || 'QTE-REC-001'}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="font-mono text-muted">{rfq.rfqNumber}</span>
-                            </td>
-                            <td style={{ color: '#475569' }}>{dateFormatted}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                              ₹ {(q.totalQuoteAmount || 0).toLocaleString()}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  padding: '2px 8px',
-                                  borderRadius: 4,
-                                  background: quotedLinesCount >= totalLines ? '#f0fdf4' : '#fffbeb',
-                                  color: quotedLinesCount >= totalLines ? '#166534' : '#b45309',
-                                  border: `1px solid ${quotedLinesCount >= totalLines ? '#bbf7d0' : '#fde68a'}`,
-                                }}
-                              >
-                                {quotedLinesCount} / {totalLines}
-                              </span>
-                            </td>
-                            <td>
-                              <span style={{ fontSize: 11, color: '#334155' }}>
-                                {q.validityDays ? `${q.validityDays} Days` : '30 Days'}
-                              </span>
-                            </td>
-                            <td>
-                              <span style={{ fontSize: 11, color: '#0f172a' }}>
-                                {q.commercialTerms || 'FOB Site Delivery'}
-                              </span>
-                            </td>
-                            <td>
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  padding: '2px 7px',
-                                  borderRadius: 4,
-                                  background: '#dcfce7',
-                                  color: '#166534',
-                                  border: '1px solid #bbf7d0',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}
-                              >
-                                <Check size={11} /> Compliant
-                              </span>
-                            </td>
-                            <td>
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  background: '#eff6ff',
-                                  color: '#1d4ed8',
-                                  border: '1px solid #bfdbfe',
-                                }}
-                              >
-                                {q.status || 'SUBMITTED'}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'right' }}>
-                              <button
-                                type="button"
-                                onClick={() => setViewingQuote(q)}
-                                className="btn btn-secondary btn-sm"
-                                style={{ fontSize: 11, padding: '3px 8px' }}
-                              >
-                                <Eye size={12} style={{ marginRight: 4 }} /> View Quote
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+            <Card
+              title={
+                <h2
+                  style={{
+                    fontSize: 26,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    letterSpacing: '-0.3px',
+                    margin: 0,
+                    lineHeight: 1.25,
+                  }}
+                >
+                  Enterprise Quotation Register
+                </h2>
+              }
+              subtitle="Formal commercial register of all submitted vendor quotations and baseline compliance parameters"
+              action={
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuoteVendorId(rfq.invitedVendors?.[0]?.vendorId || '');
+                      setShowRecordQuoteModal(true);
+                    }}
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      background: '#ffffff',
+                      borderColor: '#cbd5e1',
+                      color: '#0f172a',
+                      fontWeight: 600,
+                      fontSize: 12,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Plus size={13} /> Record New Quote
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('negotiation')}
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      background: '#ffffff',
+                      borderColor: '#cbd5e1',
+                      color: '#0f172a',
+                      fontWeight: 600,
+                      fontSize: 12,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    Open Negotiation Workspace <ArrowRight size={13} />
+                  </button>
+                  <Link
+                    href={`/procurement/auctions?create=true&rfqId=${rfq.id}`}
+                    className="btn btn-primary btn-sm"
+                    style={{
+                      fontWeight: 600,
+                      fontSize: 12,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Gavel size={13} /> Initiate E-Auction
+                  </Link>
                 </div>
-              </Card>
+              }
+              noPadding
+            >
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <table
+                  className="table enterprise-table"
+                  style={{
+                    width: '100%',
+                    minWidth: 1540,
+                    borderCollapse: 'collapse',
+                    margin: 0,
+                  }}
+                >
+                  <thead>
+                    <tr style={{ height: 44 }}>
+                      <th style={{ width: 220, minWidth: 200, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Vendor Name
+                      </th>
+                      <th style={{ width: 140, minWidth: 130, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Quote Reference
+                      </th>
+                      <th style={{ width: 130, minWidth: 120, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        RFQ Reference
+                      </th>
+                      <th style={{ width: 170, minWidth: 160, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Quotation Received Date and Time
+                      </th>
+                      <th style={{ width: 150, minWidth: 140, textAlign: 'right', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Quoted Total Value
+                      </th>
+                      <th style={{ width: 120, minWidth: 110, textAlign: 'center', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Number of Items Quoted
+                      </th>
+                      <th style={{ width: 120, minWidth: 110, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Quote Validity
+                      </th>
+                      <th style={{ width: 180, minWidth: 160, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Commercial Terms Status
+                      </th>
+                      <th style={{ width: 150, minWidth: 140, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Technical Compliance Status
+                      </th>
+                      <th style={{ width: 130, minWidth: 120, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Quotation Status
+                      </th>
+                      <th style={{ width: 120, minWidth: 110, textAlign: 'center', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submittedQuotes.map((q: any) => {
+                      const vendorName =
+                        rfq.invitedVendors?.find((iv: any) => iv.vendorId === q.vendorId)?.vendor?.name ||
+                        q.vendor?.name ||
+                        'Vendor';
+                      const totalLines = rfq.lines?.length || 0;
+                      const quotedLinesCount = q.lines?.filter((l: any) => l.unitRate > 0).length || q.lines?.length || 0;
+                      const rankInfo = quoteRankMap[q.vendorId];
+                      const dateFormatted = q.submittedAt
+                        ? new Date(q.submittedAt).toLocaleString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'Recorded';
 
-              {/* Compact Quotation Summary Cards (1 Card per Submitted Quote) */}
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 10 }}>
-                  Quotation Summary Overview
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
-                  {submittedQuotes.map((q: any) => {
-                    const vendorName =
-                      rfq.invitedVendors?.find((iv: any) => iv.vendorId === q.vendorId)?.vendor?.name ||
-                      q.vendor?.name ||
-                      'Vendor';
-                    const totalLines = rfq.lines?.length || 0;
-                    const quotedLinesCount = q.lines?.filter((l: any) => l.unitRate > 0).length || q.lines?.length || 0;
-                    const rankInfo = quoteRankMap[q.vendorId];
-                    const isL1 = rankInfo?.rankNumber === 1;
-                    const isL2 = rankInfo?.rankNumber === 2;
-
-                    return (
-                      <div
-                        key={q.id}
-                        className="card"
-                        style={{
-                          borderRadius: 8,
-                          padding: '16px',
-                          border: isL1 ? '2px solid #22c55e' : isL2 ? '1px solid #f59e0b' : '1px solid #cbd5e1',
-                          background: isL1 ? '#f0fdf4' : '#ffffff',
-                          boxShadow: isL1 ? '0 4px 12px rgba(34, 197, 94, 0.12)' : '0 1px 3px rgba(0,0,0,0.05)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{vendorName}</div>
-                            <div className="font-mono text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                              {q.quoteNumber}
-                            </div>
-                          </div>
-                          {rankInfo ? (
+                      return (
+                        <tr key={q.id} style={{ height: 48 }}>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
+                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{vendorName}</div>
+                            {rankInfo && (
+                              <div style={{ marginTop: 3 }}>
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: '2px 7px',
+                                    borderRadius: 4,
+                                    display: 'inline-block',
+                                    background: rankInfo.rankNumber === 1 ? '#dcfce7' : rankInfo.rankNumber === 2 ? '#fef3c7' : '#f1f5f9',
+                                    color: rankInfo.rankNumber === 1 ? '#166534' : rankInfo.rankNumber === 2 ? '#92400e' : '#475569',
+                                    border: `1px solid ${rankInfo.rankNumber === 1 ? '#bbf7d0' : rankInfo.rankNumber === 2 ? '#fde68a' : '#cbd5e1'}`,
+                                  }}
+                                >
+                                  {rankInfo.rankLabel}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
+                            <span className="font-mono" style={{ fontWeight: 600, color: '#1e40af', fontSize: 13 }}>
+                              {q.quoteNumber || 'QTE-REC-001'}
+                            </span>
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
+                            <span className="font-mono text-muted" style={{ fontSize: 12 }}>{rfq.rfqNumber}</span>
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#475569', fontSize: 12 }}>
+                            {dateFormatted}
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
+                            ₹ {(q.totalQuoteAmount || 0).toLocaleString()}
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'center', color: '#1e293b', fontWeight: 600, fontSize: 13 }}>
+                            {quotedLinesCount} / {totalLines}
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#334155', fontSize: 13 }}>
+                            {q.validityDays ? `${q.validityDays} Days` : '30 Days'}
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#0f172a', fontSize: 12 }}>
+                            {q.commercialTerms || 'FOB Site Delivery'}
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#0f172a', fontSize: 13, fontWeight: 500 }}>
+                            Compliant
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
                             <span
                               style={{
                                 fontSize: 11,
-                                fontWeight: 700,
-                                padding: '2px 8px',
+                                fontWeight: 600,
+                                padding: '3px 8px',
                                 borderRadius: 4,
-                                background: isL1 ? '#dcfce7' : isL2 ? '#fef3c7' : '#f1f5f9',
-                                color: isL1 ? '#166534' : isL2 ? '#92400e' : '#475569',
-                                border: `1px solid ${isL1 ? '#86efac' : isL2 ? '#fde68a' : '#cbd5e1'}`,
+                                background: '#eff6ff',
+                                color: '#1d4ed8',
+                                border: '1px solid #bfdbfe',
+                                display: 'inline-block',
                               }}
                             >
-                              {rankInfo.rankLabel}
+                              {q.status || 'SUBMITTED'}
                             </span>
-                          ) : (
-                            <span className="badge badge-info" style={{ fontSize: 10 }}>Submitted</span>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-                          <div>
-                            <div style={{ fontSize: 11, color: '#64748b' }}>Quoted Total</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
-                              ₹ {(q.totalQuoteAmount || 0).toLocaleString()}
-                            </div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: 11, color: '#64748b' }}>Item Coverage</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: quotedLinesCount >= totalLines ? '#166534' : '#b45309' }}>
-                              {quotedLinesCount} / {totalLines} Items
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
-                          <span style={{ fontSize: 11, color: '#64748b' }}>
-                            Validity: {q.validityDays || 30} days
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setViewingQuote(q)}
-                            className="btn btn-secondary btn-sm"
-                            style={{ fontSize: 11, padding: '4px 10px' }}
-                          >
-                            <Eye size={12} style={{ marginRight: 4 }} /> View Quote
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setViewingQuote(q)}
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                fontSize: 12,
+                                padding: '4px 10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                              }}
+                            >
+                              <Eye size={13} /> View Quote
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </Card>
           )}
         </div>
       )}
@@ -1868,173 +1878,6 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
             }}
             actionLoading={actionLoading}
           />
-
-          {/* Chronological Negotiation History below Commercial Table */}
-          <Card
-            title="Chronological Negotiation History"
-            subtitle="Prior round counteroffers, vendor responses, concessions, and sequential audit trail"
-            action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: 4,
-                    background: '#eff6ff',
-                    color: '#1e40af',
-                    border: '1px solid #bfdbfe',
-                  }}
-                >
-                  Turn: {rfq.negotiations?.[0]?.rounds?.[0]?.revisedQuoteAmount && rfq.negotiations?.[0]?.rounds?.[0]?.buyerDecision !== 'ACCEPTED' ? 'Buyer Decision Required (Procurement Turn)' : rfq.negotiations?.[0]?.rounds?.[0]?.buyerDecision === 'ACCEPTED' ? 'Rate Agreed / Accepted' : 'Awaiting Vendor Response (Vendor Turn)'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setRfqChatDrawerOpen(true)}
-                  className="btn btn-secondary btn-sm"
-                  title="Open persistent RFQ message and query drawer"
-                >
-                  <MessageSquare size={14} style={{ marginRight: 5 }} /> Clarifications / Chat
-                </button>
-              </div>
-            }
-            noPadding
-          >
-            {!rfq.negotiations?.length ? (
-              <div style={{ padding: 32 }}>
-                <EmptyState
-                  icon={<MessageSquare size={36} color="#94a3b8" strokeWidth={1.5} />}
-                  title="No Negotiation Rounds Logged Yet"
-                  description="Use the Buyer Target / Counteroffer Rate inputs in the table above to issue counteroffers and start Round 1."
-                  actionText="Issue Counteroffer in Table"
-                  onAction={() => {}}
-                />
-              </div>
-            ) : (
-              <div style={{ padding: 20 }}>
-                {rfq.negotiations.map((neg: any) => (
-                  <div key={neg.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                      <div>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Active Negotiation Process</span>
-                        <span className="text-muted" style={{ fontSize: 12, marginLeft: 8 }}>
-                          (Current Round: {neg.currentRound})
-                        </span>
-                      </div>
-                      <span className="badge badge-approved">{neg.status}</span>
-                    </div>
-
-                    <div className="table-wrapper">
-                      <table className="table enterprise-table" style={{ fontSize: 12 }}>
-                        <thead>
-                          <tr>
-                            <th>Round</th>
-                            <th>Vendor</th>
-                            <th style={{ textAlign: 'right' }}>Submitted Quote</th>
-                            <th style={{ textAlign: 'right' }}>Procurement Counteroffer</th>
-                            <th style={{ textAlign: 'right' }}>Vendor Revised Quote</th>
-                            <th>Concession / Savings</th>
-                            <th>Status & Buyer Decision</th>
-                            <th>Date</th>
-                            <th style={{ textAlign: 'right' }}>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {neg.rounds?.map((r: any) => (
-                            <tr key={r.id}>
-                              <td>
-                                <span className="badge badge-submitted font-mono">Round {r.roundNumber}</span>
-                                {r.isFinalOffer && (
-                                  <div style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', marginTop: 2 }}>
-                                    ★ Final Offer
-                                  </div>
-                                )}
-                              </td>
-                              <td style={{ fontWeight: 600 }}>{r.vendor?.name}</td>
-                              <td style={{ textAlign: 'right' }}>₹ {r.previousQuoteAmount?.toLocaleString()}</td>
-                              <td style={{ textAlign: 'right', fontWeight: 600, color: '#1e40af' }}>
-                                {r.counterOfferAmount ? `₹ ${r.counterOfferAmount.toLocaleString()}` : '—'}
-                              </td>
-                              <td style={{ textAlign: 'right', fontWeight: 700, color: r.revisedQuoteAmount ? '#059669' : '#64748b' }}>
-                                {r.revisedQuoteAmount ? `₹ ${r.revisedQuoteAmount.toLocaleString()}` : 'Awaiting Vendor Response'}
-                              </td>
-                              <td>
-                                {r.revisedQuoteAmount && r.savingsPercent !== null && r.savingsPercent !== undefined ? (
-                                  <span className="badge badge-approved">
-                                    {r.savingsPercent}% (₹ {r.savingsAmount?.toLocaleString()})
-                                  </span>
-                                ) : (
-                                  <span style={{ color: '#94a3b8' }}>—</span>
-                                )}
-                              </td>
-                              <td>
-                                {r.buyerDecision === 'ACCEPTED' ? (
-                                  <span className="badge badge-approved" title={r.buyerDecisionRemarks || 'Accepted'}>
-                                    <Sparkles size={11} style={{ display: 'inline', marginRight: 3 }} />
-                                    Quote Accepted by Buyer — PPO Awaited
-                                  </span>
-                                ) : r.buyerDecision === 'REJECTED' ? (
-                                  <span className="badge badge-rejected" title={r.buyerDecisionRemarks || 'Closed'}>
-                                    Quote Not Accepted / Closed
-                                  </span>
-                                ) : r.isFinalOffer ? (
-                                  <span className="badge badge-submitted">
-                                    Final Offer Submitted — Pending Buyer Decision
-                                  </span>
-                                ) : (
-                                  <span className="badge badge-info">{r.status}</span>
-                                )}
-                                <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-                                  Turn: {r.revisedQuoteAmount && r.buyerDecision !== 'ACCEPTED' ? 'Buyer Decision Needed' : r.buyerDecision === 'ACCEPTED' ? 'Agreed' : 'Vendor Turn'}
-                                </div>
-                              </td>
-                              <td className="text-muted">{new Date(r.createdAt).toLocaleDateString()}</td>
-                              <td style={{ textAlign: 'right' }}>
-                                <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                                  {r.revisedQuoteAmount && r.buyerDecision !== 'ACCEPTED' && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleBuyerDecision(r.id, 'ACCEPTED')}
-                                        className="btn btn-primary btn-sm"
-                                        style={{ fontSize: 11, background: '#059669', borderColor: '#059669' }}
-                                        title="Accept vendor quote — Transitions to Quote Accepted by Buyer — PPO Awaited"
-                                      >
-                                        <Check size={11} style={{ marginRight: 3 }} /> Accept (PPO Awaited)
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleBuyerDecision(r.id, 'REJECTED')}
-                                        className="btn btn-secondary btn-sm"
-                                        style={{ fontSize: 11, color: '#b91c1c' }}
-                                        title="Decline this commercial offer"
-                                      >
-                                        Decline
-                                      </button>
-                                    </>
-                                  )}
-                                  {r.revisedQuoteAmount && rfq.status !== 'FINAL_RATE_LOCKED' && r.buyerDecision !== 'ACCEPTED' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleLockRates(r.vendorId, r.revisedQuoteAmount)}
-                                      className="btn btn-secondary btn-sm"
-                                      style={{ fontSize: 11 }}
-                                    >
-                                      Lock Rate
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
         </div>
       )}
 
@@ -2050,18 +1893,20 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
             noPadding
           >
             <div style={{ overflowX: 'auto', width: '100%' }}>
-              <table className="table enterprise-table" style={{ fontSize: 12 }}>
+              <table className="table enterprise-table" style={{ fontSize: 12, minWidth: 1450, width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 80 }}>Rank</th>
-                    <th>Vendor Name</th>
-                    <th>Latest Quote Version</th>
-                    <th style={{ textAlign: 'right' }}>Latest Quoted Value</th>
-                    <th style={{ textAlign: 'center' }}>Total Versions</th>
-                    <th>Negotiation Status</th>
-                    <th>Technical Eligibility</th>
-                    <th style={{ textAlign: 'right' }}>Variance vs L1</th>
-                    <th style={{ textAlign: 'center' }}>Action</th>
+                    <th style={{ width: 70, minWidth: 70, border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Rank</th>
+                    <th style={{ minWidth: 170, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Vendor Name</th>
+                    <th style={{ minWidth: 140, textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Latest Quoted Value</th>
+                    <th style={{ minWidth: 100, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Total Versions</th>
+                    <th style={{ minWidth: 140, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Negotiation Status</th>
+                    <th style={{ minWidth: 125, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Technical Eligibility</th>
+                    <th style={{ minWidth: 140, textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Variance vs L1</th>
+                    <th style={{ minWidth: 160, maxWidth: 210, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Delivery Schedule</th>
+                    <th style={{ minWidth: 175, maxWidth: 230, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Payment Terms</th>
+                    <th style={{ minWidth: 160, maxWidth: 210, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Warranty Period</th>
+                    <th style={{ minWidth: 125, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2096,28 +1941,71 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
                       negStatus = `Round ${vRounds.length} Counteroffer`;
                     }
 
+                    // Commercial terms resolution from latest applicable submitted quote or negotiated terms
+                    const deliveryScheduleVal =
+                      latestQuote?.deliverySchedule ||
+                      (latestQuote?.deliveryLeadTimeDays != null
+                        ? typeof latestQuote.deliveryLeadTimeDays === 'number'
+                          ? `${latestQuote.deliveryLeadTimeDays} Days`
+                          : latestQuote.deliveryLeadTimeDays
+                        : null) ||
+                      (latestQuote?.deliveryDays != null
+                        ? typeof latestQuote.deliveryDays === 'number'
+                          ? `${latestQuote.deliveryDays} Days`
+                          : latestQuote.deliveryDays
+                        : null) ||
+                      v.deliverySchedule ||
+                      (v.deliveryLeadTimeDays != null
+                        ? typeof v.deliveryLeadTimeDays === 'number'
+                          ? `${v.deliveryLeadTimeDays} Days`
+                          : v.deliveryLeadTimeDays
+                        : null) ||
+                      (v.deliveryDays != null
+                        ? typeof v.deliveryDays === 'number'
+                          ? `${v.deliveryDays} Days`
+                          : v.deliveryDays
+                        : null) ||
+                      null;
+
+                    const paymentTermsVal =
+                      latestQuote?.paymentTerms ||
+                      latestQuote?.paymentTermsOffered ||
+                      v.paymentTerms ||
+                      v.paymentTermsOffered ||
+                      null;
+
+                    const warrantyVal =
+                      latestQuote?.warrantyPeriod ||
+                      latestQuote?.warranty ||
+                      latestQuote?.warrantyTerms ||
+                      v.warrantyPeriod ||
+                      v.warranty ||
+                      v.warrantyTerms ||
+                      null;
+
                     return (
-                      <tr key={v.vendorId} style={{ background: isL1 ? '#f0fdf4' : 'transparent' }}>
-                        <td>
+                      <tr key={v.vendorId} style={{ background: '#ffffff' }}>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', background: '#ffffff' }}>
                           <span className={`badge ${isL1 ? 'badge-approved' : 'badge-draft'}`} style={{ fontWeight: 700 }}>
                             {isL1 ? '★ L1' : `L${v.rank}`}
                           </span>
                         </td>
-                        <td style={{ fontWeight: 600, color: isL1 ? '#059669' : '#0f172a' }}>{v.vendorName}</td>
-                        <td>
-                          <span className="badge badge-submitted font-mono">v{latestVersion}</span>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', fontWeight: 600, color: isL1 ? '#059669' : '#0f172a', background: '#ffffff' }}>
+                          {v.vendorName}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, color: isL1 ? '#059669' : '#0f172a' }}>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right', fontWeight: 700, color: isL1 ? '#059669' : '#0f172a', background: '#ffffff' }}>
                           ₹ {v.totalQuoteAmount?.toLocaleString()}
                         </td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', textAlign: 'center', background: '#ffffff' }}>
                           <span className="text-muted font-medium">{quoteCount} versions</span>
                         </td>
-                        <td>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', background: '#ffffff' }}>
                           <span className="badge badge-draft">{negStatus}</span>
                         </td>
-                        <td><span className="badge badge-approved">COMPLIANT</span></td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', textAlign: 'center', background: '#ffffff' }}>
+                          <span className="badge badge-approved">COMPLIANT</span>
+                        </td>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right', background: '#ffffff' }}>
                           {isL1 ? (
                             <span className="badge badge-approved">Lowest Offer</span>
                           ) : (
@@ -2126,7 +2014,37 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
                             </span>
                           )}
                         </td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', verticalAlign: 'middle', maxWidth: 210, background: '#ffffff' }}>
+                          <BoqDescriptionCell
+                            text={deliveryScheduleVal}
+                            title="Delivery Schedule"
+                            contextLabel={v.vendorName}
+                            emptyPlaceholder="Not specified"
+                            maxWidth={200}
+                            clampLines={2}
+                          />
+                        </td>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', verticalAlign: 'middle', maxWidth: 230, background: '#ffffff' }}>
+                          <BoqDescriptionCell
+                            text={paymentTermsVal}
+                            title="Payment Terms"
+                            contextLabel={v.vendorName}
+                            emptyPlaceholder="Not specified"
+                            maxWidth={220}
+                            clampLines={2}
+                          />
+                        </td>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', verticalAlign: 'middle', maxWidth: 210, background: '#ffffff' }}>
+                          <BoqDescriptionCell
+                            text={warrantyVal}
+                            title="Warranty Period"
+                            contextLabel={v.vendorName}
+                            emptyPlaceholder="Not specified"
+                            maxWidth={200}
+                            clampLines={2}
+                          />
+                        </td>
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', textAlign: 'center', background: '#ffffff' }}>
                           {existingPpo ? (
                             <span className="badge badge-approved" title={`PPO ${existingPpo.ppoNumber} active`}>
                               <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4 }} />
@@ -2375,9 +2293,9 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
               <table className="table" style={{ fontSize: 12 }}>
                 <thead>
                   <tr>
-                    <th>Item</th>
-                    <th>Description</th>
-                    <th>Qty</th>
+                    <th>S.No.</th>
+                    <th>Item Description</th>
+                    <th>Quantity</th>
                     <th>UOM</th>
                     <th style={{ width: 140 }}>Quoted Unit Rate (₹)</th>
                     <th style={{ textAlign: 'right' }}>Line Total (₹)</th>
@@ -2536,9 +2454,9 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
                 <table className="table" style={{ fontSize: 12 }}>
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th>Description</th>
-                      <th>Qty</th>
+                      <th>S.No.</th>
+                      <th>Item Description</th>
+                      <th>Quantity</th>
                       <th>Counter Unit Rate (₹)</th>
                     </tr>
                   </thead>
@@ -3088,9 +3006,9 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
                   <thead>
                     <tr>
                       <th style={{ width: 50 }}>S.No.</th>
-                      <th>Item Description / Specification</th>
+                      <th>Item Description</th>
                       <th style={{ width: 70 }}>UOM</th>
-                      <th style={{ textAlign: 'right', width: 80 }}>Qty</th>
+                      <th style={{ textAlign: 'right', width: 80 }}>Quantity</th>
                       <th style={{ textAlign: 'right', width: 120 }}>Quoted Rate (₹)</th>
                       <th style={{ textAlign: 'right', width: 130 }}>Line Total (₹)</th>
                     </tr>
@@ -3174,5 +3092,20 @@ export default function RfqDetailPage({ params }: { params: Promise<{ id: string
         />
       )}
     </div>
+  );
+}
+
+export default function RfqDetailPage(props: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+          <div className="spinner" style={{ margin: '0 auto 12px' }} />
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Loading RFQ Workspace...</div>
+        </div>
+      }
+    >
+      <RfqDetailContent {...props} />
+    </Suspense>
   );
 }

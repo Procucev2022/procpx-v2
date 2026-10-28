@@ -18,6 +18,7 @@ import {
   FileSpreadsheet,
   Filter,
 } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
 
 function BudgetTransactionsContent() {
   const searchParams = useSearchParams();
@@ -163,32 +164,26 @@ function BudgetTransactionsContent() {
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 13, color: '#64748b' }}>Budget Management</span>
-            <span style={{ color: '#cbd5e1' }}>/</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>Ledger</span>
+      <PageHeader
+        title="Budget Transaction Ledger"
+        subtitle="Comprehensive immutable audit trail of commercial BOQ allocations, category contributions, and financial reversals"
+        breadcrumbs={[
+          { label: 'Budget', href: '/budget' },
+          { label: 'Ledger' },
+        ]}
+        actions={
+          <div className="flex gap-2 items-center">
+            <Link href="/budget" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Landmark size={14} />
+              Project Budget
+            </Link>
+            <Link href="/budget/vs-actual" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Scale size={14} />
+              Budget vs Actual
+            </Link>
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-            Budget Transaction Ledger
-          </h1>
-          <p style={{ fontSize: 14, color: '#64748b', margin: '4px 0 0 0' }}>
-            Comprehensive immutable audit trail of commercial BOQ allocations, category contributions, and financial reversals.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Link href="/budget" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-            <Landmark size={15} />
-            Project Budget
-          </Link>
-          <Link href="/budget/vs-actual" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-            <Scale size={15} />
-            Budget vs Actual
-          </Link>
-        </div>
-      </div>
+        }
+      />
 
       {statusMessage && (
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px 16px', borderRadius: 8, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

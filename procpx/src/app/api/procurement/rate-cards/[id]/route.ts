@@ -64,7 +64,18 @@ export async function GET(
       };
     });
 
-    return apiSuccess({ rateCard: { ...rateCard, items: enrichedItems } });
+    let notesData: any = {};
+    if (rateCard.notes) {
+      try { notesData = JSON.parse(rateCard.notes); } catch {}
+    }
+
+    return apiSuccess({
+      rateCard: {
+        ...rateCard,
+        items: enrichedItems,
+        agreement: notesData.agreement || null,
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching rate card details:', error);
     return apiError(error.message || 'Failed to fetch rate card', 500);
@@ -125,6 +136,12 @@ export async function PUT(
             comparisonRef: JSON.stringify(compMeta),
           },
         });
+      }
+
+      // Requirement 6: If rates change, do not reuse old signature as evidence for the changed version
+      if (notesData.agreement && notesData.agreement.signature) {
+        notesData.agreement.signature = null;
+        notesData.agreement.status = 'DRAFT';
       }
 
       notesData.currentRound = 2;
@@ -250,14 +267,28 @@ export async function PUT(
 
     // ── ACTION 3: CATEGORY_MANAGER_ACCEPT ──────────────────────
     if (body.action === 'CATEGORY_MANAGER_ACCEPT') {
-      if (rateCard.status !== 'FINAL_VENDOR_OFFER_ACCEPTED') {
+      const allowedSourceStatuses = [
+        'FINAL_VENDOR_OFFER_ACCEPTED',
+        'ROUND_2_VENDOR_QUOTE',
+        'ROUND_1_VENDOR_QUOTE',
+        'NEGOTIATION',
+        'ROUND_2_BUYER_OFFER',
+      ];
+      if (!allowedSourceStatuses.includes(rateCard.status)) {
         return apiError(`Cannot perform Category Manager Acceptance from status: ${rateCard.status}`, 400);
+      }
+
+      // Handle optional formal agreement attached by Category Manager
+      const { agreement, remarks = '' } = body;
+      if (agreement) {
+        notesData.agreement = agreement;
       }
 
       notesData.categoryManagerAccepted = {
         actor: actorName,
         timestamp: now.toISOString(),
-        remarks: body.remarks || '',
+        remarks,
+        hasAgreement: !!(agreement && agreement.required),
       };
 
       const updated = await prisma.vendorRateCard.update({

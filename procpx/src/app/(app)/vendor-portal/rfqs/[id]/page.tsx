@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import { useToast } from '@/components/ui/Toast';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function VendorRfqWorkspacePage() {
   const toast = useToast();
@@ -317,34 +319,19 @@ export default function VendorRfqWorkspacePage() {
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1300, margin: '0 auto' }}>
       {/* ── BREADCRUMB & HEADER ─────────────────────────────────────────── */}
-      <div style={{ marginBottom: 20 }}>
-        <Link
-          href="/vendor-portal/rfqs"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to My RFQs</span>
-        </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                {rfq.rfqNumber} — {rfq.title}
-              </h1>
-              <span className="badge badge-info">{rfq.status}</span>
-            </div>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-              Project: <strong>{rfq.project?.name || 'Enterprise Project'}</strong> ({rfq.project?.projectCode}) • Client:{' '}
-              {rfq.tenant?.name}
-            </p>
-          </div>
-
+      <PageHeader
+        title={`${rfq.rfqNumber} — ${rfq.title}`}
+        subtitle={`Project: ${rfq.project?.name || 'Enterprise Project'} (${rfq.project?.projectCode}) • Client: ${rfq.tenant?.name || 'Enterprise Client'}`}
+        backHref="/vendor-portal/rfqs"
+        backLabel="Back to My RFQs"
+        badge={<StatusBadge status={rfq.status} />}
+        actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
               type="button"
               onClick={() => setChatOpen(true)}
               className="btn btn-secondary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40 }}
             >
               <MessageSquare size={15} />
               <span>Clarification Chat</span>
@@ -353,14 +340,14 @@ export default function VendorRfqWorkspacePage() {
               type="button"
               onClick={loadRfqDetail}
               className="btn btn-secondary"
-              style={{ padding: 8 }}
+              style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
               title="Refresh"
             >
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── ALERTS ──────────────────────────────────────────────────────── */}
       {successMessage && (
@@ -534,9 +521,9 @@ export default function VendorRfqWorkspacePage() {
               <table className="table" style={{ margin: 0, fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#fef3c7', color: '#92400e' }}>
-                    <th style={{ width: 40 }}>#</th>
+                    <th style={{ width: 50 }}>S.No.</th>
                     <th>Item Description</th>
-                    <th style={{ width: 80, textAlign: 'right' }}>Qty</th>
+                    <th style={{ width: 80, textAlign: 'right' }}>Quantity</th>
                     <th style={{ width: 60 }}>UOM</th>
                     <th style={{ width: 140, textAlign: 'right' }}>Your Previous Rate (₹)</th>
                     <th style={{ width: 160, textAlign: 'right', fontWeight: 700 }}>Buyer Counter Rate (₹)</th>
@@ -623,9 +610,9 @@ export default function VendorRfqWorkspacePage() {
             <table className="table enterprise-table" style={{ margin: 0, fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 40 }}>#</th>
-                  <th>Item Description & Specification</th>
-                  <th style={{ width: 80, textAlign: 'right' }}>Qty</th>
+                  <th style={{ width: 50 }}>S.No.</th>
+                  <th>Item Description</th>
+                  <th style={{ width: 80, textAlign: 'right' }}>Quantity</th>
                   <th style={{ width: 60 }}>UOM</th>
                   <th style={{ width: 140, textAlign: 'right' }}>Quoted Unit Rate (₹)</th>
                   <th style={{ width: 80, textAlign: 'right' }}>GST %</th>
@@ -739,9 +726,9 @@ export default function VendorRfqWorkspacePage() {
               <table className="table enterprise-table" style={{ margin: 0 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }}>#</th>
-                    <th>Item Description & Specification</th>
-                    <th style={{ width: 80, textAlign: 'right' }}>Qty</th>
+                    <th style={{ width: 50 }}>S.No.</th>
+                    <th>Item Description</th>
+                    <th style={{ width: 80, textAlign: 'right' }}>Quantity</th>
                     <th style={{ width: 60 }}>UOM</th>
                     {latestQuote && <th style={{ width: 130, textAlign: 'right' }}>Previous Quote (₹)</th>}
                     {hasActiveBuyerCounter && (

@@ -1238,12 +1238,12 @@ export default function NewRfqPage() {
                         }}
                       />
                     </th>
-                    <th style={{ width: 60 }}>#</th>
+                    <th style={{ width: 60 }}>S.No.</th>
                     <th style={{ minWidth: 260 }}>Item Description</th>
                     <th style={{ minWidth: 160 }}>Specification</th>
                     <th style={{ width: 120 }}>Category</th>
                     <th style={{ width: 70 }}>UOM</th>
-                    <th style={{ width: 100, textAlign: 'right' }}>Qty (Locked)</th>
+                    <th style={{ width: 110, textAlign: 'right' }}>Quantity (Locked)</th>
                     <th style={{ width: 120, textAlign: 'right' }}>Baseline Rate</th>
                     <th style={{ width: 130, textAlign: 'right' }}>Baseline Amount</th>
                     <th style={{ width: 130, textAlign: 'center' }}>Include in RFQ</th>
@@ -2268,11 +2268,11 @@ export default function NewRfqPage() {
               <table className="table enterprise-table" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 50 }}>#</th>
+                    <th style={{ width: 50 }}>S.No.</th>
                     <th>Item Description</th>
                     <th>Category</th>
                     <th>UOM</th>
-                    <th style={{ textAlign: 'right' }}>Qty</th>
+                    <th style={{ textAlign: 'right' }}>Quantity</th>
                     <th style={{ textAlign: 'right' }}>Baseline Rate</th>
                     <th style={{ textAlign: 'right' }}>Baseline Amount</th>
                   </tr>

@@ -92,6 +92,19 @@ export async function POST(
         return apiError('Forbidden: Only Finance Approvers or Admins can perform Level 2 approval', 403);
       }
 
+      // Requirement 5: Enforce that an agreement awaiting mandatory signatures cannot be activated
+      let notesObj: any = {};
+      if (rateCard.notes) {
+        try { notesObj = JSON.parse(rateCard.notes); } catch {}
+      }
+
+      if (notesObj.agreement && notesObj.agreement.required && notesObj.agreement.signatureRequired) {
+        const isSigned = !!(notesObj.agreement.signature && notesObj.agreement.signature.verified);
+        if (!isSigned) {
+          return apiError('Activation Blocked: This Rate Card requires an executed bilateral agreement with valid digital signature evidence. Unsigned agreements cannot be activated without verified signature evidence.', 400);
+        }
+      }
+
       const updated = await prisma.vendorRateCard.update({
         where: { id },
         data: {

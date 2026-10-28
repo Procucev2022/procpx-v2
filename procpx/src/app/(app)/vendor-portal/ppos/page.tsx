@@ -18,7 +18,11 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronRight,
+  Receipt,
 } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function VendorPposPage() {
   const [ppos, setPpos] = useState<any[]>([]);
@@ -128,37 +132,53 @@ export default function VendorPposPage() {
     );
   });
 
+  const totalAmount = ppos.reduce((sum, p) => sum + (p.grossTotal || p.totalAmount || 0), 0);
+  const pendingCount = ppos.filter(p => !p.vendorAcceptedAt && p.vendorStatus !== 'ACCEPTED').length;
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1300, margin: '0 auto' }}>
       {/* ── HEADER ──────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 24,
-          borderBottom: '1px solid var(--border-color)',
-          paddingBottom: 16,
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            Purchase Orders (PPOs) & Awards
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Review official purchase orders issued by clients, accept commercial terms, or raise fulfillment queries
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={loadPpos}
-          className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh</span>
-        </button>
-      </div>
+      <PageHeader
+        title="Purchase Orders (PPOs) & Awards"
+        subtitle="Review official purchase orders issued by clients, accept commercial terms, or raise fulfillment queries"
+        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>Vendor Portal</span>}
+        actions={
+          <button
+            type="button"
+            onClick={loadPpos}
+            className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40 }}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <span>Refresh</span>
+          </button>
+        }
+      />
+
+      {/* ── KPI METRICS ──────────────────────────────────────────────────── */}
+      <SummaryCardGrid columns={3} className="mb-6">
+        <SummaryCard
+          label="Total Purchase Orders"
+          value={loading ? '—' : `${ppos.length} Orders`}
+          secondary="Commercial commitments issued"
+          icon={<Receipt size={16} />}
+          accent="blue"
+        />
+        <SummaryCard
+          label="Cumulative Order Value"
+          value={loading ? '—' : `₹ ${totalAmount.toLocaleString('en-IN')}`}
+          secondary="Gross executed order value"
+          icon={<FileText size={16} />}
+          accent="emerald"
+        />
+        <SummaryCard
+          label="Action Pending"
+          value={loading ? '—' : `${pendingCount} PPOs`}
+          secondary="Awaiting vendor acknowledgement"
+          icon={<Clock size={16} />}
+          accent={pendingCount > 0 ? 'amber' : 'slate'}
+        />
+      </SummaryCardGrid>
 
       {/* ── SEARCH BAR ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>

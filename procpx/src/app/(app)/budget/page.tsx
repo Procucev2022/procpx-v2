@@ -23,6 +23,10 @@ import {
   X,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
 
 function ProjectBudgetContent() {
   const toast = useToast();
@@ -267,97 +271,92 @@ function ProjectBudgetContent() {
   return (
     <div className="page-container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
       {/* 1. PROJECT BUDGET HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e40af' }}>
-              <Landmark size={22} />
-            </div>
-            <div>
-              <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                PROJECT BUDGET
-              </h1>
-              <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-                Integrated enterprise budget control, cost centre allocation, ₹/Sqft metrics, and downstream procurement governance.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Global Selectors & Fast Links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* Project Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-              Project
-            </label>
-            <select
-              className="select-field"
-              value={selectedProjectId}
-              onChange={e => handleProjectChange(e.target.value)}
-              style={{ height: 38, minWidth: 220, fontSize: 13, fontWeight: 600, color: '#0f172a' }}
-            >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.projectCode} — {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Cost Centre Selector */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-              Cost Centre
-            </label>
-            <select
-              className="select-field"
-              value={selectedCostCentreId}
-              onChange={e => handleCostCentreChange(e.target.value)}
-              disabled={costCentres.length === 0}
-              style={{ height: 38, minWidth: 240, fontSize: 13, fontWeight: 600, color: '#0f172a' }}
-            >
-              {costCentres.length === 0 ? (
-                <option value="">No Cost Centres</option>
-              ) : (
-                costCentres.map(cc => (
-                  <option key={cc.id} value={cc.id}>
-                    {cc.code} — {cc.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Action Links */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 58 }}>
+      <PageHeader
+        title="Project Budget Workspace"
+        subtitle="Integrated enterprise budget control, cost centre allocation, ₹/Sqft metrics, and downstream procurement governance"
+        actions={
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => loadBudgetData(selectedProjectId)}
-              className="btn btn-outline"
-              style={{ height: 38, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6 }}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               title="Refresh Budget"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              Refresh
             </button>
             <Link
               href="/budget/transactions"
-              className="btn btn-outline"
-              style={{ height: 38, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <History size={14} />
               Ledger
             </Link>
             <Link
               href="/budget/vs-actual"
-              className="btn btn-outline"
-              style={{ height: 38, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <Scale size={14} />
               Budget vs Actual
             </Link>
           </div>
+        }
+      />
+
+      {/* Global Selectors */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 flex gap-4 items-center flex-wrap">
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+            Project
+          </label>
+          <select
+            className="form-control"
+            value={selectedProjectId}
+            onChange={e => handleProjectChange(e.target.value)}
+            style={{ height: 40, width: '100%', fontSize: 13, fontWeight: 600 }}
+          >
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.projectCode} — {p.name}
+              </option>
+            ))}
+          </select>
         </div>
+
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+            Cost Centre
+          </label>
+          <select
+            className="form-control"
+            value={selectedCostCentreId}
+            onChange={e => handleCostCentreChange(e.target.value)}
+            disabled={costCentres.length === 0}
+            style={{ height: 40, width: '100%', fontSize: 13, fontWeight: 600 }}
+          >
+            {costCentres.length === 0 ? (
+              <option value="">No Cost Centres</option>
+            ) : (
+              costCentres.map(cc => (
+                <option key={cc.id} value={cc.id}>
+                  {cc.code} — {cc.name}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        {selectedCC && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto', paddingTop: 18 }}>
+            <span className="text-xs text-slate-500 font-medium">
+              Area: <strong className="text-slate-900">{ccArea > 0 ? `${ccArea.toLocaleString('en-IN')} Sqft` : 'Not specified'}</strong>
+            </span>
+            <StatusBadge status={ccStatus} />
+          </div>
+        )}
       </div>
 
       {/* Status / Alerts */}
@@ -386,128 +385,37 @@ function ProjectBudgetContent() {
       )}
 
       {/* 2. PROJECT BUDGET SUMMARY CARDS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-        {/* Card A: Cost Centre Meta & Budget Status */}
-        <div className="card" style={{ padding: '18px 20px', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                PROJECT & COST CENTRE
-              </div>
-              {(() => {
-                const style = getStatusBadgeStyle(ccStatus);
-                return (
-                  <span
-                    style={{
-                      background: style.bg,
-                      color: style.color,
-                      border: `1px solid ${style.border}`,
-                      padding: '3px 8px',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.4px',
-                    }}
-                  >
-                    {formatStatusText(ccStatus)}
-                  </span>
-                );
-              })()}
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>
-              {selectedCC?.name || 'No Cost Centre Selected'}
-            </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-              Code: <span style={{ fontWeight: 600, color: '#1e40af' }}>{selectedCC?.code || '—'}</span> &bull; Project: <span style={{ fontWeight: 600, color: '#334155' }}>{currentProject?.name}</span>
-            </div>
-          </div>
-          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Configured Area:</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: ccArea > 0 ? '#0f172a' : '#94a3b8' }}>
-              {ccArea > 0 ? `${ccArea.toLocaleString('en-IN')} Sqft` : 'Area not specified'}
-            </span>
-          </div>
-        </div>
-
-        {/* Card B: Total & Approved Budget */}
-        <div className="card" style={{ padding: '18px 20px', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            TOTAL BUDGET ALLOCATION
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>
-            {formatCurrency(ccTotalBudget)}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 12, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-            <div>
-              <span style={{ color: '#64748b' }}>Approved: </span>
-              <span style={{ fontWeight: 700, color: '#047857' }}>{formatCurrency(ccApprovedBudget)}</span>
-            </div>
-            <div>
-              <span style={{ color: '#64748b' }}>Pending: </span>
-              <span style={{ fontWeight: 700, color: '#d97706' }}>{formatCurrency(ccPendingBudget)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card C: Actual & Balance */}
-        <div className="card" style={{ padding: '18px 20px', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            ACTUAL SPEND & BALANCE
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: ccActual > 0 ? '#0f172a' : '#64748b', marginBottom: 4 }}>
-            {formatCurrency(ccActual)}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 12, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-            <div>
-              <span style={{ color: '#64748b' }}>Available Balance: </span>
-              <span style={{ fontWeight: 700, color: '#1e40af' }}>{formatCurrency(ccBalance)}</span>
-            </div>
-            <div>
-              <span style={{ color: '#64748b' }}>Utilised: </span>
-              <span style={{ fontWeight: 700, color: '#334155' }}>
-                {ccTotalBudget > 0 ? `${((ccActual / ccTotalBudget) * 100).toFixed(1)}%` : '0%'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card D: ₹ / Sqft Cost Metrics (Part C.4) */}
-        <div className="card" style={{ padding: '18px 20px', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            COST PER SQFT
-          </div>
-          {ccArea > 0 ? (
-            <>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#1e40af', marginBottom: 4 }}>
-                ₹ {budgetPerSqFt?.toLocaleString('en-IN')} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>/ Sqft</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 12, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-                <div>
-                  <span style={{ color: '#64748b' }}>Actual: </span>
-                  <span style={{ fontWeight: 700, color: '#0f172a' }}>
-                    {actualPerSqFt !== null ? `₹ ${actualPerSqFt.toLocaleString('en-IN')}` : '₹ 0'}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b' }}>Balance: </span>
-                  <span style={{ fontWeight: 700, color: '#047857' }}>
-                    {balancePerSqFt !== null ? `₹ ${balancePerSqFt.toLocaleString('en-IN')}` : '—'}
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ fontSize: 13, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <AlertCircle size={16} /> Area not available
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                ₹/Sqft cannot be calculated. Cost Centre area is required for sqft metrics.
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="mb-6">
+        <SummaryCardGrid columns={4}>
+          <SummaryCard
+            label="Total Budget Allocation"
+            value={formatCurrency(ccTotalBudget)}
+            secondary={`Approved: ${formatCurrency(ccApprovedBudget)} • Pending: ${formatCurrency(ccPendingBudget)}`}
+            icon={<Landmark size={16} />}
+            accent="default"
+          />
+          <SummaryCard
+            label="Actual Spend"
+            value={formatCurrency(ccActual)}
+            secondary={`Utilisation: ${ccTotalBudget > 0 ? ((ccActual / ccTotalBudget) * 100).toFixed(1) : 0}%`}
+            icon={<TrendingDown size={16} />}
+            accent="neutral"
+          />
+          <SummaryCard
+            label="Available Balance"
+            value={formatCurrency(ccBalance)}
+            secondary="Uncommitted allocation"
+            icon={<CheckCircle2 size={16} />}
+            accent="emerald"
+          />
+          <SummaryCard
+            label="Cost Per Sqft"
+            value={ccArea > 0 ? `₹ ${budgetPerSqFt?.toLocaleString('en-IN')}` : '—'}
+            secondary={ccArea > 0 ? `Actual: ₹ ${actualPerSqFt || 0} / Sqft` : 'Area not configured'}
+            icon={<Scale size={16} />}
+            accent="blue"
+          />
+        </SummaryCardGrid>
       </div>
 
       {/* Approver / Governance Queue Banner (if pending) */}

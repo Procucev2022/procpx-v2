@@ -219,11 +219,11 @@ export default function ApprovedBoqsPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ width: 80 }}>Item Code</th>
-                    <th>Description</th>
+                    <th style={{ width: 80 }}>S.No.</th>
+                    <th>Item Description</th>
                     <th style={{ width: 140 }}>Category</th>
                     <th style={{ width: 80 }}>UOM</th>
-                    <th style={{ width: 110, textAlign: 'right' }}>Qty (Locked)</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>Quantity (Locked)</th>
                     <th style={{ width: 130, textAlign: 'right' }}>Benchmark Rate</th>
                     <th style={{ width: 140, textAlign: 'right' }}>Benchmark Amount</th>
                   </tr>

@@ -8,8 +8,8 @@ import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
-import Modal from '@/components/ui/Modal';
-import SpecificationCell from '@/components/ui/SpecificationCell';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import PrDetailModal from '@/components/PrDetailModal';
 import {
   FileCheck,
   Search,
@@ -24,6 +24,7 @@ import {
   RefreshCw,
   ShoppingBag,
   ListChecks,
+  Eye,
 } from 'lucide-react';
 
 export default function ApprovedPrsPage() {
@@ -77,53 +78,36 @@ export default function ApprovedPrsPage() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Total Approved PRs
-            </span>
-            <FileCheck className="text-blue-600" size={18} />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-900">{prs.length}</div>
-          <div className="mt-1 text-xs text-slate-500">Released to Procurement</div>
-        </Card>
-
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Total Sanctioned Value
-            </span>
-            <IndianRupee className="text-emerald-600" size={18} />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-900">
-            ₹{(totalValue / 100000).toFixed(2)}L
-          </div>
-          <div className="mt-1 text-xs text-slate-500">Baseline estimated budget</div>
-        </Card>
-
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Ready for Sourcing
-            </span>
-            <ShoppingBag className="text-amber-600" size={18} />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-900">{readyToSourceCount}</div>
-          <div className="mt-1 text-xs text-slate-500">RFQ not yet initiated</div>
-        </Card>
-
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              In Active Sourcing
-            </span>
-            <CheckCircle2 className="text-indigo-600" size={18} />
-          </div>
-          <div className="mt-2 text-2xl font-bold text-slate-900">{sourcingActiveCount}</div>
-          <div className="mt-1 text-xs text-slate-500">Linked to RFQ Packages</div>
-        </Card>
-      </div>
+      <SummaryCardGrid columns={4}>
+        <SummaryCard
+          label="Total Approved PRs"
+          value={prs.length}
+          secondary="Released to Procurement"
+          icon={<FileCheck size={16} />}
+          accent="default"
+        />
+        <SummaryCard
+          label="Total Sanctioned Value"
+          value={`₹${(totalValue / 100000).toFixed(2)}L`}
+          secondary="Baseline estimated budget"
+          icon={<IndianRupee size={16} />}
+          accent="emerald"
+        />
+        <SummaryCard
+          label="Ready for Sourcing"
+          value={readyToSourceCount}
+          secondary="RFQ not yet initiated"
+          icon={<ShoppingBag size={16} />}
+          accent="amber"
+        />
+        <SummaryCard
+          label="In Active Sourcing"
+          value={sourcingActiveCount}
+          secondary="Linked to RFQ Packages"
+          icon={<CheckCircle2 size={16} />}
+          accent="blue"
+        />
+      </SummaryCardGrid>
 
       {/* Main Table Card */}
       <Card className="border border-slate-200 shadow-sm bg-white overflow-hidden">
@@ -147,21 +131,22 @@ export default function ApprovedPrsPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
-                <th className="py-3 px-4">PR Number</th>
-                <th className="py-3 px-4">Project & Cost Centre</th>
-                <th className="py-3 px-4">BOQ Source</th>
-                <th className="py-3 px-4">Lines & Items</th>
-                <th className="py-3 px-4 text-right">Sanctioned Value</th>
-                <th className="py-3 px-4">Target Date</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+              <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                <th className="py-3 px-4" style={{ width: 140 }}>PR Number</th>
+                <th className="py-3 px-4">Package Description</th>
+                <th className="py-3 px-4 text-center" style={{ width: 85 }}>Items</th>
+                <th className="py-3 px-4" style={{ width: 95 }}>Cost Centre</th>
+                <th className="py-3 px-4 text-right" style={{ width: 130 }}>PR Amount</th>
+                <th className="py-3 px-4" style={{ width: 110 }}>Approval Status</th>
+                <th className="py-3 px-4" style={{ width: 140 }}>Procurement Stage</th>
+                <th className="py-3 px-4 text-center" style={{ width: 90 }}>RFQ Count</th>
+                <th className="py-3 px-4 text-right" style={{ width: 115 }}>Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {prs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     <FileCheck size={36} className="mx-auto text-slate-300 mb-2" />
                     <p className="font-medium">No approved procurement requests found</p>
                     <p className="text-[11px] mt-0.5">
@@ -172,83 +157,88 @@ export default function ApprovedPrsPage() {
               ) : (
                 prs.map((pr) => {
                   const hasRfq = pr.rfqs && pr.rfqs.length > 0;
+                  const itemCount = pr.lines?.length || 0;
+                  const costCentreCode = pr.costCentre?.code || '—';
+
                   return (
                     <tr key={pr.id} className="hover:bg-slate-50/75 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-semibold text-slate-900">
-                        <div>{pr.prNumber}</div>
-                        <div className="text-[10px] font-sans text-slate-500 font-normal truncate max-w-[160px]">
-                          {pr.title}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-medium text-slate-900 flex items-center gap-1.5">
-                          <Building2 size={13} className="text-slate-400 shrink-0" />
-                          <span>{pr.project?.name || 'Project'}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Layers size={12} className="text-slate-400 shrink-0" />
-                          <span>
-                            {pr.costCentre?.code}: {pr.costCentre?.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono text-slate-700">
-                          {pr.boq?.boqCode || 'BOQ'}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          Rev: {pr.boqRevision?.revisionCode || 'R0'}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
-                          <ListChecks size={12} />
-                          {pr.lines?.length || 0} items
+                      {/* 1. PR Number */}
+                      <td className="py-3 px-4 font-mono font-bold text-blue-700">
+                        <span
+                          className="cursor-pointer hover:underline"
+                          onClick={() => {
+                            setSelectedPr(pr);
+                            setShowDetailModal(true);
+                          }}
+                          title="Click to view details"
+                        >
+                          {pr.prNumber}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+
+                      {/* 2. Short Package/PR Description */}
+                      <td className="py-3 px-4" style={{ maxWidth: 260 }}>
+                        <div
+                          className="font-semibold text-slate-900 truncate"
+                          title={pr.title || 'Procurement Package'}
+                        >
+                          {pr.title || 'Procurement Package'}
+                        </div>
+                      </td>
+
+                      {/* 3. Item Count */}
+                      <td className="py-3 px-4 text-center">
+                        <span className="text-slate-600 font-medium text-xs">
+                          {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                        </span>
+                      </td>
+
+                      {/* 4. Cost Centre Code */}
+                      <td className="py-3 px-4">
+                        <span className="font-mono text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                          {costCentreCode}
+                        </span>
+                      </td>
+
+                      {/* 5. PR Amount */}
+                      <td className="py-3 px-4 text-right">
                         <div className="font-mono font-bold text-slate-900">
                           ₹{(pr.totalEstimatedValue || 0).toLocaleString('en-IN')}
                         </div>
-                        <div className="text-[10px] text-slate-500">
-                          ₹{((pr.totalEstimatedValue || 0) / 100000).toFixed(2)} Lakhs
-                        </div>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1 text-slate-700 text-[11px]">
-                          <Calendar size={12} className="text-slate-400" />
-                          {pr.requiredDate
-                            ? new Date(pr.requiredDate).toLocaleDateString()
-                            : 'Immediate'}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
+
+                      {/* 6. PR Approval Status */}
+                      <td className="py-3 px-4">
                         <StatusBadge status={pr.status} />
-                        {hasRfq && (
-                          <div className="mt-1 text-[10px] text-indigo-700 font-medium">
-                            RFQ: {pr.rfqs[0].rfqNumber}
-                          </div>
-                        )}
                       </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedPr(pr);
-                              setShowDetailModal(true);
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors shadow-sm"
-                          >
-                            View
-                          </button>
-                          <Link
-                            href={`/procurement/rfqs/new?revisionId=${pr.boqRevisionId}&prId=${pr.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors shadow-sm"
-                          >
-                            <span>Start Sourcing</span>
-                            <ArrowRight size={12} />
-                          </Link>
-                        </div>
+
+                      {/* 7. Current Procurement Stage */}
+                      <td className="py-3 px-4">
+                        <span className={`badge ${hasRfq ? 'badge-info' : 'badge-draft'}`} style={{ fontSize: 11 }}>
+                          {hasRfq ? 'In Sourcing' : 'Ready for Sourcing'}
+                        </span>
+                      </td>
+
+                      {/* 8. RFQ Count */}
+                      <td className="py-3 px-4 text-center">
+                        <span className={`badge ${hasRfq ? 'badge-info' : 'badge-draft'}`}>
+                          {pr.rfqs?.length || 0} {(pr.rfqs?.length || 0) === 1 ? 'RFQ' : 'RFQs'}
+                        </span>
+                      </td>
+
+                      {/* 9. One View Details Action */}
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPr(pr);
+                            setShowDetailModal(true);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors shadow-sm inline-flex items-center gap-1.5"
+                        >
+                          <Eye size={12} />
+                          <span>View Details</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -259,122 +249,17 @@ export default function ApprovedPrsPage() {
         </div>
       </Card>
 
-      {/* PR Technical / Commercial Detail Modal */}
+      {/* Standardised Reusable PR Detail Modal */}
       {showDetailModal && selectedPr && (
-        <Modal
+        <PrDetailModal
           isOpen={showDetailModal}
-          onClose={() => setShowDetailModal(false)}
-          title={`Procurement Request Details — ${selectedPr.prNumber}`}
-          maxWidth="max-w-4xl"
-        >
-          <div className="space-y-5 text-xs text-slate-700">
-            {/* Header Summary */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-              <div>
-                <span className="text-[10px] font-semibold text-slate-500 uppercase">Project</span>
-                <p className="font-semibold text-slate-900 mt-0.5">{selectedPr.project?.name}</p>
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold text-slate-500 uppercase">Cost Centre</span>
-                <p className="font-semibold text-slate-900 mt-0.5">
-                  {selectedPr.costCentre?.code}: {selectedPr.costCentre?.name}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold text-slate-500 uppercase">Sanctioned Value</span>
-                <p className="font-mono font-bold text-emerald-700 mt-0.5">
-                  ₹{(selectedPr.totalEstimatedValue || 0).toLocaleString('en-IN')}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold text-slate-500 uppercase">Released Date</span>
-                <p className="font-medium text-slate-800 mt-0.5">
-                  {selectedPr.releasedAt
-                    ? new Date(selectedPr.releasedAt).toLocaleDateString()
-                    : 'N/A'}
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-slate-900 mb-2 uppercase tracking-wider text-[11px]">
-                Controlled BOQ Technical Requirements ({selectedPr.lines?.length || 0} Items)
-              </h4>
-              <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-100 border-b border-slate-200 font-semibold text-slate-700">
-                    <tr>
-                      <th className="py-2 px-3">#</th>
-                      <th className="py-2 px-3">Item Description</th>
-                      <th className="py-2 px-3">Specification</th>
-                      <th className="py-2 px-3">Category</th>
-                      <th className="py-2 px-3 text-right">Qty</th>
-                      <th className="py-2 px-3">UOM</th>
-                      <th className="py-2 px-3 text-right">Est. Rate</th>
-                      <th className="py-2 px-3 text-right">Est. Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedPr.lines?.map((line: any, idx: number) => (
-                      <tr key={line.id} className="hover:bg-slate-50">
-                        <td className="py-2 px-3 font-mono text-slate-500">{idx + 1}</td>
-                        <td className="py-2 px-3 font-medium text-slate-900">{line.itemDescription}</td>
-                        <td className="py-2 px-3">
-                          <SpecificationCell
-                            specification={line.specification}
-                            lineNumber={idx + 1}
-                            itemDescription={line.itemDescription}
-                            lineId={line.boqLineId}
-                            maxWidth={180}
-                          />
-                        </td>
-                        <td className="py-2 px-3">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 font-medium">
-                            {line.category}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono font-semibold">{line.quantity}</td>
-                        <td className="py-2 px-3 text-slate-500">{line.uom}</td>
-                        <td className="py-2 px-3 text-right font-mono">
-                          ₹{(line.estimatedRate || 0).toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                          ₹{(line.estimatedValue || 0).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-[11px]">
-              <div className="font-semibold flex items-center gap-1.5 mb-1">
-                <CheckCircle2 size={14} className="text-blue-700" />
-                <span>Procurement Integrity Baseline</span>
-              </div>
-              <p>
-                As Procurement User, you are sourcing against the approved BOQ revision baseline. Technical descriptions, quantities, and specifications are locked to preserve commercial fidelity.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setShowDetailModal(false)}
-                className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50"
-              >
-                Close
-              </button>
-              <Link
-                href={`/procurement/rfqs/new?revisionId=${selectedPr.boqRevisionId}&prId=${selectedPr.id}`}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-bold shadow-sm"
-              >
-                <span>Initiate RFQ Sourcing</span>
-                <ArrowRight size={14} />
-              </Link>
-            </div>
-          </div>
-        </Modal>
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedPr(null);
+          }}
+          pr={selectedPr}
+          userRole="PROCUREMENT_USER"
+        />
       )}
     </div>
   );

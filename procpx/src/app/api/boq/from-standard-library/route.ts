@@ -75,9 +75,12 @@ export async function POST(req: NextRequest) {
       const it = items[i];
       const matchedCategory = catMap.get((it.category || '').toLowerCase());
       const matchedUom = uomMap.get((it.uom || '').toUpperCase());
-      const qty = parseFloat(it.quantity) || 1;
-      const benchmarkRate = it.benchmarkRate ? parseFloat(it.benchmarkRate) : null;
-      const totalCost = benchmarkRate ? benchmarkRate * qty : null;
+      const qty =
+        it.quantity !== undefined && it.quantity !== null && String(it.quantity).trim() !== '' && !isNaN(parseFloat(it.quantity))
+          ? parseFloat(it.quantity)
+          : null;
+      const benchmarkRate = it.benchmarkRate && !isNaN(parseFloat(it.benchmarkRate)) ? parseFloat(it.benchmarkRate) : null;
+      const totalCost = benchmarkRate !== null && qty !== null ? benchmarkRate * qty : null;
 
       await prisma.boqLine.create({
         data: {

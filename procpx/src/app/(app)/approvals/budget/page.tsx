@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
 import { useToast } from '@/components/ui/Toast';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export default function BudgetApprovalQueuePage() {
   const toast = useToast();
@@ -120,33 +123,47 @@ export default function BudgetApprovalQueuePage() {
     setChatDrawerOpen(true);
   };
 
+  const totalProposed = queue.reduce((sum, item) => sum + (item.totalEstimatedValue || 0), 0);
+  const pendingClarifications = queue.filter(item => item.hasEnquiry).length;
+
   return (
     <div className="page-container" style={{ padding: '24px 32px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e40af' }}>
-              <Landmark size={20} />
-            </div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Budget Approvals
-            </h1>
-            <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>
-              Project Approver Profile
-            </span>
-          </div>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-            Review category-wise budget contributions awaiting Project Approver approval. Project approval advances contributions to Finance Approval.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Link href="/approvals/boq-pr" className="btn btn-secondary">
+      <PageHeader
+        title="Budget Approvals"
+        subtitle="Review category-wise budget contributions awaiting Project Approver approval. Project approval advances contributions to Finance Approval."
+        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>Project Approver</span>}
+        actions={
+          <Link href="/approvals/boq-pr" className="btn btn-secondary" style={{ height: 40, display: 'inline-flex', alignItems: 'center' }}>
             Switch to PR Approvals
           </Link>
-        </div>
-      </div>
+        }
+      />
+
+      {/* KPI Cards */}
+      <SummaryCardGrid columns={3} className="mb-6">
+        <SummaryCard
+          label="Pending Queue"
+          value={loading ? '—' : `${queue.length} Allocations`}
+          secondary="Awaiting Project Approver sign-off"
+          icon={<Clock size={16} />}
+          accent="amber"
+        />
+        <SummaryCard
+          label="Proposed Contribution Total"
+          value={loading ? '—' : `₹ ${totalProposed.toLocaleString('en-IN')}`}
+          secondary="To be routed to Finance Approval"
+          icon={<Landmark size={16} />}
+          accent="emerald"
+        />
+        <SummaryCard
+          label="Clarifications Active"
+          value={loading ? '—' : `${pendingClarifications} Inquiries`}
+          secondary="Queries pending resolution"
+          icon={<HelpCircle size={16} />}
+          accent="blue"
+        />
+      </SummaryCardGrid>
 
       {statusMessage && (
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 16px', borderRadius: 6, fontSize: 13, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -369,10 +386,10 @@ export default function BudgetApprovalQueuePage() {
               <table className="table" style={{ width: '100%', fontSize: 12 }}>
                 <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                   <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '0 10px', width: 40 }}>#</th>
-                    <th style={{ padding: '0 10px' }}>Description</th>
+                    <th style={{ padding: '0 10px', width: 45 }}>S.No.</th>
+                    <th style={{ padding: '0 10px' }}>Item Description</th>
                     <th style={{ padding: '0 10px' }}>Category</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Qty</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Quantity</th>
                     <th style={{ padding: '0 10px' }}>UOM</th>
                     <th style={{ padding: '0 10px', textAlign: 'right' }}>Rate (₹)</th>
                     <th style={{ padding: '0 10px', textAlign: 'right' }}>Total (₹)</th>

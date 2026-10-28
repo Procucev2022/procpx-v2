@@ -78,32 +78,14 @@ export default function TopNav({ user }: TopNavProps) {
     <header className="app-topbar">
       {/* ── Left: Brand & Product ────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 6,
-              background: 'linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 15,
-              boxShadow: '0 2px 4px rgba(30, 64, 175, 0.25)',
-              letterSpacing: -0.5,
-            }}
-          >
-            P
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: -0.3, lineHeight: 1.1 }}>
-              proCPX
-            </div>
-            <div style={{ fontSize: 10, fontWeight: 500, color: '#64748b', letterSpacing: 0.2 }}>
-              Enterprise Capex Procurement
-            </div>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 10C6 7.79086 7.79086 6 10 6H16C20.4183 6 24 9.58172 24 14C24 18.4183 20.4183 22 16 22H11V26H6V10Z" fill="#0284c7" />
+            <path d="M11 11H16C17.6569 11 19 12.3431 19 14C19 15.6569 17.6569 17 16 17H11V11Z" fill="#ffffff" />
+            <circle cx="23" cy="9" r="4" fill="#0f52ba" />
+          </svg>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#0284c7', letterSpacing: -0.5, lineHeight: 1 }}>
+            Procucev
           </div>
         </Link>
       </div>

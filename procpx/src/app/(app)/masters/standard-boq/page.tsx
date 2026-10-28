@@ -23,6 +23,9 @@ import {
   AlertTriangle,
   Check,
 } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import SpecificationCell from '@/components/ui/SpecificationCell';
 
 interface StandardItem {
   id: string;
@@ -297,12 +300,13 @@ export default function StandardBoqCreationPage() {
   // -------------------------------------------------------------
   const handleDownloadTemplate = () => {
     const headers = [
+      'S.No.',
       'Item Code *',
-      'Category *',
-      'Subcategory',
       'Item Description *',
       'BOQ Description',
       'UOM *',
+      'Category *',
+      'Sub-category',
       'Benchmark Rate (₹)',
       'Brand / Make',
       'Sector',
@@ -311,24 +315,26 @@ export default function StandardBoqCreationPage() {
 
     const sampleRows = [
       [
+        1,
         'STD-CIV-001',
-        categories[0]?.name || 'Civil & Interior',
-        'Flooring',
         '600x600 mm Vitrified Floor Tiles (Heavy Traffic)',
         'Full body 10mm thickness, matte anti-skid surface, PEI Group 5',
         'SQFT',
+        categories[0]?.name || 'Civil & Interior',
+        'Flooring',
         125.0,
         'Somany / Kajaria',
         'RETAIL',
         'Store Fitout',
       ],
       [
+        2,
         'STD-ELE-001',
-        categories.find(c => c.name.toLowerCase().includes('ele'))?.name || 'Electrical',
-        'Wiring',
         '2.5 SQMM FRLS Multi-strand Copper Cable',
         '1100V fire-retardant low-smoke copper wire in 25mm PVC conduit',
         'MTR',
+        categories.find(c => c.name.toLowerCase().includes('ele'))?.name || 'Electrical',
+        'Wiring',
         65.0,
         'Havells / Polycab',
         'RETAIL',
@@ -337,7 +343,7 @@ export default function StandardBoqCreationPage() {
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);
-    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 4, 18) }));
+    ws['!cols'] = headers.map(h => ({ wch: Math.max(String(h).length + 4, 18) }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Standard_BOQ_Master');
     XLSX.writeFile(wb, 'proCPX_Standard_BOQ_Import_Template.xlsx');
@@ -522,93 +528,76 @@ export default function StandardBoqCreationPage() {
   });
 
   return (
-    <div className="container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
-      {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 13, color: '#64748b' }}>Master Creation</span>
-            <span style={{ color: '#cbd5e1' }}>/</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>Standard BOQ Master</span>
+    <div className="w-full">
+      <PageHeader
+        title="Standard BOQ Creation & Central Master"
+        subtitle="Enterprise Standard BOQ repository. Items created here are instantly available for download via Download Standard BOQ in BOQ Studio."
+        breadcrumbs={[
+          { label: 'Master Creation', href: '/masters/standard-boq' },
+          { label: 'Standard BOQ Master' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
+              onClick={handleDownloadTemplate}
+              title="Download standard Excel import template"
+            >
+              <Download size={14} /> Download Excel Template
+            </button>
+
+            {canEdit && (
+              <button
+                type="button"
+                className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs text-blue-700 border-blue-200 hover:bg-blue-50"
+                onClick={() => {
+                  setUploadError(null);
+                  setUploadParsedRows([]);
+                  setUploadFile(null);
+                  setUploadModalOpen(true);
+                }}
+                title="Upload standard BOQ items from Excel spreadsheet"
+              >
+                <Upload size={14} /> Upload Excel
+              </button>
+            )}
+
+            <Link
+              href="/boq/studio"
+              className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <FileSpreadsheet size={14} /> Open BOQ Studio
+            </Link>
+
+            {canEdit ? (
+              <button
+                type="button"
+                className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                onClick={handleOpenModal}
+              >
+                <Plus size={16} /> + Create Standard BOQ Items
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-outline h-[40px] px-4 text-xs font-semibold inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed"
+                disabled
+                title="Restricted: Master Data Administrator or Category Manager role required"
+              >
+                <Plus size={16} /> + Create Standard BOQ (Admin Only)
+              </button>
+            )}
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-            Standard BOQ Creation & Central Master
-          </h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0 0' }}>
-            Enterprise Standard BOQ repository. Items created here are instantly available for download via Download Standard BOQ in BOQ Studio.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={handleDownloadTemplate}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13 }}
-            title="Download standard Excel import template"
-          >
-            <Download size={15} />
-            Download Excel Template
-          </button>
-
-          {canEdit && (
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => {
-                setUploadError(null);
-                setUploadParsedRows([]);
-                setUploadFile(null);
-                setUploadModalOpen(true);
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, borderColor: '#2563eb', color: '#1d4ed8' }}
-              title="Upload standard BOQ items from Excel spreadsheet"
-            >
-              <Upload size={15} />
-              Upload Excel
-            </button>
-          )}
-
-          <Link
-            href="/boq/studio"
-            className="btn btn-outline"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13 }}
-          >
-            <FileSpreadsheet size={15} />
-            Open BOQ Studio
-          </Link>
-
-          {canEdit ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleOpenModal}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}
-            >
-              <Plus size={16} />
-              + Create Standard BOQ Items
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-outline"
-              disabled
-              title="Restricted: Master Data Administrator or Category Manager role required"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.6, cursor: 'not-allowed', color: '#64748b' }}
-            >
-              <Plus size={16} />
-              + Create Standard BOQ (Admin Only)
-            </button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       {/* Role / Context Banner */}
       {!canEdit && (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ShieldAlert size={18} color="#64748b" />
-          <div style={{ fontSize: 13, color: '#475569' }}>
-            <strong style={{ color: '#0f172a' }}>Read-Only Master View:</strong> Standard BOQ item creation is restricted to Master Data Administrators and Category Managers. Project Users can view standard specifications below and use <strong>BOQ Studio</strong> to download templates, enter project quantities, and generate project BOQs.
+        <div className="p-3.5 mb-6 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center gap-2.5">
+          <ShieldAlert size={18} className="text-slate-500 shrink-0" />
+          <div>
+            <strong className="text-slate-900">Read-Only Master View:</strong> Standard BOQ item creation is restricted to Master Data Administrators and Category Managers. Project Users can view standard specifications below and use <strong>BOQ Studio</strong> to download templates, enter project quantities, and generate project BOQs.
           </div>
         </div>
       )}
@@ -616,47 +605,41 @@ export default function StandardBoqCreationPage() {
       {/* Notification Banner */}
       {notification && (
         <div
-          style={{
-            background: notification.type === 'success' ? '#ecfdf5' : '#fef2f2',
-            border: `1px solid ${notification.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
-            borderRadius: 8,
-            padding: '12px 16px',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
+          className={`p-3.5 mb-6 rounded-lg border text-xs flex items-center justify-between ${
+            notification.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: notification.type === 'success' ? '#047857' : '#b91c1c', fontSize: 13, fontWeight: 600 }}>
-            {notification.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <div className="flex items-center gap-2 font-medium">
+            {notification.type === 'success' ? <CheckCircle2 size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-rose-600" />}
             <span>{notification.message}</span>
           </div>
-          <button type="button" onClick={() => setNotification(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+          <button type="button" onClick={() => setNotification(null)} className="text-slate-500 hover:text-slate-700">
             <X size={14} />
           </button>
         </div>
       )}
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Standard BOQ Items</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 4 }}>{items.length}</div>
-          <div style={{ fontSize: 11, color: '#16a34a', marginTop: 4, fontWeight: 600 }}>Available in Download Standard BOQ</div>
-        </div>
-
-        <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Covered Sectors</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{SECTORS.length}</div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Retail, Hospitality, Banking, Office, etc.</div>
-        </div>
-
-        <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Integrated Architecture</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#059669', marginTop: 4 }}>Single Master</div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Feeds BOQ Studio without duplication</div>
-        </div>
-      </div>
+      <SummaryCardGrid columns={3}>
+        <SummaryCard
+          label="Total Standard BOQ Items"
+          value={items.length}
+          secondary="Available in Download Standard BOQ"
+          accent="default"
+        />
+        <SummaryCard
+          label="Covered Sectors"
+          value={SECTORS.length}
+          secondary="Retail, Hospitality, Banking, Office, etc."
+          accent="blue"
+        />
+        <SummaryCard
+          label="Integrated Architecture"
+          value="Single Master"
+          secondary="Feeds BOQ Studio without duplication"
+          accent="emerald"
+        />
+      </SummaryCardGrid>
 
       {/* Filters Toolbar */}
       <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px', marginBottom: 20 }}>
@@ -737,37 +720,52 @@ export default function StandardBoqCreationPage() {
             <table className="table" style={{ width: '100%', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', height: 40, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                  <th style={{ padding: '0 12px', width: 60 }}>S.No.</th>
                   <th style={{ padding: '0 12px', width: 120 }}>Item Code</th>
-                  <th style={{ padding: '0 12px', width: 100 }}>Sector</th>
-                  <th style={{ padding: '0 12px', width: 150 }}>Category</th>
-                  <th style={{ padding: '0 12px' }}>Description & Specification</th>
-                  <th style={{ padding: '0 12px', width: 80 }}>UOM</th>
-                  <th style={{ padding: '0 12px', width: 110, textAlign: 'right' }}>Benchmark</th>
-                  <th style={{ padding: '0 12px', width: 90 }}>Status</th>
+                  <th style={{ padding: '0 12px', minWidth: 200 }}>Item Description</th>
+                  <th style={{ padding: '0 12px', minWidth: 220 }}>BOQ Description</th>
+                  <th style={{ padding: '0 12px', width: 70, textAlign: 'center' }}>UOM</th>
+                  <th style={{ padding: '0 12px', width: 120, textAlign: 'right' }}>Benchmark Rate (₹)</th>
+                  <th style={{ padding: '0 12px', width: 90 }}>Sector</th>
+                  <th style={{ padding: '0 12px', width: 130 }}>Category</th>
+                  <th style={{ padding: '0 12px', width: 120 }}>Sub-category</th>
+                  <th style={{ padding: '0 12px', width: 80 }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map(it => (
+                {filteredItems.map((it, idx) => (
                   <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px', color: '#64748b', fontWeight: 600 }}>
+                      {idx + 1}
+                    </td>
                     <td style={{ padding: '12px', fontWeight: 800, color: '#1e40af', fontFamily: 'monospace' }}>
                       {it.itemCode}
+                    </td>
+                    <td style={{ padding: '12px', fontWeight: 600, color: '#0f172a' }}>
+                      {it.standardDescription}
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <SpecificationCell
+                        specification={it.detailedSpecification}
+                        lineNumber={it.itemCode}
+                        itemDescription={it.standardDescription}
+                        maxWidth={220}
+                      />
+                    </td>
+                    <td style={{ padding: '12px', fontWeight: 700, color: '#1e3a8a', textAlign: 'center' }}>
+                      {it.uom}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
+                      {it.benchmarkRate ? `₹ ${it.benchmarkRate.toLocaleString()}` : '—'}
                     </td>
                     <td style={{ padding: '12px', color: '#475569', fontSize: 11, fontWeight: 600 }}>
                       {it.sector}
                     </td>
                     <td style={{ padding: '12px', color: '#0f172a', fontWeight: 600 }}>
-                      <div>{it.category}</div>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>{it.subcategory}</div>
+                      {it.category}
                     </td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{it.standardDescription}</div>
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{it.detailedSpecification}</div>
-                    </td>
-                    <td style={{ padding: '12px', fontWeight: 700, color: '#1e3a8a' }}>
-                      {it.uom}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                      {it.benchmarkRate ? `₹ ${it.benchmarkRate.toLocaleString()}` : '—'}
+                    <td style={{ padding: '12px', color: '#64748b', fontSize: 11 }}>
+                      {it.subcategory}
                     </td>
                     <td style={{ padding: '12px' }}>
                       <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#047857' }}>
@@ -877,9 +875,10 @@ export default function StandardBoqCreationPage() {
                 <table className="table" style={{ width: '100%', fontSize: 12 }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
                     <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                      <th style={{ padding: '0 8px', width: 50 }}>S.No.</th>
                       <th style={{ padding: '0 8px', width: 130 }}>Item Code *</th>
-                      <th style={{ padding: '0 8px', width: 260 }}>Description *</th>
-                      <th style={{ padding: '0 8px', width: 220 }}>Specification</th>
+                      <th style={{ padding: '0 8px', width: 260 }}>Item Description *</th>
+                      <th style={{ padding: '0 8px', width: 220 }}>BOQ Description</th>
                       <th style={{ padding: '0 8px', width: 100 }}>UOM *</th>
                       <th style={{ padding: '0 8px', width: 100 }}>Rate (₹)</th>
                       <th style={{ padding: '0 8px', width: 50, textAlign: 'center' }}></th>
@@ -888,6 +887,9 @@ export default function StandardBoqCreationPage() {
                   <tbody>
                     {lineItems.map((line, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '6px 8px', color: '#64748b', fontWeight: 600 }}>
+                          {idx + 1}
+                        </td>
                         <td style={{ padding: '6px 8px' }}>
                           <input
                             type="text"
@@ -1170,11 +1172,14 @@ export default function StandardBoqCreationPage() {
                       <thead>
                         <tr style={{ background: '#f8fafc', height: 36, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                           <th style={{ padding: '0 10px', width: 60 }}>Status</th>
-                          <th style={{ padding: '0 10px', width: 130 }}>Item Code *</th>
-                          <th style={{ padding: '0 10px', width: 170 }}>Category *</th>
-                          <th style={{ padding: '0 10px', width: 220 }}>Description *</th>
+                          <th style={{ padding: '0 8px', width: 50 }}>S.No.</th>
+                          <th style={{ padding: '0 10px', width: 120 }}>Item Code *</th>
+                          <th style={{ padding: '0 10px', width: 150 }}>Category *</th>
+                          <th style={{ padding: '0 10px', width: 120 }}>Sub-category</th>
+                          <th style={{ padding: '0 10px', width: 180 }}>Item Description *</th>
+                          <th style={{ padding: '0 10px', width: 180 }}>BOQ Description</th>
                           <th style={{ padding: '0 10px', width: 85 }}>UOM *</th>
-                          <th style={{ padding: '0 10px', width: 100 }}>Rate (₹)</th>
+                          <th style={{ padding: '0 10px', width: 95 }}>Rate (₹)</th>
                           <th style={{ padding: '0 10px' }}>Validation Details</th>
                         </tr>
                       </thead>
@@ -1204,6 +1209,9 @@ export default function StandardBoqCreationPage() {
                                   </span>
                                 )}
                               </td>
+                              <td style={{ padding: '6px 8px', color: '#64748b', fontWeight: 600 }}>
+                                {idx + 1}
+                              </td>
                               <td style={{ padding: '6px 10px' }}>
                                 <input
                                   type="text"
@@ -1229,10 +1237,30 @@ export default function StandardBoqCreationPage() {
                               <td style={{ padding: '6px 10px' }}>
                                 <input
                                   type="text"
+                                  value={row.subcategory}
+                                  onChange={e => handleUpdateParsedRow(row.id, 'subcategory', e.target.value)}
+                                  className="input-field"
+                                  style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 6px' }}
+                                  placeholder="Sub-category"
+                                />
+                              </td>
+                              <td style={{ padding: '6px 10px' }}>
+                                <input
+                                  type="text"
                                   value={row.standardDescription}
                                   onChange={e => handleUpdateParsedRow(row.id, 'standardDescription', e.target.value)}
                                   className="input-field"
                                   style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 6px', borderColor: !row.standardDescription ? '#ef4444' : undefined }}
+                                />
+                              </td>
+                              <td style={{ padding: '6px 10px' }}>
+                                <input
+                                  type="text"
+                                  value={row.detailedSpecification}
+                                  onChange={e => handleUpdateParsedRow(row.id, 'detailedSpecification', e.target.value)}
+                                  className="input-field"
+                                  style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 6px' }}
+                                  placeholder="BOQ Description"
                                 />
                               </td>
                               <td style={{ padding: '6px 10px' }}>

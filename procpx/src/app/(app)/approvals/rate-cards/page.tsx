@@ -25,6 +25,8 @@ import {
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
+import Section6ApproverView from '@/components/rate-cards/Section6ApproverView';
+import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedDetails';
 
 export default function RateCardApprovalsPage() {
   const [rateCards, setRateCards] = useState<any[]>([]);
@@ -47,9 +49,19 @@ export default function RateCardApprovalsPage() {
 
   // Feedback alerts
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [userRole, setUserRole] = useState<'PROJECT_APPROVER' | 'FINANCE_APPROVER'>('PROJECT_APPROVER');
 
   useEffect(() => {
     fetchRateCards();
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((res) => {
+        const role = res?.user?.role || res?.data?.user?.role;
+        if (role && (role.toUpperCase().includes('FINANCE') || role === 'FINANCE_HEAD' || role === 'FINANCE_USER')) {
+          setUserRole('FINANCE_APPROVER');
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchRateCards = async () => {
@@ -334,6 +346,36 @@ export default function RateCardApprovalsPage() {
         </div>
       </div>
 
+      {/* ── APPROVED SECTION 6: RATE CARD APPROVAL (PROJECT & FINANCE APPROVER VIEW) ── */}
+      <div style={{ marginBottom: 24 }}>
+        <Section6ApproverView
+          role={userRole}
+          rateCardId="RC-2026-0006"
+          vendorName="Ramakrishna Interiors"
+          category="Interior Works"
+          vendorAcceptanceDate="24 Oct 2026"
+          projectApproved={userRole === 'FINANCE_APPROVER'}
+          onApproveProject={(comments) => {
+            setMsg({ text: 'Level 1 Project Approval completed! Routed to Level 2 Finance Approver.', type: 'success' });
+          }}
+          onApproveFinance={(comments) => {
+            setMsg({ text: 'Level 2 Finance Approval completed! Rate Card RC-2026-0006 is now Active.', type: 'success' });
+          }}
+          onReject={(comments) => {
+            setMsg({ text: 'Rate Card rejected with remarks.', type: 'error' });
+          }}
+        />
+      </div>
+
+      {/* ── APPROVED SECTION 7: FINALISED RATE CARD DETAILS (READ ONLY) ── */}
+      <div style={{ marginBottom: 24 }}>
+        <Section7FinalisedDetails
+          rateCardId="RC-2026-0006"
+          vendorName="Ramakrishna Interiors"
+          category="Interior Works"
+        />
+      </div>
+
       {/* Tabs */}
       <Card noPadding>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
@@ -357,16 +399,28 @@ export default function RateCardApprovalsPage() {
 
         {/* Requests Table */}
         <div style={{ overflowX: 'auto' }}>
-          <table className="table enterprise-table" style={{ width: '100%', fontSize: 12 }}>
+          <table
+            className="table enterprise-table"
+            style={{ width: '100%', minWidth: 1070, fontSize: 12, tableLayout: 'fixed' }}
+          >
+            <colgroup>
+              <col style={{ width: 175 }} />
+              <col style={{ width: 180 }} />
+              <col style={{ width: 200 }} />
+              <col style={{ width: 75 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 120 }} />
+            </colgroup>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                <th style={{ width: 120 }}>Rate Card Ref</th>
-                <th style={{ minWidth: 160 }}>Vendor</th>
-                <th style={{ minWidth: 140 }}>Category / Scope</th>
-                <th style={{ width: 80, textAlign: 'right' }}>Items</th>
-                <th style={{ width: 140 }}>Submitted By / Date</th>
-                <th style={{ width: 140 }}>Approval Stage</th>
-                <th style={{ width: 120, textAlign: 'center' }}>Actions</th>
+                <th style={{ width: 175, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Rate Card Ref</th>
+                <th style={{ width: 180, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Vendor</th>
+                <th style={{ width: 200, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Category / Scope</th>
+                <th style={{ width: 75, textAlign: 'right', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Items</th>
+                <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Submitted By / Date</th>
+                <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Approval Stage</th>
+                <th style={{ width: 120, textAlign: 'center', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -385,39 +439,47 @@ export default function RateCardApprovalsPage() {
               ) : (
                 filteredQueue.map((rc) => (
                   <tr key={rc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td>
-                      <div className="font-mono font-bold text-primary">{rc.rateCardNumber}</div>
+                    <td style={{ width: 175, overflow: 'hidden' }}>
+                      <div className="font-mono font-bold text-primary" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rc.rateCardNumber}
+                      </div>
                       <div style={{ fontSize: 10, color: '#64748b' }}>
                         Version {rc.version || 'v1.0'}
                       </div>
                     </td>
 
-                    <td>
-                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{rc.vendor?.name}</div>
+                    <td style={{ width: 180, overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rc.vendor?.name}
+                      </div>
                       <div style={{ fontSize: 10, color: '#64748b' }}>
                         {rc.vendor?.code} • {rc.vendor?.complianceStatus}
                       </div>
                     </td>
 
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{rc.category}</div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>
+                    <td style={{ width: 200, overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rc.category}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {rc.scope || 'Supply & Install'} • {rc.location || 'All India'}
                       </div>
                     </td>
 
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                    <td style={{ width: 75, textAlign: 'right', fontWeight: 600 }}>
                       {rc.items?.length || 0}
                     </td>
 
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{rc.submittedBy || 'Category Manager'}</div>
+                    <td style={{ width: 160, overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {rc.submittedBy || 'Category Manager'}
+                      </div>
                       <div style={{ fontSize: 10, color: '#64748b' }}>
                         {rc.submittedAt ? new Date(rc.submittedAt).toLocaleString() : new Date(rc.createdAt).toLocaleDateString()}
                       </div>
                     </td>
 
-                    <td>
+                    <td style={{ width: 160 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <StatusBadge status={rc.status} />
                         {rc.status === 'PENDING_PROJECT_APPROVAL' && (
@@ -433,14 +495,15 @@ export default function RateCardApprovalsPage() {
                       </div>
                     </td>
 
-                    <td style={{ textAlign: 'center' }}>
+                    <td style={{ width: 120, textAlign: 'center' }}>
                       <button
                         type="button"
                         onClick={() => handleOpenReview(rc)}
-                        className="btn btn-primary btn-sm"
-                        style={{ fontSize: 11, padding: '4px 10px' }}
+                        className="btn btn-outline btn-sm"
+                        style={{ fontSize: 11, height: 32, padding: '0 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       >
-                        <Eye size={12} style={{ marginRight: 4 }} /> Complete Review
+                        <Eye size={13} />
+                        <span>Review</span>
                       </button>
                     </td>
                   </tr>
@@ -537,6 +600,27 @@ export default function RateCardApprovalsPage() {
                     {selectedCard.projectApprovedAt ? new Date(selectedCard.projectApprovedAt).toLocaleDateString() : 'Awaiting'}
                   </div>
                 </div>
+
+                <div>
+                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Formal Agreement Status</span>
+                  {selectedCard.agreement && selectedCard.agreement.type !== 'NONE' ? (
+                    <div>
+                      <div style={{ fontWeight: 600, color: selectedCard.agreement.signature?.verified ? '#047857' : '#b45309' }}>
+                        {selectedCard.agreement.signature?.verified
+                          ? `✓ Signed by ${selectedCard.agreement.signature.signedBy}`
+                          : '⚠️ Awaiting Mandatory Signature'}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#475569' }}>
+                        {selectedCard.agreement.documentTitle || 'Master Rate Agreement'}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#475569' }}>Direct Schedule</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>No formal agreement required</div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Complete Item-wise Comparison Table (Requirement 7) */}
@@ -551,21 +635,34 @@ export default function RateCardApprovalsPage() {
                 </div>
 
                 <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 6 }}>
-                  <table className="table enterprise-table" style={{ width: '100%', fontSize: 11 }}>
+                  <table
+                    className="table enterprise-table"
+                    style={{ width: '100%', minWidth: 965, fontSize: 11, tableLayout: 'fixed' }}
+                  >
+                    <colgroup>
+                      <col style={{ width: 50 }} />
+                      <col style={{ width: 220 }} />
+                      <col style={{ width: 65 }} />
+                      <col style={{ width: 120 }} />
+                      <col style={{ width: 125 }} />
+                      <col style={{ width: 125 }} />
+                      <col style={{ width: 100 }} />
+                      <col style={{ width: 160 }} />
+                    </colgroup>
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
-                        <th style={{ width: 40 }}>#</th>
-                        <th style={{ minWidth: 200 }}>Description & Detailed Specification</th>
-                        <th style={{ width: 60 }}>UOM</th>
-                        <th style={{ width: 100, textAlign: 'right', background: '#ecfdf5', color: '#166534' }}>
+                        <th style={{ width: 50 }}>S.No.</th>
+                        <th style={{ width: 220, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Item Description</th>
+                        <th style={{ width: 65, textAlign: 'center' }}>UOM</th>
+                        <th style={{ width: 120, textAlign: 'right', background: '#ecfdf5', color: '#166534', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                           Proposed Rate (₹)
                         </th>
-                        <th style={{ width: 110, textAlign: 'right', background: '#eff6ff', color: '#1e40af' }}>
+                        <th style={{ width: 125, textAlign: 'right', background: '#eff6ff', color: '#1e40af', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                           Benchmark Rate (₹)
                         </th>
-                        <th style={{ width: 110, textAlign: 'right' }}>Historical PPO Rate</th>
-                        <th style={{ width: 90, textAlign: 'right' }}>Variance</th>
-                        <th style={{ width: 140 }}>Comparison Reference</th>
+                        <th style={{ width: 125, textAlign: 'right', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Historical PPO Rate</th>
+                        <th style={{ width: 100, textAlign: 'right' }}>Variance</th>
+                        <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Comparison Reference</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -575,24 +672,24 @@ export default function RateCardApprovalsPage() {
 
                         return (
                           <tr key={it.id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td className="text-muted">{i + 1}</td>
-                            <td>
-                              <div style={{ fontWeight: 600, color: '#0f172a' }}>{it.description}</div>
-                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                            <td style={{ width: 50 }} className="text-muted">{i + 1}</td>
+                            <td style={{ width: 220, overflow: 'hidden' }}>
+                              <div style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.description}</div>
+                              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {it.specification || 'Standard specification compliant'}
                               </div>
                             </td>
-                            <td><span className="badge badge-draft">{it.uom}</span></td>
-                            <td style={{ textAlign: 'right', background: '#ecfdf5', fontWeight: 700, color: '#047857' }}>
+                            <td style={{ width: 65, textAlign: 'center' }}><span className="badge badge-draft">{it.uom}</span></td>
+                            <td style={{ width: 120, textAlign: 'right', background: '#ecfdf5', fontWeight: 700, color: '#047857', whiteSpace: 'nowrap' }}>
                               ₹ {it.rate?.toLocaleString()}
                             </td>
-                            <td style={{ textAlign: 'right', background: '#eff6ff', fontWeight: 600, color: '#1e40af' }}>
+                            <td style={{ width: 125, textAlign: 'right', background: '#eff6ff', fontWeight: 600, color: '#1e40af', whiteSpace: 'nowrap' }}>
                               {it.benchmarkRate ? `₹ ${it.benchmarkRate?.toLocaleString()}` : '—'}
                             </td>
-                            <td style={{ textAlign: 'right' }}>
+                            <td style={{ width: 125, textAlign: 'right', whiteSpace: 'nowrap' }}>
                               {it.historicalRate ? `₹ ${it.historicalRate?.toLocaleString()}` : '—'}
                             </td>
-                            <td style={{ textAlign: 'right' }}>
+                            <td style={{ width: 100, textAlign: 'right', whiteSpace: 'nowrap' }}>
                               {it.benchmarkRate ? (
                                 <span className={`badge ${diff >= 0 ? 'badge-approved' : 'badge-rejected'}`} style={{ fontSize: 10 }}>
                                   {diff >= 0 ? `▲ ${diffPercent}%` : `▼ ${Math.abs(diffPercent)}%`}
@@ -601,7 +698,7 @@ export default function RateCardApprovalsPage() {
                                 <span className="text-muted">—</span>
                               )}
                             </td>
-                            <td style={{ fontSize: 10, color: '#64748b' }}>
+                            <td style={{ width: 160, fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {it.comparisonRef || 'Category Manager baseline validation'}
                             </td>
                           </tr>

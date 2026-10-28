@@ -58,10 +58,16 @@ export async function GET(req: NextRequest) {
         };
       });
 
+      let notesData: any = {};
+      if (rc.notes) {
+        try { notesData = JSON.parse(rc.notes); } catch {}
+      }
+
       return {
         ...rc,
         items: enrichedItems,
         itemCount: rc.items.length,
+        agreement: notesData.agreement || null,
       };
     });
 
@@ -124,16 +130,39 @@ export async function POST(req: NextRequest) {
         return apiError(`Vendor Acceptance requires prior Category Manager Acceptance (Current status: ${rateCard.status})`, 400);
       }
 
+      const { signature } = body;
+      const isSigned = !!(signature && signature.verified);
+
+      if (notesData.agreement) {
+        if (isSigned) {
+          notesData.agreement.status = 'SIGNED';
+          notesData.agreement.signature = {
+            signedBy: signature.signedBy,
+            designation: signature.designation,
+            signedAt: signature.signedAt || now.toISOString(),
+            signatureType: signature.signatureType || 'DIGITAL_VERIFIED',
+            signatureEvidenceId: signature.signatureEvidenceId || `DSC-${now.getFullYear()}-${rateCard.rateCardNumber}`,
+            verified: true,
+          };
+        } else {
+          notesData.agreement.status = 'VENDOR_ACCEPTED';
+          notesData.agreement.signature = null;
+        }
+      }
+
       notesData.vendorAccepted = {
         actor: vendorUserName,
         timestamp: now.toISOString(),
         remarks: remarks || 'Vendor accepted final negotiated rate card agreement and commercial terms',
+        hasSignature: isSigned,
       };
 
+      // Canonical Sequence: Vendor Acceptance -> Level 1 Project Approver Approval
       const updated = await prisma.vendorRateCard.update({
         where: { id: rateCardId },
         data: {
-          status: 'VENDOR_ACCEPTED',
+          status: 'PENDING_PROJECT_APPROVAL',
+          approvalLevel: 'LEVEL_1_PROJECT',
           notes: JSON.stringify(notesData),
         },
       });
@@ -147,7 +176,9 @@ export async function POST(req: NextRequest) {
           approverName: vendorUserName,
           approverEmail: ctx.userEmail || null,
           action: 'VENDOR_ACCEPTED',
-          remarks: remarks || 'Vendor accepted final negotiated rate card agreement',
+          remarks: isSigned
+            ? `Vendor ${vendorUserName} accepted terms & executed digital signature (${signature.signatureEvidenceId})`
+            : remarks || 'Vendor accepted final negotiated rate card agreement',
           timestamp: now,
         },
       });
@@ -155,14 +186,14 @@ export async function POST(req: NextRequest) {
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'Vendor Accepted Final Rate Card Agreement',
-          message: `Vendor ${vendorUserName} accepted Rate Card ${rateCard.rateCardNumber}. Category Manager Sign Off is now pending.`,
+          title: 'Rate Card Accepted by Vendor — Level 1 Project Approval Required',
+          message: `Vendor ${vendorUserName} accepted Rate Card ${rateCard.rateCardNumber}. Level 1 Project Approval is now required.`,
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: rateCardId,
           recordNumber: rateCard.rateCardNumber,
-          targetRole: 'CATEGORY_MANAGER',
-          link: '/procurement/rate-cards',
+          targetRole: 'PROJECT_APPROVER',
+          link: '/approvals/rate-cards',
         },
       });
 
@@ -172,12 +203,12 @@ export async function POST(req: NextRequest) {
         entityType: 'VENDOR',
         entityId: vendorId,
         action: 'RATE_CARD_VENDOR_ACCEPTED',
-        description: `Vendor ${vendorUserName} accepted final Rate Card ${rateCard.rateCardNumber} terms`,
-        newValue: { status: 'VENDOR_ACCEPTED' },
+        description: `Vendor ${vendorUserName} accepted final Rate Card ${rateCard.rateCardNumber} terms. Routed to Level 1 Project Approver.`,
+        newValue: { status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', isSigned },
       });
 
       return apiSuccess({
-        message: 'Rate Card final terms accepted! Category Manager Sign Off is now pending.',
+        message: 'Rate Card final terms accepted! Request forwarded to Level 1 Project Approver queue.',
         rateCard: updated,
       });
     }

@@ -662,8 +662,9 @@ async function runTests() {
           const client = await page.target().createCDPSession();
           await client.send('Network.clearBrowserCookies');
           await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle2' });
-          await page.type('input[type="email"]', userEmail);
-          await page.type('input[type="password"]', 'Demo@1234');
+          await page.waitForSelector('#work-email', { timeout: 10000 });
+          await page.type('#work-email', userEmail);
+          await page.type('#password', 'Demo@1234');
           await page.click('button[type="submit"]');
           await page.waitForFunction(() => !window.location.pathname.includes('/login'), { timeout: 15000 });
         }

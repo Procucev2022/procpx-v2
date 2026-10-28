@@ -12,7 +12,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const vendorType = searchParams.get('vendorType'); // CLIENT_VENDOR | PROCUCEV_VENDOR | ALL
   const qualificationStatus = searchParams.get('qualificationStatus');
+  const onboardingStatus = searchParams.get('onboardingStatus');
   const category = searchParams.get('category');
+  const region = searchParams.get('region');
   const status = searchParams.get('status');
   const search = searchParams.get('search') || '';
 
@@ -40,6 +42,10 @@ export async function GET(req: NextRequest) {
       where.qualificationStatus = qualificationStatus;
     }
 
+    if (onboardingStatus && onboardingStatus !== 'ALL') {
+      where.onboardingStatus = onboardingStatus;
+    }
+
     if (category && category !== 'ALL') {
       where.categories = { contains: category };
     }
@@ -48,20 +54,35 @@ export async function GET(req: NextRequest) {
       where.status = status;
     }
 
+    const andConditions: any[] = [];
+
+    if (region && region !== 'ALL') {
+      andConditions.push({
+        OR: [
+          { operatingLocation: { contains: region } },
+          { city: { contains: region } },
+          { state: { contains: region } },
+        ],
+      });
+    }
+
     if (search.trim()) {
       const q = search.trim();
-      where.AND = [
-        {
-          OR: [
-            { name: { contains: q } },
-            { code: { contains: q } },
-            { categories: { contains: q } },
-            { city: { contains: q } },
-            { contactPerson: { contains: q } },
-            { gstin: { contains: q } },
-          ],
-        },
-      ];
+      andConditions.push({
+        OR: [
+          { name: { contains: q } },
+          { code: { contains: q } },
+          { categories: { contains: q } },
+          { city: { contains: q } },
+          { contactPerson: { contains: q } },
+          { gstin: { contains: q } },
+          { operatingLocation: { contains: q } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     const vendors = await prisma.vendor.findMany({
@@ -75,6 +96,7 @@ export async function GET(req: NextRequest) {
           },
         },
         ppoRatings: {
+          where: { status: 'APPROVED' },
           select: {
             overallScore: true,
             qualityScore: true,
@@ -134,7 +156,7 @@ export async function GET(req: NextRequest) {
 
     const counts = {
       total: allTenantVendors.length,
-      clientVendorsCount: allTenantVendors.filter(v => v.vendorType === 'CLIENT_VENDOR').length,
+      clientVendorsCount: allTenantVendors.filter(v => v.vendorType !== 'PROCUCEV_VENDOR').length,
       procucevVendorsCount: allTenantVendors.filter(v => v.vendorType === 'PROCUCEV_VENDOR').length,
       qualifiedCount: allTenantVendors.filter(v => v.qualificationStatus === 'QUALIFIED').length,
       pendingReviewCount: allTenantVendors.filter(v => v.qualificationStatus === 'PENDING_REVIEW' || v.qualificationStatus === 'EVALUATION_IN_PROGRESS').length,

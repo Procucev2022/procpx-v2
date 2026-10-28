@@ -970,7 +970,7 @@ export default function VendorNegotiationWorkspace({
             <thead>
               <tr>
                 {/* 1. S. No. */}
-                <th style={{ width: 45, textAlign: 'center' }}>#</th>
+                <th style={{ width: 45, textAlign: 'center' }}>S.No.</th>
 
                 {/* 2. Item Description */}
                 <th style={{ minWidth: 220 }}>Item Description</th>

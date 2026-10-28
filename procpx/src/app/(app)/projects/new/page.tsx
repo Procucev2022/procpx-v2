@@ -1,9 +1,11 @@
 'use client';
-// app/(app)/projects/new/page.tsx - Create project
+// app/(app)/projects/new/page.tsx - Standardised Create Project Workspace
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import FormSection from '@/components/ui/FormSection';
 
 const SECTORS = ['RETAIL', 'HOSPITALITY', 'BANKING', 'INSURANCE', 'OTHER'];
 const PROJECT_TYPES = ['NEW_BUILD', 'RENOVATION', 'REFURBISHMENT', 'EXPANSION', 'REPLACEMENT', 'FIT_OUT', 'MAINTENANCE_CAPEX', 'OTHER'];
@@ -80,18 +82,17 @@ export default function NewProjectPage() {
   }
 
   return (
-    <div className="page-content">
-      <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
-        <div>
-          <div className="page-title">Create New Project</div>
-          <div className="page-subtitle">Project ID will be auto-generated (CPX-P-XXXXXX)</div>
-        </div>
-        <Link href="/projects" className="btn btn-secondary">Cancel</Link>
-      </div>
+    <div className="w-full max-w-5xl mx-auto">
+      <PageHeader
+        title="Create New Project"
+        subtitle="Project ID will be auto-generated in standard format (CPX-P-XXXXXX)"
+        backHref="/projects"
+        backLabel="Back to Projects"
+      />
 
       {currentUserRole && !canCreate && (
-        <div className="alert alert-warning mb-4" style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e' }}>
-          <ShieldAlert size={18} color="#d97706" />
+        <div className="p-3.5 mb-6 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-center gap-2.5">
+          <ShieldAlert size={18} className="text-amber-600 shrink-0" />
           <span>
             <strong>Read-Only Notice:</strong> Your current role (<code>{currentUserRole}</code>) has read-only access to projects. Only Project Users and Administrators can create projects.
           </span>
@@ -99,140 +100,286 @@ export default function NewProjectPage() {
       )}
 
       {error && (
-        <div className="alert alert-error mb-4" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <AlertTriangle size={16} />
+        <div className="p-3.5 mb-6 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-sm flex items-center gap-2.5">
+          <AlertTriangle size={18} className="text-rose-600 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        {/* Basic Info */}
-        <div className="card mb-4">
-          <div className="card-header"><span className="card-title">Basic Information</span></div>
-          <div className="card-body">
-            <div className="form-group">
-              <label className="form-label">Project Name <span className="required">*</span></label>
-              <input className="form-control" value={form.name} onChange={e => update('name', e.target.value)} placeholder="e.g. Premium Retail Store – Bengaluru" required />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Section 1: Basic Information */}
+        <FormSection
+          sectionNumber="1"
+          title="Basic Information"
+          subtitle="Define core project identifiers, industry sector, and operational scope"
+        >
+          <div className="space-y-4">
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">
+                Project Name <span className="text-rose-600 font-bold">*</span>
+              </label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.name}
+                onChange={e => update('name', e.target.value)}
+                placeholder="e.g. Premium Retail Store – Bengaluru Flagship"
+                required
+              />
             </div>
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Sector <span className="required">*</span></label>
-                <select className="form-control" value={form.sector} onChange={e => update('sector', e.target.value)} required>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="form-field">
+                <label className="form-label text-xs font-semibold text-slate-700">
+                  Sector <span className="text-rose-600 font-bold">*</span>
+                </label>
+                <select
+                  className="input h-[40px] text-sm w-full cursor-pointer"
+                  value={form.sector}
+                  onChange={e => update('sector', e.target.value)}
+                  required
+                >
                   <option value="">Select Sector</option>
                   {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div className="form-group">
-                <label className="form-label">Project Type <span className="required">*</span></label>
-                <select className="form-control" value={form.projectType} onChange={e => update('projectType', e.target.value)} required>
+
+              <div className="form-field">
+                <label className="form-label text-xs font-semibold text-slate-700">
+                  Project Type <span className="text-rose-600 font-bold">*</span>
+                </label>
+                <select
+                  className="input h-[40px] text-sm w-full cursor-pointer"
+                  value={form.projectType}
+                  onChange={e => update('projectType', e.target.value)}
+                  required
+                >
                   <option value="">Select Type</option>
                   {PROJECT_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
                 </select>
               </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Project Description</label>
-              <textarea className="form-control" value={form.description} onChange={e => update('description', e.target.value)} placeholder="Brief description of the project scope..." rows={3} />
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">
+                Project Description / Scope Summary
+              </label>
+              <textarea
+                className="input h-auto min-h-[90px] py-2 text-sm w-full"
+                value={form.description}
+                onChange={e => update('description', e.target.value)}
+                placeholder="Brief description of the Capex scope, key milestones, and business objectives..."
+                rows={3}
+              />
             </div>
           </div>
-        </div>
+        </FormSection>
 
-        {/* Location */}
-        <div className="card mb-4">
-          <div className="card-header"><span className="card-title">Location</span></div>
-          <div className="card-body">
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">City</label>
-                <input className="form-control" value={form.city} onChange={e => update('city', e.target.value)} placeholder="Bengaluru" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">State</label>
-                <input className="form-control" value={form.state} onChange={e => update('state', e.target.value)} placeholder="Karnataka" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Country</label>
-                <input className="form-control" value={form.country} onChange={e => update('country', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Location / Area</label>
-                <input className="form-control" value={form.location} onChange={e => update('location', e.target.value)} placeholder="Koramangala" />
-              </div>
-              <div className="form-group col-span-2">
-                <label className="form-label">Address</label>
-                <input className="form-control" value={form.address} onChange={e => update('address', e.target.value)} placeholder="Full site address" />
-              </div>
+        {/* Section 2: Location */}
+        <FormSection
+          sectionNumber="2"
+          title="Location & Site Address"
+          subtitle="Geographic parameters for regional cost centre alignment and delivery logistics"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">City</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.city}
+                onChange={e => update('city', e.target.value)}
+                placeholder="Bengaluru"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">State / Region</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.state}
+                onChange={e => update('state', e.target.value)}
+                placeholder="Karnataka"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Country</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.country}
+                onChange={e => update('country', e.target.value)}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Location / Commercial Area</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.location}
+                onChange={e => update('location', e.target.value)}
+                placeholder="e.g. Koramangala 5th Block"
+              />
+            </div>
+
+            <div className="form-field md:col-span-2">
+              <label className="form-label text-xs font-semibold text-slate-700">Full Site Address</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.address}
+                onChange={e => update('address', e.target.value)}
+                placeholder="Plot / Unit number, Street, Landmark, Pin code"
+              />
             </div>
           </div>
-        </div>
+        </FormSection>
 
-        {/* Project Details */}
-        <div className="card mb-4">
-          <div className="card-header"><span className="card-title">Project Details</span></div>
-          <div className="card-body">
-            <div className="form-grid-3">
-              <div className="form-group">
-                <label className="form-label">Area (Sq Ft)</label>
-                <input className="form-control" type="number" value={form.areaSqFt} onChange={e => update('areaSqFt', e.target.value)} placeholder="25000" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Cost Centre</label>
-                <input className="form-control" value={form.costCentre} onChange={e => update('costCentre', e.target.value)} placeholder="RET-BLR-001" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Project Owner</label>
-                <input className="form-control" value={form.projectOwner} onChange={e => update('projectOwner', e.target.value)} placeholder="Name or Team" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Budget</label>
-                <input className="form-control" type="number" value={form.budget} onChange={e => update('budget', e.target.value)} placeholder="0.00" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Currency</label>
-                <select className="form-control" value={form.currency} onChange={e => update('currency', e.target.value)}>
-                  {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Business Unit</label>
-                <input className="form-control" value={form.businessUnit} onChange={e => update('businessUnit', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Number of Floors</label>
-                <input className="form-control" type="number" value={form.numberOfFloors} onChange={e => update('numberOfFloors', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Number of Units / Outlets</label>
-                <input className="form-control" type="number" value={form.numberOfUnits} onChange={e => update('numberOfUnits', e.target.value)} />
-              </div>
+        {/* Section 3: Commercial & Project Details */}
+        <FormSection
+          sectionNumber="3"
+          title="Commercial & Technical Specifications"
+          subtitle="Fitout floor area, Cost Centre mapping, initial budget, and physical layout"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Area (Sq Ft)</label>
+              <input
+                className="input h-[40px] text-sm w-full font-mono"
+                type="number"
+                value={form.areaSqFt}
+                onChange={e => update('areaSqFt', e.target.value)}
+                placeholder="25000"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Cost Centre Code</label>
+              <input
+                className="input h-[40px] text-sm w-full font-mono"
+                value={form.costCentre}
+                onChange={e => update('costCentre', e.target.value)}
+                placeholder="RET-BLR-001"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Project Owner</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.projectOwner}
+                onChange={e => update('projectOwner', e.target.value)}
+                placeholder="Name or Functional Lead"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Budget (Est.)</label>
+              <input
+                className="input h-[40px] text-sm w-full font-mono"
+                type="number"
+                value={form.budget}
+                onChange={e => update('budget', e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Currency</label>
+              <select
+                className="input h-[40px] text-sm w-full cursor-pointer font-mono"
+                value={form.currency}
+                onChange={e => update('currency', e.target.value)}
+              >
+                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Business Unit</label>
+              <input
+                className="input h-[40px] text-sm w-full"
+                value={form.businessUnit}
+                onChange={e => update('businessUnit', e.target.value)}
+                placeholder="e.g. Retail Operations"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Number of Floors</label>
+              <input
+                className="input h-[40px] text-sm w-full font-mono"
+                type="number"
+                value={form.numberOfFloors}
+                onChange={e => update('numberOfFloors', e.target.value)}
+                placeholder="1"
+              />
+            </div>
+
+            <div className="form-field md:col-span-2">
+              <label className="form-label text-xs font-semibold text-slate-700">Number of Units / Outlets</label>
+              <input
+                className="input h-[40px] text-sm w-full font-mono"
+                type="number"
+                value={form.numberOfUnits}
+                onChange={e => update('numberOfUnits', e.target.value)}
+                placeholder="1"
+              />
             </div>
           </div>
-        </div>
+        </FormSection>
 
-        {/* Timeline */}
-        <div className="card mb-6">
-          <div className="card-header"><span className="card-title">Timeline</span></div>
-          <div className="card-body">
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Project Start Date</label>
-                <input className="form-control" type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Target Completion Date</label>
-                <input className="form-control" type="date" value={form.targetCompletion} onChange={e => update('targetCompletion', e.target.value)} />
-              </div>
+        {/* Section 4: Timeline */}
+        <FormSection
+          sectionNumber="4"
+          title="Project Timeline"
+          subtitle="Target start and completion schedule for procurement planning"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Project Start Date</label>
+              <input
+                className="input h-[40px] text-sm w-full cursor-pointer"
+                type="date"
+                value={form.startDate}
+                onChange={e => update('startDate', e.target.value)}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label text-xs font-semibold text-slate-700">Target Completion Date</label>
+              <input
+                className="input h-[40px] text-sm w-full cursor-pointer"
+                type="date"
+                value={form.targetCompletion}
+                onChange={e => update('targetCompletion', e.target.value)}
+              />
             </div>
           </div>
-        </div>
+        </FormSection>
 
-        <div className="flex gap-3" style={{ justifyContent: 'flex-end' }}>
-          <Link href="/projects" className="btn btn-secondary">Cancel</Link>
-          <button type="submit" className="btn btn-primary btn-lg" disabled={loading || Boolean(currentUserRole && !canCreate)}>
-            {loading ? <><div className="spinner" style={{ width: 16, height: 16 }} /> Creating...</> : 'Create Project'}
+        {/* Actions bar */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+          <Link
+            href="/projects"
+            className="btn btn-secondary h-[42px] px-5 text-sm font-semibold inline-flex items-center"
+          >
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            className="btn btn-primary h-[42px] px-6 text-sm font-bold inline-flex items-center gap-2 shadow-xs"
+            disabled={loading || Boolean(currentUserRole && !canCreate)}
+          >
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Creating Project...</span>
+              </>
+            ) : (
+              'Create Project'
+            )}
           </button>
         </div>
       </form>
     </div>
   );
 }
+

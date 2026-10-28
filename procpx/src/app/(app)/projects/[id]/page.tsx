@@ -1,5 +1,5 @@
 'use client';
-// app/(app)/projects/[id]/page.tsx - Project detail
+// app/(app)/projects/[id]/page.tsx - Standardised Project Detail Workspace
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -14,16 +14,10 @@ import {
   FileText,
   Folder,
   Activity,
+  Layers,
 } from 'lucide-react';
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    DRAFT: 'badge-draft', BOQ_PREPARATION: 'badge-submitted', BOQ_REVIEW: 'badge-review',
-    BOQ_APPROVED: 'badge-approved', CANCELLED: 'badge-draft', SUBMITTED: 'badge-submitted',
-    APPROVED: 'badge-approved', REJECTED: 'badge-rejected',
-  };
-  return <span className={`badge ${map[status] || 'badge-draft'}`}>{status.replace(/_/g, ' ')}</span>;
-}
+import PageHeader from '@/components/ui/PageHeader';
+import StatusBadge from '@/components/ui/StatusBadge';
 
 function QualityScore({ score }: { score?: number | null }) {
   if (score == null) return <span className="text-muted">—</span>;
@@ -49,70 +43,107 @@ export default function ProjectDetailPage() {
       .then(d => { setProject(d); setLoading(false); });
   }, [id]);
 
-  if (loading) return <div className="page-content"><div className="loading-overlay"><div className="spinner" /> Loading project...</div></div>;
-  if (!project || project.error) return <div className="page-content"><div className="alert alert-error">Project not found or access denied.</div></div>;
+  if (loading) return (
+    <div className="py-20 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
+      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm">Loading project...</span>
+    </div>
+  );
+
+  if (!project || project.error) return (
+    <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">
+      Project not found or access denied.
+    </div>
+  );
 
   const latestBoq = project.boqs?.[0];
   const latestRevision = latestBoq?.revisions?.[0];
 
   return (
-    <div className="page-content">
-      {/* Header */}
-      <div className="top-header" style={{ margin: '-24px -24px 0', padding: '0 24px' }}>
-        <div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-            <Link href="/projects" style={{ color: '#6b7280', textDecoration: 'none' }}>Projects</Link> /
-          </div>
-          <div className="page-title">{project.name}</div>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/projects/${id}/edit`} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Pencil size={14} /> Edit
-          </Link>
-          {latestBoq ? (
-            <Link href={`/boq/${latestRevision?.id || latestBoq.id}`} className="btn btn-primary">Open BOQ</Link>
-          ) : (
-            <Link href={`/boq/upload?projectId=${id}`} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Upload size={14} /> Upload BOQ
+    <div className="w-full">
+      <PageHeader
+        title={project.name}
+        subtitle={`${project.projectCode} • Sector: ${project.sector}${project.city ? ` • ${project.city}` : ''}`}
+        backHref="/projects"
+        backLabel="Back to Projects"
+        badge={<StatusBadge status={project.status} />}
+        actions={
+          <div className="flex items-center gap-2.5">
+            <Link
+              href={`/projects/${id}/edit`}
+              className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <Pencil size={14} /> Edit Project
             </Link>
-          )}
-        </div>
-      </div>
+            {latestBoq ? (
+              <Link
+                href={`/boq/${latestRevision?.id || latestBoq.id}`}
+                className="btn btn-primary h-[40px] px-4 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
+              >
+                <ClipboardCheck size={14} /> Open BOQ
+              </Link>
+            ) : (
+              <Link
+                href={`/boq/upload?projectId=${id}`}
+                className="btn btn-primary h-[40px] px-4 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
+              >
+                <Upload size={14} /> Upload BOQ
+              </Link>
+            )}
+          </div>
+        }
+      />
 
       {/* Summary strip */}
-      <div style={{ display: 'flex', gap: 16, padding: '16px 0', borderBottom: '1px solid var(--surface-border)', marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span className="font-mono" style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{project.projectCode}</span>
-          <StatusBadge status={project.status} />
-          <span className="badge badge-info">{project.sector}</span>
+      <div className="flex items-center gap-4 py-3 px-4 bg-white border border-slate-200 rounded-xl mb-6 shadow-2xs flex-wrap text-xs text-slate-600">
+        <div className="flex items-center gap-2 pr-4 border-r border-slate-200">
+          <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+            {project.projectCode}
+          </span>
+          <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+            {project.sector}
+          </span>
         </div>
         {project.city && (
-          <span className="text-muted" style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <MapPin size={13} /> {project.city}{project.state ? `, ${project.state}` : ''}
+          <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium">
+            <MapPin size={14} className="text-slate-400" />
+            <span>{project.city}{project.state ? `, ${project.state}` : ''}</span>
           </span>
         )}
         {project.areaSqFt && (
-          <span className="text-muted" style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Maximize2 size={13} /> {project.areaSqFt.toLocaleString()} Sq Ft
+          <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium font-mono">
+            <Maximize2 size={14} className="text-slate-400" />
+            <span>{project.areaSqFt.toLocaleString('en-IN')} Sq Ft</span>
           </span>
         )}
         {project.costCentre && (
-          <span className="text-muted" style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Briefcase size={13} /> {project.costCentre}
+          <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium font-mono">
+            <Briefcase size={14} className="text-slate-400" />
+            <span>{project.costCentre}</span>
           </span>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="tabs mb-4">
+      <div className="flex items-center gap-1 border-b border-slate-200 mb-6 overflow-x-auto pb-px">
         {['overview', 'boq', 'team', 'documents', 'activity'].map(tab => (
-          <div key={tab} className={`tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
+          <button
+            key={tab}
+            type="button"
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === tab
+                ? 'border-[#0f52ba] text-[#0f52ba] bg-blue-50/40 rounded-t-lg'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+            }`}
+            onClick={() => setActiveTab(tab)}
+          >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </div>
+          </button>
         ))}
         {['benchmark', 'rfqs', 'quotes', 'ppo'].map(tab => (
-          <div key={tab} className="tab" style={{ opacity: 0.4, cursor: 'not-allowed' }}>
-            {tab.charAt(0).toUpperCase() + tab.slice(1)} <span style={{ fontSize: 9, background: '#f1f5f9', padding: '1px 4px', borderRadius: 3 }}>Soon</span>
+          <div key={tab} className="px-4 py-2.5 text-sm font-medium text-slate-400 cursor-not-allowed opacity-50 flex items-center gap-1.5 whitespace-nowrap">
+            <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded font-mono">Soon</span>
           </div>
         ))}
       </div>

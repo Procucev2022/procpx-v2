@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
 import StatusBadge from '@/components/ui/StatusBadge';
+import Section5VendorAcceptance from '@/components/rate-cards/Section5VendorAcceptance';
+import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedDetails';
 
 export default function VendorRateCardsPage() {
   const [rateCards, setRateCards] = useState<any[]>([]);
@@ -266,6 +268,34 @@ export default function VendorRateCardsPage() {
         </div>
       )}
 
+      {/* ── APPROVED SECTION 5: VENDOR ACCEPTANCE (VENDOR PORTAL VIEW) ── */}
+      <div style={{ marginBottom: 24 }}>
+        <Section5VendorAcceptance
+          rateCardId="RC-2026-0006"
+          category="Interior Works"
+          validity="01 Oct 2026 - 30 Sep 2027"
+          onAccept={(remarks, signature) => {
+            if (signature) {
+              setSuccessMsg(`Rate Card Agreement formally accepted & digitally signed by ${signature.signedBy} (${signature.signatureEvidenceId})! Routed directly to Level 1 Project Approver.`);
+            } else {
+              setSuccessMsg('Rate Card agreement accepted by Vendor! Routed directly to Level 1 Project Approver.');
+            }
+          }}
+          onReject={(remarks) => {
+            setError('Rate Card rejected with remarks: ' + remarks);
+          }}
+        />
+      </div>
+
+      {/* ── APPROVED SECTION 7: FINALISED RATE CARD DETAILS (READ ONLY) ── */}
+      <div style={{ marginBottom: 24 }}>
+        <Section7FinalisedDetails
+          rateCardId="RC-2026-0006"
+          vendorName="Ramakrishna Interiors"
+          category="Interior Works"
+        />
+      </div>
+
       {/* ── RATE CARDS ACCORDION ────────────────────────────────────────── */}
       {loading ? (
         <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -413,26 +443,40 @@ export default function VendorRateCardsPage() {
 
                     {/* Named Rounds Line Items Table (Section 4 Requirements) */}
                     <div style={{ overflowX: 'auto', background: '#ffffff', borderRadius: 6, border: '1px solid var(--border-color)' }}>
-                      <table className="table" style={{ width: '100%', fontSize: 11, minWidth: 1000, margin: 0 }}>
+                      <table
+                        className="table"
+                        style={{ width: '100%', fontSize: 11, minWidth: 1075, margin: 0, tableLayout: 'fixed' }}
+                      >
+                        <colgroup>
+                          <col style={{ width: 50 }} />
+                          <col style={{ width: 210 }} />
+                          <col style={{ width: 65 }} />
+                          <col style={{ width: 75 }} />
+                          <col style={{ width: 130 }} />
+                          <col style={{ width: 140 }} />
+                          <col style={{ width: 130 }} />
+                          <col style={{ width: 140 }} />
+                          <col style={{ width: 135 }} />
+                        </colgroup>
                         <thead>
                           <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                            <th style={{ width: 40 }}>#</th>
-                            <th style={{ minWidth: 200 }}>Item Description & Specification</th>
-                            <th style={{ width: 60 }}>UOM</th>
-                            <th style={{ width: 70, textAlign: 'right' }}>Ref Qty</th>
-                            <th style={{ width: 120, textAlign: 'right', background: '#eff6ff', color: '#1e40af' }}>
+                            <th style={{ width: 50 }}>S.No.</th>
+                            <th style={{ width: 210, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Item Description</th>
+                            <th style={{ width: 65, textAlign: 'center' }}>UOM</th>
+                            <th style={{ width: 75, textAlign: 'right' }}>Quantity</th>
+                            <th style={{ width: 130, textAlign: 'right', background: '#eff6ff', color: '#1e40af', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                               Buyer RC Offer-1
                             </th>
-                            <th style={{ width: 130, textAlign: 'right', background: '#f0fdf4', color: '#047857' }}>
+                            <th style={{ width: 140, textAlign: 'right', background: '#f0fdf4', color: '#047857', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                               Vendor RC Quote-1
                             </th>
-                            <th style={{ width: 120, textAlign: 'right', background: '#eff6ff', color: '#1e40af' }}>
+                            <th style={{ width: 130, textAlign: 'right', background: '#eff6ff', color: '#1e40af', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                               Buyer RC Offer-2
                             </th>
-                            <th style={{ width: 130, textAlign: 'right', background: '#f0fdf4', color: '#047857' }}>
+                            <th style={{ width: 140, textAlign: 'right', background: '#f0fdf4', color: '#047857', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                               Vendor RC Quote-2
                             </th>
-                            <th style={{ width: 120, textAlign: 'right', background: '#f8fafc', fontWeight: 700 }}>
+                            <th style={{ width: 135, textAlign: 'right', background: '#f8fafc', fontWeight: 700, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
                               Final Agreed Rate
                             </th>
                           </tr>
@@ -445,32 +489,32 @@ export default function VendorRateCardsPage() {
 
                             return (
                               <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                <td style={{ color: 'var(--text-muted)' }}>{idx + 1}</td>
-                                <td>
-                                  <div style={{ fontWeight: 600, fontSize: 12 }}>{item.description}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.specification || item.itemCode || '—'}</div>
+                                <td style={{ width: 50, color: 'var(--text-muted)' }}>{idx + 1}</td>
+                                <td style={{ width: 210, overflow: 'hidden' }}>
+                                  <div style={{ fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.description}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.specification || item.itemCode || '—'}</div>
                                 </td>
-                                <td><span className="badge badge-draft">{item.uom}</span></td>
-                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.referenceQty || item.minQuantity || 1}</td>
+                                <td style={{ width: 65, textAlign: 'center' }}><span className="badge badge-draft">{item.uom}</span></td>
+                                <td style={{ width: 75, textAlign: 'right', fontWeight: 600 }}>{item.referenceQty || item.minQuantity || 1}</td>
 
                                 {/* Buyer RC Offer-1 (Read-Only) */}
-                                <td style={{ textAlign: 'right', background: '#eff6ff', fontWeight: 700, color: '#1e40af' }}>
+                                <td style={{ width: 130, textAlign: 'right', background: '#eff6ff', fontWeight: 700, color: '#1e40af', whiteSpace: 'nowrap' }}>
                                   ₹ {Number(item.buyerOffer1 ?? item.rate).toLocaleString('en-IN')}
                                 </td>
 
                                 {/* Vendor RC Quote-1 (Editable during Round 1, locked once submitted) */}
-                                <td style={{ textAlign: 'right', background: '#f0fdf4' }}>
+                                <td style={{ width: 140, textAlign: 'right', background: '#f0fdf4' }}>
                                   {isRound1Active ? (
                                     <input
                                       type="number"
                                       value={cardInputs[item.id] ?? (val1 || '')}
                                       onChange={(e) => handleQuoteRateChange(rc.id, item.id, Number(e.target.value))}
                                       className="input input-sm"
-                                      style={{ width: 100, textAlign: 'right', fontWeight: 700, color: '#047857', borderColor: '#86efac' }}
+                                      style={{ width: '100%', maxWidth: 100, textAlign: 'right', fontWeight: 700, color: '#047857', borderColor: '#86efac' }}
                                       placeholder="Quote-1"
                                     />
                                   ) : val1 !== null && val1 !== undefined ? (
-                                    <span style={{ fontWeight: 700, color: '#047857', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    <span style={{ fontWeight: 700, color: '#047857', display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
                                       {isRound1Locked && <Lock size={10} color="#94a3b8" />}
                                       ₹ {Number(val1).toLocaleString('en-IN')}
                                     </span>
@@ -480,7 +524,7 @@ export default function VendorRateCardsPage() {
                                 </td>
 
                                 {/* Buyer RC Offer-2 (Read-Only, shown when submitted) */}
-                                <td style={{ textAlign: 'right', background: '#eff6ff', fontWeight: 700, color: '#1e40af' }}>
+                                <td style={{ width: 130, textAlign: 'right', background: '#eff6ff', fontWeight: 700, color: '#1e40af', whiteSpace: 'nowrap' }}>
                                   {item.buyerOffer2 !== null && item.buyerOffer2 !== undefined ? (
                                     `₹ ${Number(item.buyerOffer2).toLocaleString('en-IN')}`
                                   ) : (
@@ -489,18 +533,18 @@ export default function VendorRateCardsPage() {
                                 </td>
 
                                 {/* Vendor RC Quote-2 (Editable during Round 2, locked once submitted) */}
-                                <td style={{ textAlign: 'right', background: '#f0fdf4' }}>
+                                <td style={{ width: 140, textAlign: 'right', background: '#f0fdf4' }}>
                                   {isRound2Active ? (
                                     <input
                                       type="number"
                                       value={cardInputs[item.id] ?? (val2 || '')}
                                       onChange={(e) => handleQuoteRateChange(rc.id, item.id, Number(e.target.value))}
                                       className="input input-sm"
-                                      style={{ width: 100, textAlign: 'right', fontWeight: 700, color: '#047857', borderColor: '#86efac' }}
+                                      style={{ width: '100%', maxWidth: 100, textAlign: 'right', fontWeight: 700, color: '#047857', borderColor: '#86efac' }}
                                       placeholder="Quote-2"
                                     />
                                   ) : val2 !== null && val2 !== undefined ? (
-                                    <span style={{ fontWeight: 700, color: '#047857', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    <span style={{ fontWeight: 700, color: '#047857', display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
                                       {isRound2Locked && <Lock size={10} color="#94a3b8" />}
                                       ₹ {Number(val2).toLocaleString('en-IN')}
                                     </span>
@@ -510,7 +554,7 @@ export default function VendorRateCardsPage() {
                                 </td>
 
                                 {/* Final Agreed Rate */}
-                                <td style={{ textAlign: 'right', fontWeight: 800, color: '#166534', background: '#f8fafc' }}>
+                                <td style={{ width: 135, textAlign: 'right', fontWeight: 800, color: '#166534', background: '#f8fafc', whiteSpace: 'nowrap' }}>
                                   {item.finalAgreedRate !== null && item.finalAgreedRate !== undefined ? (
                                     `₹ ${Number(item.finalAgreedRate).toLocaleString('en-IN')}`
                                   ) : (

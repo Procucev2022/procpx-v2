@@ -92,12 +92,12 @@ export async function GET(req: NextRequest) {
     const boqRows = standardItems.map((item, idx) => ({
       'S.No.': idx + 1,
       'Item Code': item.itemCode,
-      'Category': item.category,
-      'Sub-category': item.subcategory || '',
       'Item Description': item.standardDescription,
       'BOQ Description': item.detailedSpecification,
       'UOM': item.uom,
       'Quantity': '', // Mandatory blank column for user to fill!
+      'Category': item.category,
+      'Sub-category': item.subcategory || '',
       'Wastage %': 0,
       'Drawing Reference': '',
       'Area / Zone': costCentre?.floorZone || costCentre?.name || '',
@@ -121,12 +121,12 @@ export async function GET(req: NextRequest) {
     wsBoq['!cols'] = [
       { wch: 8 },  // S.No.
       { wch: 16 }, // Item Code
-      { wch: 22 }, // Category
-      { wch: 22 }, // Sub-category
       { wch: 45 }, // Item Description
       { wch: 55 }, // BOQ Description
       { wch: 10 }, // UOM
       { wch: 14 }, // Quantity (User Fill)
+      { wch: 22 }, // Category
+      { wch: 22 }, // Sub-category
       { wch: 12 }, // Wastage %
       { wch: 18 }, // Drawing Reference
       { wch: 20 }, // Area / Zone

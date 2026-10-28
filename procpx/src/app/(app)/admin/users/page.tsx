@@ -1,7 +1,8 @@
 'use client';
 // app/(app)/admin/users/page.tsx - User Management & RBAC Permissions
 import { useEffect, useState } from 'react';
-import { CheckCircle2, X, Search, Users, Shield, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
 
 const ROLES = [
   'PROJECT_USER',
@@ -88,41 +89,75 @@ export default function UsersPage() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="page-content">
-      <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
-        <div>
-          <div className="page-title">User Management & Role Governance</div>
-          <div className="page-subtitle">{total} users in this tenant</div>
-        </div>
-        {activeTab === 'users' && (
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Invite User</button>
-        )}
-      </div>
+    <div className="w-full">
+      <PageHeader
+        title="User Management & Role Governance"
+        subtitle={`${total} authorized users in this organization tenant`}
+        breadcrumbs={[
+          { label: 'Administration', href: '/admin/users' },
+          { label: 'Users' },
+        ]}
+        actions={
+          activeTab === 'users' ? (
+            <button
+              type="button"
+              className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
+              onClick={() => setShowModal(true)}
+            >
+              <Plus size={16} /> Invite User
+            </button>
+          ) : undefined
+        }
+      />
 
       {success && (
-        <div className="alert alert-success mb-4 flex justify-between items-center">
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <CheckCircle2 size={16} /> {success}
+        <div className="p-3.5 mb-6 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex justify-between items-center">
+          <span className="flex items-center gap-2 font-medium">
+            <CheckCircle2 size={16} className="text-emerald-600" /> {success}
           </span>
-          <button className="btn btn-ghost btn-sm" onClick={() => setSuccess('')}>
+          <button type="button" className="text-slate-500 hover:text-slate-700" onClick={() => setSuccess('')}>
             <X size={14} />
           </button>
         </div>
       )}
 
-      <div className="tabs mb-4">
-        <div className={`tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Tenant Users ({total})</div>
-        <div className={`tab ${activeTab === 'roles' ? 'active' : ''}`} onClick={() => setActiveTab('roles')}>Role & Permission Matrix</div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 mb-6 pb-px">
+        <button
+          type="button"
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'users'
+              ? 'border-[#0f52ba] text-[#0f52ba] bg-blue-50/40 rounded-t-lg'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+          }`}
+          onClick={() => setActiveTab('users')}
+        >
+          Tenant Users ({total})
+        </button>
+        <button
+          type="button"
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'roles'
+              ? 'border-[#0f52ba] text-[#0f52ba] bg-blue-50/40 rounded-t-lg'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+          }`}
+          onClick={() => setActiveTab('roles')}
+        >
+          Role & Permission Matrix
+        </button>
       </div>
 
       {activeTab === 'users' ? (
-        <div className="card">
-          <div className="filter-bar">
-            <div className="search-input-wrapper">
-              <span className="search-icon" style={{ display: 'flex', alignItems: 'center' }}>
-                <Search size={16} color="#94a3b8" />
-              </span>
-              <input className="form-control search-input" placeholder="Search by name or email..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+        <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
+          <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+            <div className="relative max-w-md">
+              <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
+              <input
+                className="input pl-9 h-[40px] w-full text-sm bg-white"
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}
+              />
             </div>
           </div>
 

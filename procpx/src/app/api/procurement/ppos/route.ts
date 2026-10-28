@@ -6,9 +6,16 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
 
+import { hasPermission } from '@/lib/permissions';
+import { getUserAuthorizedProjectIds } from '@/lib/project-auth';
+
 export async function GET(req: NextRequest) {
-  const ctx = await requireAuth('PPO_VIEW');
+  const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
+
+  if (!hasPermission(ctx.role, 'PPO_VIEW') && !hasPermission(ctx.role, 'VENDOR_RATE_PPO')) {
+    return apiError('Forbidden: insufficient permissions', 403);
+  }
 
   const { searchParams } = new URL(req.url);
   const rfqId = searchParams.get('rfqId');
@@ -22,11 +29,19 @@ export async function GET(req: NextRequest) {
     if (rfqId) where.rfqId = rfqId;
     if (projectId) where.projectId = projectId;
 
+    // Scope by user's assigned projects for project users / approvers
+    const authorizedProjectIds = await getUserAuthorizedProjectIds(ctx.userId, ctx.role);
+    if (authorizedProjectIds !== null) {
+      where.projectId = { in: authorizedProjectIds };
+    }
+
     const ppos = await prisma.ppo.findMany({
       where,
       include: {
         project: { select: { id: true, name: true, projectCode: true, location: true } },
+        costCentre: { select: { id: true, name: true, code: true } },
         vendor: true,
+        vendorRating: true,
         rfq: {
           select: {
             id: true,
@@ -53,7 +68,53 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return apiSuccess({ ppos, total: ppos.length });
+    const isProcurementUser = ctx.role === 'PROCUREMENT_USER';
+
+    // Parse ratings and enforce Procurement User read-only restriction for unapproved ratings
+    const pposWithParsedRatings = ppos.map((p) => {
+      let rating = p.vendorRating;
+      if (rating && isProcurementUser && rating.status !== 'APPROVED') {
+        rating = null;
+      }
+      let parsedCriteria: any = {};
+      if (rating?.criteriaDetails) {
+        try {
+          parsedCriteria = typeof rating.criteriaDetails === 'string'
+            ? JSON.parse(rating.criteriaDetails)
+            : rating.criteriaDetails;
+        } catch {
+          parsedCriteria = {};
+        }
+      }
+      return {
+        ...p,
+        vendorRating: rating
+          ? {
+              ...rating,
+              criteriaDetailsParsed: parsedCriteria,
+              qualityComments: parsedCriteria.qualityComments || '',
+              deliveryComments: parsedCriteria.deliveryComments || '',
+              commercialComments: parsedCriteria.commercialComments || '',
+              documentationComments: parsedCriteria.documentationComments || '',
+              responsivenessComments: parsedCriteria.responsivenessComments || '',
+              overallImprovement: parsedCriteria.overallImprovement || '',
+              approverComments: parsedCriteria.approverComments || '',
+              approvedBy: parsedCriteria.approvedBy || null,
+              approvedByName: parsedCriteria.approvedByName || null,
+              approvedAt: parsedCriteria.approvedAt || null,
+              returnReason: parsedCriteria.returnReason || null,
+              decisionHistory: parsedCriteria.history || [],
+            }
+          : null,
+      };
+    });
+
+    return apiSuccess({
+      ppos: pposWithParsedRatings,
+      total: pposWithParsedRatings.length,
+      currentUserRole: ctx.role,
+      isProcurementUser,
+    });
   } catch (error: any) {
     console.error('Error fetching PPOs:', error);
     return apiError(error.message || 'Failed to fetch PPOs', 500);

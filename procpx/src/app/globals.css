@@ -22,9 +22,9 @@
   --bg-surface: #ffffff;       /* Pure white card surface */
   --bg-surface-elevated: #ffffff;
   --bg-subtle: #f1f5f9;        /* Slate 100 subtle containers */
-  --bg-sidebar: #0f172a;       /* Deep Slate 900 */
+  --bg-sidebar: #0f172a;       /* Deep Slate Navy (Procucev Approved) */
   --bg-sidebar-hover: rgba(255, 255, 255, 0.06);
-  --bg-sidebar-active: #1e293b;
+  --bg-sidebar-active: #1e3a8a;
 
   /* ── Borders & Dividers ── */
   --border-subtle: #e2e8f0;    /* Slate 200 standard border */
@@ -183,7 +183,9 @@ p, .text-body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -673,8 +675,30 @@ p, .text-body {
 }
 
 .input:focus, .form-control:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--primary-focus);
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 3px var(--primary-focus) !important;
+  outline: none !important;
+}
+
+.form-control-phone {
+  display: flex;
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #ffffff;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control-phone:hover {
+  border-color: #94a3b8;
+}
+
+.form-control-phone:focus-within {
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 3px var(--primary-focus) !important;
 }
 
 .input.error, .form-control.error {
@@ -1129,8 +1153,13 @@ td.text-left {
 }
 
 .tab-btn {
-  padding: 10px 18px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
   background: transparent;
@@ -1139,9 +1168,6 @@ td.text-left {
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .tab-btn:hover {
@@ -1149,9 +1175,9 @@ td.text-left {
 }
 
 .tab-btn.active {
-  color: var(--primary);
+  color: #0f52ba;
   font-weight: 600;
-  border-bottom-color: var(--primary);
+  border-bottom-color: #0f52ba;
 }
 
 /* ── Modal Dialogs ────────────────────────────────────────── */
@@ -1506,3 +1532,299 @@ td.text-left {
   letter-spacing: 0.1px;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   PROCPX MASTER UI/UX STANDARDISATION DESIGN TOKENS & UTILITIES
+   Desktop Dimensions & Enterprise Baseline Standards
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Standard Typography Classes ── */
+.pro-page-title {
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.pro-section-title {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.pro-card-title {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pro-form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.pro-table-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #1e293b;
+}
+
+/* ── Standard Controls (40–44 px) ── */
+.pro-btn,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  text-decoration: none !important;
+}
+
+.pro-btn:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pro-btn-primary,
+.btn-primary {
+  background-color: #0f52ba;
+  color: #ffffff !important;
+  border-color: #0f52ba;
+}
+
+.pro-btn-primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled) {
+  background-color: #0c4399;
+  border-color: #0c4399;
+  color: #ffffff !important;
+}
+
+.pro-btn-secondary,
+.btn-secondary {
+  background-color: #ffffff;
+  color: #334155 !important;
+  border-color: #cbd5e1;
+}
+
+.pro-btn-secondary:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a !important;
+}
+
+.pro-btn-danger,
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff !important;
+  border-color: #dc2626;
+}
+
+.pro-btn-danger:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff !important;
+}
+
+.pro-input,
+.pro-select,
+.input,
+.select {
+  height: 42px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #0f172a;
+  background-color: #ffffff;
+  transition: all 0.15s ease-in-out;
+  outline: none;
+  width: 100%;
+}
+
+.pro-input:focus,
+.pro-select:focus,
+.input:focus,
+.select:focus {
+  border-color: #0f52ba;
+  box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.15);
+}
+
+.pro-textarea,
+.textarea {
+  min-height: 100px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #0f172a;
+  background-color: #ffffff;
+  transition: all 0.15s ease-in-out;
+  outline: none;
+  width: 100%;
+  resize: vertical;
+}
+
+.pro-textarea:focus,
+.textarea:focus {
+  border-color: #0f52ba;
+  box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.15);
+}
+
+/* ── Standard Tabs & Stepper (44–48 px) ── */
+.pro-tab {
+  height: 46px;
+  min-height: 46px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.pro-tab:hover {
+  color: #0f172a;
+}
+
+.pro-tab-active {
+  color: #0f52ba;
+  border-bottom-color: #0f52ba;
+}
+
+/* ── Standard Enterprise Grid Table ── */
+.table,
+.pro-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.table th,
+.pro-table th,
+.pro-table-header-cell {
+  background-color: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 12px 14px;
+  border-bottom: 1px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table th:last-child,
+.pro-table th:last-child,
+.pro-table-header-cell:last-child {
+  border-right: none;
+}
+
+.table td,
+.pro-table td,
+.pro-table-data-cell {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.table td:last-child,
+.pro-table td:last-child,
+.pro-table-data-cell:last-child {
+  border-right: none;
+}
+
+.table tr:hover td,
+.pro-table tr:hover td {
+  background-color: rgba(239, 246, 255, 0.45);
+}
+
+.table tfoot tr,
+.pro-table tfoot tr,
+.pro-table-totals-row {
+  background-color: #f8fafc;
+  font-weight: 700;
+  border-top: 2px solid #cbd5e1;
+}
+
+.table-wrapper,
+.pro-table-wrapper {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow-x: auto;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* Standardized Enterprise Summary Card Styling (100-120px height, 16px padding) */
+.summary-card {
+  padding: 16px !important;
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  border-radius: 12px;
+  transition: all 0.15s ease-in-out;
+}
+
+/* ── Content Shell Centered Modal Backdrop (No Sidebar/TopNav Overlap) ─────── */
+.app-content-modal-backdrop {
+  position: fixed;
+  top: var(--topbar-height, 56px);
+  left: var(--sidebar-width, 250px);
+  right: 0;
+  bottom: 0;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  padding: 16px 24px;
+  overflow: hidden;
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-main.sidebar-collapsed .app-content-modal-backdrop,
+.app-sidebar.collapsed ~ .app-main .app-content-modal-backdrop {
+  left: 68px;
+}
+
+@media (max-width: 768px) {
+  .app-content-modal-backdrop {
+    left: 0 !important;
+    padding: 12px;
+  }
+}

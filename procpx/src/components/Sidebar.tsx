@@ -102,7 +102,8 @@ export default function Sidebar({ user }: SidebarProps) {
 
             {!collapsed && <div className="nav-section-label">SOURCING EXECUTION</div>}
             {navItem('/procurement/rfqs', 'RFQs', FileText, pathname.startsWith('/procurement/rfqs'))}
-            {navItem('/procurement/vendors', 'Vendor Management', Building2, pathname.startsWith('/procurement/vendors'))}
+            {navItem('/procurement/rate-cards', 'Rate Cards', Tag, pathname.startsWith('/procurement/rate-cards'))}
+            {navItem('/procurement/vendors', 'Vendors', Building2, pathname.startsWith('/procurement/vendors'))}
 
             {!collapsed && <div className="nav-section-label">NEGOTIATION & AWARDS</div>}
             {navItem('/procurement/negotiations', 'Negotiations', MessageSquare, pathname.startsWith('/procurement/negotiations'))}
@@ -134,6 +135,12 @@ export default function Sidebar({ user }: SidebarProps) {
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
+
+            {!collapsed && <div className="nav-section-label">VENDOR PERFORMANCE</div>}
+            {navItem('/procurement/ppos', 'PPO Performance', Award, pathname.startsWith('/procurement/ppos'))}
+
+            {!collapsed && <div className="nav-section-label">OBSERVER</div>}
+            {navItem('/procurement/auctions', 'Observer Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
           </>
         )}
 
@@ -150,11 +157,15 @@ export default function Sidebar({ user }: SidebarProps) {
             {navItem('/approvals/boq-pr', 'BOQ Approvals', CheckSquare, pathname.startsWith('/approvals/boq-pr'))}
             {navItem('/approvals/budget', 'Budget Approvals', Landmark, pathname.startsWith('/approvals/budget'))}
             {navItem('/approvals/rate-cards', 'Rate Card Approvals', Tag, pathname.startsWith('/approvals/rate-cards'))}
+            {navItem('/approvals/vendor-ratings', 'Vendor Performance Approvals', Award, pathname.startsWith('/approvals/vendor-ratings'))}
 
             {!collapsed && <div className="nav-section-label">BUDGET REVIEW</div>}
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
+
+            {!collapsed && <div className="nav-section-label">OBSERVER</div>}
+            {navItem('/procurement/auctions', 'Observer Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
 
             {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
             {navItem('/audit', 'Activity & Audit', ShieldCheck, pathname.startsWith('/audit'))}
@@ -191,13 +202,19 @@ export default function Sidebar({ user }: SidebarProps) {
             {navItem('/masters/standard-boq', 'Standard BOQ Creation', BookOpen, pathname.startsWith('/masters/standard-boq'))}
             {navItem('/masters/categories', 'Category Creation', Boxes, pathname.startsWith('/masters/categories'))}
 
-            {!collapsed && <div className="nav-section-label">SOURCING & ORDERS</div>}
-            {navItem('/procurement/rfqs', 'RFQs', FileText, pathname.startsWith('/procurement/rfqs'))}
-            {navItem('/procurement/ppos', 'PPOs & Orders', FileCheck, pathname.startsWith('/procurement/ppos'))}
+            {!collapsed && <div className="nav-section-label">SOURCING QUEUE</div>}
+            {navItem('/procurement/approved-prs', 'Approved PRs', Send, pathname.startsWith('/procurement/approved-prs'))}
 
-            {!collapsed && <div className="nav-section-label">VENDOR GOVERNANCE</div>}
-            {navItem('/procurement/vendors', 'Vendor Management', Building2, pathname.startsWith('/procurement/vendors'))}
-            {navItem('/procurement/rate-cards', 'Rate Card Management', Tag, pathname.startsWith('/procurement/rate-cards'))}
+            {!collapsed && <div className="nav-section-label">SOURCING EXECUTION</div>}
+            {navItem('/procurement/rfqs', 'RFQs', FileText, pathname.startsWith('/procurement/rfqs'))}
+            {navItem('/procurement/rate-cards', 'Rate Cards', Tag, pathname.startsWith('/procurement/rate-cards'))}
+            {navItem('/procurement/vendors', 'Vendors', Building2, pathname.startsWith('/procurement/vendors'))}
+
+            {!collapsed && <div className="nav-section-label">NEGOTIATION & AWARDS</div>}
+            {navItem('/procurement/negotiations', 'Negotiations', MessageSquare, pathname.startsWith('/procurement/negotiations'))}
+            {navItem('/procurement/auctions', 'Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
+            {navItem('/procurement/awards', 'Awards', Award, pathname.startsWith('/procurement/awards'))}
+            {navItem('/procurement/ppos', 'PPOs & Orders', FileCheck, pathname.startsWith('/procurement/ppos'))}
 
             {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
             {navItem('/audit', 'Audit Trail', ShieldCheck, pathname.startsWith('/audit'))}
@@ -230,13 +247,17 @@ export default function Sidebar({ user }: SidebarProps) {
             {hasPermission(role, 'BUDGET_VIEW') &&
               navItem('/budget', 'Project Budget', Landmark, pathname.startsWith('/budget'))}
             {hasPermission(role, 'PR_VIEW') &&
-              navItem('/pr', 'Procurement Requests', Send, pathname.startsWith('/pr'))}
+              navItem('/pr', 'Procurement Requests', Send, pathname === '/pr' || pathname.startsWith('/pr/'))}
             {hasPermission(role, 'BUDGET_APPROVE') &&
               navItem('/approvals/budget', 'Budget Approvals', CheckSquare, pathname.startsWith('/approvals/budget'))}
             {hasPermission(role, 'PR_APPROVE') &&
               navItem('/approvals/boq-pr', 'BOQ Approvals', CheckSquare, pathname.startsWith('/approvals/boq-pr'))}
             {hasPermission(role, 'RATE_CARD_APPROVE') &&
               navItem('/approvals/rate-cards', 'Rate Card Approvals', Tag, pathname.startsWith('/approvals/rate-cards'))}
+            {hasPermission(role, 'VENDOR_RATE_PPO_APPROVE') &&
+              navItem('/approvals/vendor-ratings', 'Vendor Performance Approvals', Award, pathname.startsWith('/approvals/vendor-ratings'))}
+            {hasPermission(role, 'VENDOR_RATE_PPO') &&
+              navItem('/procurement/ppos', 'PPO Performance', Award, pathname.startsWith('/procurement/ppos'))}
 
             {hasPermission(role, 'RFQ_VIEW') && (
               <>
@@ -284,6 +305,7 @@ export default function Sidebar({ user }: SidebarProps) {
             {navItem('/vendor-portal/dashboard', 'Vendor Dashboard', LayoutDashboard, pathname === '/vendor-portal' || pathname === '/vendor-portal/dashboard')}
             {navItem('/vendor-portal/profile', 'Company Profile', Building2, pathname.startsWith('/vendor-portal/profile'))}
             {navItem('/vendor-portal/rfqs', 'My RFQs & Bids', FileText, pathname.startsWith('/vendor-portal/rfqs'))}
+            {navItem('/vendor-portal/auctions', 'Auctions & Bidding', Gavel, pathname.startsWith('/vendor-portal/auctions'))}
             {navItem('/vendor-portal/ppos', 'PPOs / Orders', FileCheck, pathname.startsWith('/vendor-portal/ppos'))}
             {navItem('/vendor-portal/rate-cards', 'Rate Cards', Tag, pathname.startsWith('/vendor-portal/rate-cards'))}
           </>

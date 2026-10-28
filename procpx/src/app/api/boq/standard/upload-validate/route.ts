@@ -125,7 +125,8 @@ export async function POST(req: NextRequest) {
         return '';
       };
 
-      const itemCode = getField(['item code', 'itemcode', 'code', 's.no.', 'sno', 'item no']);
+      const sno = getField(['s.no.', 's.no', 'sno', 'sl no', 'sl.no', 'sl. no.', 'serial no', 'line number', 'line no']);
+      const itemCode = getField(['item code', 'itemcode', 'material code', 'item id', 'catalog code', 'code']);
       const description = getField(['item description', 'description', 'particulars', 'item', 'item name', 'scope of work', 'scope']);
       const category = getField(['category', 'trade', 'discipline', 'cost centre category']);
       const subcategory = getField(['sub-category', 'subcategory']);
@@ -270,7 +271,7 @@ export async function POST(req: NextRequest) {
       } else {
         validCount++;
         parsedValidLines.push({
-          lineNumber: String(validCount),
+          lineNumber: sno || String(validCount),
           itemCode: itemCode || `STD-L${validCount}`,
           description: finalDesc,
           category: category || 'Civil & Interior',

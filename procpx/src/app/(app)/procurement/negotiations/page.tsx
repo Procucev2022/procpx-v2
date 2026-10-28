@@ -3,7 +3,11 @@
 // Negotiations Hub
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Handshake } from 'lucide-react';
+import { Handshake, Clock, CheckCircle2, TrendingDown } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
 
 export default function NegotiationsHubPage() {
   const [negotiations, setNegotiations] = useState<any[]>([]);
@@ -26,23 +30,57 @@ export default function NegotiationsHubPage() {
     }
   };
 
+  const activeCount = negotiations.filter(n => n.status !== 'CONCLUDED' && n.status !== 'FINAL_RATE_LOCKED').length;
+  const lockedCount = negotiations.filter(n => n.status === 'CONCLUDED' || n.status === 'FINAL_RATE_LOCKED').length;
+
   return (
-    <div className="page-content">
-      <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
-        <div>
-          <div className="page-title">Commercial Negotiations Hub</div>
-          <div className="page-subtitle">
-            Counter-offers, Negotiation Rounds, Target Prices & Savings Realisation
-          </div>
-        </div>
-        <Link href="/procurement/rfqs" className="btn btn-secondary btn-sm">
-          Active RFQs
-        </Link>
+    <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
+      <PageHeader
+        title="Commercial Negotiations Hub"
+        subtitle="Counter-offers, negotiation rounds, target prices, and commercial savings realisation"
+        breadcrumbs={[
+          { label: 'Procurement', href: '/procurement/rfqs' },
+          { label: 'Negotiations' },
+        ]}
+        actions={
+          <Link href="/procurement/rfqs" className="btn btn-secondary btn-sm">
+            Active RFQs Register
+          </Link>
+        }
+      />
+
+      {/* KPI Cards */}
+      <div className="mb-6">
+        <SummaryCardGrid columns={3}>
+          <SummaryCard
+            label="Total Negotiations"
+            value={negotiations.length}
+            secondary="All initiated negotiation tracks"
+            icon={<Handshake size={16} />}
+            accent="default"
+          />
+          <SummaryCard
+            label="In Active Rounds"
+            value={activeCount}
+            secondary="Counter-offers open with vendors"
+            icon={<Clock size={16} />}
+            accent="amber"
+          />
+          <SummaryCard
+            label="Rates Concluded / Locked"
+            value={lockedCount}
+            secondary="Ready for award recommendation"
+            icon={<CheckCircle2 size={16} />}
+            accent="emerald"
+          />
+        </SummaryCardGrid>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">Ongoing & Concluded Negotiations ({negotiations.length})</span>
+      <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+            Ongoing & Concluded Negotiations ({negotiations.length})
+          </span>
         </div>
 
         {loading ? (
@@ -51,26 +89,28 @@ export default function NegotiationsHubPage() {
             Loading negotiations...
           </div>
         ) : negotiations.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <Handshake size={36} strokeWidth={1.5} color="#94a3b8" />
-            </div>
-            <div className="empty-title">No Negotiations Active</div>
-            <div className="empty-desc">Initiate a negotiation round inside an RFQ after reviewing quote comparisons.</div>
+          <div style={{ padding: 32 }}>
+            <EmptyState
+              icon={<Handshake size={36} strokeWidth={1.5} color="#94a3b8" />}
+              title="No Negotiations Active"
+              description="Initiate a negotiation round inside an RFQ after reviewing quote comparisons."
+              actionText="View Active RFQs"
+              actionHref="/procurement/rfqs"
+            />
           </div>
         ) : (
           <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
-            <table className="data-table enterprise-table">
+            <table className="data-table enterprise-table" style={{ width: '100%', fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 140 }}>RFQ Number</th>
+                  <th style={{ width: 150 }}>RFQ Number</th>
                   <th>Project</th>
-                  <th style={{ width: 120 }}>Current Round</th>
-                  <th style={{ width: 120 }}>Rounds Logged</th>
-                  <th style={{ width: 160, textAlign: 'right' }}>Best Commercial Value</th>
-                  <th style={{ width: 120, textAlign: 'center' }}>Status</th>
-                  <th style={{ width: 120 }}>Last Updated</th>
-                  <th className="col-actions" style={{ width: 120, textAlign: 'center' }}>Actions</th>
+                  <th style={{ width: 130, textAlign: 'center' }}>Current Round</th>
+                  <th style={{ width: 130, textAlign: 'center' }}>Rounds Logged</th>
+                  <th style={{ width: 180, textAlign: 'right' }}>Best Commercial Value</th>
+                  <th style={{ width: 150, textAlign: 'center' }}>Status</th>
+                  <th style={{ width: 130 }}>Last Updated</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -85,14 +125,20 @@ export default function NegotiationsHubPage() {
                       </Link>
                     </td>
                     <td>{neg.rfq?.project?.name}</td>
-                    <td><span className="badge badge-submitted font-mono">Round {neg.currentRound}</span></td>
-                    <td><strong>{neg.rounds?.length || 0} rounds</strong></td>
-                    <td style={{ fontWeight: 700, color: '#059669', textAlign: 'right' }}>
-                      ₹ {neg.bestQuoteAmount?.toLocaleString() || '—'}
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="badge badge-info font-mono">Round {neg.currentRound}</span>
                     </td>
-                    <td style={{ textAlign: 'center' }}><span className="badge badge-approved">{neg.status}</span></td>
-                    <td className="text-muted">{new Date(neg.updatedAt).toLocaleDateString()}</td>
-                    <td className="col-actions">
+                    <td style={{ textAlign: 'center' }}>
+                      <strong>{neg.rounds?.length || 0} rounds</strong>
+                    </td>
+                    <td style={{ fontWeight: 700, color: '#059669', textAlign: 'right' }}>
+                      ₹ {neg.bestQuoteAmount?.toLocaleString('en-IN') || '—'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <StatusBadge status={neg.status} />
+                    </td>
+                    <td className="text-muted text-xs">{new Date(neg.updatedAt).toLocaleDateString('en-IN')}</td>
+                    <td style={{ textAlign: 'right' }}>
                       <Link
                         href={`/procurement/rfqs/${neg.rfqId}?tab=negotiation`}
                         className="btn btn-sm btn-primary"

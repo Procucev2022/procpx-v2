@@ -1,17 +1,17 @@
 {
-  "timestamp": "2026-10-15T12:47:09.454Z",
+  "timestamp": "2026-10-28T08:39:13.029Z",
   "counts": {
     "tenants": 2,
     "users": 21,
-    "categories": 797,
-    "projects": 34,
-    "costCentres": 55,
-    "boqs": 117,
-    "boqLines": 281,
-    "prs": 51,
-    "prLines": 84,
+    "categories": 803,
+    "projects": 41,
+    "costCentres": 64,
+    "boqs": 135,
+    "boqLines": 377,
+    "prs": 52,
+    "prLines": 88,
     "approvedPrs": 24,
-    "vendors": 15,
+    "vendors": 20,
     "rfqs": 14,
     "rfqLines": 40,
     "quotes": 19,
@@ -149,20 +149,20 @@
         "status": "PR_PENDING_PROJECT_APPROVAL"
       },
       {
-        "id": "05bc76a7-4591-4218-9f75-84c8a4f4a2f8",
-        "prNumber": "PR-TEST-0530",
-        "title": "PR for Store Fitout Lighting Package",
-        "status": "PR_DRAFT"
-      },
-      {
-        "id": "dbb108c5-ef8d-4c10-aa4e-31179bc48d85",
-        "prNumber": "PR-TEST-6946",
-        "title": "PR for Store Fitout Lighting Package",
-        "status": "PR_RELEASED_TO_PROCUREMENT"
-      },
-      {
         "id": "b8d863a8-5a4c-4166-b2c9-cb1381c96043",
         "prNumber": "PR-REJ-6969",
+        "title": "PR to Reject Test",
+        "status": "PR_REJECTED"
+      },
+      {
+        "id": "68503221-5ed4-4b84-b77f-45d6a8655836",
+        "prNumber": "PR-REJ-9720",
+        "title": "PR to Reject Test",
+        "status": "PR_REJECTED"
+      },
+      {
+        "id": "69e6e1da-8c84-4582-950f-eb9f911cfca3",
+        "prNumber": "PR-REJ-9623",
         "title": "PR to Reject Test",
         "status": "PR_REJECTED"
       }
@@ -199,7 +199,7 @@
         "id": "051e2ee7-5b81-46ec-b5c6-787ddbee765b",
         "rfqNumber": "RFQ-2026-000001",
         "title": "RFQ for Civil & Interior Works (Flooring & Partitions)",
-        "status": "NEGOTIATION"
+        "status": "COMPARISON"
       },
       {
         "id": "4576ca63-7dd3-4de2-abb0-a8f2508c32f3",

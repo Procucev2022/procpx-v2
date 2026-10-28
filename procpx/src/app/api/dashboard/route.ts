@@ -154,29 +154,20 @@ export async function GET() {
   // ── PROCUREMENT_USER ─────────────────────────────────────
   if (ctx.role === 'PROCUREMENT_USER') {
     const [
-      approvedPrsReceivedCount,
       rfqsInProgressCount,
       negotiationsCount,
       pendingAwardsCount,
       approvedAwardsWithoutPpoCount,
-      approvedBoqsCount,
+      rateCardsCount,
     ] = await Promise.all([
-      // 1. PRs Received — approved PRs available to Procurement and not yet fully sourced
-      prisma.procurementRequest.count({
-        where: {
-          tenantId,
-          status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] },
-          rfqs: { none: { ppos: { some: {} } } },
-        },
-      }),
-      // 2. RFQs in Progress
+      // 1. RFQs in Progress
       prisma.rfq.count({
         where: {
           tenantId,
           status: { in: ['DRAFT', 'RELEASED', 'VENDOR_RESPONSE_OPEN', 'RESPONSE_CLOSED', 'COMPARISON', 'NEGOTIATION', 'FINAL_RATE_LOCKED'] },
         },
       }),
-      // 3. Negotiations Pending
+      // 2. Negotiations Pending
       prisma.rfq.count({
         where: {
           tenantId,
@@ -186,52 +177,144 @@ export async function GET() {
           ],
         },
       }),
-      // 4. Awards / PPO Pending
+      // 3. Awards / PPO Pending
       prisma.awardRecommendation.count({
         where: { tenantId, status: 'PENDING_APPROVAL' },
       }),
       prisma.awardRecommendation.count({
         where: { tenantId, status: 'APPROVED', ppos: { none: {} } },
       }),
-      // Legacy compatibility
-      prisma.boqRevision.count({ where: { tenantId, status: 'APPROVED' } }),
+      // Rate cards count
+      prisma.vendorRateCard.count({
+        where: { tenantId, status: 'APPROVED' },
+      }),
     ]);
 
     const awardsPpoPendingCount = pendingAwardsCount + approvedAwardsWithoutPpoCount;
 
-    // Helper to map RFQ status to Enterprise Sourcing Stage
-    const mapStage = (rfq: any): string => {
-      if (!rfq) return 'Approved PR — Awaiting RFQ';
-      if (rfq.ppos?.length > 0 || rfq.status === 'AWARDED') return 'PPO Created';
-      const hasApprovedAward = rfq.awards?.some((a: any) => a.status === 'APPROVED');
-      if (hasApprovedAward || rfq.status === 'APPROVED') return 'Award Approved';
-      const hasPendingAward = rfq.awards?.some((a: any) => a.status === 'PENDING_APPROVAL');
-      if (hasPendingAward || rfq.status === 'AWARD_RECOMMENDED') return 'Award Pending Approval';
-      if (rfq.status === 'FINAL_RATE_LOCKED' || rfq.status === 'NEGOTIATION' || (rfq.negotiations?.[0]?.rounds?.length > 0)) {
+    // Helper to map RFQ status to concise Procurement Stage: Awaiting RFQ, RFQ Issued, Quotations, Negotiation, Award, PPO
+    const mapConciseStage = (rfqs: any[]): string => {
+      if (!rfqs || rfqs.length === 0) return 'Awaiting RFQ';
+      if (rfqs.some(r => r.ppos?.length > 0 || r.status === 'AWARDED')) return 'PPO';
+      const hasApprovedAward = rfqs.some(r => r.awards?.some((a: any) => a.status === 'APPROVED'));
+      if (hasApprovedAward || rfqs.some(r => r.status === 'APPROVED')) return 'Award';
+      const hasPendingAward = rfqs.some(r => r.awards?.some((a: any) => a.status === 'PENDING_APPROVAL'));
+      if (hasPendingAward || rfqs.some(r => r.status === 'AWARD_RECOMMENDED')) return 'Award';
+      if (rfqs.some(r => r.status === 'FINAL_RATE_LOCKED' || r.status === 'NEGOTIATION' || (r.negotiations?.[0]?.rounds?.length || 0) > 0)) {
         return 'Negotiation';
       }
-      if (rfq.status === 'RESPONSE_CLOSED' || rfq.status === 'COMPARISON' || (rfq.quotes?.length > 0)) {
-        return 'Quotation Comparison';
+      if (rfqs.some(r => r.status === 'RESPONSE_CLOSED' || r.status === 'COMPARISON' || (r.quotes?.length || 0) > 0)) {
+        return 'Quotations';
       }
-      if (rfq.status === 'VENDOR_RESPONSE_OPEN' || rfq.status === 'RELEASED') return 'RFQ Issued / Awaiting Quotations';
-      if (rfq.status === 'DRAFT') return 'RFQ Preparation';
-      if (rfq.status === 'CANCELLED') return 'Closed / Cancelled';
-      return 'RFQ Preparation';
+      if (rfqs.some(r => r.status === 'RELEASED' || r.status === 'VENDOR_RESPONSE_OPEN')) {
+        return 'RFQ Issued';
+      }
+      return 'Awaiting RFQ';
     };
 
-    // A. Fetch all PRs relevant to Procurement for Tenant
-    const prs = await prisma.procurementRequest.findMany({
+    // Helper to format linked RFQ items
+    const formatRfqItem = (rfq: any) => {
+      const quotesCount = rfq.quotes?.length || 0;
+      const invitedCount = rfq.invitedVendors?.length || 0;
+      const vendorInvitationProgress = `${quotesCount} submitted / ${invitedCount} invited`;
+
+      let quotationStage = '—';
+      if (quotesCount > 0) {
+        quotationStage = `${quotesCount} Quotes Recorded`;
+      } else if (rfq.status === 'RELEASED' || rfq.status === 'VENDOR_RESPONSE_OPEN') {
+        quotationStage = 'Awaiting Quotes';
+      } else if (rfq.status === 'DRAFT') {
+        quotationStage = 'Draft';
+      }
+
+      let negotiationStage = '—';
+      const rounds = rfq.negotiations?.[0]?.rounds || [];
+      if (rfq.status === 'FINAL_RATE_LOCKED') {
+        negotiationStage = 'Rates Locked';
+      } else if (rounds.length > 0) {
+        negotiationStage = `Round ${rounds.length} (${rounds[rounds.length - 1]?.status?.replace(/_/g, ' ') || 'Active'})`;
+      } else if (rfq.status === 'NEGOTIATION') {
+        negotiationStage = 'In Negotiation';
+      }
+
+      let awardStatus = 'Not Prepared';
+      if (rfq.awards?.some((a: any) => a.status === 'APPROVED')) {
+        awardStatus = 'Approved';
+      } else if (rfq.awards?.some((a: any) => a.status === 'PENDING_APPROVAL')) {
+        awardStatus = 'Pending Approval';
+      } else if (rfq.awards?.some((a: any) => a.status === 'REJECTED')) {
+        awardStatus = 'Rejected';
+      }
+
+      let ppoStatus = '—';
+      if (rfq.ppos?.length > 0) {
+        ppoStatus = `${rfq.ppos[0].ppoNumber} (${rfq.ppos[0].status})`;
+      } else if (rfq.awards?.some((a: any) => a.status === 'APPROVED')) {
+        ppoStatus = 'PPO Pending';
+      }
+
+      return {
+        id: rfq.id,
+        rfqNumber: rfq.rfqNumber,
+        description: rfq.title || rfq.packageName || 'Commercial Sourcing Package',
+        packageName: rfq.packageName,
+        status: rfq.status,
+        vendorInvitationProgress,
+        invitedCount,
+        quotesCount,
+        quotationStage,
+        negotiationStage,
+        awardStatus,
+        ppoStatus,
+        estimatedBenchmarkValue: rfq.estimatedBenchmarkValue || 0,
+        lastUpdated: rfq.updatedAt || rfq.createdAt,
+        openUrl: `/procurement/rfqs/${rfq.id}`,
+      };
+    };
+
+    // A. Query Authoritative Eligible Approved BOQs
+    // Only BOQs that have completed the approval process and are eligible for procurement sourcing
+    const approvedRevisions = await prisma.boqRevision.findMany({
       where: {
         tenantId,
-        status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT', 'PR_PENDING_PROJECT_APPROVAL', 'CLOSED', 'COMPLETED'] },
+        OR: [
+          { status: 'APPROVED' },
+          { prStatus: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } },
+          { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
+          { boq: { status: 'APPROVED' } },
+        ],
       },
       include: {
-        project: { select: { id: true, projectCode: true, name: true, location: true, city: true } },
+        boq: {
+          include: {
+            project: { select: { id: true, projectCode: true, name: true, location: true, city: true, state: true } },
+            costCentre: { select: { id: true, code: true, name: true } },
+          },
+        },
         costCentre: { select: { id: true, code: true, name: true } },
-        boq: { select: { id: true, boqCode: true, title: true } },
-        boqRevision: { select: { id: true, revisionCode: true } },
         lines: {
-          select: { id: true, itemDescription: true, category: true, quantity: true, estimatedRate: true, estimatedValue: true },
+          where: { isDeleted: false },
+          include: {
+            category: { select: { id: true, name: true, code: true } },
+            uom: { select: { id: true, code: true, name: true } },
+          },
+        },
+        prs: {
+          where: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } },
+          select: {
+            id: true,
+            prNumber: true,
+            title: true,
+            status: true,
+            totalEstimatedValue: true,
+            requestedDate: true,
+            projectApprovedAt: true,
+            releasedAt: true,
+            updatedAt: true,
+            createdAt: true,
+            costCentre: { select: { id: true, code: true, name: true } },
+            lines: { select: { id: true } },
+          },
         },
         rfqs: {
           include: {
@@ -250,168 +333,106 @@ export async function GET() {
           orderBy: { createdAt: 'desc' },
         },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Check rate cards in tenant to flag rate card eligibility
-    const rateCardsCount = await prisma.vendorRateCard.count({
-      where: { tenantId, status: 'APPROVED' },
-    });
-
-    // B. Build the PR-First Register
-    const prRegister: any[] = (prs as any[]).map((pr: any) => {
-      const categories = Array.from(new Set(pr.lines.map((l: any) => l.category).filter(Boolean)));
-      const linkedRfqs = pr.rfqs || [];
-
-      // Derive overall PR sourcing stage
-      let overallStage = 'Approved PR — Awaiting RFQ';
-      if (linkedRfqs.some((r: any) => r.ppos?.length > 0 || r.status === 'AWARDED')) {
-        overallStage = 'PPO Created';
-      } else if (linkedRfqs.some((r: any) => r.awards?.some((a: any) => a.status === 'APPROVED') || r.status === 'APPROVED')) {
-        overallStage = 'Award Approved';
-      } else if (linkedRfqs.some((r: any) => r.awards?.some((a: any) => a.status === 'PENDING_APPROVAL') || r.status === 'AWARD_RECOMMENDED')) {
-        overallStage = 'Award Pending Approval';
-      } else if (linkedRfqs.some((r: any) => r.status === 'NEGOTIATION' || r.status === 'FINAL_RATE_LOCKED' || (r.negotiations?.[0]?.rounds?.length || 0) > 0)) {
-        overallStage = 'Negotiation';
-      } else if (linkedRfqs.some((r: any) => r.status === 'COMPARISON' || r.status === 'RESPONSE_CLOSED' || (r.quotes?.length || 0) > 0)) {
-        overallStage = 'Quotation Comparison';
-      } else if (linkedRfqs.some((r: any) => r.status === 'RELEASED' || r.status === 'VENDOR_RESPONSE_OPEN')) {
-        overallStage = 'RFQ Issued / Awaiting Quotations';
-      } else if (linkedRfqs.some((r: any) => r.status === 'DRAFT')) {
-        overallStage = 'RFQ Preparation';
+    // Map each unique BOQ to its authoritative approved revision, prioritizing non-zero lines
+    const boqMap = new Map<string, any>();
+    for (const r of approvedRevisions) {
+      const existing = boqMap.get(r.boq.id);
+      if (!existing) {
+        boqMap.set(r.boq.id, r);
+      } else {
+        if (r.lines.length > 0 && existing.lines.length === 0) {
+          boqMap.set(r.boq.id, r);
+        } else if (existing.lines.length > 0 && r.lines.length === 0) {
+          // keep existing
+        } else if (r.rfqs.length > existing.rfqs.length) {
+          boqMap.set(r.boq.id, r);
+        } else if (r.revisionNumber > existing.revisionNumber) {
+          boqMap.set(r.boq.id, r);
+        }
       }
+    }
 
-      // Format nested RFQ records
-      const formattedRfqs = linkedRfqs.map((rfq: any) => {
-        const quotesCount = rfq.quotes?.length || 0;
-        const invitedCount = rfq.invitedVendors?.length || 0;
-        const vendorInvitationProgress = `${quotesCount} submitted / ${invitedCount} invited`;
-
-        // Quotation Stage
-        let quotationStage = '—';
-        if (quotesCount > 0) {
-          quotationStage = `${quotesCount} Quotes Recorded`;
-        } else if (rfq.status === 'RELEASED' || rfq.status === 'VENDOR_RESPONSE_OPEN') {
-          quotationStage = 'Awaiting Quotes';
-        } else if (rfq.status === 'DRAFT') {
-          quotationStage = 'Draft';
+    // Collect all unique RFQs across revisions for each BOQ
+    const boqRfqsMap = new Map<string, any[]>();
+    for (const r of approvedRevisions) {
+      const list = boqRfqsMap.get(r.boq.id) || [];
+      for (const rfq of r.rfqs) {
+        if (!list.some(x => x.id === rfq.id)) {
+          list.push(rfq);
         }
+      }
+      boqRfqsMap.set(r.boq.id, list);
+    }
 
-        // Negotiation Stage
-        let negotiationStage = '—';
-        const rounds = rfq.negotiations?.[0]?.rounds || [];
-        if (rfq.status === 'FINAL_RATE_LOCKED') {
-          negotiationStage = 'Rates Locked';
-        } else if (rounds.length > 0) {
-          negotiationStage = `Round ${rounds.length} (${rounds[rounds.length - 1]?.status?.replace(/_/g, ' ') || 'Active'})`;
-        } else if (rfq.status === 'NEGOTIATION') {
-          negotiationStage = 'In Negotiation';
-        }
+    // Build the BOQ Register
+    const boqRegister: any[] = [];
+    for (const [, r] of boqMap.entries()) {
+      const allRfqs = boqRfqsMap.get(r.boq.id) || [];
+      const formattedRfqs = allRfqs.map(formatRfqItem);
+      const stage = mapConciseStage(allRfqs);
+      const costCentreCode = r.costCentre?.code || r.boq?.costCentre?.code || '—';
+      const costCentreDisplay = r.costCentre ? `${r.costCentre.code} - ${r.costCentre.name}` : (r.boq?.costCentre ? `${r.boq.costCentre.code} - ${r.boq.costCentre.name}` : 'General');
+      const linesAmount = r.lines.reduce((s: number, l: any) => s + ((l.quantity || 0) * ((l as any).aiUnitCost || (l as any).benchmarkRate || 100)), 0);
+      const amount = linesAmount > 0 ? linesAmount : (r.prs[0]?.totalEstimatedValue || 0);
+      const itemCount = r.lines.length > 0 ? r.lines.length : (r.prs[0]?.lines?.length || r.totalLines || 0);
+      const date = r.approvedAt || r.submittedAt || r.createdAt;
+      const description = r.boq.title || r.boq.description || `${r.boq.project?.name} Commercial Baseline`;
 
-        // Award Status
-        let awardStatus = 'Not Prepared';
-        if (rfq.awards?.some((a: any) => a.status === 'APPROVED')) {
-          awardStatus = 'Approved';
-        } else if (rfq.awards?.some((a: any) => a.status === 'PENDING_APPROVAL')) {
-          awardStatus = 'Pending Approval';
-        } else if (rfq.awards?.some((a: any) => a.status === 'REJECTED')) {
-          awardStatus = 'Rejected';
-        }
-
-        // PPO Status
-        let ppoStatus = '—';
-        if (rfq.ppos?.length > 0) {
-          ppoStatus = `${rfq.ppos[0].ppoNumber} (${rfq.ppos[0].status})`;
-        } else if (rfq.awards?.some((a: any) => a.status === 'APPROVED')) {
-          ppoStatus = 'PPO Pending';
-        }
-
-        return {
-          id: rfq.id,
-          rfqNumber: rfq.rfqNumber,
-          description: rfq.title || rfq.packageName || 'Commercial Sourcing Package',
-          packageName: rfq.packageName,
-          status: rfq.status,
-          vendorInvitationProgress,
-          invitedCount,
-          quotesCount,
-          quotationStage,
-          negotiationStage,
-          awardStatus,
-          ppoStatus,
-          estimatedBenchmarkValue: rfq.estimatedBenchmarkValue || 0,
-          lastUpdated: rfq.updatedAt || rfq.createdAt,
-          openUrl: `/procurement/rfqs/${rfq.id}`,
-        };
-      });
-
-      return {
-        id: pr.id,
-        prId: pr.id,
-        prNumber: pr.prNumber,
-        description: pr.title || pr.boq?.title || 'Procurement Package',
-        boqCode: pr.boq?.boqCode || pr.boqRevision?.revisionCode || '—',
-        projectName: pr.project?.name || 'Project',
-        projectCode: pr.project?.projectCode || '',
-        costCentre: pr.costCentre ? `${pr.costCentre.code} - ${pr.costCentre.name}` : 'General',
-        category: categories.join(', ') || 'General',
-        requestedValue: pr.totalEstimatedValue || 0,
-        prApprovalStatus: pr.status,
-        sourcingStage: overallStage,
-        currentStage: overallStage,
-        rfqCount: linkedRfqs.length,
-        canCreateRfq: !linkedRfqs.some((r: any) => r.status !== 'CANCELLED'),
+      boqRegister.push({
+        id: r.id,
+        boqId: r.boq.id,
+        boqCode: r.boq.boqCode,
+        boqNumber: r.boq.boqCode,
+        prNumber: r.boq.boqCode, // backwards compatibility
+        title: description,
+        description,
+        projectName: r.boq.project?.name || 'Project',
+        projectCode: r.boq.project?.projectCode || '',
+        projectId: r.boq.project?.id,
+        costCentre: costCentreDisplay,
+        costCentreCode,
+        itemCount,
+        amount,
+        requestedValue: amount, // backwards compatibility
+        procurementStage: stage,
+        sourcingStage: stage, // backwards compatibility
+        currentStage: stage, // backwards compatibility
+        rfqCount: allRfqs.length,
+        canCreateRfq: !allRfqs.some((x: any) => x.status !== 'CANCELLED'),
         hasRateCardMatch: rateCardsCount > 0,
+        createRfqUrl: `/procurement/rfqs/new?revisionId=${r.id}&projectId=${r.boq.project.id}`,
         rfqs: formattedRfqs,
-        lastUpdated: pr.updatedAt || pr.createdAt,
-      };
-    });
+        date,
+        lastUpdated: r.updatedAt || r.createdAt,
+      });
+    }
 
-    // Also build consolidatedRegister for backwards compatibility with existing callers
-    const consolidatedRegister = prRegister.map((pr: any) => {
-      const firstRfq = pr.rfqs[0] || null;
-      return {
-        id: `pr-${pr.id}`,
-        prId: pr.id,
-        prNumber: pr.prNumber,
-        rfqId: firstRfq?.id || null,
-        rfqNumber: firstRfq?.rfqNumber || null,
-        description: pr.description,
-        projectName: pr.projectName,
-        projectCode: pr.projectCode,
-        costCentre: pr.costCentre,
-        category: pr.category,
-        estimatedValue: firstRfq?.estimatedBenchmarkValue || pr.requestedValue,
-        currentStage: pr.sourcingStage,
-        lastUpdated: pr.lastUpdated,
-        canCreateRfq: pr.canCreateRfq,
-        hasRateCardMatch: pr.hasRateCardMatch,
-        rfqStatus: firstRfq?.status || null,
-        ppoNumber: firstRfq?.ppoStatus !== '—' ? firstRfq?.ppoStatus : null,
-      };
-    });
+    // Sort by date descending
+    boqRegister.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const awaitingRfqCount = boqRegister.filter(b => b.procurementStage === 'Awaiting RFQ' || b.rfqCount === 0).length;
 
     return apiSuccess({
       role: ctx.role,
       summaryCards: {
-        prsReceived: approvedPrsReceivedCount,
+        boqsReceived: awaitingRfqCount,
+        prsReceived: awaitingRfqCount, // backwards compatibility
+        approvedBoqs: boqRegister.length,
         rfqsInProgress: rfqsInProgressCount,
         negotiationsPending: negotiationsCount,
         awardsPpoPending: awardsPpoPendingCount,
-        // Compatibility keys
-        approvedPrsReceived: approvedPrsReceivedCount,
-        awaitingQuotations: rfqsInProgressCount,
-        pendingAwardPpo: awardsPpoPendingCount,
       },
-      prRegister,
-      consolidatedRegister,
-      // Compatibility fields
-      approvedBoqsCount,
+      boqRegister,
+      prRegister: boqRegister, // backwards compatibility
+      consolidatedRegister: boqRegister, // backwards compatibility
+      approvedBoqsCount: boqRegister.length,
       activeRfqsCount: rfqsInProgressCount,
-      comparisonRequiredCount: rfqsInProgressCount,
       negotiationsCount,
       awardsPendingCount: awardsPpoPendingCount,
-      approvedPrsCount: approvedPrsReceivedCount,
+      approvedPrsCount: awaitingRfqCount,
     });
   }
 
@@ -807,8 +828,10 @@ export async function GET() {
         boqId: rev.boq.id,
         boqCode,
         boqNumber: boqCode,
+        prNumber: boqCode,
         title: rev.boq.title || `${rev.boq.project.name} — Commercial Baseline`,
         description: rev.boq.title || `${rev.boq.project.name} — Commercial Baseline`,
+        itemCount: rev.lines.length,
         projectName: rev.boq.project.name,
         projectCode: rev.boq.project.projectCode,
         costCentre: rev.boq.costCentre ? `${rev.boq.costCentre.code} - ${rev.boq.costCentre.name}` : 'General',

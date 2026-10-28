@@ -21,6 +21,10 @@ import {
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
 import { useToast } from '@/components/ui/Toast';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
 
 export default function FinanceBudgetApprovalsPage() {
   const toast = useToast();
@@ -124,32 +128,51 @@ export default function FinanceBudgetApprovalsPage() {
   return (
     <div className="page-container" style={{ padding: '24px 32px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#166534' }}>
-              <ShieldCheck size={20} />
-            </div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Budget Approvals
-            </h1>
-            <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f0fdf4', color: '#166534', fontWeight: 600, border: '1px solid #bbf7d0' }}>
-              Finance Approver Profile
-            </span>
+      <PageHeader
+        title="Finance Budget Approvals"
+        subtitle="Sanction and release category-wise capex budgets following Project Approver endorsement"
+        badge={
+          <span className="badge badge-success font-semibold">
+            Finance Approver Profile
+          </span>
+        }
+        actions={
+          <div className="flex gap-2">
+            <Link href="/budget" className="btn btn-secondary btn-sm">
+              Project Budgets
+            </Link>
+            <Link href="/budget/transactions" className="btn btn-secondary btn-sm">
+              Transaction Ledger
+            </Link>
           </div>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-            Sanction and release category-wise capex budgets following Project Approver endorsement. Final approval updates the sanctioned project budget.
-          </p>
-        </div>
+        }
+      />
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Link href="/budget" className="btn btn-secondary">
-            View Project Budgets
-          </Link>
-          <Link href="/budget/transactions" className="btn btn-secondary">
-            Transaction Ledger
-          </Link>
-        </div>
+      {/* KPI Cards */}
+      <div className="mb-6">
+        <SummaryCardGrid columns={3}>
+          <SummaryCard
+            label="Pending Finance Approvals"
+            value={queue.length}
+            secondary="Awaiting final sanction"
+            icon={<Clock size={16} />}
+            accent="amber"
+          />
+          <SummaryCard
+            label="Total Proposed Capex"
+            value={`₹ ${Math.round(queue.reduce((acc, q) => acc + (q.amount || 0), 0)).toLocaleString('en-IN')}`}
+            secondary="Proposed budget value in queue"
+            icon={<Landmark size={16} />}
+            accent="blue"
+          />
+          <SummaryCard
+            label="Governance Role"
+            value="Finance Approver"
+            secondary="Capex budget controller"
+            icon={<ShieldCheck size={16} />}
+            accent="emerald"
+          />
+        </SummaryCardGrid>
       </div>
 
       {statusMessage && (
@@ -388,10 +411,10 @@ export default function FinanceBudgetApprovalsPage() {
               <table className="table" style={{ width: '100%', fontSize: 12 }}>
                 <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                   <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '0 10px', width: 40 }}>#</th>
-                    <th style={{ padding: '0 10px' }}>Description</th>
+                    <th style={{ padding: '0 10px', width: 50 }}>S.No.</th>
+                    <th style={{ padding: '0 10px' }}>Item Description</th>
                     <th style={{ padding: '0 10px' }}>Category</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Qty</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Quantity</th>
                     <th style={{ padding: '0 10px' }}>UOM</th>
                     <th style={{ padding: '0 10px', textAlign: 'right' }}>Rate (₹)</th>
                     <th style={{ padding: '0 10px', textAlign: 'right' }}>Total (₹)</th>
