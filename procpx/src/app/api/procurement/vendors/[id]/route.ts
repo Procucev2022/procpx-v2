@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { hasPermission } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { getUserAuthorizedProjectIds } from '@/lib/project-auth';
 
 export async function GET(
   req: NextRequest,
@@ -58,6 +59,7 @@ export async function GET(
             status: true,
             issuedAt: true,
             completedAt: true,
+            projectId: true,
             project: { select: { id: true, name: true, projectCode: true } },
             costCentre: { select: { id: true, name: true, code: true } },
           },
@@ -70,14 +72,69 @@ export async function GET(
       return apiError('Vendor not found or access denied.', 404);
     }
 
-    // Identify eligible completed PPOs for performance evaluation
-    // (PPOs with status COMPLETED or ISSUED that have not yet been rated)
-    const ratedPpoIds = new Set(vendor.ppoRatings.map(r => r.ppoId));
-    const eligiblePposToRate = vendor.ppos.filter(p => !ratedPpoIds.has(p.id));
+    const isProcurementUser = ctx.role === 'PROCUREMENT_USER';
 
-    // Calculate aggregated PPO performance metrics
-    const ratings = vendor.ppoRatings;
-    const ppoRatingsCount = ratings.length;
+    // Resolve submitters for ratings
+    const userIds = Array.from(new Set(vendor.ppoRatings.map(r => r.ratedBy).filter(Boolean)));
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, role: true, email: true },
+    });
+    const userMap = new Map(users.map(u => [u.id, u.name]));
+
+    // Parse criteriaDetails for all ratings
+    const parsedRatings = vendor.ppoRatings.map(r => {
+      let parsedCriteria: any = {};
+      if (r.criteriaDetails) {
+        try {
+          parsedCriteria = typeof r.criteriaDetails === 'string' ? JSON.parse(r.criteriaDetails) : r.criteriaDetails;
+        } catch {
+          parsedCriteria = {};
+        }
+      }
+      return {
+        ...r,
+        ratedByName: userMap.get(r.ratedBy) || r.ratedBy,
+        criteriaDetailsParsed: parsedCriteria,
+        qualityComments: parsedCriteria.qualityComments || '',
+        deliveryComments: parsedCriteria.deliveryComments || '',
+        commercialComments: parsedCriteria.commercialComments || '',
+        documentationComments: parsedCriteria.documentationComments || '',
+        responsivenessComments: parsedCriteria.responsivenessComments || '',
+        overallImprovement: parsedCriteria.overallImprovement || '',
+        approverComments: parsedCriteria.approverComments || '',
+        approvedBy: parsedCriteria.approvedBy || null,
+        approvedByName: parsedCriteria.approvedByName || null,
+        approvedAt: parsedCriteria.approvedAt || null,
+        returnReason: parsedCriteria.returnReason || null,
+        decisionHistory: parsedCriteria.history || [],
+      };
+    });
+
+    // Procurement Users can view approved ratings and feedback only (Requirement 4)
+    const visibleRatings = isProcurementUser
+      ? parsedRatings.filter(r => r.status === 'APPROVED')
+      : parsedRatings;
+
+    // Identify eligible PPOs for evaluation (PPOs without APPROVED or SUBMITTED rating)
+    const lockedPpoIds = new Set(
+      parsedRatings.filter(r => r.status === 'APPROVED' || r.status === 'SUBMITTED').map(r => r.ppoId)
+    );
+    let eligiblePposToRate: any[] = [];
+    if (!isProcurementUser) {
+      const allowedProjectIds = await getUserAuthorizedProjectIds(ctx.userId, ctx.role);
+      eligiblePposToRate = vendor.ppos.filter(p => {
+        if (lockedPpoIds.has(p.id)) return false;
+        if (p.status === 'DRAFT' || p.status === 'CANCELLED') return false;
+        const pProjectId = p.projectId || p.project?.id;
+        if (allowedProjectIds !== null && pProjectId && !allowedProjectIds.includes(pProjectId)) return false;
+        return true;
+      });
+    }
+
+    // Calculate aggregated PPO performance metrics exclusively from APPROVED ratings
+    const approvedRatings = parsedRatings.filter(r => r.status === 'APPROVED');
+    const ppoRatingsCount = approvedRatings.length;
     let averagePpoRating: number | null = null;
     let avgQuality: number | null = null;
     let avgDelivery: number | null = null;
@@ -86,12 +143,12 @@ export async function GET(
     let avgDocumentation: number | null = null;
 
     if (ppoRatingsCount > 0) {
-      const sumOverall = ratings.reduce((acc, r) => acc + r.overallScore, 0);
-      const sumQuality = ratings.reduce((acc, r) => acc + r.qualityScore, 0);
-      const sumDelivery = ratings.reduce((acc, r) => acc + r.deliveryScore, 0);
-      const sumCommercial = ratings.reduce((acc, r) => acc + r.commercialComplianceScore, 0);
-      const sumResponsiveness = ratings.reduce((acc, r) => acc + r.responsivenessScore, 0);
-      const sumDocumentation = ratings.reduce((acc, r) => acc + r.documentationClosureScore, 0);
+      const sumOverall = approvedRatings.reduce((acc, r) => acc + r.overallScore, 0);
+      const sumQuality = approvedRatings.reduce((acc, r) => acc + r.qualityScore, 0);
+      const sumDelivery = approvedRatings.reduce((acc, r) => acc + r.deliveryScore, 0);
+      const sumCommercial = approvedRatings.reduce((acc, r) => acc + r.commercialComplianceScore, 0);
+      const sumResponsiveness = approvedRatings.reduce((acc, r) => acc + r.responsivenessScore, 0);
+      const sumDocumentation = approvedRatings.reduce((acc, r) => acc + r.documentationClosureScore, 0);
 
       averagePpoRating = Math.round((sumOverall / ppoRatingsCount) * 10) / 10;
       avgQuality = Math.round((sumQuality / ppoRatingsCount) * 10) / 10;
@@ -114,8 +171,13 @@ export async function GET(
       take: 20,
     });
 
+    const vendorWithParsedRatings = {
+      ...vendor,
+      ppoRatings: visibleRatings,
+    };
+
     return apiSuccess({
-      vendor,
+      vendor: vendorWithParsedRatings,
       eligiblePposToRate,
       performanceSummary: {
         ppoRatingsCount,
@@ -125,9 +187,11 @@ export async function GET(
         avgCommercial,
         avgResponsiveness,
         avgDocumentation,
-        mostRecentRating: ratings[0] || null,
+        mostRecentRating: approvedRatings[0] || null,
       },
       auditLogs,
+      currentUserRole: ctx.role,
+      isProcurementUser,
     });
   } catch (error: any) {
     console.error('Error fetching vendor profile:', error);

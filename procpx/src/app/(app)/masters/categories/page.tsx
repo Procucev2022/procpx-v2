@@ -16,6 +16,8 @@ import {
   Sparkles,
   RefreshCw,
 } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 
 interface CategoryItem {
   id: string;
@@ -181,55 +183,42 @@ export default function CategoryCreationPage() {
   });
 
   return (
-    <div className="container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
-      {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 13, color: '#64748b' }}>Master Creation</span>
-            <span style={{ color: '#cbd5e1' }}>/</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>Category Master</span>
-          </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-            Category Creation & Master Taxonomy
-          </h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0 0' }}>
-            Central category taxonomy. Categories defined here automatically sync across Standard BOQ Creation, BOQ Studio, and Project Budget.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          {canEdit ? (
+    <div className="w-full">
+      <PageHeader
+        title="Category Creation & Master Taxonomy"
+        subtitle="Central category taxonomy. Categories defined here automatically sync across Standard BOQ Creation, BOQ Studio, and Project Budget."
+        breadcrumbs={[
+          { label: 'Master Creation', href: '/masters/categories' },
+          { label: 'Category Master' },
+        ]}
+        actions={
+          canEdit ? (
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => handleOpenAddModal()}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}
             >
-              <Plus size={16} />
-              + Add Category
+              <Plus size={16} /> Add Category
             </button>
           ) : (
             <button
               type="button"
-              className="btn btn-outline"
+              className="btn btn-outline h-[40px] px-4 text-xs font-semibold inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed"
               disabled
               title="Restricted: Master Data Administrator or Category Manager role required"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.6, cursor: 'not-allowed', color: '#64748b' }}
             >
-              <Plus size={16} />
-              + Add Category (Admin Only)
+              <Plus size={16} /> Add Category (Admin Only)
             </button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {/* Role / Context Banner */}
       {!canEdit && (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ShieldAlert size={18} color="#64748b" />
-          <div style={{ fontSize: 13, color: '#475569' }}>
-            <strong style={{ color: '#0f172a' }}>Read-Only Master View:</strong> Category taxonomy creation and edits are reserved for Master Data Administrators and Category Managers. All categories below are active and immediately available in BOQ Studio and Project Budget.
+        <div className="p-3.5 mb-6 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center gap-2.5">
+          <ShieldAlert size={18} className="text-slate-500 shrink-0" />
+          <div>
+            <strong className="text-slate-900">Read-Only Master View:</strong> Category taxonomy creation and edits are reserved for Master Data Administrators and Category Managers. All categories below are active and immediately available in BOQ Studio and Project Budget.
           </div>
         </div>
       )}
@@ -237,47 +226,41 @@ export default function CategoryCreationPage() {
       {/* Notification Banner */}
       {notification && (
         <div
-          style={{
-            background: notification.type === 'success' ? '#ecfdf5' : '#fef2f2',
-            border: `1px solid ${notification.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
-            borderRadius: 8,
-            padding: '12px 16px',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
+          className={`p-3.5 mb-6 rounded-lg border text-xs flex items-center justify-between ${
+            notification.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: notification.type === 'success' ? '#047857' : '#b91c1c', fontSize: 13, fontWeight: 600 }}>
-            {notification.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <div className="flex items-center gap-2 font-medium">
+            {notification.type === 'success' ? <CheckCircle2 size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-rose-600" />}
             <span>{notification.message}</span>
           </div>
-          <button type="button" onClick={() => setNotification(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+          <button type="button" onClick={() => setNotification(null)} className="text-slate-500 hover:text-slate-700">
             <X size={14} />
           </button>
         </div>
       )}
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Top-Level Categories</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 4 }}>{categories.length}</div>
-          <div style={{ fontSize: 11, color: '#16a34a', marginTop: 4, fontWeight: 600 }}>Active in BOQ & Budget Workflows</div>
-        </div>
-
-        <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Subcategories</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{totalSubcategories}</div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Granular Procurement Classifications</div>
-        </div>
-
-        <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Workflow Integration</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#059669', marginTop: 4 }}>100% Synced</div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Standard BOQ, Studio & Project Budget</div>
-        </div>
-      </div>
+      <SummaryCardGrid columns={3}>
+        <SummaryCard
+          label="Top-Level Categories"
+          value={categories.length}
+          secondary="Active in BOQ & Budget Workflows"
+          accent="default"
+        />
+        <SummaryCard
+          label="Subcategories"
+          value={totalSubcategories}
+          secondary="Granular Procurement Classifications"
+          accent="blue"
+        />
+        <SummaryCard
+          label="Workflow Integration"
+          value="100% Synced"
+          secondary="Standard BOQ, Studio & Project Budget"
+          accent="emerald"
+        />
+      </SummaryCardGrid>
 
       {/* Search and Action Bar */}
       <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 20px', marginBottom: 20 }}>

@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
+import PageHeader from '@/components/ui/PageHeader';
+import { Plus } from 'lucide-react';
+
 export default function MastersPage() {
   const [activeTab, setActiveTab] = useState<'uom' | 'categories'>('uom');
   const [uoms, setUoms] = useState<any[]>([]);
@@ -40,42 +43,105 @@ export default function MastersPage() {
   }
 
   return (
-    <div className="page-content">
-      <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
-        <div><div className="page-title">Masters</div><div className="page-subtitle">UOM and Categories</div></div>
-        {activeTab === 'uom' && <button className="btn btn-primary" onClick={() => setShowUomModal(true)}>+ Add UOM</button>}
-        {activeTab === 'categories' && <button className="btn btn-primary" onClick={() => setShowCatModal(true)}>+ Add Category</button>}
-      </div>
+    <div className="w-full">
+      <PageHeader
+        title="Masters Administration"
+        subtitle="Manage master unit of measure (UOM) definitions and category taxonomy"
+        breadcrumbs={[
+          { label: 'Administration', href: '/admin/masters' },
+          { label: 'Masters' },
+        ]}
+        actions={
+          activeTab === 'uom' ? (
+            <button
+              type="button"
+              className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
+              onClick={() => setShowUomModal(true)}
+            >
+              <Plus size={16} /> Add UOM
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
+              onClick={() => setShowCatModal(true)}
+            >
+              <Plus size={16} /> Add Category
+            </button>
+          )
+        }
+      />
 
       {msg && (
-        <div className={`alert ${msg.isError ? 'alert-error' : 'alert-success'} mb-4`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {msg.isError ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
-          <span>{msg.text}</span>
-          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setMsg(null)}>
+        <div
+          className={`p-3.5 mb-6 rounded-lg border text-xs flex items-center justify-between ${
+            msg.isError ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          <div className="flex items-center gap-2 font-medium">
+            {msg.isError ? <AlertCircle size={16} className="text-rose-600" /> : <CheckCircle2 size={16} className="text-emerald-600" />}
+            <span>{msg.text}</span>
+          </div>
+          <button type="button" onClick={() => setMsg(null)} className="text-slate-500 hover:text-slate-700">
             <X size={14} />
           </button>
         </div>
       )}
 
-      <div className="tabs mb-4">
-        <div className={`tab ${activeTab === 'uom' ? 'active' : ''}`} onClick={() => setActiveTab('uom')}>UOM Master ({uoms.length})</div>
-        <div className={`tab ${activeTab === 'categories' ? 'active' : ''}`} onClick={() => setActiveTab('categories')}>Categories ({categories.length})</div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 mb-6 pb-px">
+        <button
+          type="button"
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'uom'
+              ? 'border-[#0f52ba] text-[#0f52ba] bg-blue-50/40 rounded-t-lg'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+          }`}
+          onClick={() => setActiveTab('uom')}
+        >
+          UOM Master ({uoms.length})
+        </button>
+        <button
+          type="button"
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'categories'
+              ? 'border-[#0f52ba] text-[#0f52ba] bg-blue-50/40 rounded-t-lg'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+          }`}
+          onClick={() => setActiveTab('categories')}
+        >
+          Categories ({categories.length})
+        </button>
       </div>
 
       {loading ? (
-        <div className="loading-overlay"><div className="spinner" /> Loading...</div>
+        <div className="py-16 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
+          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Loading masters...</span>
+        </div>
       ) : activeTab === 'uom' ? (
-        <div className="card">
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Aliases</th></tr></thead>
+        <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
+          <div className="table-responsive">
+            <table className="enterprise-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 140 }}>Code</th>
+                  <th style={{ minWidth: 200 }}>Name</th>
+                  <th style={{ width: 160 }}>Category</th>
+                  <th style={{ minWidth: 220 }}>Aliases</th>
+                </tr>
+              </thead>
               <tbody>
                 {uoms.map(u => (
-                  <tr key={u.id}>
-                    <td><span className="badge badge-info font-mono">{u.code}</span></td>
-                    <td style={{ fontWeight: 600 }}>{u.name}</td>
-                    <td className="text-muted">{u.category}</td>
-                    <td className="text-muted text-sm">{u.aliases ? JSON.parse(u.aliases).join(', ') : '—'}</td>
+                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                    <td>
+                      <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                        {u.code}
+                      </span>
+                    </td>
+                    <td className="font-semibold text-slate-900">{u.name}</td>
+                    <td className="text-slate-600 text-xs">{u.category}</td>
+                    <td className="text-slate-500 text-xs">{u.aliases ? JSON.parse(u.aliases).join(', ') : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -83,20 +149,27 @@ export default function MastersPage() {
           </div>
         </div>
       ) : (
-        <div className="card">
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead><tr><th>Category</th><th>Subcategories</th></tr></thead>
+        <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
+          <div className="table-responsive">
+            <table className="enterprise-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 220 }}>Category</th>
+                  <th>Subcategories</th>
+                </tr>
+              </thead>
               <tbody>
                 {categories.map(cat => (
-                  <tr key={cat.id}>
-                    <td style={{ fontWeight: 700, verticalAlign: 'top', paddingTop: 14 }}>{cat.name}</td>
-                    <td>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
+                  <tr key={cat.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="font-bold text-slate-900 align-top py-3">{cat.name}</td>
+                    <td className="py-2.5">
+                      <div className="flex flex-wrap gap-1.5">
                         {cat.children?.map((sub: any) => (
-                          <span key={sub.id} className="badge badge-draft">{sub.name}</span>
+                          <span key={sub.id} className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            {sub.name}
+                          </span>
                         ))}
-                        {!cat.children?.length && <span className="text-muted text-sm">No subcategories</span>}
+                        {!cat.children?.length && <span className="text-slate-400 text-xs italic">No subcategories</span>}
                       </div>
                     </td>
                   </tr>

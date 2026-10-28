@@ -21,20 +21,11 @@ import {
 } from 'lucide-react';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import { useToast } from '@/components/ui/Toast';
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    DRAFT: 'badge-draft',
-    SUBMITTED: 'badge-submitted',
-    APPROVED: 'badge-approved',
-    REJECTED: 'badge-rejected',
-    VALID: 'badge-valid',
-    WARNING: 'badge-warning',
-    ERROR: 'badge-error',
-    PENDING: 'badge-draft',
-  };
-  return <span className={`badge ${map[status] || 'badge-draft'}`}>{status}</span>;
-}
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import EmptyState from '@/components/ui/EmptyState';
+import { FileSpreadsheet, CheckCircle, AlertTriangle, AlertOctagon } from 'lucide-react';
 
 function QualityBar({ score }: { score?: number | null }) {
   if (score == null) return null;
@@ -214,50 +205,50 @@ export default function BoqWorkspacePage() {
   return (
     <div className="page-content">
       {/* Header */}
-      <div className="top-header" style={{ margin: '-24px -24px 0', padding: '0 24px' }}>
-        <div>
-          <div className="page-title">
-            BOQ Workspace
-            {revision && <span className="badge badge-info font-mono" style={{ marginLeft: 10 }}>{revision.revisionCode || '...'}</span>}
-            {revision && <StatusBadge status={revision.status} />}
+      <PageHeader
+        title={revision?.revisionCode ? `BOQ Workspace — ${revision.revisionCode}` : 'BOQ Workspace'}
+        subtitle="Manage BOQ lines, validate specifications, run automated standardisation, and submit for approval"
+        backHref="/boq"
+        backLabel="← Back to BOQ Register"
+        badge={revision ? <StatusBadge status={revision.status} /> : undefined}
+        actions={
+          <div className="flex gap-2 items-center flex-wrap">
+            {revision && <QualityBar score={revision.qualityScore} />}
+            {isEditable && (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={standardiseBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Wand2 size={14} /> Standardise
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={validateBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Check size={14} /> Validate
+                </button>
+                {revision?.errorLines === 0 ? (
+                  <button className="btn btn-primary btn-sm" onClick={submitBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Send size={14} /> Submit for Approval
+                  </button>
+                ) : (
+                  <button className="btn btn-secondary btn-sm" disabled title="Fix validation errors before submitting" style={{ opacity: 0.6, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <AlertCircle size={14} /> {revision?.errorLines} Errors Block Submit
+                  </button>
+                )}
+              </>
+            )}
+            {isSubmitted && (
+              <>
+                <button className="btn btn-primary btn-sm" onClick={approveBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <CheckCircle2 size={14} /> Approve BOQ
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => setShowRejectModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <XCircle size={14} /> Reject BOQ
+                </button>
+              </>
+            )}
+            {isApproved && (
+              <button className="btn btn-primary btn-sm" onClick={newRevision}>+ Create New Revision</button>
+            )}
           </div>
-        </div>
-        <div className="flex gap-2 items-center flex-wrap">
-          {revision && <QualityBar score={revision.qualityScore} />}
-          {isEditable && (
-            <>
-              <button className="btn btn-secondary btn-sm" onClick={standardiseBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Wand2 size={14} /> Standardise
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={validateBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Check size={14} /> Validate
-              </button>
-              {revision?.errorLines === 0 ? (
-                <button className="btn btn-success btn-sm" onClick={submitBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Send size={14} /> Submit for Approval
-                </button>
-              ) : (
-                <button className="btn btn-secondary btn-sm" disabled title="Fix validation errors before submitting" style={{ opacity: 0.6, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <AlertCircle size={14} /> {revision?.errorLines} Errors Block Submit
-                </button>
-              )}
-            </>
-          )}
-          {isSubmitted && (
-            <>
-              <button className="btn btn-success btn-sm" onClick={approveBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={14} /> Approve BOQ
-              </button>
-              <button className="btn btn-danger btn-sm" onClick={() => setShowRejectModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <XCircle size={14} /> Reject BOQ
-              </button>
-            </>
-          )}
-          {isApproved && (
-            <button className="btn btn-primary btn-sm" onClick={newRevision}>+ Create New Revision</button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       {actionMsg && (
         <div className={`alert ${actionMsg.isError ? 'alert-error' : 'alert-success'} mb-4`} style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -292,11 +283,37 @@ export default function BoqWorkspacePage() {
 
       {/* KPI Stats */}
       {revision && (
-        <div className="kpi-grid" style={{ marginTop: 16, marginBottom: 16 }}>
-          <div className="kpi-card"><div className="kpi-label">Total Lines</div><div className="kpi-value">{revision.totalLines || 0}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Valid Lines</div><div className="kpi-value" style={{ color: '#059669' }}>{revision.validLines || 0}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Warnings</div><div className="kpi-value" style={{ color: '#d97706' }}>{revision.warningLines || 0}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Errors</div><div className="kpi-value" style={{ color: '#dc2626' }}>{revision.errorLines || 0}</div></div>
+        <div className="mb-6">
+          <SummaryCardGrid columns={4}>
+            <SummaryCard
+              label="Total Lines"
+              value={revision.totalLines || 0}
+              secondary="Total items in BOQ"
+              icon={<FileSpreadsheet size={16} />}
+              accent="default"
+            />
+            <SummaryCard
+              label="Valid Lines"
+              value={revision.validLines || 0}
+              secondary="Passed validation rules"
+              icon={<CheckCircle size={16} />}
+              accent="emerald"
+            />
+            <SummaryCard
+              label="Warnings"
+              value={revision.warningLines || 0}
+              secondary="Non-blocking notices"
+              icon={<AlertTriangle size={16} />}
+              accent="amber"
+            />
+            <SummaryCard
+              label="Errors"
+              value={revision.errorLines || 0}
+              secondary="Blocking issues"
+              icon={<AlertOctagon size={16} />}
+              accent="rose"
+            />
+          </SummaryCardGrid>
         </div>
       )}
 
@@ -344,22 +361,28 @@ export default function BoqWorkspacePage() {
               <table className="data-table enterprise-table" style={{ width: '100%', minWidth: 1200 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 60 }}>Line</th>
-                    <th style={{ minWidth: 260 }}>Description & Standardisation</th>
-                    <th style={{ minWidth: 160 }}>Specification</th>
+                    <th style={{ width: 60 }}>S.No.</th>
+                    <th style={{ width: 110 }}>Item Code</th>
+                    <th style={{ minWidth: 240 }}>Item Description</th>
+                    <th style={{ minWidth: 160 }}>BOQ Description</th>
+                    <th style={{ width: 80, textAlign: 'center' }}>UOM</th>
+                    <th style={{ width: 90, textAlign: 'right' }}>Quantity</th>
                     <th style={{ minWidth: 120 }}>Category</th>
-                    <th style={{ minWidth: 120 }}>Subcategory</th>
-                    <th style={{ width: 80 }}>UOM</th>
-                    <th style={{ width: 90, textAlign: 'right' }}>Qty</th>
+                    <th style={{ minWidth: 120 }}>Sub-category</th>
                     <th style={{ width: 100 }}>Location</th>
                     <th style={{ width: 130, textAlign: 'center' }}>Status & Rules</th>
                     <th style={{ width: 90, textAlign: 'center' }} className="col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lines.map(line => (
+                  {lines.map((line, idx) => (
                     <tr key={line.id} style={{ background: line.validationStatus === 'ERROR' ? '#fff8f8' : line.validationStatus === 'WARNING' ? '#fffbeb' : undefined }}>
-                      <td><span className="font-mono text-muted">{line.lineNumber}</span></td>
+                      <td><span className="font-mono text-muted">{(page - 1) * pageSize + idx + 1}</span></td>
+                      <td>
+                        <span className="font-mono font-bold text-xs" style={{ color: '#1e40af' }}>
+                          {line.itemCode || line.lineNumber || '—'}
+                        </span>
+                      </td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{line.standardDescription || line.originalDescription}</div>
                         {line.standardDescription && line.standardDescription !== line.originalDescription && (
@@ -377,9 +400,7 @@ export default function BoqWorkspacePage() {
                           maxWidth={200}
                         />
                       </td>
-                      <td>{line.category?.name || <span className="text-muted">—</span>}</td>
-                      <td>{line.subcategory?.name || <span className="text-muted">—</span>}</td>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         <span className="font-mono font-bold" style={{ color: line.uom?.code ? '#059669' : '#d97706' }}>
                           {line.uom?.code || line.uomRaw || '—'}
                         </span>
@@ -388,6 +409,8 @@ export default function BoqWorkspacePage() {
                         )}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{line.quantity !== null && line.quantity !== undefined ? line.quantity.toLocaleString() : '—'}</td>
+                      <td>{line.category?.name || <span className="text-muted">—</span>}</td>
+                      <td>{line.subcategory?.name || <span className="text-muted">—</span>}</td>
                       <td className="text-muted">{line.location || '—'}</td>
                       <td style={{ textAlign: 'center' }}>
                         <StatusBadge status={line.validationStatus} />
@@ -554,8 +577,8 @@ export default function BoqWorkspacePage() {
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>Line</th>
-                          <th>Description</th>
+                          <th>S.No.</th>
+                          <th>Item Description</th>
                           <th>Field</th>
                           <th>Previous ({compareData.compareRevision?.revisionCode})</th>
                           <th>Current ({compareData.currentRevision?.revisionCode})</th>
@@ -585,7 +608,7 @@ export default function BoqWorkspacePage() {
                   <h4 style={{ fontWeight: 700, marginBottom: 8, color: '#059669' }}>+ Added Line Items</h4>
                   <div className="table-wrapper">
                     <table className="data-table">
-                      <thead><tr><th>Line</th><th>Description</th><th>Qty</th><th>UOM</th><th>Category</th></tr></thead>
+                      <thead><tr><th>S.No.</th><th>Item Description</th><th>Quantity</th><th>UOM</th><th>Category</th></tr></thead>
                       <tbody>
                         {compareData.added.map((l: any) => (
                           <tr key={l.lineNumber} style={{ background: '#f0fdf4' }}>

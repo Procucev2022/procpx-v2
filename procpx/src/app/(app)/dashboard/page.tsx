@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
 import { useToast } from '@/components/ui/Toast';
+import PrDetailModal from '@/components/PrDetailModal';
+import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 
 function StatusBadge({ status }: { status: string }) {
   const cls: Record<string, string> = {
@@ -73,6 +75,15 @@ export default function DashboardPage() {
   const [approverChatDrawerOpen, setApproverChatDrawerOpen] = useState(false);
   const [approverChatPr, setApproverChatPr] = useState<any | null>(null);
   const [approverIsEnquiryMode, setApproverIsEnquiryMode] = useState(false);
+
+  // Standardised PR Details Modal state
+  const [selectedPrForDetails, setSelectedPrForDetails] = useState<any | null>(null);
+  const [prDetailsModalOpen, setPrDetailsModalOpen] = useState(false);
+
+  const handleOpenPrDetails = (pr: any) => {
+    setSelectedPrForDetails(pr);
+    setPrDetailsModalOpen(true);
+  };
 
   const loadDashboard = async () => {
     try {
@@ -596,11 +607,11 @@ export default function DashboardPage() {
                 <table className="table" style={{ width: '100%', fontSize: 12 }}>
                   <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                     <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '0 10px', width: 40 }}>#</th>
+                      <th style={{ padding: '0 10px', width: 50 }}>S.No.</th>
                       <th style={{ padding: '0 10px' }}>Item Description</th>
                       <th style={{ padding: '0 10px' }}>BOQ Description</th>
                       <th style={{ padding: '0 10px' }}>Category</th>
-                      <th style={{ padding: '0 10px', textAlign: 'right' }}>Qty</th>
+                      <th style={{ padding: '0 10px', textAlign: 'right' }}>Quantity</th>
                       <th style={{ padding: '0 10px' }}>UOM</th>
                       <th style={{ padding: '0 10px', textAlign: 'right' }}>Rate (₹)</th>
                       <th style={{ padding: '0 10px', textAlign: 'right' }}>Total (₹)</th>
@@ -611,7 +622,15 @@ export default function DashboardPage() {
                       <tr key={line.id || idx} style={{ borderBottom: '1px solid #f1f5f9', height: 40 }}>
                         <td style={{ padding: '0 10px', color: '#64748b' }}>{line.lineNumber || idx + 1}</td>
                         <td style={{ padding: '0 10px', fontWeight: 600, color: '#0f172a' }}>{line.itemDescription}</td>
-                        <td style={{ padding: '0 10px', color: '#64748b' }}>{line.specification || line.boqLine?.specification || '—'}</td>
+                        <td style={{ padding: '0 10px', color: '#64748b', maxWidth: 220 }}>
+                          <BoqDescriptionCell
+                            text={line.specification || line.boqLine?.specification}
+                            itemDescription={line.itemDescription}
+                            lineNumber={line.lineNumber || idx + 1}
+                            maxWidth={210}
+                            clampLines={2}
+                          />
+                        </td>
                         <td style={{ padding: '0 10px', color: '#475569' }}>{line.category}</td>
                         <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 600 }}>{line.quantity}</td>
                         <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uom}</td>
@@ -835,58 +854,19 @@ export default function DashboardPage() {
   }
 
   // ============================================================
-  // 3. PROCUREMENT_USER VIEW (PR-FIRST REGISTER & EXPANDABLE RFQS)
+  // 3. PROCUREMENT_USER VIEW (BOQ-FIRST REGISTER & EXPANDABLE RFQS)
   // ============================================================
   if (data.role === 'PROCUREMENT_USER') {
     const summary = data.summaryCards || {
+      boqsReceived: data.approvedPrsCount || 0,
       prsReceived: data.approvedPrsCount || 0,
       rfqsInProgress: data.activeRfqsCount || 0,
       negotiationsPending: data.negotiationsCount || 0,
       awardsPpoPending: data.awardsPendingCount || 0,
     };
 
-    const demoPrRecord = {
-      id: 'PR-DEMO-001',
-      prId: 'PR-DEMO-001',
-      prNumber: 'PR-DEMO-001',
-      description: 'Civil Finishing & Interior Fitout Package (8 items)',
-      boqCode: 'BOQ-KND-001',
-      projectName: 'Kundanahalli Retail Project',
-      projectCode: 'KND-RET-01',
-      costCentre: 'CC45 - Civil & Interior Fitout',
-      category: 'Civil & Interior',
-      requestedValue: 1133150,
-      prApprovalStatus: 'APPROVED',
-      sourcingStage: 'Negotiation',
-      currentStage: 'Negotiation',
-      rfqCount: 1,
-      canCreateRfq: false,
-      hasRateCardMatch: true,
-      isExample: true,
-      lastUpdated: new Date().toISOString(),
-      rfqs: [
-        {
-          id: 'RFQ-DEMO-001',
-          rfqNumber: 'RFQ-DEMO-001',
-          description: 'Civil Finishing & Interior Fitout Package (8 items)',
-          packageName: 'Kundanahalli Retail Store — CC45 Fitout',
-          status: 'NEGOTIATION',
-          vendorInvitationProgress: '3 submitted / 3 invited',
-          invitedCount: 3,
-          quotesCount: 3,
-          quotationStage: '3 Quotes Recorded',
-          negotiationStage: 'Round 1 (Revised ₹8,50,000)',
-          awardStatus: 'Pending Approval',
-          ppoStatus: 'Ready for PPO',
-          estimatedBenchmarkValue: 1133150,
-          lastUpdated: new Date().toISOString(),
-          openUrl: '/procurement/rfqs/RFQ-DEMO-001',
-          isExample: true,
-        },
-      ],
-    };
-
-    const register: any[] = [demoPrRecord, ...(data.prRegister || data.consolidatedRegister || [])];
+    // Use only authoritative eligible approved BOQs (no hardcoded demo PR record)
+    const register: any[] = data.boqRegister || data.prRegister || data.consolidatedRegister || [];
     const searchLower = (searchTerm || '').toLowerCase();
 
     // Filter logic supporting text search, stage select, and clickable card filter
@@ -894,10 +874,12 @@ export default function DashboardPage() {
       // 1. Text search
       const matchesSearch =
         !searchTerm ||
+        item.boqCode?.toLowerCase().includes(searchLower) ||
         item.prNumber?.toLowerCase().includes(searchLower) ||
         item.description?.toLowerCase().includes(searchLower) ||
         item.projectName?.toLowerCase().includes(searchLower) ||
         item.costCentre?.toLowerCase().includes(searchLower) ||
+        item.costCentreCode?.toLowerCase().includes(searchLower) ||
         item.category?.toLowerCase().includes(searchLower) ||
         item.rfqs?.some((r: any) =>
           r.rfqNumber?.toLowerCase().includes(searchLower) ||
@@ -910,16 +892,15 @@ export default function DashboardPage() {
 
       // 3. Clickable summary card filter
       let matchesCard = true;
-      if (activeCardFilter === 'prs_received') {
+      if (activeCardFilter === 'boqs_received' || activeCardFilter === 'prs_received') {
         matchesCard =
-          itemStage === 'Approved PR — Awaiting RFQ' ||
-          itemStage === 'RFQ Preparation' ||
+          itemStage === 'Awaiting RFQ' ||
           !item.rfqs ||
           item.rfqs.length === 0;
       } else if (activeCardFilter === 'rfqs_in_progress') {
         matchesCard =
-          itemStage === 'RFQ Issued / Awaiting Quotations' ||
-          itemStage === 'Quotation Comparison' ||
+          itemStage === 'RFQ Issued' ||
+          itemStage === 'Quotations' ||
           item.rfqs?.some((r: any) =>
             r.status === 'RELEASED' ||
             r.status === 'VENDOR_RESPONSE_OPEN' ||
@@ -935,11 +916,10 @@ export default function DashboardPage() {
           );
       } else if (activeCardFilter === 'awards_ppo_pending') {
         matchesCard =
-          itemStage === 'Award Pending Approval' ||
-          itemStage === 'Award Approved' ||
-          itemStage === 'PPO Created' ||
+          itemStage === 'Award' ||
+          itemStage === 'PPO' ||
           item.rfqs?.some((r: any) =>
-            (r.awardStatus && r.awardStatus !== 'Not Prepared') ||
+            (r.awardStatus && r.awardStatus !== 'Not Prepared' && r.awardStatus !== 'Draft') ||
             (r.ppoStatus && r.ppoStatus !== '—')
           );
       }
@@ -948,51 +928,43 @@ export default function DashboardPage() {
     });
 
     const stagesList = [
-      'Approved PR — Awaiting RFQ',
-      'RFQ Preparation',
-      'RFQ Issued / Awaiting Quotations',
-      'Quotation Comparison',
+      'Awaiting RFQ',
+      'RFQ Issued',
+      'Quotations',
       'Negotiation',
-      'Award Pending Approval',
-      'Award Approved',
-      'PPO Created',
+      'Award',
+      'PPO',
     ];
 
-    const toggleExpand = (prId: string) => {
+    const toggleExpand = (boqId: string) => {
       setExpandedPrs((prev) => ({
         ...prev,
-        [prId]: !prev[prId],
+        [boqId]: !prev[boqId],
       }));
     };
 
     const toggleExpandAll = () => {
-      const allExpanded = filteredRegister.every((pr) => expandedPrs[pr.id]);
+      const allExpanded = filteredRegister.every((boq) => expandedPrs[boq.id]);
       const next: Record<string, boolean> = {};
-      filteredRegister.forEach((pr) => {
-        next[pr.id] = !allExpanded;
+      filteredRegister.forEach((boq) => {
+        next[boq.id] = !allExpanded;
       });
       setExpandedPrs(next);
     };
 
     const getStageBadgeClass = (stage: string) => {
       switch (stage) {
-        case 'Approved PR — Awaiting RFQ':
+        case 'Awaiting RFQ':
           return 'badge-info';
-        case 'RFQ Preparation':
-          return 'badge-draft';
-        case 'RFQ Issued / Awaiting Quotations':
         case 'RFQ Issued':
           return 'badge-submitted';
-        case 'Awaiting Quotations':
-        case 'Quotation Comparison':
+        case 'Quotations':
           return 'badge-submitted';
         case 'Negotiation':
           return 'badge-review';
-        case 'Award Pending Approval':
-          return 'badge-review';
-        case 'Award Approved':
+        case 'Award':
           return 'badge-approved';
-        case 'PPO Created':
+        case 'PPO':
           return 'badge-approved';
         case 'Closed / Cancelled':
           return 'badge-rejected';
@@ -1001,15 +973,25 @@ export default function DashboardPage() {
       }
     };
 
+    const formatBoqDate = (dVal: any) => {
+      if (!dVal) return '—';
+      try {
+        const d = new Date(dVal);
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      } catch {
+        return '—';
+      }
+    };
+
     return (
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
             <div className="page-title">Procurement Workspace</div>
-            <div className="page-subtitle">PR-First Register: Traceable RFQ sourcing, negotiation, awarding & PPO execution</div>
+            <div className="page-subtitle">BOQ sourcing, quotation comparison, negotiation and awards.</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>Role: PROCUREMENT_USER</span>
             <Link
               href="/procurement/rfqs/RFQ-DEMO-001"
               className="btn btn-sm btn-secondary"
@@ -1021,95 +1003,36 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Interactive Example Mode Banner */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%)',
-            border: '1px solid #bbf7d0',
-            borderRadius: 8,
-            padding: '14px 20px',
-            marginBottom: 20,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: '50%',
-                background: '#dcfce7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#16a34a',
-                flexShrink: 0,
-              }}
-            >
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <strong style={{ fontSize: 13, color: '#166534' }}>
-                  Interactive Procurement Workflow Demonstration
-                </strong>
-                <span className="badge badge-approved" style={{ fontSize: 10, padding: '1px 6px' }}>
-                  SAMPLE DATA
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
-                Experience end-to-end sourcing in the actual application: <strong>Kundanahalli Retail Project (CC45)</strong>.
-                Explore PR-inherited scope (8 items), 3 qualified vendors, quotation comparison, negotiation rounds, award sanction, and PPO creation.
-              </div>
-            </div>
-          </div>
-
-          <Link
-            href="/procurement/rfqs/RFQ-DEMO-001"
-            className="btn btn-sm btn-primary"
-            style={{
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 14px',
-              backgroundColor: '#16a34a',
-              borderColor: '#15803d',
-            }}
-          >
-            <Sparkles size={14} /> View Workflow Example →
-          </Link>
-        </div>
-
         {/* 1. Four Compact, Live Clickable Summary Cards */}
         <div className="kpi-grid mb-6">
-          {/* Card 1: PRs Received */}
+          {/* Card 1: BOQs Received */}
           <div
             className="kpi-card"
-            onClick={() => setActiveCardFilter(activeCardFilter === 'prs_received' ? null : 'prs_received')}
+            onClick={() => setActiveCardFilter(activeCardFilter === 'boqs_received' ? null : 'boqs_received')}
             style={{
               cursor: 'pointer',
-              borderLeft: '4px solid #059669',
-              backgroundColor: activeCardFilter === 'prs_received' ? '#f0fdf4' : undefined,
-              boxShadow: activeCardFilter === 'prs_received' ? '0 0 0 2px #059669' : undefined,
+              background: '#ffffff',
+              backgroundColor: '#ffffff',
+              border: '1px solid #2563eb',
+              borderLeft: '4px solid #2563eb',
+              borderRadius: 8,
+              padding: '18px 20px',
+              boxShadow: activeCardFilter === 'boqs_received' ? '0 0 0 2px #2563eb' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter PRs awaiting sourcing"
+            title="Click to filter BOQs awaiting sourcing"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">PRs Received</div>
-              {activeCardFilter === 'prs_received' && (
-                <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 6px' }}>Filtered</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FileText size={16} color="#2563eb" />
+                <div className="kpi-label" style={{ margin: 0 }}>BOQs Received</div>
+              </div>
+              {activeCardFilter === 'boqs_received' && (
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#2563eb', border: '1px solid #2563eb', fontWeight: 600 }}>Filtered</span>
               )}
             </div>
-            <div className="kpi-value" style={{ color: '#059669' }}>{summary.prsReceived ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Approved PRs awaiting sourcing</div>
+            <div className="kpi-value" style={{ color: '#2563eb', marginTop: 6 }}>{summary.boqsReceived ?? summary.prsReceived ?? 0}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Approved BOQs awaiting sourcing</div>
           </div>
 
           {/* Card 2: RFQs in Progress */}
@@ -1118,20 +1041,27 @@ export default function DashboardPage() {
             onClick={() => setActiveCardFilter(activeCardFilter === 'rfqs_in_progress' ? null : 'rfqs_in_progress')}
             style={{
               cursor: 'pointer',
-              borderLeft: '4px solid #2563eb',
-              backgroundColor: activeCardFilter === 'rfqs_in_progress' ? '#eff6ff' : undefined,
-              boxShadow: activeCardFilter === 'rfqs_in_progress' ? '0 0 0 2px #2563eb' : undefined,
+              background: '#ffffff',
+              backgroundColor: '#ffffff',
+              border: '1px solid #0d9488',
+              borderLeft: '4px solid #0d9488',
+              borderRadius: 8,
+              padding: '18px 20px',
+              boxShadow: activeCardFilter === 'rfqs_in_progress' ? '0 0 0 2px #0d9488' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
             title="Click to filter RFQs in progress"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">RFQs in Progress</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Layers size={16} color="#0d9488" />
+                <div className="kpi-label" style={{ margin: 0 }}>RFQs in Progress</div>
+              </div>
               {activeCardFilter === 'rfqs_in_progress' && (
-                <span className="badge badge-info" style={{ fontSize: 10, padding: '2px 6px' }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#0d9488', border: '1px solid #0d9488', fontWeight: 600 }}>Filtered</span>
               )}
             </div>
-            <div className="kpi-value" style={{ color: '#2563eb' }}>{summary.rfqsInProgress ?? 0}</div>
+            <div className="kpi-value" style={{ color: '#0d9488', marginTop: 6 }}>{summary.rfqsInProgress ?? 0}</div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Active sourcing & quote collection</div>
           </div>
 
@@ -1141,20 +1071,27 @@ export default function DashboardPage() {
             onClick={() => setActiveCardFilter(activeCardFilter === 'negotiations_pending' ? null : 'negotiations_pending')}
             style={{
               cursor: 'pointer',
+              background: '#ffffff',
+              backgroundColor: '#ffffff',
+              border: '1px solid #d97706',
               borderLeft: '4px solid #d97706',
-              backgroundColor: activeCardFilter === 'negotiations_pending' ? '#fffbeb' : undefined,
-              boxShadow: activeCardFilter === 'negotiations_pending' ? '0 0 0 2px #d97706' : undefined,
+              borderRadius: 8,
+              padding: '18px 20px',
+              boxShadow: activeCardFilter === 'negotiations_pending' ? '0 0 0 2px #d97706' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
             title="Click to filter negotiations pending"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">Negotiations Pending</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Scale size={16} color="#d97706" />
+                <div className="kpi-label" style={{ margin: 0 }}>Negotiations Pending</div>
+              </div>
               {activeCardFilter === 'negotiations_pending' && (
-                <span className="badge badge-review" style={{ fontSize: 10, padding: '2px 6px' }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#d97706', border: '1px solid #d97706', fontWeight: 600 }}>Filtered</span>
               )}
             </div>
-            <div className="kpi-value" style={{ color: '#d97706' }}>{summary.negotiationsPending ?? 0}</div>
+            <div className="kpi-value" style={{ color: '#d97706', marginTop: 6 }}>{summary.negotiationsPending ?? 0}</div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Active rounds & commercial reviews</div>
           </div>
 
@@ -1164,30 +1101,37 @@ export default function DashboardPage() {
             onClick={() => setActiveCardFilter(activeCardFilter === 'awards_ppo_pending' ? null : 'awards_ppo_pending')}
             style={{
               cursor: 'pointer',
-              borderLeft: '4px solid #7c3aed',
-              backgroundColor: activeCardFilter === 'awards_ppo_pending' ? '#f5f3ff' : undefined,
-              boxShadow: activeCardFilter === 'awards_ppo_pending' ? '0 0 0 2px #7c3aed' : undefined,
+              background: '#ffffff',
+              backgroundColor: '#ffffff',
+              border: '1px solid #123B7A',
+              borderLeft: '4px solid #123B7A',
+              borderRadius: 8,
+              padding: '18px 20px',
+              boxShadow: activeCardFilter === 'awards_ppo_pending' ? '0 0 0 2px #123B7A' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
             title="Click to filter awards and PPOs pending"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">Awards / PPO Pending</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Award size={16} color="#123B7A" />
+                <div className="kpi-label" style={{ margin: 0 }}>Awards / PPO Pending</div>
+              </div>
               {activeCardFilter === 'awards_ppo_pending' && (
-                <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 6px', background: '#f3e8ff', color: '#7c3aed' }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#123B7A', border: '1px solid #123B7A', fontWeight: 600 }}>Filtered</span>
               )}
             </div>
-            <div className="kpi-value" style={{ color: '#7c3aed' }}>{summary.awardsPpoPending ?? 0}</div>
+            <div className="kpi-value" style={{ color: '#123B7A', marginTop: 6 }}>{summary.awardsPpoPending ?? 0}</div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Award approval & order issuance</div>
           </div>
         </div>
 
-        {/* 2. PR-First Register with Expandable Associated RFQs */}
+        {/* 2. BOQ Register with Expandable Associated RFQs */}
         <div className="card mb-6">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <FileText size={18} /> PR Register
+                <FileText size={18} /> BOQ Register
               </span>
               <button
                 type="button"
@@ -1195,7 +1139,7 @@ export default function DashboardPage() {
                 className="btn btn-sm btn-ghost"
                 style={{ fontSize: 11, color: '#2563eb' }}
               >
-                {filteredRegister.every((pr) => expandedPrs[pr.id]) ? 'Collapse All RFQs' : 'Expand All RFQs'}
+                {filteredRegister.length > 0 && filteredRegister.every((b) => expandedPrs[b.id]) ? 'Collapse All RFQs' : 'Expand All RFQs'}
               </button>
             </div>
 
@@ -1203,18 +1147,18 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 type="text"
-                placeholder="Search PR #, RFQ #, description, cost centre..."
+                placeholder="Search BOQ #, BOQ description, Cost Centre, RFQ #..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input input-sm"
-                style={{ width: 270, fontSize: 12 }}
+                style={{ width: 280, fontSize: 12 }}
               />
 
               <select
                 value={selectedStage}
                 onChange={(e) => setSelectedStage(e.target.value)}
                 className="input input-sm"
-                style={{ width: 210, fontSize: 12 }}
+                style={{ width: 190, fontSize: 12 }}
               >
                 <option value="">All Stages ({register.length})</option>
                 {stagesList.map((st) => {
@@ -1250,12 +1194,12 @@ export default function DashboardPage() {
               <span>
                 Filtered by:{' '}
                 <strong style={{ color: '#0f172a' }}>
-                  {activeCardFilter === 'prs_received' && 'PRs Received (Awaiting RFQ)'}
+                  {(activeCardFilter === 'boqs_received' || activeCardFilter === 'prs_received') && 'BOQs Received (Awaiting RFQ)'}
                   {activeCardFilter === 'rfqs_in_progress' && 'RFQs in Progress'}
                   {activeCardFilter === 'negotiations_pending' && 'Negotiations Pending'}
                   {activeCardFilter === 'awards_ppo_pending' && 'Awards / PPO Pending'}
                 </strong>{' '}
-                — Showing {filteredRegister.length} PRs
+                — Showing {filteredRegister.length} BOQs
               </span>
               <button
                 type="button"
@@ -1272,170 +1216,210 @@ export default function DashboardPage() {
               <div className="empty-state-icon">
                 <FileText size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No matching PR records found</div>
+              <div className="empty-title">No matching BOQ records found</div>
               <div className="empty-desc">
                 {searchTerm || selectedStage || activeCardFilter
-                  ? 'Try clearing the search or category filters.'
-                  : 'Approved Purchase Requests available to Procurement will appear here.'}
+                  ? 'Try clearing the search or stage filters.'
+                  : 'Eligible approved BOQs available to Procurement will appear here.'}
               </div>
             </div>
           ) : (
-            <div className="table-wrapper">
-              <table className="data-table">
+            <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ minWidth: 1250, tableLayout: 'fixed', width: '100%' }}>
+                <colgroup>
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 160 }} />
+                  <col style={{ width: 310 }} />
+                  <col style={{ width: 85 }} />
+                  <col style={{ width: 105 }} />
+                  <col style={{ width: 145 }} />
+                  <col style={{ width: 135 }} />
+                  <col style={{ width: 95 }} />
+                  <col style={{ width: 125 }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }}></th>
-                    <th>PR Number</th>
-                    <th>PR / BOQ Description</th>
-                    <th>Cost Centre</th>
-                    <th>Category</th>
-                    <th style={{ textAlign: 'right' }}>Requested Value</th>
-                    <th>PR Status</th>
-                    <th>Sourcing Stage</th>
-                    <th style={{ textAlign: 'center' }}>Linked RFQs</th>
-                    <th>Last Updated</th>
-                    <th className="col-actions" style={{ textAlign: 'right' }}>Action</th>
+                    <th style={{ textAlign: 'center' }}>Date</th>
+                    <th style={{ textAlign: 'center' }}>BOQ Number</th>
+                    <th style={{ textAlign: 'center' }}>BOQ / Package Description</th>
+                    <th style={{ textAlign: 'center' }}>Items</th>
+                    <th style={{ textAlign: 'center' }}>Cost Centre</th>
+                    <th style={{ textAlign: 'center' }}>BOQ Amount</th>
+                    <th style={{ textAlign: 'center' }}>Procurement Stage</th>
+                    <th style={{ textAlign: 'center' }}>RFQ Count</th>
+                    <th className="col-actions" style={{ textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRegister.map((item: any) => {
                     const isExpanded = !!expandedPrs[item.id];
                     const rfqCount = item.rfqs?.length || 0;
-                    const stage = item.sourcingStage || item.currentStage;
-                    const isAwaitingRfq = stage === 'Approved PR — Awaiting RFQ' || rfqCount === 0;
+                    const stage = item.sourcingStage || item.currentStage || 'Awaiting RFQ';
+                    const itemCount = item.itemCount || item.lines?.length || item.totalLines || 1;
+                    const costCentreCode = item.costCentreCode || (item.costCentre ? item.costCentre.split(' - ')[0] : '—');
+                    const boqDisplayCode = item.boqCode || item.boqNumber || item.code || '—';
+                    const dateFormatted = formatBoqDate(item.date || item.createdAt || item.updatedAt);
+                    const amountFormatted = (item.requestedValue || item.benchmarkTotal || 0).toLocaleString('en-IN');
 
                     return (
                       <Fragment key={item.id}>
-                        {/* Top-Level PR Row */}
+                        {/* Top-Level BOQ Summary Row */}
                         <tr
                           style={{
                             backgroundColor: isExpanded ? '#f8fafc' : undefined,
                             transition: 'background-color 0.15s ease',
                           }}
                         >
-                          {/* Expand Toggle Chevron */}
-                          <td style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(item.id)}>
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              style={{ padding: '2px 4px', color: '#64748b' }}
-                              aria-label={isExpanded ? 'Collapse RFQs' : 'Expand RFQs'}
-                            >
-                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            </button>
+                          {/* 1. Date */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap', fontSize: 12, color: '#64748b' }}>
+                            {dateFormatted}
                           </td>
 
-                          {/* PR Number */}
-                          <td className="font-mono font-bold text-primary">
-                            <span
-                              style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={() => toggleExpand(item.id)}
-                              title="Click to toggle associated RFQs"
-                            >
-                              {item.prNumber}
-                            </span>
-                            {item.isExample && (
-                              <span
-                                className="badge"
-                                style={{
-                                  marginLeft: 6,
-                                  fontSize: 10,
-                                  padding: '1px 5px',
-                                  background: '#dcfce7',
-                                  color: '#15803d',
-                                  fontWeight: 700,
-                                }}
-                              >
-                                EXAMPLE
+                          {/* 2. BOQ Number */}
+                          <td className="font-mono font-bold text-primary" style={{ whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {rfqCount > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(item.id)}
+                                  className="btn btn-ghost btn-xs"
+                                  style={{ padding: 2, color: '#64748b' }}
+                                  title={isExpanded ? 'Collapse nested RFQs' : 'Expand nested RFQs'}
+                                  aria-label={isExpanded ? 'Collapse RFQs' : 'Expand RFQs'}
+                                >
+                                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                </button>
+                              ) : (
+                                <span style={{ width: 18 }} />
+                              )}
+                              <span style={{ color: '#1d4ed8' }}>
+                                {boqDisplayCode}
                               </span>
-                            )}
-                          </td>
-
-                          {/* PR / BOQ Description */}
-                          <td>
-                            <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.description}</div>
-                            <div className="text-muted" style={{ fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
-                              <span>Project: {item.projectName}</span>
-                              <span>•</span>
-                              <span>BOQ: {item.boqCode}</span>
                             </div>
                           </td>
 
-                          {/* Cost Centre */}
-                          <td>
-                            <span style={{ fontSize: 12 }}>{item.costCentre}</span>
+                          {/* 3. BOQ / Package Description */}
+                          <td style={{ maxWidth: 310 }}>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                color: '#0f172a',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                              title={item.description}
+                            >
+                              {item.description}
+                            </div>
+                            {item.projectName && (
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: '#64748b',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                                title={item.projectName}
+                              >
+                                {item.projectName}
+                              </div>
+                            )}
                           </td>
 
-                          {/* Category */}
-                          <td>
-                            <span className="badge badge-info" style={{ fontSize: 11 }}>
-                              {item.category}
+                          {/* 4. Items */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <span className="text-muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                              {itemCount} {itemCount === 1 ? 'item' : 'items'}
                             </span>
                           </td>
 
-                          {/* Requested Value */}
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                            ₹ {(item.requestedValue || 0).toLocaleString('en-IN')}
+                          {/* 5. Cost Centre */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <span
+                              className="font-mono"
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: '#334155',
+                                background: '#f1f5f9',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                              }}
+                            >
+                              {costCentreCode}
+                            </span>
                           </td>
 
-                          {/* PR Approval Status */}
-                          <td>
-                            <StatusBadge status={item.prApprovalStatus || 'APPROVED'} />
+                          {/* 6. BOQ Amount */}
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                            <span className="font-mono">₹ {amountFormatted}</span>
                           </td>
 
-                          {/* Sourcing Stage */}
-                          <td>
-                            <span className={`badge ${getStageBadgeClass(stage)}`}>
+                          {/* 7. Procurement Stage */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <span className={`badge ${getStageBadgeClass(stage)}`} style={{ fontSize: 11 }}>
                               {stage}
                             </span>
                           </td>
 
-                          {/* Linked RFQ Count */}
-                          <td style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              onClick={() => toggleExpand(item.id)}
-                              className={`badge ${rfqCount > 0 ? 'badge-info' : 'badge-draft'}`}
-                              style={{ cursor: 'pointer', border: 'none', fontSize: 11 }}
-                              title="Click to view associated RFQ packages"
-                            >
-                              {rfqCount} {rfqCount === 1 ? 'RFQ' : 'RFQs'}
-                            </button>
-                          </td>
-
-                          {/* Last Updated */}
-                          <td className="text-muted" style={{ fontSize: 12 }}>
-                            {item.lastUpdated ? new Date(item.lastUpdated).toLocaleDateString() : '—'}
-                          </td>
-
-                          {/* Action */}
-                          <td className="col-actions" style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                              {isAwaitingRfq && (
-                                <Link
-                                  href={`/procurement/rfqs/new?prId=${item.id}`}
-                                  className="btn btn-sm btn-primary"
-                                  style={{ fontWeight: 700, padding: '4px 10px', fontSize: 11 }}
-                                >
-                                  + Create RFQ
-                                </Link>
-                              )}
+                          {/* 8. RFQ Count */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {rfqCount > 0 ? (
                               <button
                                 type="button"
                                 onClick={() => toggleExpand(item.id)}
-                                className="btn btn-sm btn-ghost"
-                                style={{ fontSize: 11, padding: '4px 8px' }}
+                                className="badge badge-info"
+                                style={{ cursor: 'pointer', border: 'none', fontSize: 11 }}
+                                title="Click to toggle associated RFQ packages"
                               >
-                                {isExpanded ? 'Hide RFQs' : 'View RFQs'}
+                                {rfqCount} {rfqCount === 1 ? 'RFQ' : 'RFQs'}
                               </button>
-                            </div>
+                            ) : (
+                              <span className="badge badge-draft" style={{ fontSize: 11 }}>
+                                0 RFQs
+                              </span>
+                            )}
+                          </td>
+
+                          {/* 9. Action */}
+                          <td className="col-actions" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {rfqCount === 0 ? (
+                              <Link
+                                href={`/procurement/rfqs/new?boqId=${item.boqId || item.id}&boqRevisionId=${item.boqRevisionId || item.id}`}
+                                className="btn btn-xs btn-primary"
+                                style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                title="Raise RFQ for this approved BOQ"
+                              >
+                                <Plus size={12} /> Raise RFQ
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpand(item.id)}
+                                className="btn btn-xs btn-secondary"
+                                style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                title={isExpanded ? 'Hide linked RFQs' : 'View linked RFQs'}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronDown size={12} /> Hide RFQs
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronRight size={12} /> View RFQs
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </td>
                         </tr>
 
                         {/* Nested Associated RFQs Row (Expanded) */}
                         {isExpanded && (
                           <tr key={`${item.id}-nested`} style={{ background: '#f8fafc' }}>
-                            <td colSpan={11} style={{ padding: '0 0 16px 40px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                            <td colSpan={9} style={{ padding: '0 0 16px 40px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                               <div
                                 style={{
                                   background: '#ffffff',
@@ -1450,17 +1434,14 @@ export default function DashboardPage() {
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <Layers size={16} color="#2563eb" />
                                     <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
-                                      Associated RFQs for {item.prNumber}
+                                      Associated RFQs for {boqDisplayCode}
                                     </span>
                                     <span className="badge badge-info" style={{ fontSize: 11 }}>
                                       {rfqCount} Package{rfqCount === 1 ? '' : 's'} Linked
                                     </span>
-                                    <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>
-                                      Linked BOQ: <strong style={{ color: '#334155' }}>{item.boqCode}</strong>
-                                    </span>
                                   </div>
                                   <Link
-                                    href={`/procurement/rfqs/new?prId=${item.id}`}
+                                    href={`/procurement/rfqs/new?boqId=${item.boqId || item.id}&boqRevisionId=${item.boqRevisionId || item.id}`}
                                     className="btn btn-sm btn-primary"
                                     style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
                                   >
@@ -1479,17 +1460,17 @@ export default function DashboardPage() {
                                     }}
                                   >
                                     <p style={{ margin: 0, fontSize: 13, color: '#475569', fontWeight: 600 }}>
-                                      No RFQ packages created for this Purchase Request yet.
+                                      No RFQ packages created for this BOQ yet.
                                     </p>
                                     <p style={{ margin: '4px 0 12px', fontSize: 12, color: '#64748b' }}>
-                                      Approved PR line items are ready for vendor invitations and sourcing package initiation.
+                                      Approved BOQ line items are ready for vendor invitations and sourcing package initiation.
                                     </p>
                                     <Link
-                                      href={`/procurement/rfqs/new?prId=${item.id}`}
+                                      href={`/procurement/rfqs/new?boqId=${item.boqId || item.id}&boqRevisionId=${item.boqRevisionId || item.id}`}
                                       className="btn btn-sm btn-primary"
                                       style={{ fontWeight: 700, fontSize: 12 }}
                                     >
-                                      + Create RFQ for {item.prNumber}
+                                      + Create RFQ for {boqDisplayCode}
                                     </Link>
                                   </div>
                                 ) : (
@@ -1614,7 +1595,7 @@ export default function DashboardPage() {
           )}
 
           <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: 12, color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Showing {filteredRegister.length} of {register.length} PR records (with linked RFQ packages)</span>
+            <span>Showing {filteredRegister.length} of {register.length} eligible BOQ records</span>
             <span style={{ fontSize: 11 }}>Tenant Isolation: {data.tenant?.name || 'Active Tenant'}</span>
           </div>
         </div>
@@ -2185,17 +2166,15 @@ export default function DashboardPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }}></th>
-                    <th>BOQ Code</th>
-                    <th>BOQ Scope Description</th>
-                    <th>Project</th>
-                    <th>Cost Centre</th>
-                    <th>Category</th>
-                    <th style={{ textAlign: 'right' }}>Benchmark Value</th>
-                    <th>Approved Rev</th>
-                    <th>Sourcing Stage</th>
-                    <th style={{ textAlign: 'center' }}>Linked RFQs</th>
-                    <th className="col-actions" style={{ textAlign: 'right' }}>Action</th>
+                    <th style={{ width: 140 }}>PR Number</th>
+                    <th>Package Description</th>
+                    <th style={{ width: 85, textAlign: 'center' }}>Items</th>
+                    <th style={{ width: 95 }}>Cost Centre</th>
+                    <th style={{ width: 130, textAlign: 'right' }}>PR Amount</th>
+                    <th style={{ width: 110 }}>Approval Status</th>
+                    <th style={{ width: 140 }}>Procurement Stage</th>
+                    <th style={{ width: 90, textAlign: 'center' }}>RFQ Count</th>
+                    <th className="col-actions" style={{ width: 115, textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2203,143 +2182,144 @@ export default function DashboardPage() {
                     const isExpanded = !!expandedPrs[item.id];
                     const rfqCount = item.rfqs?.length || 0;
                     const stage = item.sourcingStage || item.currentStage || item.overallStage;
-                    const isAwaitingRfq = stage === 'Approved BOQ — Awaiting RFQ' || stage === 'Approved PR — Awaiting RFQ' || rfqCount === 0;
+                    const itemCount = item.itemCount || item.totalLines || item.lines?.length || (item.isExample ? 8 : 1);
+                    const costCentreCode = item.costCentreCode || (item.costCentre ? item.costCentre.split(' - ')[0] : '—');
 
                     return (
                       <Fragment key={item.id}>
-                        {/* Top-Level BOQ Row */}
+                        {/* Top-Level Summary Row */}
                         <tr
                           style={{
                             backgroundColor: isExpanded ? '#f8fafc' : undefined,
                             transition: 'background-color 0.15s ease',
                           }}
                         >
-                          {/* Expand Toggle Chevron */}
-                          <td style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleExpand(item.id)}>
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              style={{ padding: '2px 4px', color: '#64748b' }}
-                              aria-label={isExpanded ? 'Collapse RFQs' : 'Expand RFQs'}
-                            >
-                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            </button>
-                          </td>
-
-                          {/* BOQ Code */}
+                          {/* 1. PR / BOQ Number */}
                           <td className="font-mono font-bold text-primary">
-                            <span
-                              style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                              onClick={() => toggleExpand(item.id)}
-                              title="Click to toggle associated RFQ sourcing packages"
-                            >
-                              {item.boqCode || item.prNumber}
-                            </span>
-                            {item.isExample && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {rfqCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(item.id)}
+                                  className="btn btn-ghost btn-xs"
+                                  style={{ padding: 2, color: '#64748b' }}
+                                  title={isExpanded ? 'Collapse nested RFQs' : 'Expand nested RFQs'}
+                                  aria-label={isExpanded ? 'Collapse RFQs' : 'Expand RFQs'}
+                                >
+                                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                </button>
+                              )}
                               <span
-                                className="badge"
-                                style={{
-                                  marginLeft: 6,
-                                  fontSize: 10,
-                                  padding: '1px 5px',
-                                  background: '#dcfce7',
-                                  color: '#15803d',
-                                  fontWeight: 700,
-                                }}
+                                style={{ cursor: 'pointer', textDecoration: 'none' }}
+                                onClick={() => handleOpenPrDetails(item)}
+                                title="Click to view details"
                               >
-                                SAMPLE
+                                {item.prNumber || item.boqCode}
                               </span>
-                            )}
-                          </td>
-
-                          {/* BOQ / Scope Description */}
-                          <td>
-                            <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.title || item.description}</div>
-                            <div className="text-muted" style={{ fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
-                              <span>Rev: {item.approvedRevision || item.revisionCode || 'R0'}</span>
-                              <span>•</span>
-                              <span>Lines: {item.totalLines || 8} items</span>
+                              {item.isExample && (
+                                <span
+                                  className="badge"
+                                  style={{
+                                    fontSize: 9,
+                                    padding: '1px 4px',
+                                    background: '#dcfce7',
+                                    color: '#15803d',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  SAMPLE
+                                </span>
+                              )}
                             </div>
                           </td>
 
-                          {/* Project */}
-                          <td>
-                            <div style={{ fontWeight: 500 }}>{item.projectName}</div>
-                            {item.projectCode && <div className="text-muted font-mono" style={{ fontSize: 11 }}>{item.projectCode}</div>}
+                          {/* 2. Short Package/PR Description */}
+                          <td style={{ maxWidth: 260 }}>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                color: '#0f172a',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                              title={item.title || item.description}
+                            >
+                              {item.title || item.description}
+                            </div>
                           </td>
 
-                          {/* Cost Centre */}
-                          <td>
-                            <span style={{ fontSize: 12 }}>{item.costCentre}</span>
-                          </td>
-
-                          {/* Category */}
-                          <td>
-                            <span className="badge badge-info" style={{ fontSize: 11 }}>
-                              {item.category}
+                          {/* 3. Item Count */}
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="text-muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                              {itemCount} {itemCount === 1 ? 'item' : 'items'}
                             </span>
                           </td>
 
-                          {/* Benchmark Value */}
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                          {/* 4. Cost Centre Code */}
+                          <td>
+                            <span
+                              className="font-mono"
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: '#334155',
+                                background: '#f1f5f9',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                              }}
+                            >
+                              {costCentreCode}
+                            </span>
+                          </td>
+
+                          {/* 5. PR Amount */}
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
                             ₹ {(item.benchmarkValue || item.requestedValue || 0).toLocaleString('en-IN')}
                           </td>
 
-                          {/* Approved Revision */}
+                          {/* 6. Approval Status */}
                           <td>
-                            <span className="badge badge-approved font-mono" style={{ fontSize: 11, fontWeight: 700 }}>
-                              {item.approvedRevision || item.revisionCode || 'APPROVED'}
-                            </span>
+                            <StatusBadge status={item.prApprovalStatus || 'APPROVED'} />
                           </td>
 
-                          {/* Sourcing Stage */}
+                          {/* 7. Procurement Stage */}
                           <td>
-                            <span className={`badge ${getStageBadgeClass(stage)}`}>
+                            <span className={`badge ${getStageBadgeClass(stage)}`} style={{ fontSize: 11 }}>
                               {stage}
                             </span>
                           </td>
 
-                          {/* Linked RFQs Count */}
+                          {/* 8. RFQ Count */}
                           <td style={{ textAlign: 'center' }}>
                             <button
                               type="button"
                               onClick={() => toggleExpand(item.id)}
                               className={`badge ${rfqCount > 0 ? 'badge-info' : 'badge-draft'}`}
                               style={{ cursor: 'pointer', border: 'none', fontSize: 11 }}
-                              title="Click to view associated RFQ packages"
+                              title="Click to toggle associated RFQ packages"
                             >
                               {rfqCount} {rfqCount === 1 ? 'RFQ' : 'RFQs'}
                             </button>
                           </td>
 
-                          {/* Action */}
+                          {/* 9. One View Details Action */}
                           <td className="col-actions" style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                              {isAwaitingRfq && (
-                                <Link
-                                  href={item.createRfqUrl || `/procurement/rfqs/new?revisionId=${item.id}&projectId=${item.projectId}`}
-                                  className="btn btn-sm btn-primary"
-                                  style={{ fontWeight: 700, padding: '4px 10px', fontSize: 11 }}
-                                >
-                                  + Create RFQ
-                                </Link>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => toggleExpand(item.id)}
-                                className="btn btn-sm btn-ghost"
-                                style={{ fontSize: 11, padding: '4px 8px' }}
-                              >
-                                {isExpanded ? 'Hide RFQs' : 'View RFQs'}
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPrDetails(item)}
+                              className="btn btn-sm btn-secondary"
+                              style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <Eye size={12} /> View Details
+                            </button>
                           </td>
                         </tr>
 
                         {/* Nested Associated RFQs Sourcing Lifecycle Row (Expanded) */}
                         {isExpanded && (
                           <tr key={`${item.id}-nested`} style={{ background: '#f8fafc' }}>
-                            <td colSpan={11} style={{ padding: '0 0 16px 40px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                            <td colSpan={9} style={{ padding: '0 0 16px 40px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                               <div
                                 style={{
                                   background: '#ffffff',
@@ -2657,6 +2637,19 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Standardised PR Details Modal */}
+        {prDetailsModalOpen && selectedPrForDetails && (
+          <PrDetailModal
+            isOpen={prDetailsModalOpen}
+            onClose={() => {
+              setPrDetailsModalOpen(false);
+              setSelectedPrForDetails(null);
+            }}
+            pr={selectedPrForDetails}
+            userRole={data.role}
+          />
+        )}
       </div>
     );
   }

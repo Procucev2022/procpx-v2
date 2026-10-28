@@ -1,13 +1,15 @@
 'use client';
 // app/(app)/procurement/rfqs/page.tsx
 // Enterprise RFQs Register & Control Tower with Approved Blue Summary Bar
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Plus, ClipboardCheck, FileText, ArrowRight, ExternalLink } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import EmptyState from '@/components/ui/EmptyState';
+import { ShoppingBag, TrendingUp, CheckCircle2, Lock } from 'lucide-react';
 
 // Helper to calculate actual workflow stage from persisted records
 function getActualRfqWorkflowStage(rfq: any): { stage: string; bg: string; color: string; border: string } {
@@ -38,7 +40,7 @@ function getActualRfqWorkflowStage(rfq: any): { stage: string; bg: string; color
   return { stage: 'Draft', bg: '#F1F5F9', color: '#475569', border: '#CBD5E1' };
 }
 
-export default function RfqsListPage() {
+function RfqsListContent() {
   const searchParams = useSearchParams();
   const filterQuery = searchParams.get('filter') || 'all';
 
@@ -97,66 +99,38 @@ export default function RfqsListPage() {
         }
       />
 
-      {/* 1. RFQ Summary — Blue Bar (ProCPX Blue Styling) */}
-      <div
-        className="rfq-summary-bar"
-        style={{
-          backgroundColor: '#EFF6FF',
-          border: '1px solid #BFDBFE',
-          borderLeft: '5px solid #2563EB',
-          borderRadius: 8,
-          boxShadow: '0 1px 3px 0 rgba(37, 99, 235, 0.08)',
-          overflow: 'hidden',
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            padding: '9px 16px',
-            borderBottom: '1px solid #DBEAFE',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(239, 246, 255, 0.95)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 6,
-                backgroundColor: '#2563EB',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <FileText size={14} />
-            </div>
-            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#1E40AF', margin: 0, letterSpacing: '0.02em' }}>
-              1. RFQ SUMMARY
-            </h3>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#3B82F6', fontWeight: 600 }}>Active Packages:</span>
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 10,
-                backgroundColor: '#DBEAFE',
-                color: '#1E40AF',
-                border: '1px solid #BFDBFE',
-              }}
-            >
-              {rfqs.length} Records
-            </span>
-          </div>
-        </div>
+      {/* Summary Cards */}
+      <div className="mb-6">
+        <SummaryCardGrid columns={4}>
+          <SummaryCard
+            label="Total RFQs"
+            value={rfqs.length}
+            secondary="All sourcing packages"
+            icon={<FileText size={16} />}
+            accent="default"
+          />
+          <SummaryCard
+            label="In Market / Response"
+            value={rfqs.filter(r => r.status === 'RELEASED' || r.status === 'VENDOR_RESPONSE_OPEN' || r.status === 'AWAITING_QUOTES').length}
+            secondary="Open for vendor quotes"
+            icon={<ShoppingBag size={16} />}
+            accent="blue"
+          />
+          <SummaryCard
+            label="Comparison & Negotiation"
+            value={rfqs.filter(r => r.status === 'COMPARISON' || r.status === 'NEGOTIATION').length}
+            secondary="Commercial evaluations"
+            icon={<TrendingUp size={16} />}
+            accent="amber"
+          />
+          <SummaryCard
+            label="Awarded / PPO"
+            value={rfqs.filter(r => r.status === 'AWARDED' || r.status === 'AWARD_APPROVED' || r.status === 'PPO_ISSUED' || r.status === 'FINAL_RATE_LOCKED').length}
+            secondary="Finalised commercial awards"
+            icon={<CheckCircle2 size={16} />}
+            accent="emerald"
+          />
+        </SummaryCardGrid>
       </div>
 
       {/* Tabs Filter */}
@@ -184,11 +158,11 @@ export default function RfqsListPage() {
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 mb-4 flex gap-3 items-center">
         <input
           type="text"
-          className="input"
-          style={{ maxWidth: 440 }}
+          className="form-control"
+          style={{ maxWidth: 440, height: 40 }}
           placeholder="Search by RFQ number, title, package, or project..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -382,5 +356,13 @@ export default function RfqsListPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+export default function RfqsListPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>Loading RFQ Control Tower...</div>}>
+      <RfqsListContent />
+    </Suspense>
   );
 }

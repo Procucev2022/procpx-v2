@@ -219,11 +219,10 @@ export function getRateCardStatusLabel(status: string): string {
     case 'CATEGORY_MANAGER_ACCEPTED':
       return 'Category Manager Accepted — Vendor Acceptance Pending';
     case 'VENDOR_ACCEPTED':
-      return 'Vendor Accepted — Category Manager Sign Off Pending';
     case 'PENDING_PROJECT_APPROVAL':
-      return 'Category Manager Signed Off — Pending Project Approver (Level 1)';
+      return 'Vendor Accepted — Pending Level 1 Project Approval';
     case 'PENDING_FINANCE_APPROVAL':
-      return 'Project Approved — Pending Finance Head (Level 2)';
+      return 'Project Approved — Pending Level 2 Finance Approval';
     case 'APPROVED':
       return 'Active / Contracted Rate Card';
     case 'RETURNED_FOR_CORRECTION':

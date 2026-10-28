@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import StatusBadge from '@/components/ui/StatusBadge';
+import PageHeader from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 
@@ -183,6 +184,11 @@ export default function BoqStudioPage() {
   const [drawingFile, setDrawingFile] = useState<File | null>(null);
   const [drawingNumber, setDrawingNumber] = useState('DWG-A-101');
   const [extractingDrawing, setExtractingDrawing] = useState(false);
+  const [drawingProgressText, setDrawingProgressText] = useState('');
+  const [extractedDrawingData, setExtractedDrawingData] = useState<any | null>(null);
+  const [reviewLines, setReviewLines] = useState<any[]>([]);
+  const [drawingReviewModalOpen, setDrawingReviewModalOpen] = useState(false);
+  const [generatingDrawingBoq, setGeneratingDrawingBoq] = useState(false);
 
   // Method 4: Manual Entry
   const [manualRows, setManualRows] = useState<any[]>([
@@ -822,41 +828,161 @@ export default function BoqStudioPage() {
   // -------------------------------------------------------------
   // METHOD 3: DRAWING TO BOQ
   // -------------------------------------------------------------
-  const handleDrawingExtract = async () => {
-    if (!drawingFile) return;
+  const handleDrawingExtract = async (fileToUpload?: File) => {
+    const file = fileToUpload || drawingFile;
+    if (!file) {
+      toast.error('Please select an architectural drawing file (.pdf, .png, .jpg, .jpeg).');
+      return;
+    }
+
+    const projId = setupProject || selectedProjectId || projects[0]?.id;
+    if (!projId) {
+      toast.error('Please select or configure a target Project first.');
+      return;
+    }
+
     setExtractingDrawing(true);
+    setDrawingProgressText('Analyzing architectural drawing & extracting schedule...');
     setStatusMessage('');
 
     try {
-      const currentBoq = await ensureActiveBoqRecord();
       const fd = new FormData();
-      fd.append('file', drawingFile);
-      fd.append('projectId', currentBoq.projectId);
-      fd.append('costCentreId', currentBoq.costCentreId || '');
-      fd.append('boqId', currentBoq.id);
-      fd.append('drawingNumber', drawingNumber);
+      fd.append('file', file);
+      fd.append('projectId', projId);
+      fd.append('costCentreId', setupCostCentre || selectedCostCentreId || '');
+      fd.append('drawingNumber', drawingNumber.trim() || 'DWG-A-101');
       fd.append('purpose', setupPurpose);
       if (setupTitle.trim()) fd.append('title', setupTitle.trim());
       if (setupDescription.trim()) fd.append('description', setupDescription.trim());
 
       const res = await fetch('/api/boq/drawing-extract', { method: 'POST', body: fd });
+      const data = await res.json();
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Drawing extraction failed');
+        throw new Error(data.error || 'Drawing extraction failed');
       }
 
-      const data = await res.json();
-      setStatusType('success');
-      setStatusMessage(`✓ Drawing analyzed! BOQ ${currentBoq.boqCode} updated with extracted items.`);
-
-      await loadAllBoqs();
-      await loadBoqDetails(currentBoq.id);
-      workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+      const payload = data.data || data;
+      setExtractedDrawingData(payload);
+      setReviewLines(payload.items || []);
+      setDrawingReviewModalOpen(true);
+      toast.success(`✓ Drawing parsed! ${payload.totalDetected} line items extracted for review.`);
+      setStatusType('info');
+      setStatusMessage(`✓ Drawing parsed! ${payload.totalDetected} line items extracted. Please review and confirm to generate Draft BOQ.`);
     } catch (e: any) {
+      toast.error(`Extraction Error: ${e.message}`);
       setStatusType('error');
-      setStatusMessage(`Error: ${e.message}`);
+      setStatusMessage(`Drawing Extraction Error: ${e.message}`);
     } finally {
       setExtractingDrawing(false);
+      setDrawingProgressText('');
+    }
+  };
+
+  const handleUpdateReviewLine = (index: number, field: string, val: any) => {
+    setReviewLines(prev => {
+      const next = [...prev];
+      const updated = { ...next[index], [field]: val };
+      if (field === 'quantity') {
+        const num = parseFloat(val);
+        if (!isNaN(num) && num > 0) {
+          updated.quantity = num;
+          updated.quantityType = 'EXPLICIT';
+          updated.uncertainReason = undefined;
+        } else if (val === '' || val === null) {
+          updated.quantity = null;
+          updated.quantityType = 'UNCERTAIN';
+        }
+      }
+      next[index] = updated;
+      return next;
+    });
+  };
+
+  const handleAddReviewLine = () => {
+    const newLine = {
+      lineNumber: String(reviewLines.length + 1),
+      mark: `M-${reviewLines.length + 1}`,
+      description: 'New Extracted Line Item',
+      specification: 'Commercial grade specification',
+      category: 'Civil & Interior',
+      uom: 'NOS',
+      quantity: 1,
+      quantityType: 'EXPLICIT',
+      location: 'Store / Floor',
+      confidence: 1.0,
+      drawingReference: drawingNumber,
+      sheet: 'Sheet 01',
+    };
+    setReviewLines(prev => [...prev, newLine]);
+  };
+
+  const handleRemoveReviewLine = (index: number) => {
+    setReviewLines(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleGenerateDrawingBoq = async () => {
+    if (!extractedDrawingData || reviewLines.length === 0) {
+      toast.error('No items available to generate BOQ.');
+      return;
+    }
+
+    for (let i = 0; i < reviewLines.length; i++) {
+      if (!reviewLines[i].description?.trim()) {
+        toast.error(`Line ${i + 1} is missing an item description.`);
+        return;
+      }
+    }
+
+    setGeneratingDrawingBoq(true);
+    try {
+      const projId = setupProject || selectedProjectId || projects[0]?.id;
+      const ccId = setupCostCentre || selectedCostCentreId || costCentres[0]?.id || null;
+      const proj = projects.find(p => p.id === projId);
+
+      const computedTitle = setupTitle.trim() || `Architectural Drawing — ${proj?.name || 'Project'}`;
+
+      const res = await fetch('/api/boq/drawing-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          projectId: projId,
+          costCentreId: ccId,
+          drawingNumber: extractedDrawingData.drawingNumber || drawingNumber,
+          fileName: extractedDrawingData.fileName,
+          savedFilePath: extractedDrawingData.savedFilePath,
+          title: computedTitle,
+          description: setupDescription.trim() || `Extracted from architectural drawing ${extractedDrawingData.drawingNumber}`,
+          purpose: setupPurpose,
+          lines: reviewLines,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to generate Draft BOQ');
+      }
+
+      const payload = data.data || data;
+      setDrawingReviewModalOpen(false);
+      setExtractedDrawingData(null);
+      setReviewLines([]);
+
+      toast.success(`✓ Draft BOQ ${payload.boqCode} generated successfully with ${payload.totalLines} lines.`);
+      setStatusType('success');
+      setStatusMessage(`✓ Draft BOQ ${payload.boqCode} (${payload.revisionCode}) generated from drawing with ${payload.totalLines} lines.`);
+
+      await loadAllBoqs();
+      await loadBoqDetails(payload.boqId);
+      syncActiveBoqUrl(payload.boqId);
+
+      workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e: any) {
+      toast.error(`Generation Error: ${e.message}`);
+      setStatusType('error');
+      setStatusMessage(`Error generating BOQ: ${e.message}`);
+    } finally {
+      setGeneratingDrawingBoq(false);
     }
   };
 
@@ -1526,22 +1652,10 @@ export default function BoqStudioPage() {
       {/* =========================================================================
           TOP SECTION: BOQ CREATION HEADER & SETUP BAR
       ========================================================================= */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e40af' }}>
-              <Sparkles size={18} />
-            </div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: -0.3 }}>
-              BOQ CREATION
-            </h1>
-          </div>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-            Unified BOQ generation, import, line standardization, and AI market cost estimation workspace.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
+      <PageHeader
+        title="BOQ Creation Studio"
+        subtitle="Unified BOQ generation, import, line standardisation, and AI market cost estimation workspace"
+        actions={
           <button
             type="button"
             className="btn btn-outline"
@@ -1563,12 +1677,12 @@ export default function BoqStudioPage() {
               setStatusType('info');
               setStatusMessage('Ready to create a new BOQ. Select your project parameters and choose a generation method.');
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, padding: '8px 16px', fontSize: 12 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, padding: '8px 16px', fontSize: 13 }}
           >
             <Plus size={14} /> + CREATE NEW BOQ
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* SETUP CONTEXT BAR (Project, Cost Centre, Sector, Area, Purpose) */}
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: '16px 20px', marginBottom: 22 }}>
@@ -2101,26 +2215,51 @@ export default function BoqStudioPage() {
                   borderRadius: 6,
                   fontSize: 11,
                   fontWeight: 700,
-                  background: '#2563eb',
+                  background: extractingDrawing ? '#94a3b8' : '#2563eb',
                   color: '#ffffff',
-                  cursor: 'pointer',
+                  cursor: extractingDrawing ? 'not-allowed' : 'pointer',
                   textAlign: 'center',
                 }}
               >
                 <Upload size={13} />
-                {extractingDrawing ? 'Extracting...' : '[ UPLOAD DRAWING ]'}
+                {extractingDrawing ? (drawingProgressText || 'Extracting...') : '[ UPLOAD DRAWING ]'}
                 <input
+                  id="drawing-file-input"
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.dxf"
+                  accept=".pdf,.png,.jpg,.jpeg"
                   style={{ display: 'none' }}
+                  disabled={extractingDrawing}
                   onChange={e => {
                     if (e.target.files && e.target.files[0]) {
-                      setDrawingFile(e.target.files[0]);
-                      handleDrawingExtract();
+                      const file = e.target.files[0];
+                      setDrawingFile(file);
+                      handleDrawingExtract(file);
+                      e.target.value = '';
                     }
                   }}
                 />
               </label>
+              {extractedDrawingData && !drawingReviewModalOpen && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setDrawingReviewModalOpen(true);
+                  }}
+                  style={{
+                    padding: '5px 8px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: '#ecfdf5',
+                    color: '#065f46',
+                    border: '1px solid #a7f3d0',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Review Extracted Items ({reviewLines.length})
+                </button>
+              )}
             </div>
           </div>
 
@@ -2696,12 +2835,12 @@ export default function BoqStudioPage() {
                 <table className="table enterprise-table" style={{ width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', height: 38, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                      <th style={{ padding: '0 8px', width: 40 }}>#</th>
+                      <th style={{ padding: '0 8px', width: 45 }}>S.No.</th>
                       <th style={{ padding: '0 10px', minWidth: 160 }}>Original Description</th>
-                      <th style={{ padding: '0 10px', minWidth: 180 }}>Standard Description</th>
+                      <th style={{ padding: '0 10px', minWidth: 180 }}>Item Description</th>
                       <th style={{ padding: '0 10px', minWidth: 180 }}>BOQ Description</th>
                       <th style={{ padding: '0 8px', width: 70 }}>UOM</th>
-                      <th style={{ padding: '0 8px', width: 90, textAlign: 'right' }}>Qty</th>
+                      <th style={{ padding: '0 8px', width: 90, textAlign: 'right' }}>Quantity</th>
                       <th style={{ padding: '0 8px', width: 90 }}>Location</th>
                       <th style={{ padding: '0 8px', width: 90 }}>Brand</th>
                       <th style={{ padding: '0 8px', width: 95, textAlign: 'right' }}>AI Unit Cost</th>
@@ -3718,8 +3857,8 @@ export default function BoqStudioPage() {
               <table className="table" style={{ width: '100%', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
-                    <th style={{ padding: '6px 8px' }}>Row</th>
-                    <th style={{ padding: '6px 8px' }}>Item</th>
+                    <th style={{ padding: '6px 8px' }}>S.No.</th>
+                    <th style={{ padding: '6px 8px' }}>Item Description</th>
                     <th style={{ padding: '6px 8px' }}>Warning</th>
                     <th style={{ padding: '6px 8px' }}>Action Taken</th>
                   </tr>
@@ -3741,6 +3880,291 @@ export default function BoqStudioPage() {
               <button type="button" className="btn btn-primary" onClick={() => setShowWarningModal(false)}>
                 Close Review
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DRAWING TO BOQ: REVIEW & EDIT EXTRACTED ITEMS MODAL */}
+      {drawingReviewModalOpen && extractedDrawingData && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 20 }}>
+          <div className="card" style={{ background: '#ffffff', borderRadius: 10, width: '100%', maxWidth: 1100, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            {/* Modal Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ImageIcon size={20} color="#2563eb" />
+                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                    Review Extracted BOQ Items — Drawing {extractedDrawingData.drawingNumber || drawingNumber}
+                  </h3>
+                </div>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0 0' }}>
+                  Source: <strong>{extractedDrawingData.fileName}</strong> • Parser: <span style={{ color: '#2563eb', fontWeight: 600 }}>{extractedDrawingData.parserUsed === 'NATIVE_PDF_SCHEDULE' ? 'Native Architectural Schedule Parser' : (extractedDrawingData.parserUsed || 'Vision Parser')}</span>
+                  {extractedDrawingData.providerMessage && ` • ${extractedDrawingData.providerMessage}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDrawingReviewModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* KPI Badges Strip */}
+            <div style={{ padding: '10px 20px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#64748b' }}>Total Items:</span>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>{reviewLines.length}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#16a34a' }}>✓ Explicit Quantities:</span>
+                <span style={{ fontWeight: 700, color: '#16a34a' }}>
+                  {reviewLines.filter(l => l.quantity !== null && l.quantityType === 'EXPLICIT').length}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: reviewLines.some(l => l.quantity === null || l.quantityType === 'UNCERTAIN') ? '#d97706' : '#64748b' }}>
+                  ⚠️ Uncertain / Needs Verification:
+                </span>
+                <span style={{ fontWeight: 700, color: reviewLines.some(l => l.quantity === null || l.quantityType === 'UNCERTAIN') ? '#b45309' : '#64748b' }}>
+                  {reviewLines.filter(l => l.quantity === null || l.quantityType === 'UNCERTAIN').length}
+                </span>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleAddReviewLine}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 10px',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#2563eb',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={13} /> Add Item
+                </button>
+              </div>
+            </div>
+
+            {/* Warning Alert if uncertain items exist */}
+            {reviewLines.some(l => l.quantity === null || l.quantityType === 'UNCERTAIN') && (
+              <div style={{ padding: '8px 20px', background: '#fffbeb', borderBottom: '1px solid #fef3c7', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#92400e' }}>
+                <AlertTriangle size={15} color="#d97706" style={{ flexShrink: 0 }} />
+                <span>
+                  Items highlighted in amber have unverified or uncertain quantities in the drawing schedule. Please enter or verify numeric quantities before generating the Draft BOQ.
+                </span>
+              </div>
+            )}
+
+            {/* Editable Table */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
+                    <th style={{ padding: '8px 6px', width: 40 }}>#</th>
+                    <th style={{ padding: '8px 6px', width: 90 }}>Mark / Ref</th>
+                    <th style={{ padding: '8px 6px', minWidth: 180 }}>Item Description *</th>
+                    <th style={{ padding: '8px 6px', minWidth: 200 }}>Specification</th>
+                    <th style={{ padding: '8px 6px', width: 140 }}>Category</th>
+                    <th style={{ padding: '8px 6px', width: 120 }}>Location</th>
+                    <th style={{ padding: '8px 6px', width: 80 }}>UOM</th>
+                    <th style={{ padding: '8px 6px', width: 100 }}>Quantity *</th>
+                    <th style={{ padding: '8px 6px', width: 100 }}>Status</th>
+                    <th style={{ padding: '8px 6px', width: 40, textAlign: 'center' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviewLines.map((line, idx) => {
+                    const isUncertain = line.quantity === null || line.quantityType === 'UNCERTAIN';
+                    return (
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: '1px solid #f1f5f9',
+                          background: isUncertain ? '#fffdf7' : '#ffffff',
+                        }}
+                      >
+                        <td style={{ padding: '6px', fontWeight: 600, color: '#64748b' }}>
+                          {idx + 1}
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <input
+                            type="text"
+                            value={line.mark || ''}
+                            onChange={e => handleUpdateReviewLine(idx, 'mark', e.target.value)}
+                            placeholder="e.g. D-01"
+                            style={{ width: '100%', padding: '4px 6px', fontSize: 11, border: '1px solid #cbd5e1', borderRadius: 4 }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <input
+                            type="text"
+                            value={line.description || ''}
+                            onChange={e => handleUpdateReviewLine(idx, 'description', e.target.value)}
+                            placeholder="Item description"
+                            style={{
+                              width: '100%',
+                              padding: '4px 6px',
+                              fontSize: 11,
+                              border: !line.description?.trim() ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                              borderRadius: 4,
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <input
+                            type="text"
+                            value={line.specification || ''}
+                            onChange={e => handleUpdateReviewLine(idx, 'specification', e.target.value)}
+                            placeholder="Specification details"
+                            style={{ width: '100%', padding: '4px 6px', fontSize: 11, border: '1px solid #cbd5e1', borderRadius: 4 }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <select
+                            value={line.category || 'Civil & Interior'}
+                            onChange={e => handleUpdateReviewLine(idx, 'category', e.target.value)}
+                            style={{ width: '100%', padding: '4px 6px', fontSize: 11, border: '1px solid #cbd5e1', borderRadius: 4 }}
+                          >
+                            {masterCategories.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <input
+                            type="text"
+                            value={line.location || ''}
+                            onChange={e => handleUpdateReviewLine(idx, 'location', e.target.value)}
+                            placeholder="Room / Floor"
+                            style={{ width: '100%', padding: '4px 6px', fontSize: 11, border: '1px solid #cbd5e1', borderRadius: 4 }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <input
+                            type="text"
+                            value={line.uom || 'NOS'}
+                            onChange={e => handleUpdateReviewLine(idx, 'uom', e.target.value.toUpperCase())}
+                            style={{ width: '100%', padding: '4px 6px', fontSize: 11, border: '1px solid #cbd5e1', borderRadius: 4, textTransform: 'uppercase' }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={line.quantity !== null && line.quantity !== undefined ? line.quantity : ''}
+                            onChange={e => handleUpdateReviewLine(idx, 'quantity', e.target.value)}
+                            placeholder="Enter qty"
+                            style={{
+                              width: '100%',
+                              padding: '4px 6px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              borderRadius: 4,
+                              border: isUncertain ? '1.5px solid #f59e0b' : '1px solid #cbd5e1',
+                              background: isUncertain ? '#fffbeb' : '#ffffff',
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '6px' }}>
+                          {isUncertain ? (
+                            <span
+                              title={line.uncertainReason || 'Quantity unverified; field check required'}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: '2px 6px',
+                                borderRadius: 10,
+                                background: '#fef3c7',
+                                color: '#b45309',
+                                border: '1px solid #fde68a',
+                              }}
+                            >
+                              UNCERTAIN
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: '2px 6px',
+                                borderRadius: 10,
+                                background: '#dcfce7',
+                                color: '#15803d',
+                                border: '1px solid #bbf7d0',
+                              }}
+                            >
+                              ✓ EXPLICIT
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '6px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveReviewLine(idx)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            title="Remove Line"
+                          >
+                            <Trash2 size={14} color="#ef4444" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer with Actions */}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 12, color: '#64748b' }}>
+                Target Project: <strong>{projects.find(p => p.id === (setupProject || selectedProjectId))?.name || 'Selected Project'}</strong> • Purpose: <strong>{setupPurpose}</strong>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setDrawingReviewModalOpen(false)}
+                  disabled={generatingDrawingBoq}
+                  style={{ fontSize: 12, padding: '7px 14px' }}
+                >
+                  Cancel / Re-upload
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleGenerateDrawingBoq}
+                  disabled={generatingDrawingBoq || reviewLines.length === 0}
+                  style={{
+                    fontSize: 12,
+                    padding: '7px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#2563eb',
+                    fontWeight: 700,
+                  }}
+                >
+                  <Send size={14} />
+                  {generatingDrawingBoq ? 'Generating Draft BOQ...' : `Generate Draft BOQ (${reviewLines.length} Items)`}
+                </button>
+              </div>
             </div>
           </div>
         </div>

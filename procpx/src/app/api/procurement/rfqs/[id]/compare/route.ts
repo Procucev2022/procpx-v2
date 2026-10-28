@@ -19,7 +19,17 @@ export async function GET(
       where: { id, tenantId: ctx.tenantId },
       include: {
         project: true,
-        boqRevision: true,
+        boqRevision: {
+          include: {
+            lines: {
+              include: {
+                category: true,
+                subcategory: true,
+                uom: true,
+              },
+            },
+          },
+        },
         pr: {
           select: {
             id: true,
@@ -31,8 +41,24 @@ export async function GET(
         },
         lines: {
           include: {
-            boqLine: true,
-            prLine: true,
+            boqLine: {
+              include: {
+                category: true,
+                subcategory: true,
+                uom: true,
+              },
+            },
+            prLine: {
+              include: {
+                boqLine: {
+                  include: {
+                    category: true,
+                    subcategory: true,
+                    uom: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: { lineNumber: 'asc' },
         },
@@ -318,13 +344,46 @@ export async function GET(
       const varianceVsAi = (aiCost !== null && lowestRate !== Infinity) ? (aiCost * rfqLine.quantity) - (lowestRate * rfqLine.quantity) : 0;
       const variancePercent = (aiTotal && aiTotal > 0 && lowestRate !== Infinity) ? (varianceVsAi / aiTotal) * 100 : 0;
 
+      const sourceBoq =
+        rfqLine.boqLine ||
+        rfqLine.prLine?.boqLine ||
+        rfq.boqRevision?.lines?.find((b: any) =>
+          b.id === rfqLine.boqLineId ||
+          (b.itemCode && b.itemCode === (rfqLine as any).itemCode) ||
+          b.lineNumber === rfqLine.lineNumber ||
+          b.lineNumber === String(rfqLine.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, '') ||
+          (b.standardDescription && b.standardDescription.toLowerCase() === (rfqLine.description || '').toLowerCase()) ||
+          (b.originalDescription && b.originalDescription.toLowerCase() === (rfqLine.description || '').toLowerCase())
+        );
+
+      const itemCode = sourceBoq?.itemCode || (rfqLine as any).itemCode || null;
+      const itemDescription = rfqLine.description || sourceBoq?.standardDescription || sourceBoq?.originalDescription || 'Line item';
+      
+      // BOQ Description: The source BOQ-specific description.
+      // Do not copy Item Description into BOQ Description. If blank or identical to itemDescription, show null ("—").
+      const rawBoqDesc = (sourceBoq?.originalDescription && sourceBoq.originalDescription.trim() !== itemDescription.trim())
+        ? sourceBoq.originalDescription.trim()
+        : null;
+      const boqDescription = (rawBoqDesc && rawBoqDesc.trim() !== '') ? rawBoqDesc.trim() : null;
+
       return {
         id: rfqLine.id,
         lineNumber: rfqLine.lineNumber,
+        itemCode,
         description: rfqLine.description,
-        specification: rfqLine.specification || rfqLine.boqLine?.specification || 'Standard specifications',
-        category: rfqLine.category || 'General',
-        subcategory: rfqLine.subcategory || null,
+        itemDescription,
+        boqDescription,
+        fullBoqDescription: sourceBoq?.originalDescription || null,
+        specification: rfqLine.specification || sourceBoq?.specification || null,
+        category: (sourceBoq as any)?.category?.name || rfqLine.category || 'General',
+        subcategory: (sourceBoq as any)?.subcategory?.name || rfqLine.subcategory || null,
+        location: (sourceBoq as any)?.location || null,
+        drawingReference: (sourceBoq as any)?.drawingReference || null,
+        brand: (sourceBoq as any)?.brand || null,
+        model: (sourceBoq as any)?.model || null,
+        material: (sourceBoq as any)?.material || null,
+        grade: (sourceBoq as any)?.grade || null,
+        remarks: (sourceBoq as any)?.remarks || null,
         uom: rfqLine.uom,
         quantity: rfqLine.quantity,
         aiUnitCost: aiCost,

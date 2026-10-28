@@ -1,7 +1,9 @@
 'use client';
 // app/(app)/audit/page.tsx - Audit Trail Viewer
 import { useEffect, useState, useCallback } from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, ShieldCheck, Activity, Layers, Filter } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
 
 interface AuditLogItem {
   id: string;
@@ -21,18 +23,18 @@ interface AuditLogItem {
   } | null;
 }
 
-const ACTION_COLORS: Record<string, string> = {
-  CREATE: '#10b981',
-  UPDATE: '#38bdf8',
-  DELETE: '#ef4444',
-  SUBMIT: '#f59e0b',
-  APPROVE: '#10b981',
-  REJECT: '#ef4444',
-  IMPORT: '#8b5cf6',
-  UPLOAD: '#a855f7',
-  STANDARDISE: '#ec4899',
-  VALIDATE: '#06b6d4',
-  LOGIN: '#64748b',
+const ACTION_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  CREATE: { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
+  UPDATE: { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
+  DELETE: { bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
+  SUBMIT: { bg: '#fef3c7', text: '#b45309', border: '#fde68a' },
+  APPROVE: { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
+  REJECT: { bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
+  IMPORT: { bg: '#f3e8ff', text: '#7e22ce', border: '#e9d5ff' },
+  UPLOAD: { bg: '#f3e8ff', text: '#7e22ce', border: '#e9d5ff' },
+  STANDARDISE: { bg: '#fce7f3', text: '#be185d', border: '#fbcfe8' },
+  VALIDATE: { bg: '#cffafe', text: '#0e7490', border: '#a5f3fc' },
+  LOGIN: { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' },
 };
 
 export default function AuditTrailPage() {
@@ -82,25 +84,49 @@ export default function AuditTrailPage() {
   };
 
   return (
-    <div className="main-content">
+    <div className="page-container" style={{ padding: '24px 32px' }}>
       {/* Header */}
-      <div className="page-header" style={{ marginBottom: 24 }}>
-        <h1 className="page-title" style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>System Audit Trail</h1>
-        <p className="page-subtitle" style={{ color: '#94a3b8', fontSize: 14, marginTop: 4 }}>
-          Immutable chronological log of all changes, approvals, user creations, and data mutations
-        </p>
-      </div>
+      <PageHeader
+        title="System Audit Trail"
+        subtitle="Immutable chronological log of all changes, approvals, user creations, and data mutations"
+        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>Security & Compliance</span>}
+      />
+
+      {/* KPI Metrics */}
+      <SummaryCardGrid columns={3} className="mb-6">
+        <SummaryCard
+          label="Total Recorded Events"
+          value={loading ? '—' : total.toLocaleString('en-IN')}
+          secondary="Immutable audit records in ledger"
+          icon={<ShieldCheck size={16} />}
+          accent="blue"
+        />
+        <SummaryCard
+          label="Active Filter Scope"
+          value={entityType ? entityType : 'All Entities'}
+          secondary={action ? `Action: ${action}` : 'All system operations'}
+          icon={<Filter size={16} />}
+          accent="slate"
+        />
+        <SummaryCard
+          label="Ledger Pagination"
+          value={`Page ${page} of ${totalPages}`}
+          secondary={`Showing 25 events per page`}
+          icon={<Activity size={16} />}
+          accent="emerald"
+        />
+      </SummaryCardGrid>
 
       {/* Filter Bar */}
-      <div className="card" style={{ marginBottom: 20, padding: 16, background: '#1e293b', borderRadius: 8, border: '1px solid #334155' }}>
+      <div className="card" style={{ marginBottom: 20, padding: 16, background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>Entity Type</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Entity Type</label>
             <select
               value={entityType}
               onChange={e => { setEntityType(e.target.value); setPage(1); }}
               className="form-select"
-              style={{ background: '#0f172a', borderColor: '#334155', color: '#fff', padding: '8px 12px', borderRadius: 6 }}
+              style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: 6, fontSize: 13, minWidth: 160 }}
             >
               <option value="">All Entities</option>
               <option value="PROJECT">PROJECT</option>
@@ -112,12 +138,12 @@ export default function AuditTrailPage() {
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>Action</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Action</label>
             <select
               value={action}
               onChange={e => { setAction(e.target.value); setPage(1); }}
               className="form-select"
-              style={{ background: '#0f172a', borderColor: '#334155', color: '#fff', padding: '8px 12px', borderRadius: 6 }}
+              style={{ background: '#ffffff', borderColor: '#cbd5e1', color: '#0f172a', padding: '8px 12px', borderRadius: 6, fontSize: 13, minWidth: 160 }}
             >
               <option value="">All Actions</option>
               <option value="CREATE">CREATE</option>
@@ -131,85 +157,85 @@ export default function AuditTrailPage() {
             </select>
           </div>
           <div style={{ alignSelf: 'flex-end', marginLeft: 'auto' }}>
-            <span style={{ fontSize: 13, color: '#94a3b8' }}>Total recorded events: <strong>{total}</strong></span>
+            <span style={{ fontSize: 13, color: '#64748b' }}>Filtered events count: <strong style={{ color: '#0f172a' }}>{total}</strong></span>
           </div>
         </div>
       </div>
 
       {/* Audit Log Table */}
-      <div className="card" style={{ background: '#1e293b', borderRadius: 8, border: '1px solid #334155', overflow: 'hidden' }}>
+      <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div className="table-responsive">
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
             <thead>
-              <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155', color: '#94a3b8', fontSize: 12, textTransform: 'uppercase' }}>
-                <th style={{ padding: '12px 16px' }}>Timestamp</th>
-                <th style={{ padding: '12px 16px' }}>User</th>
-                <th style={{ padding: '12px 16px' }}>Action</th>
-                <th style={{ padding: '12px 16px' }}>Entity</th>
-                <th style={{ padding: '12px 16px' }}>Description</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>State Diff</th>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', height: 42 }}>
+                <th style={{ padding: '0 16px', fontWeight: 600 }}>Timestamp</th>
+                <th style={{ padding: '0 16px', fontWeight: 600 }}>User</th>
+                <th style={{ padding: '0 16px', fontWeight: 600 }}>Action</th>
+                <th style={{ padding: '0 16px', fontWeight: 600 }}>Entity</th>
+                <th style={{ padding: '0 16px', fontWeight: 600 }}>Description</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>State Diff</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
                     Loading audit trail...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
                     No audit records match the selected criteria
                   </td>
                 </tr>
               ) : (
                 logs.map(log => {
-                  const actionColor = ACTION_COLORS[log.action] || '#94a3b8';
+                  const style = ACTION_COLORS[log.action] || { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' };
                   const hasDiff = !!(log.oldValue || log.newValue || log.oldValues || log.newValues);
                   return (
-                    <tr key={log.id} style={{ borderBottom: '1px solid #334155' }}>
-                      <td style={{ padding: '12px 16px', fontSize: 13, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                    <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9', height: 52 }}>
+                      <td style={{ padding: '0 16px', fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
                         {new Date(log.createdAt).toLocaleString()}
                       </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div style={{ fontWeight: 500, color: '#f8fafc' }}>
+                      <td style={{ padding: '0 16px' }}>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>
                           {log.user?.name || log.user?.email || 'System'}
                         </div>
                         {log.user?.name && (
                           <div style={{ fontSize: 11, color: '#64748b' }}>{log.user.email}</div>
                         )}
                       </td>
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '0 16px' }}>
                         <span style={{
                           padding: '3px 8px',
                           borderRadius: 4,
                           fontSize: 11,
                           fontWeight: 700,
-                          backgroundColor: `${actionColor}20`,
-                          color: actionColor,
-                          border: `1px solid ${actionColor}40`,
+                          backgroundColor: style.bg,
+                          color: style.text,
+                          border: `1px solid ${style.border}`,
                         }}>
                           {log.action}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 16px', color: '#cbd5e1', fontWeight: 500 }}>
+                      <td style={{ padding: '0 16px', color: '#334155', fontWeight: 600 }}>
                         {log.entityType}
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: 13, color: '#cbd5e1', maxWidth: 350 }}>
+                      <td style={{ padding: '0 16px', fontSize: 13, color: '#334155', maxWidth: 350 }}>
                         {log.description}
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <td style={{ padding: '0 16px', textAlign: 'right' }}>
                         {hasDiff ? (
                           <button
                             onClick={() => setSelectedLog(log)}
-                            className="btn btn-secondary"
+                            className="btn btn-secondary btn-sm"
                             style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                           >
                             <Eye size={13} /> Inspect Diff
                           </button>
                         ) : (
-                          <span style={{ fontSize: 12, color: '#64748b' }}>None</span>
+                          <span style={{ fontSize: 12, color: '#94a3b8' }}>None</span>
                         )}
                       </td>
                     </tr>
@@ -222,27 +248,27 @@ export default function AuditTrailPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid #334155' }}>
-            <div style={{ fontSize: 13, color: '#94a3b8' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+            <div style={{ fontSize: 13, color: '#64748b' }}>
               Showing {logs.length} of {total} records
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-                className="btn btn-secondary"
-                style={{ padding: '4px 10px', fontSize: 12 }}
+                className="btn btn-secondary btn-sm"
+                style={{ height: 32 }}
               >
                 Previous
               </button>
-              <span style={{ padding: '4px 8px', fontSize: 13, color: '#cbd5e1' }}>
+              <span style={{ padding: '0 8px', fontSize: 13, color: '#334155', fontWeight: 600 }}>
                 Page {page} of {totalPages}
               </span>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                className="btn btn-secondary"
-                style={{ padding: '4px 10px', fontSize: 12 }}
+                className="btn btn-secondary btn-sm"
+                style={{ height: 32 }}
               >
                 Next
               </button>
@@ -259,7 +285,7 @@ export default function AuditTrailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)',
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -267,44 +293,45 @@ export default function AuditTrailPage() {
           padding: 20,
         }}>
           <div style={{
-            background: '#1e293b',
+            background: '#ffffff',
             borderRadius: 8,
             maxWidth: 750,
             width: '100%',
             maxHeight: '85vh',
             overflowY: 'auto',
-            border: '1px solid #334155',
+            border: '1px solid #e2e8f0',
             padding: 24,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 18, color: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
                 Audit Event State Diff: {selectedLog.action} on {selectedLog.entityType}
               </h3>
               <button
                 onClick={() => setSelectedLog(null)}
-                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}
               >
                 ×
               </button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
               Recorded on {new Date(selectedLog.createdAt).toLocaleString()} by {selectedLog.user?.name || selectedLog.user?.email || 'System'} (Entity ID: {selectedLog.entityId})
             </div>
 
             {(selectedLog.oldValue || selectedLog.oldValues) && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#ef4444', marginBottom: 6, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 6, textTransform: 'uppercase' }}>
                   Previous State (Old Value):
                 </div>
                 <pre style={{
-                  background: '#0f172a',
+                  background: '#f8fafc',
                   padding: 12,
                   borderRadius: 6,
                   fontSize: 12,
-                  color: '#f8fafc',
+                  color: '#0f172a',
                   overflowX: 'auto',
-                  border: '1px solid #334155',
+                  border: '1px solid #e2e8f0',
                 }}>
                   {JSON.stringify(parseJson(selectedLog.oldValue || selectedLog.oldValues), null, 2)}
                 </pre>
@@ -313,17 +340,17 @@ export default function AuditTrailPage() {
 
             {(selectedLog.newValue || selectedLog.newValues) && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#10b981', marginBottom: 6, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', marginBottom: 6, textTransform: 'uppercase' }}>
                   New State (New Value):
                 </div>
                 <pre style={{
-                  background: '#0f172a',
+                  background: '#f8fafc',
                   padding: 12,
                   borderRadius: 6,
                   fontSize: 12,
-                  color: '#f8fafc',
+                  color: '#0f172a',
                   overflowX: 'auto',
-                  border: '1px solid #334155',
+                  border: '1px solid #e2e8f0',
                 }}>
                   {JSON.stringify(parseJson(selectedLog.newValue || selectedLog.newValues), null, 2)}
                 </pre>

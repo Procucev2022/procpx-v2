@@ -32,7 +32,12 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const rateCards = await prisma.vendorRateCard.findMany({
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
+    const page = pageParam ? Math.max(1, parseInt(pageParam, 10)) : 1;
+    const limit = limitParam ? Math.max(1, parseInt(limitParam, 10)) : 0;
+
+    const findOptions: any = {
       where,
       include: {
         vendor: {
@@ -52,14 +57,24 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { createdAt: 'desc' },
-    });
+    };
+
+    if (limit > 0) {
+      findOptions.skip = (page - 1) * limit;
+      findOptions.take = limit;
+    }
+
+    const [rateCards, totalCount] = await Promise.all([
+      prisma.vendorRateCard.findMany(findOptions),
+      prisma.vendorRateCard.count({ where }),
+    ]);
 
     const now = new Date();
-    const formatted = rateCards.map((rc) => {
+    const formatted = rateCards.map((rc: any) => {
       const isValid = rc.status === 'APPROVED' && rc.validFrom <= now && rc.validTo >= now;
       const isExpired = rc.validTo < now || rc.status === 'EXPIRED';
 
-      const enrichedItems = rc.items.map((it) => {
+      const enrichedItems = (rc.items || []).map((it: any) => {
         let meta: any = {};
         if (it.comparisonRef) {
           try {
@@ -80,16 +95,27 @@ export async function GET(req: NextRequest) {
         };
       });
 
+      let notesData: any = {};
+      if (rc.notes) {
+        try { notesData = JSON.parse(rc.notes); } catch {}
+      }
+
       return {
         ...rc,
         isValid,
         isExpired,
         items: enrichedItems,
         itemCount: rc.items.length,
+        agreement: notesData.agreement || null,
       };
     });
 
-    return apiSuccess({ rateCards: formatted, total: formatted.length });
+    return apiSuccess({
+      rateCards: formatted,
+      total: totalCount,
+      page: limit > 0 ? page : 1,
+      totalPages: limit > 0 ? Math.ceil(totalCount / limit) : 1,
+    });
   } catch (error: any) {
     console.error('Error fetching rate cards:', error);
     return apiError(error.message || 'Failed to fetch rate cards', 500);
@@ -169,7 +195,14 @@ export async function POST(req: NextRequest) {
         items: {
           create: items.map((it: any) => {
             const initialBuyerRate = Number(it.buyerOffer1 ?? it.rate ?? 0);
-            const refQty = Number(it.referenceQty ?? it.minQuantity ?? 1);
+            const refQty =
+              it.referenceQty !== undefined && it.referenceQty !== null && String(it.referenceQty).trim() !== '' && !isNaN(Number(it.referenceQty))
+                ? Number(it.referenceQty)
+                : it.qty !== undefined && it.qty !== null && String(it.qty).trim() !== '' && !isNaN(Number(it.qty))
+                ? Number(it.qty)
+                : it.minQuantity !== undefined && it.minQuantity !== null && String(it.minQuantity).trim() !== '' && !isNaN(Number(it.minQuantity))
+                ? Number(it.minQuantity)
+                : null;
             const compJson = JSON.stringify({
               buyerOffer1: initialBuyerRate,
               vendorQuote1: it.vendorQuote1 ? Number(it.vendorQuote1) : null,

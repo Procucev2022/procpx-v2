@@ -886,10 +886,10 @@ export default function VendorSourcingDashboard({
                           <table className="table enterprise-table" style={{ fontSize: 11 }}>
                             <thead>
                               <tr>
-                                <th>Item</th>
-                                <th>Description & Specification</th>
+                                <th>S.No.</th>
+                                <th>Item Description</th>
                                 <th>UOM</th>
-                                <th style={{ textAlign: 'right' }}>Qty</th>
+                                <th style={{ textAlign: 'right' }}>Quantity</th>
                                 <th style={{ textAlign: 'right' }}>Agreed Unit Rate</th>
                                 <th style={{ textAlign: 'right' }}>Line Total</th>
                               </tr>
@@ -1063,9 +1063,9 @@ export default function VendorSourcingDashboard({
                     <table className="table enterprise-table" style={{ fontSize: 11 }}>
                       <thead>
                         <tr>
-                          <th>Item</th>
-                          <th>Description & UOM</th>
-                          <th style={{ textAlign: 'right' }}>Qty</th>
+                          <th>S.No.</th>
+                          <th>Item Description</th>
+                          <th style={{ textAlign: 'right' }}>Quantity</th>
                           <th style={{ textAlign: 'right' }}>Orig. Quote</th>
                           <th style={{ textAlign: 'right', color: '#1e40af' }}>Buyer Counter</th>
                           <th style={{ textAlign: 'right', minWidth: 120 }}>Vendor Revised Unit Rate</th>

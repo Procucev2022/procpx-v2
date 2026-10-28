@@ -418,6 +418,7 @@ model Vendor {
   quotes            Quote[]
   negotiationRounds NegotiationRound[]
   auctionBids       AuctionBid[]
+  auctionVendors    AuctionVendor[]
   awards            AwardRecommendation[]
   ppos              Ppo[]
   ppoLines          PpoLine[]
@@ -634,46 +635,115 @@ model NegotiationRound {
 }
 
 // ============================================================
-// REVERSE E-AUCTIONS & SEALED BIDS
+// ============================================================
+// E-AUCTIONS (REVERSE, FORWARD, SEALED BIDS) & MULTI-CATEGORY
 // ============================================================
 model Auction {
-  id                     String       @id @default(uuid())
-  tenantId               String
-  rfqId                  String
-  auctionNumber          String       // AUC-2026-000001
-  auctionType            String       @default("REVERSE_AUCTION") // REVERSE_AUCTION, SEALED_BID
-  title                  String
-  startingPrice          Float
-  minDecrement           Float        @default(1000)
-  currentLowestBid       Float?
-  currentWinningVendorId String?
-  startTime              DateTime
-  endTime                DateTime
-  autoExtensionMinutes   Int          @default(5)
-  status                 String       @default("SCHEDULED") // SCHEDULED, LIVE, EXTENDED, CLOSED, CANCELLED
-  bidVisibility          String       @default("RANK_ONLY") // RANK_ONLY, FULL_LEADERBOARD, BLIND
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  id                      String          @id @default(uuid())
+  tenantId                String
+  rfqId                   String
+  auctionNumber           String          // AUC-2026-000001 or SLD-2026-000001
+  auctionType             String          @default("REVERSE_AUCTION") // REVERSE_AUCTION, FORWARD_AUCTION, SEALED_BID
+  auctionCategory         String          @default("RFQ_TOTAL_WISE")  // RFQ_TOTAL_WISE, ITEM_WISE
+  title                   String
+  currency                String          @default("INR")             // INR, USD, EUR, GBP, AED, SGD
+  scrollingText           String?
+  refreshIntervalSeconds  Int             @default(10)
+  quantityType            String          @default("FULL")            // FULL, SINGLE
+  hasStartPrice           Boolean         @default(true)
+  startingPrice           Float
+  hasLeadingPrice         Boolean         @default(true)
+  hasMinBidReduction      Boolean         @default(true)
+  minDecrement            Float           @default(1000)              // Minimum decrement (Reverse) or increment (Forward)
+  hasAutoExtension        Boolean         @default(true)
+  autoExtensionMinutes    Int             @default(5)
+  hasBidLimit             Boolean         @default(false)
+  maxBidsPerParticipant   Int?
+  inviteProjectUser       Boolean         @default(false)
+  projectUserId           String?
+  nonInvitedJustification String?
+  termsAndConditions      String?
+  documents               String?         // JSON array of attachments [{ name, url, size, mimeType, uploadedAt }]
+  status                  String          @default("SCHEDULED")       // DRAFT, SCHEDULED, LIVE, PAUSED, EXTENDED, CLOSED, CANCELLED
+  bidVisibility           String          @default("RANK_ONLY")       // RANK_ONLY, FULL_LEADERBOARD, BLIND
+  currentLowestBid        Float?
+  currentLeadingBid       Float?
+  currentWinningVendorId  String?
+  startTime               DateTime
+  endTime                 DateTime
+  scheduledEndTime        DateTime?
+  extensionCount          Int             @default(0)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
-  rfq                    Rfq          @relation(fields: [rfqId], references: [id], onDelete: Cascade)
-  bids                   AuctionBid[]
+  rfq                     Rfq             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  bids                    AuctionBid[]
+  vendors                 AuctionVendor[]
+  items                   AuctionItem[]
 
   @@unique([tenantId, auctionNumber])
   @@map("auctions")
 }
 
-model AuctionBid {
-  id         String   @id @default(uuid())
-  tenantId   String
-  auctionId  String
-  vendorId   String
-  bidNumber  Int
-  bidAmount  Float
-  rank       Int?
-  timestamp  DateTime @default(now())
+model AuctionVendor {
+  id              String    @id @default(uuid())
+  tenantId        String
+  auctionId       String
+  vendorId        String
+  invitedAt       DateTime  @default(now())
+  termsAccepted   Boolean   @default(false)
+  termsAcceptedAt DateTime?
+  isEligible      Boolean   @default(true)
+  bidsCount       Int       @default(0)
+  lastBidAmount   Float?
+  lastBidAt       DateTime?
+  bestBidAmount   Float?
+  bestBidRank     Int?
 
-  auction    Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
-  vendor     Vendor   @relation(fields: [vendorId], references: [id])
+  auction         Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  vendor          Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, vendorId])
+  @@map("auction_vendors")
+}
+
+model AuctionItem {
+  id                     String       @id @default(uuid())
+  tenantId               String
+  auctionId              String
+  rfqLineId              String?
+  itemCode               String?
+  description            String
+  category               String?
+  subcategory            String?
+  brand                  String?
+  uom                    String
+  quantity               Float
+  startPrice             Float?
+  currentLeadingBid      Float?
+  currentWinningVendorId String?
+
+  auction                Auction      @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bids                   AuctionBid[]
+
+  @@map("auction_items")
+}
+
+model AuctionBid {
+  id            String       @id @default(uuid())
+  tenantId      String
+  auctionId     String
+  vendorId      String
+  auctionItemId String?
+  bidNumber     Int
+  bidAmount     Float
+  rank          Int?
+  ipAddress     String?
+  timestamp     DateTime     @default(now())
+
+  auction       Auction      @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  vendor        Vendor       @relation(fields: [vendorId], references: [id])
+  auctionItem   AuctionItem? @relation(fields: [auctionItemId], references: [id], onDelete: Cascade)
 
   @@map("auction_bids")
 }

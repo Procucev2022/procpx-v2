@@ -13,7 +13,10 @@ import {
   ArrowRight,
   CheckCircle2,
   Layers,
+  AlertCircle,
 } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import FormSection from '@/components/ui/FormSection';
 
 export default function CreatePrPage() {
   const router = useRouter();
@@ -106,10 +109,10 @@ export default function CreatePrPage() {
           projectId: selectedProjectId,
           costCentreId: selectedCostCentreId || null,
           boqId: selectedBoqId,
-          boqRevisionId: revisionId,
-          title: prTitle || `PR for ${selectedBoq?.boqCode || 'BOQ'}`,
+          revisionId: revisionId || null,
+          title: prTitle.trim() || (selectedBoq ? `${selectedBoq.title || 'Procurement Package'} PR` : 'Commercial PR'),
           requiredDate: requiredDate || null,
-          deliveryLocation: deliveryLocation || null,
+          deliveryLocation: deliveryLocation.trim() || null,
         }),
       });
 
@@ -118,7 +121,7 @@ export default function CreatePrPage() {
         throw new Error(err.error || 'Failed to create PR');
       }
 
-      const created = await res.json();
+      await res.json();
       router.push('/pr');
     } catch (err: any) {
       setError(err.message);
@@ -129,51 +132,50 @@ export default function CreatePrPage() {
 
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 13, color: '#64748b' }}>Procurement Requests</span>
-          <span style={{ color: '#cbd5e1' }}>/</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>Create PR</span>
-        </div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-          Create Procurement Request (PR)
-        </h1>
-        <p style={{ fontSize: 14, color: '#64748b', margin: '4px 0 0 0' }}>
-          Derive a new Procurement Request directly from a validated BOQ source baseline.
-        </p>
-      </div>
+      <PageHeader
+        title="Create Procurement Request"
+        subtitle="Derive a new Procurement Request directly from a validated BOQ source baseline"
+        backHref="/pr"
+        backLabel="← Back to PR Register"
+      />
 
       {/* BOQ Studio Callout */}
-      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 flex justify-between items-center">
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>
+          <div className="font-semibold text-sm text-slate-900">
             Need to prepare or modify standard line items first?
           </div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+          <div className="text-xs text-slate-500 mt-1">
             Use BOQ Studio to download standard BOQ, refine specifications with AI, and estimate costs.
           </div>
         </div>
-        <Link href="/boq/studio" className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Sparkles size={14} color="#2563eb" />
+        <Link href="/boq/studio" className="btn btn-secondary btn-sm flex items-center gap-2">
+          <Sparkles size={14} className="text-blue-600" />
           Launch BOQ Studio
         </Link>
       </div>
 
-      {/* PR Form Card */}
-      <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: 28 }}>
-        <form onSubmit={handleCreatePr}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 20 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Project *
-              </label>
+      {error && (
+        <div className="alert alert-error mb-6 flex items-center gap-2">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* PR Form */}
+      <form onSubmit={handleCreatePr}>
+        <FormSection
+          title="Project & Cost Centre Baseline"
+          subtitle="Select the commercial project and cost allocation code for this package"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Project <span className="required">*</span></label>
               <select
-                className="select-field"
+                className="form-control"
                 value={selectedProjectId}
                 onChange={e => setSelectedProjectId(e.target.value)}
                 required
-                style={{ width: '100%', height: 40 }}
               >
                 <option value="">Select Project...</option>
                 {projects.map(p => (
@@ -184,15 +186,12 @@ export default function CreatePrPage() {
               </select>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Cost Centre
-              </label>
+            <div className="form-group">
+              <label className="form-label">Cost Centre</label>
               <select
-                className="select-field"
+                className="form-control"
                 value={selectedCostCentreId}
                 onChange={e => setSelectedCostCentreId(e.target.value)}
-                style={{ width: '100%', height: 40 }}
               >
                 <option value="">Select Cost Centre...</option>
                 {costCentres.map(cc => (
@@ -203,17 +202,19 @@ export default function CreatePrPage() {
               </select>
             </div>
           </div>
+        </FormSection>
 
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Source BOQ Baseline *
-            </label>
+        <FormSection
+          title="BOQ Specification Source"
+          subtitle="Link to the approved or draft BOQ containing the line items"
+        >
+          <div className="form-group">
+            <label className="form-label">Source BOQ Baseline <span className="required">*</span></label>
             <select
-              className="select-field"
+              className="form-control"
               value={selectedBoqId}
               onChange={e => setSelectedBoqId(e.target.value)}
               required
-              style={{ width: '100%', height: 40 }}
             >
               <option value="">Select Source BOQ...</option>
               {boqs.map(b => (
@@ -223,77 +224,71 @@ export default function CreatePrPage() {
               ))}
             </select>
             {boqs.length === 0 && selectedProjectId && (
-              <div style={{ fontSize: 12, color: '#d97706', marginTop: 6 }}>
-                No BOQs found for this project. <Link href={`/boq/studio?projectId=${selectedProjectId}`} style={{ color: '#2563eb', textDecoration: 'underline' }}>Create a BOQ in Studio</Link> first.
-              </div>
+              <p className="text-xs text-amber-600 mt-2">
+                No BOQs found for this project.{' '}
+                <Link href={`/boq/studio?projectId=${selectedProjectId}`} className="text-blue-600 underline">
+                  Create a BOQ in Studio
+                </Link>{' '}
+                first.
+              </p>
             )}
           </div>
 
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              PR Title / Subject
-            </label>
+          <div className="form-group">
+            <label className="form-label">PR Title / Subject</label>
             <input
               type="text"
-              className="input-field"
+              className="form-control"
               value={prTitle}
               onChange={e => setPrTitle(e.target.value)}
               placeholder="e.g. Electrical & Civil Fitout Procurement"
-              style={{ width: '100%', height: 40 }}
             />
           </div>
+        </FormSection>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 24 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Required By Date
-              </label>
+        <FormSection
+          title="Delivery & Procurement Schedule"
+          subtitle="Specify site fulfillment timelines and destination store"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-group">
+              <label className="form-label">Required By Date</label>
               <input
                 type="date"
-                className="input-field"
+                className="form-control"
                 value={requiredDate}
                 onChange={e => setRequiredDate(e.target.value)}
-                style={{ width: '100%', height: 40 }}
               />
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Delivery Location
-              </label>
+            <div className="form-group">
+              <label className="form-label">Delivery Location</label>
               <input
                 type="text"
-                className="input-field"
+                className="form-control"
                 value={deliveryLocation}
                 onChange={e => setDeliveryLocation(e.target.value)}
                 placeholder="e.g. Site Store - Unit 402"
-                style={{ width: '100%', height: 40 }}
               />
             </div>
           </div>
+        </FormSection>
 
-          {error && (
-            <div style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: 6, fontSize: 13, marginBottom: 18 }}>
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-            <Link href="/pr" className="btn btn-outline">
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={creating || !selectedBoqId}
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', fontWeight: 600 }}
-            >
-              <Send size={15} />
-              {creating ? 'Creating PR...' : 'Create Procurement Request'}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <Link href="/pr" className="btn btn-secondary">
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            disabled={creating || !selectedBoqId}
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <Send size={15} />
+            {creating ? 'Creating PR...' : 'Create Procurement Request'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

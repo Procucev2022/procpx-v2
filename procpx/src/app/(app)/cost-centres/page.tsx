@@ -17,6 +17,9 @@ import {
   X,
   FileSpreadsheet,
 } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import StatusBadge from '@/components/ui/StatusBadge';
 
 export default function CostCentresPage() {
   const [costCentres, setCostCentres] = useState<any[]>([]);
@@ -142,101 +145,68 @@ export default function CostCentresPage() {
   const avgRatePerSqft = totalArea > 0 ? totalApproved / totalArea : 0;
 
   return (
-    <div className="page-container" style={{ padding: '24px 32px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e40af' }}>
-              <Layers size={20} />
-            </div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>Cost Centres</h1>
-          </div>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-            First-class project commercial containers tracking floor area, square-foot benchmarks, and budget allocations.
-          </p>
-        </div>
-        {canCreate && (
-          <div style={{ display: 'flex', gap: 10 }}>
+    <div className="w-full">
+      <PageHeader
+        title="Cost Centres"
+        subtitle="First-class project commercial containers tracking floor area, square-foot benchmarks, and budget allocations."
+        actions={
+          canCreate ? (
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => setModalOpen(true)}
             >
               <Plus size={16} /> Create Cost Centre
             </button>
-          </div>
-        )}
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ padding: '16px 20px', background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            Cost Centres
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{costCentres.length}</div>
-          <div style={{ fontSize: 12, color: '#10b981', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <CheckCircle2 size={13} /> Active and operational
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '16px 20px', background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            Total Fitout Area
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
-            {totalArea.toLocaleString('en-IN')} <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}>Sqft</span>
-          </div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-            Across {filtered.length} functional zones
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '16px 20px', background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            Approved Budget
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#1e40af' }}>
-            ₹ {(totalApproved / 100000).toFixed(2)} <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}>Lakhs</span>
-          </div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-            Total Allocated: ₹ {(totalBudget / 100000).toFixed(2)} L
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '16px 20px', background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-            Average Benchmark
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
-            ₹ {Math.round(avgRatePerSqft).toLocaleString('en-IN')} <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}>/ Sqft</span>
-          </div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-            Commercial rate per unit area
-          </div>
-        </div>
-      </div>
+      <SummaryCardGrid columns={4}>
+        <SummaryCard
+          label="Cost Centres"
+          value={costCentres.length}
+          secondary="Active and operational"
+          accent="default"
+        />
+        <SummaryCard
+          label="Total Fitout Area"
+          value={`${totalArea.toLocaleString('en-IN')} Sqft`}
+          secondary={`Across ${filtered.length} functional zones`}
+          accent="neutral"
+        />
+        <SummaryCard
+          label="Approved Budget"
+          value={`₹ ${(totalApproved / 100000).toFixed(2)} Lakhs`}
+          secondary={`Total Allocated: ₹ ${(totalBudget / 100000).toFixed(2)} L`}
+          accent="blue"
+        />
+        <SummaryCard
+          label="Average Benchmark"
+          value={`₹ ${Math.round(avgRatePerSqft).toLocaleString('en-IN')} / Sqft`}
+          secondary="Commercial rate per unit area"
+          accent="emerald"
+        />
+      </SummaryCardGrid>
 
       {/* Filter Bar */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={16} style={{ position: 'absolute', left: 12, top: 12, color: '#94a3b8' }} />
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="relative flex-1 min-w-[280px]">
+          <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           <input
             type="text"
-            className="input-field"
+            className="input pl-9 h-[40px] w-full text-sm bg-white"
             placeholder="Search Cost Centre code, name, zone or location..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ paddingLeft: 38, height: 40, width: '100%' }}
           />
         </div>
 
         <select
-          className="select-field"
+          className="input h-[40px] min-w-[260px] text-sm bg-white cursor-pointer"
           value={selectedProjectId}
           onChange={e => setSelectedProjectId(e.target.value)}
-          style={{ height: 40, minWidth: 260 }}
         >
           <option value="">All Projects</option>
           {projects.map(p => (
@@ -248,21 +218,22 @@ export default function CostCentresPage() {
       </div>
 
       {/* Cost Centre Table */}
-      <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569', height: 42 }}>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Code</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Cost Centre Name</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Project</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Area (Sqft)</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Location / Zone</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>Approved Budget</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>₹ / Sqft</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Status</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>Quick Actions</th>
-            </tr>
-          </thead>
+      <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
+        <div className="table-responsive">
+          <table className="enterprise-table">
+            <thead>
+              <tr>
+                <th style={{ width: 110 }}>Code</th>
+                <th style={{ minWidth: 200 }}>Cost Centre Name</th>
+                <th style={{ minWidth: 180 }}>Project</th>
+                <th style={{ width: 120, textAlign: 'right' }}>Area (Sqft)</th>
+                <th style={{ width: 160 }}>Location / Zone</th>
+                <th style={{ width: 140, textAlign: 'right' }}>Approved Budget</th>
+                <th style={{ width: 120, textAlign: 'right' }}>₹ / Sqft</th>
+                <th style={{ width: 110 }}>Status</th>
+                <th style={{ width: 140, textAlign: 'center' }}>Quick Actions</th>
+              </tr>
+            </thead>
           <tbody>
             {loading ? (
               <tr>
@@ -304,36 +275,20 @@ export default function CostCentresPage() {
                     {cc.ratePerSqFt ? `₹ ${cc.ratePerSqFt} / sqft` : '—'}
                   </td>
                   <td style={{ padding: '0 16px' }}>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '2px 8px',
-                        borderRadius: 4,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: cc.status === 'ACTIVE' ? '#ecfdf5' : '#f1f5f9',
-                        color: cc.status === 'ACTIVE' ? '#047857' : '#64748b',
-                      }}
-                    >
-                      <CheckCircle2 size={11} /> {cc.status}
-                    </span>
+                    <StatusBadge status={cc.status} />
                   </td>
-                  <td style={{ padding: '0 16px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: 6 }}>
+                  <td style={{ padding: '0 16px', textAlign: 'center' }}>
+                    <div className="inline-flex items-center gap-1.5 justify-center">
                       <Link
                         href={`/boq/studio?costCentreId=${cc.id}&projectId=${cc.projectId}`}
-                        className="btn btn-secondary btn-sm"
-                        style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+                        className="btn btn-secondary btn-sm h-7 px-2.5 text-xs font-semibold"
                         title="Open in BOQ Studio"
                       >
                         <Sparkles size={12} /> BOQ Studio
                       </Link>
                       <Link
                         href={`/budget?costCentreId=${cc.id}&projectId=${cc.projectId}`}
-                        className="btn btn-secondary btn-sm"
-                        style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+                        className="btn btn-secondary btn-sm h-7 px-2.5 text-xs font-semibold"
                         title="View Budget Ledger"
                       >
                         <Landmark size={12} /> Budget
@@ -346,6 +301,7 @@ export default function CostCentresPage() {
           </tbody>
         </table>
       </div>
+    </div>
 
       {/* Modal: Create Cost Centre */}
       {modalOpen && (

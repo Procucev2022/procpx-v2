@@ -42,9 +42,36 @@ export async function GET(
         boqRevision: {
           include: {
             approvedBy: { select: { id: true, name: true, email: true } },
+            lines: {
+              include: {
+                category: true,
+                subcategory: true,
+                uom: true,
+              },
+            },
           },
         },
         lines: {
+          include: {
+            boqLine: {
+              include: {
+                category: true,
+                subcategory: true,
+                uom: true,
+              },
+            },
+            prLine: {
+              include: {
+                boqLine: {
+                  include: {
+                    category: true,
+                    subcategory: true,
+                    uom: true,
+                  },
+                },
+              },
+            },
+          },
           orderBy: { lineNumber: 'asc' },
         },
         invitedVendors: {

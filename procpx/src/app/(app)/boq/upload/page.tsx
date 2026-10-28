@@ -2,15 +2,20 @@
 // app/(app)/boq/upload/page.tsx - BOQ Upload Wizard
 import { useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Check, AlertTriangle, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
+import { Check, AlertTriangle, FileSpreadsheet, CheckCircle2, CheckCircle, AlertOctagon } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 
 type WizardStep = 'upload' | 'map' | 'preview' | 'importing' | 'done';
 
 const BOQ_FIELDS = [
-  { key: 'description', label: 'Description', required: true },
-  { key: 'lineNumber', label: 'Line Number', required: false },
-  { key: 'specification', label: 'Specification', required: false },
-  { key: 'uom', label: 'UOM (Unit of Measure)', required: true },
+  { key: 'lineNumber', label: 'S.No.', required: false },
+  { key: 'itemCode', label: 'Item Code', required: false },
+  { key: 'category', label: 'Category', required: false },
+  { key: 'subcategory', label: 'Sub-category', required: false },
+  { key: 'description', label: 'Item Description', required: true },
+  { key: 'specification', label: 'BOQ Description', required: false },
+  { key: 'uom', label: 'UOM', required: true },
   { key: 'quantity', label: 'Quantity', required: true },
   { key: 'location', label: 'Location', required: false },
   { key: 'drawingReference', label: 'Drawing Reference', required: false },
@@ -57,13 +62,20 @@ export default function BoqUploadPage() {
     const autoMap: Record<string, string> = {};
     const cols: string[] = data.columns || [];
     BOQ_FIELDS.forEach(field => {
-      const match = cols.find(c =>
-        c.toLowerCase().includes(field.key.toLowerCase()) ||
-        (field.key === 'description' && c.toLowerCase().match(/desc|description/)) ||
-        (field.key === 'uom' && c.toLowerCase().match(/uom|unit/)) ||
-        (field.key === 'quantity' && c.toLowerCase().match(/qty|quantity|nos/)) ||
-        (field.key === 'lineNumber' && c.toLowerCase().match(/line|sl\.?\s*no|sno/))
-      );
+      const match = cols.find(c => {
+        const cl = c.toLowerCase();
+        return (
+          cl.includes(field.key.toLowerCase()) ||
+          (field.key === 'description' && cl.match(/item\s*desc|desc|description/)) ||
+          (field.key === 'specification' && cl.match(/boq\s*desc|spec|specification/)) ||
+          (field.key === 'uom' && cl.match(/uom|unit/)) ||
+          (field.key === 'quantity' && cl.match(/qty|quantity|nos/)) ||
+          (field.key === 'lineNumber' && cl.match(/s\.?no|sl\.?\s*no|line/)) ||
+          (field.key === 'itemCode' && cl.match(/item\s*code|code/)) ||
+          (field.key === 'category' && cl.match(/category/)) ||
+          (field.key === 'subcategory' && cl.match(/sub-?category/))
+        );
+      });
       if (match) autoMap[field.key] = match;
     });
     setColumnMapping(autoMap);
@@ -99,9 +111,12 @@ export default function BoqUploadPage() {
 
   return (
     <div className="page-content">
-      <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
-        <div><div className="page-title">BOQ Upload Wizard</div></div>
-      </div>
+      <PageHeader
+        title="BOQ Upload Wizard"
+        subtitle="Upload and map Excel / CSV line items to standard ProCPX BOQ format"
+        backHref={projectId ? `/projects/${projectId}` : '/boq'}
+        backLabel="← Back to BOQ Register"
+      />
 
       {/* Step Indicator */}
       <div className="step-wizard mb-6">
@@ -246,11 +261,37 @@ export default function BoqUploadPage() {
               <CheckCircle2 size={48} color="#059669" strokeWidth={1.5} />
             </div>
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>BOQ Imported Successfully</h2>
-            <div className="kpi-grid" style={{ maxWidth: 600, margin: '20px auto' }}>
-              <div className="kpi-card"><div className="kpi-label">Total Lines</div><div className="kpi-value">{importResult.imported}</div></div>
-              <div className="kpi-card"><div className="kpi-label">Valid</div><div className="kpi-value" style={{ color: '#059669' }}>{importResult.valid}</div></div>
-              <div className="kpi-card"><div className="kpi-label">Warnings</div><div className="kpi-value" style={{ color: '#d97706' }}>{importResult.warnings}</div></div>
-              <div className="kpi-card"><div className="kpi-label">Errors</div><div className="kpi-value" style={{ color: '#dc2626' }}>{importResult.errors}</div></div>
+            <div style={{ maxWidth: 800, margin: '20px auto' }}>
+              <SummaryCardGrid columns={4}>
+                <SummaryCard
+                  label="Total Lines"
+                  value={importResult.imported}
+                  secondary="Imported lines"
+                  icon={<FileSpreadsheet size={16} />}
+                  accent="default"
+                />
+                <SummaryCard
+                  label="Valid"
+                  value={importResult.valid}
+                  secondary="Passed validation"
+                  icon={<CheckCircle size={16} />}
+                  accent="emerald"
+                />
+                <SummaryCard
+                  label="Warnings"
+                  value={importResult.warnings}
+                  secondary="Minor notices"
+                  icon={<AlertTriangle size={16} />}
+                  accent="amber"
+                />
+                <SummaryCard
+                  label="Errors"
+                  value={importResult.errors}
+                  secondary="Validation errors"
+                  icon={<AlertOctagon size={16} />}
+                  accent="rose"
+                />
+              </SummaryCardGrid>
             </div>
             <div style={{ marginBottom: 20 }}>
               <p className="text-muted">Quality Score:</p>
