@@ -1,15 +1,16 @@
 ---
 trigger: always_on
-description: "Apply the repository unit-test, 90 percent per-file coverage, timeout, and database persistence requirements to code changes."
+description: "Apply workspace-wide build, test coverage, typecheck, lint, and safe migration checks to every proCPX change."
 ---
 
-# Unit testing and coverage policy
+# Workspace quality and unit-test policy
 
-- Add or update focused unit tests for every application behavior changed under `src/`.
-- Keep unit tests under `unit-tests/`; keep the existing workflow/browser scripts separate.
-- Run `npm run test:coverage` after every code change. The command enables Jest `--detectOpenHandles` and enforces at least 90% statements, branches, functions, and lines for every TypeScript/TSX file under `src/`, plus 90% overall.
-- `npm run test:coverage` always prints and writes `unit-test-coverage-report.md` with overall metrics and every source file's four percentages, including files below the gate, even when Jest exits because a threshold failed.
-- Do not exclude, ignore, or lower the threshold for an application file to make coverage pass. `jest.config.js` discovers every current application file and applies the thresholds individually; newly added files are included on the next run.
-- Setups use a 30-second global timeout. Give tests explicit cleanup for timers, servers, database clients, and other resources so open handles are reported.
-- Use isolated fixtures for database-backed tests. Never reset, truncate, reseed, or delete shared development data. Follow the database persistence policy in `AGENTS.md` and run the required pre/post integrity check when applicable.
-- If the 90% gate fails, add meaningful behavior tests or fix the uncovered behavior before considering the change complete. Report the overall and per-file coverage result.
+- Follow `AGENTS.md` for data persistence, migration safety, and regression requirements.
+- After every code change, run `npm run check:quality` from the workspace root. The runner discovers npm projects under the workspace and executes their configured checks globally.
+- The full gate runs build first and unit-test coverage second, then typecheck, lint, safe pending migrations, and a final database-integrity check. Run the stages across all discovered projects; do not check only the active package.
+- Run `npm run check:changed` for fast feedback while editing. It lints changed files, typechecks the owning TypeScript project when relevant, runs changed tests plus tests related to changed source, and checks tracked diffs for whitespace errors. It is not the completion gate.
+- Keep unit tests under `unit-tests/`; add or update focused tests for changed application behavior. Keep browser and workflow scripts separate.
+- The coverage command uses Jest's global 30-second timeout and `--detectOpenHandles`. Every TypeScript/TSX file under `src/` must reach at least 90% statements, branches, functions, and lines individually and overall.
+- `npm run test:coverage` prints and writes `unit-test-coverage-report.md` with the overall metrics and every source file, including files below threshold. Never exclude a file or lower a threshold to make the gate pass.
+- The full runner applies pending migrations only through `npm run db:migrate:safe`, after quality checks. That command records integrity, backs up the SQLite database, blocks migration history problems and detected destructive SQL, applies safe pending migrations, and checks integrity afterward. Do not use `db push` to bypass missing migration history.
+- If a project uses a different build, coverage, typecheck, lint, migration, or integrity command, expose it as a package script for the workspace runner.

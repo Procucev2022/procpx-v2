@@ -5,13 +5,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "typecheck": "tsc --noEmit",
     "start": "next start",
     "lint": "eslint",
-    "db:integrity": "npx tsx scripts/db-integrity-check.ts",
+    "db:integrity": "node scripts/run-db-integrity.cjs",
+    "db:migrate:safe": "node scripts/apply-pending-migrations.cjs",
     "test": "jest --runInBand --detectOpenHandles",
     "test:coverage": "node scripts/run-unit-coverage.cjs",
     "coverage:report": "node scripts/write-unit-coverage-report.cjs",
-    "test:watch": "jest --watch --detectOpenHandles"
+    "test:watch": "jest --watch --detectOpenHandles",
+    "check:quality": "node scripts/check-quality.cjs",
+    "check:changed": "node scripts/check-changed.cjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

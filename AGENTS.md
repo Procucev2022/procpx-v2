@@ -111,3 +111,12 @@ Summary rows must maintain clean spacing without wrapping or crowding:
 ## Unit Tests and Coverage Gate
 
 Follow `.agents/rules/unit-test-coverage.md` for every code change. Run `npm run test:coverage`; it uses Jest's global 30-second timeout and `--detectOpenHandles`, enforces all thresholds, and prints plus writes `unit-test-coverage-report.md` with overall and per-file metrics even when the gate fails. All files under `src/` must meet 90% statements, branches, functions, and lines individually and overall; do not skip application files or lower thresholds.
+
+## Workspace Quality Gate
+
+- After every code change, run `npm run check:quality` from the workspace root before considering the work complete. It discovers npm projects under the workspace and runs each project's checks globally.
+- The full check runs **build first, then unit-test coverage**, followed by typecheck, lint, safe pending migrations, and a final database-integrity check. Do not replace the full workspace check with a command scoped to only the active package.
+- `npm run check:changed` is the fast inner-loop command. It runs lint on changed files, typechecks affected TypeScript projects, runs changed test files and tests related to changed application source, and checks tracked diffs for whitespace errors. It does not replace `npm run check:quality` before handoff.
+- The coverage step must print and write the complete overall and per-file report, including every file under `src/`. Keep the 90% threshold for statements, branches, functions, and lines both per file and overall.
+- The migration stage applies pending migrations only through `npm run db:migrate:safe`. It checks migration status, records the integrity baseline, backs up the SQLite database, and applies only migrations without detected destructive SQL. It verifies integrity afterward. Stop and report if migration history is missing or divergent, a migration may delete data, or the backup/integrity checks fail. Do not substitute `db push` for a missing migration history.
+- If a project has its own build, coverage, typecheck, lint, migration, or integrity command, expose it as a package script so the workspace runner can include it.

@@ -1,3 +1,3 @@
 # Agent instructions
 
-Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. For every code change, add meaningful unit tests and run `npm run test:coverage`. Every application file must meet the configured 90% statement, branch, function, and line thresholds; do not skip files or weaken the thresholds. Jest uses a 30-second global timeout and `--detectOpenHandles`.
+Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. After every code change, run `npm run check:quality` from the workspace root. It discovers npm projects across the workspace and checks build and unit-test coverage first, then typecheck, lint, safe pending migrations, and database integrity. Use `npm run check:changed` for fast checks on changed files and related tests while editing; it does not replace the full gate. Every application file must meet the configured 90% statement, branch, function, and line thresholds. Jest uses a 30-second global timeout and `--detectOpenHandles`.

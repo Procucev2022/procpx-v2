@@ -7,7 +7,7 @@ Files included: **211**. Files meeting all four 90% thresholds: **211/211**.
 | Overall | Coverage |
 | --- | ---: |
 | statements | 99.59% (82085/82418) |
-| branches | 94.34% (16616/17612) |
+| branches | 94.34% (16617/17613) |
 | functions | 98.30% (1567/1594) |
 | lines | 99.59% (82085/82418) |
 
@@ -207,7 +207,7 @@ Files included: **211**. Files meeting all four 90% thresholds: **211/211**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.10% | 94.23% | 92.85% | 99.10% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.10% | 94.24% | 92.85% | 99.10% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.13% | 96.15% | 99.91% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
