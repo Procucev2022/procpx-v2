@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 import { standardiseUom } from '@/lib/uom-standardise';
 import { validateBoqLine, computeQualityScore } from '@/lib/boq-validate';
-import { readFile } from 'fs/promises';
+import { readUpload } from '@/lib/storage';
 import type { ColumnMapping } from "@app-types/app/api/boq/import/route.types";
 
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!revision.originalFilePath) return apiError('No uploaded file found for this revision.');
 
   // Read file
-  const buffer = await readFile(revision.originalFilePath);
+  const buffer = await readUpload(revision.originalFilePath);
   const XLSX = (await import('xlsx')).default;
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheet = sheetName

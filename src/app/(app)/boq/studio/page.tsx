@@ -879,6 +879,7 @@ export default function BoqStudioPage() {
           drawingNumber: extractedDrawingData.drawingNumber || drawingNumber,
           fileName: extractedDrawingData.fileName,
           savedFilePath: extractedDrawingData.savedFilePath,
+          fileSize: extractedDrawingData.fileSize,
           title: computedTitle,
           description: setupDescription.trim() || `Extracted from architectural drawing ${extractedDrawingData.drawingNumber}`,
           purpose: setupPurpose,

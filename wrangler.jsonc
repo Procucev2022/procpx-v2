@@ -1,0 +1,32 @@
+// Cloudflare Workers deployment for proCPX (Next.js via OpenNext)
+// Docs: https://opennext.js.org/cloudflare
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "procpx",
+  "account_id": "13a0babc81814551cad074685a88e2f9",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "UPLOAD_DIR": "r2"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "procpx-dev",
+      "database_id": "12bf5e7f-4e82-43d2-9f85-52e861545367",
+      "migrations_dir": "migrations"
+    }
+  ]
+  // Uploads: enable R2 in the Cloudflare dashboard, run
+  //   npx wrangler r2 bucket create procpx-uploads
+  // then add this block:
+  // "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "procpx-uploads" }]
+}

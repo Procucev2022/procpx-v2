@@ -4,8 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
 import * as XLSX from 'xlsx';
-import path from 'path';
-import fs from 'fs';
+import { saveUpload } from '@/lib/storage';
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
@@ -36,11 +35,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Save original uploaded file
-    const uploadsDir = path.join(process.cwd(), 'uploads', ctx.tenantId, projectId);
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-    const savedFileName = `${Date.now()}_${file.name}`;
-    const savedFilePath = path.join(uploadsDir, savedFileName);
-    fs.writeFileSync(savedFilePath, buffer);
+    const savedFilePath = await saveUpload([ctx.tenantId, projectId], `${Date.now()}_${file.name}`, buffer);
 
     // Parse XLSX
     const workbook = XLSX.read(buffer, { type: 'buffer' });

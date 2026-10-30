@@ -58,7 +58,10 @@
 ### 2. Install Dependencies
 ```bash
 npm install
+cp .env.example .env
 ```
+
+`prisma/dev.db` is not committed: each developer keeps their own local SQLite database.
 
 ### 3. Initialize Database Schema
 ```bash
@@ -76,6 +79,30 @@ npm run dev
 ```
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## ☁️ Deploying to Cloudflare Workers
+
+The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cloudflare). Configuration lives in `wrangler.jsonc`.
+
+| Concern | Local dev | Cloudflare |
+|---|---|---|
+| Database | SQLite file from `DATABASE_URL` | D1 database bound as `DB` (via `@prisma/adapter-d1`) |
+| Uploads | `uploads/` folder | R2 bucket bound as `UPLOADS` |
+| Logs | `logs/` JSONL files | Workers Logs (console) |
+
+**Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), then run `npm run cf:migrate`.
+
+**Secrets** (once per environment):
+```bash
+npx wrangler secret put NEXTAUTH_SECRET   # a long random value
+npx wrangler secret put NEXTAUTH_URL      # e.g. https://procpx.<subdomain>.workers.dev
+```
+
+**Deploy:** `npm run cf:deploy`. On Windows the OpenNext build needs symlink permission, so turn on Developer Mode or build in WSL or CI.
+
+**Copy local test data into D1:** `node scripts/export-sqlite-to-d1.cjs`, then `npx wrangler d1 execute DB --remote --file prisma/backups/d1-data-export.sql`. Run this only against an empty database.
 
 ---
 

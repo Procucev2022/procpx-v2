@@ -9,6 +9,7 @@ import {
 } from './shared';
 import type { CleanupOptions } from "@app-types/lib/observability/server-logger.types";
 import { RETENTION_DAYS, CLEANUP_INTERVAL_MS, PURGEABLE_EXTENSIONS, LOG_DIRECTORY_NAME, CONSOLE_LEVELS } from "./server-logger.constants";
+import { isCloudflareWorker } from '../runtime';
 
 
 let writeQueue: Promise<void> = Promise.resolve();
@@ -17,6 +18,8 @@ let initializedDirectory: string | null = null;
 let originalConsoleMethods: Partial<Record<'debug' | 'info' | 'log' | 'warn' | 'error', (...args: unknown[]) => void>> = {};
 
 export function isFileLoggingEnabled(environment = process.env): boolean {
+  // Cloudflare Workers have no writable disk; logs go to the console (Workers Logs) only.
+  if (isCloudflareWorker()) return false;
   return environment.APP_LOG_TO_FILE === 'true' || environment.NODE_ENV !== 'production';
 }
 

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
-import { writeFile, mkdir } from 'fs/promises';
+import { saveUpload } from '@/lib/storage';
 import path from 'path';
 import crypto from 'crypto';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
@@ -41,11 +41,8 @@ export async function POST(req: NextRequest) {
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
   // Save file
-  const uploadDir = path.join(process.cwd(), 'uploads', ctx.tenantId, projectId);
-  await mkdir(uploadDir, { recursive: true });
   const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  const filePath = path.join(uploadDir, fileName);
-  await writeFile(filePath, buffer);
+  const filePath = await saveUpload([ctx.tenantId, projectId], fileName, buffer);
 
   // Parse file to detect columns
   let sheets: string[] = [];

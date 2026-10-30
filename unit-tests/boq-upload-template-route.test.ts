@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
-import fs from 'fs';
 import { POST } from '../src/app/api/boq/upload-template/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createNextBoqRevision } from '../src/lib/boq-revision-utils';
+import { saveUpload } from '../src/lib/storage';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -25,11 +25,13 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/boq-revision-utils', () => ({ createNextBoqRevision: jest.fn() }));
+jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const createRevision = createNextBoqRevision as jest.Mock;
+const storeUpload = saveUpload as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const project = { id: 'project-1', name: 'West Campus' };
 const costCentres = [{ id: 'cc-1', code: 'CC-1', name: 'Electrical' }, { id: 'cc-2', code: 'CC-2', name: 'Mechanical' }];
@@ -37,9 +39,6 @@ const category = { id: 'cat-electrical', name: 'Electrical' };
 const uom = { id: 'uom-nos', code: 'NOS' };
 const boq = { id: 'boq-new', boqCode: 'BOQ-000001' };
 const revision = { id: 'revision-new', revisionCode: 'BOQ-000001-R1' };
-let existsSpy: jest.SpyInstance;
-let mkdirSpy: jest.SpyInstance;
-let writeSpy: jest.SpyInstance;
 
 function makeRequest(rows: Record<string, unknown>[], fields: Record<string, string> = {}, fileName = 'import.xlsx', sheetName = 'BOQ Data') {
   const workbook = XLSX.utils.book_new();
@@ -81,16 +80,12 @@ describe('fixed template BOQ upload API', () => {
     db.boqRevision.update.mockReset().mockResolvedValue({});
     db.auditLog.create.mockReset().mockResolvedValue({ id: 'audit-1' });
     createRevision.mockReset().mockResolvedValue(revision);
-    existsSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
-    mkdirSpy = jest.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
-    writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+    storeUpload.mockReset().mockImplementation((segments: string[], fileName: string) =>
+      Promise.resolve(`uploads/${segments.join('/')}/${fileName}`));
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    existsSpy.mockRestore();
-    mkdirSpy.mockRestore();
-    writeSpy.mockRestore();
     consoleError.mockRestore();
   });
 
@@ -115,7 +110,7 @@ describe('fixed template BOQ upload API', () => {
     await expect(POST(makeRequest([], { projectId: 'project-1' }))).resolves.toEqual({
       ok: false, error: 'Uploaded spreadsheet is empty or has no recognizable rows.', status: 400,
     });
-    expect(writeSpy).toHaveBeenCalled();
+    expect(storeUpload).toHaveBeenCalled();
   });
 
   it('creates a BOQ, maps valid rows, flags warnings and errors, and saves revision statistics', async () => {
@@ -164,9 +159,10 @@ describe('fixed template BOQ upload API', () => {
     expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       entityType: 'BOQ', entityId: 'boq-new', action: 'BOQ_UPLOADED', description: expect.stringContaining('5 lines'),
     }) });
-    expect(existsSpy).toHaveBeenCalled();
-    expect(mkdirSpy).toHaveBeenCalledWith(expect.stringContaining('uploads'), { recursive: true });
-    expect(writeSpy).toHaveBeenCalledWith(expect.stringContaining('vendor-template.xlsx'), expect.any(Buffer));
+    expect(storeUpload).toHaveBeenCalledWith(['tenant-1', 'project-1'], expect.stringContaining('vendor-template.xlsx'), expect.any(Buffer));
+    expect(createRevision).toHaveBeenCalledWith(expect.objectContaining({
+      originalFilePath: expect.stringMatching(/^uploads\/tenant-1\/project-1\/\d+_vendor-template\.xlsx$/),
+    }));
   });
 
   it('replaces a draft BOQ revision and uses a selected cost centre', async () => {

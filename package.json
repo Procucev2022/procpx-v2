@@ -7,6 +7,10 @@
     "build": "prisma generate && next build",
     "typecheck": "tsc --noEmit",
     "start": "next start",
+    "cf:build": "prisma generate && opennextjs-cloudflare build",
+    "cf:preview": "npm run cf:build && opennextjs-cloudflare preview",
+    "cf:deploy": "npm run cf:build && opennextjs-cloudflare deploy",
+    "cf:migrate": "wrangler d1 migrations apply DB --remote",
     "lint": "eslint",
     "db:integrity": "node scripts/run-db-integrity.cjs",
     "db:migrate:safe": "node scripts/apply-pending-migrations.cjs",
@@ -20,6 +24,8 @@
     "check:changed": "node scripts/check-changed.cjs"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "1.20.11",
+    "@prisma/adapter-d1": "6.19.3",
     "@prisma/client": "6.19.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/multer": "^2.3.0",
@@ -53,6 +59,7 @@
     "playwright-core": "^1.57.0",
     "puppeteer-core": "^25.13.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "4.156.0"
   }
 }

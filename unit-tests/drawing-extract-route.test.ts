@@ -3,6 +3,7 @@ import { POST } from '../src/app/api/boq/drawing-extract/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { processDrawingFile } from '../src/lib/drawing-parser';
+import { saveUpload } from '../src/lib/storage';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -25,12 +26,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 
 jest.mock('../src/lib/drawing-parser', () => ({ processDrawingFile: jest.fn() }));
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  mkdirSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  statSync: jest.fn(),
-}));
+jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -38,12 +34,7 @@ const isContext = isApiContext as unknown as jest.Mock;
 const errorResult = apiError as jest.Mock;
 const successResult = apiSuccess as jest.Mock;
 const parseDrawing = processDrawingFile as jest.Mock;
-const fsMock = require('fs') as {
-  existsSync: jest.Mock;
-  mkdirSync: jest.Mock;
-  writeFileSync: jest.Mock;
-  statSync: jest.Mock;
-};
+const storeUpload = saveUpload as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 
 function jsonRequest(body: unknown) {
@@ -84,8 +75,8 @@ describe('BOQ drawing extraction route', () => {
     db.boqLine.create.mockImplementation(({ data }: { data: unknown }) => Promise.resolve({ data }));
     db.auditLog.create.mockResolvedValue({ id: 'audit-1' });
     db.projectDocument.create.mockResolvedValue({ id: 'document-1' });
-    fsMock.existsSync.mockReturnValue(false);
-    fsMock.statSync.mockReturnValue({ size: 42 });
+    storeUpload.mockImplementation((segments: string[], fileName: string) =>
+      Promise.resolve(`uploads/${segments.join('/')}/${fileName}`));
     parseDrawing.mockResolvedValue({
       parserUsed: 'native', providerMessage: 'schedule parsed', totalDetected: 1,
       explicitCount: 1, uncertainCount: 0, drawingReference: 'D-101',
@@ -113,7 +104,6 @@ describe('BOQ drawing extraction route', () => {
   });
 
   it('creates a draft BOQ with matched and uncertain reviewed lines', async () => {
-    fsMock.existsSync.mockReturnValue(true);
     const lines = [
       { description: 'Cable tray', specification: 'Hot dip galvanized', category: 'ELECTRICAL', uom: 'ea', quantity: '4', confidence: 0.8, mark: 'CT-01', location: 'Roof' },
       { description: 'Unknown fitting', category: 'Unmatched', uom: 'nos', quantity: null, quantityType: 'UNCERTAIN', uncertainReason: 'Scale is unclear' },
@@ -121,7 +111,7 @@ describe('BOQ drawing extraction route', () => {
     ];
     await expect(POST(jsonRequest({
       projectId: 'project-1', costCentreId: 'cc-1', drawingNumber: 'D-101', fileName: 'plans.pdf',
-      savedFilePath: 'uploads/plans.pdf', title: '  Package title  ', description: '  Reviewed drawing  ',
+      savedFilePath: 'uploads/plans.pdf', fileSize: 42, title: '  Package title  ', description: '  Reviewed drawing  ',
       purpose: 'TENDER', lines,
     }))).resolves.toEqual({
       ok: true,
@@ -131,7 +121,6 @@ describe('BOQ drawing extraction route', () => {
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       boqCode: 'BOQ-000005', title: 'Package title', description: 'Reviewed drawing', purpose: 'TENDER',
     }) });
-    expect(fsMock.statSync).toHaveBeenCalledWith('uploads/plans.pdf');
     expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       originalFileSize: 42, sourceFile: 'plans.pdf', sourceReference: 'D-101', totalLines: 3, validLines: 1, qualityScore: 33,
     }) });
@@ -192,10 +181,10 @@ describe('BOQ drawing extraction route', () => {
       success: true, fileName: 'floor-plan.pdf', fileSize: file.size, savedFilePath: expect.stringContaining('1234_floor-plan.pdf'),
       drawingNumber: 'D-101', parserUsed: 'native', totalDetected: 1, items: [{ description: 'Cable tray', quantity: 4 }],
     }), status: 200 });
-    expect(fsMock.mkdirSync).toHaveBeenCalledWith(expect.stringContaining('tenant-1'), { recursive: true });
-    expect(fsMock.writeFileSync).toHaveBeenCalledWith(expect.stringContaining('1234_floor-plan.pdf'), expect.any(Buffer));
+    expect(storeUpload).toHaveBeenCalledWith(['tenant-1', 'project-1', 'drawings'], '1234_floor-plan.pdf', expect.any(Buffer));
     expect(db.projectDocument.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       fileType: 'application/pdf', category: 'DRAWING', uploadedBy: 'user-1',
+      filePath: 'uploads/tenant-1/project-1/drawings/1234_floor-plan.pdf',
     }) });
     expect(parseDrawing).toHaveBeenCalledWith(expect.any(Buffer), 'floor-plan.pdf', 'A-22');
     expect(now).toHaveBeenCalled();

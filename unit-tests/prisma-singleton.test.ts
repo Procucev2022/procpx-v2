@@ -48,6 +48,43 @@ describe('Prisma client singleton', () => {
     expect(PrismaClientMock).toHaveBeenCalledWith({ log: ['error', 'warn'] });
   });
 
+  it('creates a D1-backed client on first use inside Cloudflare Workers', () => {
+    const userAgent = jest.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Cloudflare-Workers');
+    const binding = { name: 'DB' };
+    jest.doMock('@opennextjs/cloudflare', () => ({ getCloudflareContext: () => ({ env: { DB: binding } }) }));
+    jest.doMock('@prisma/adapter-d1', () => ({ PrismaD1: jest.fn().mockImplementation((db) => ({ db })) }));
+
+    const loaded = loadPrismaModule();
+    expect(PrismaClientMock).not.toHaveBeenCalled();
+
+    const client = loaded.prisma as unknown as { options: { adapter: { db: unknown }; log: string[] } };
+    expect(client.options).toEqual({ adapter: { db: binding }, log: ['error'] });
+    expect(PrismaClientMock).toHaveBeenCalledTimes(1);
+    void (loaded.prisma as unknown as { options: unknown }).options;
+    expect(PrismaClientMock).toHaveBeenCalledTimes(1);
+
+    userAgent.mockRestore();
+    jest.dontMock('@opennextjs/cloudflare');
+    jest.dontMock('@prisma/adapter-d1');
+  });
+
+  it('binds client methods to the D1-backed client', () => {
+    const userAgent = jest.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Cloudflare-Workers');
+    jest.doMock('@opennextjs/cloudflare', () => ({ getCloudflareContext: () => ({ env: { DB: {} } }) }));
+    jest.doMock('@prisma/adapter-d1', () => ({ PrismaD1: jest.fn() }));
+    PrismaClientMock.mockImplementationOnce(function (this: { tag: string }) {
+      return { tag: 'd1', whoAmI(this: { tag: string }) { return this.tag; } };
+    });
+
+    const loaded = loadPrismaModule();
+    const { whoAmI } = loaded.prisma as unknown as { whoAmI: () => string };
+    expect(whoAmI()).toBe('d1');
+
+    userAgent.mockRestore();
+    jest.dontMock('@opennextjs/cloudflare');
+    jest.dontMock('@prisma/adapter-d1');
+  });
+
   it('does not store a newly-created client on the global in production', () => {
     Reflect.set(process.env, 'NODE_ENV', 'production');
     const loaded = loadPrismaModule();

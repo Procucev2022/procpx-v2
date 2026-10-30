@@ -3,8 +3,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { processDrawingFile, ExtractedDrawingItem } from '@/lib/drawing-parser';
-import path from 'path';
-import fs from 'fs';
+import { saveUpload } from '@/lib/storage';
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
@@ -24,6 +23,7 @@ export async function POST(req: NextRequest) {
         drawingNumber,
         fileName,
         savedFilePath,
+        fileSize,
         title,
         description,
         purpose,
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
           sourceConfidence: 0.90,
           originalFileName: fileName || `${drawingNumber || 'drawing'}.pdf`,
           originalFilePath: savedFilePath || null,
-          originalFileSize: savedFilePath && fs.existsSync(savedFilePath) ? fs.statSync(savedFilePath).size : 0,
+          originalFileSize: Number(fileSize) || 0,
           notes: `Extracted via Architectural Drawing Parser from ${fileName || drawingNumber} (Ref: ${drawingNumber})`,
           totalLines: lines.length,
           validLines: validLinesCount,
@@ -204,14 +204,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Save drawing file to persistent uploads directory
-    const uploadsDir = path.join(process.cwd(), 'uploads', ctx.tenantId, projectId, 'drawings');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-    const savedFileName = `${Date.now()}_${file.name}`;
-    const savedFilePath = path.join(uploadsDir, savedFileName);
+    // Save drawing file to persistent uploads storage
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(savedFilePath, fileBuffer);
+    const savedFilePath = await saveUpload(
+      [ctx.tenantId, projectId, 'drawings'],
+      `${Date.now()}_${file.name}`,
+      fileBuffer
+    );
 
     // Register in Project Documents for traceability
     await prisma.projectDocument.create({

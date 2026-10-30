@@ -88,6 +88,12 @@ describe('server structured logging', () => {
     expect(getLogDirectory(productionEnvironment)).toBe(productionDirectory);
   });
 
+  it('never writes log files on Cloudflare Workers, even when opted in', () => {
+    const userAgent = jest.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Cloudflare-Workers');
+    expect(isFileLoggingEnabled({ ...process.env, NODE_ENV: 'development', APP_LOG_TO_FILE: 'true' } as NodeJS.ProcessEnv)).toBe(false);
+    userAgent.mockRestore();
+  });
+
   it('supports production file opt-in and purges only expired supported artifacts', async () => {
     const productionEnvironment = { ...process.env, NODE_ENV: 'production', APP_LOG_TO_FILE: 'true' } as NodeJS.ProcessEnv;
     expect(isFileLoggingEnabled(productionEnvironment)).toBe(true);
