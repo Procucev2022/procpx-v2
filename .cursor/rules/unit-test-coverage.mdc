@@ -1,0 +1,6 @@
+---
+description: Required unit tests and per-file coverage for proCPX changes
+alwaysApply: true
+---
+
+Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. Add meaningful unit tests for code changes and run `npm run test:coverage`. Every `src/**/*.ts` and `src/**/*.tsx` file must meet 90% statements, branches, functions, and lines individually and overall. Do not exclude files or weaken thresholds. Jest uses a 30-second global timeout and `--detectOpenHandles`.

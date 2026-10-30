@@ -107,3 +107,7 @@ Summary rows must maintain clean spacing without wrapping or crowding:
 1. Show only: PR Number, Short Package/PR Description, Item Count, Cost Centre code, PR Amount, PR Approval Status, Current Procurement Stage, RFQ Count, and One View Details action.
 2. Put secondary descriptions, project/BOQ references, line-item specifications, approvals, and audit information in View Details.
 3. Keep the identifier prominent, maintain consistent horizontal alignment, and prevent badges from competing with descriptions.
+
+## Unit Tests and Coverage Gate
+
+Follow `.agents/rules/unit-test-coverage.md` for every code change. Run `npm run test:coverage`; it uses Jest's global 30-second timeout and `--detectOpenHandles`, enforces all thresholds, and prints plus writes `unit-test-coverage-report.md` with overall and per-file metrics even when the gate fails. All files under `src/` must meet 90% statements, branches, functions, and lines individually and overall; do not skip application files or lower thresholds.

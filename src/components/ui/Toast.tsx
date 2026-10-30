@@ -120,10 +120,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (input: ToastInput, title: string = 'Action Failed') => {
       if (typeof input === 'object') {
         showToast({
+          ...input,
           type: 'error',
           title: input.title || title,
           durationMs: input.durationMs || input.duration || 7000,
-          ...input,
         });
       } else {
         showToast({
@@ -141,10 +141,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (input: ToastInput, title: string = 'Notice') => {
       if (typeof input === 'object') {
         showToast({
+          ...input,
           type: 'warning',
           title: input.title || title,
           durationMs: input.durationMs || input.duration || 6000,
-          ...input,
         });
       } else {
         showToast({
@@ -162,10 +162,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (input: ToastInput, title: string = 'Information') => {
       if (typeof input === 'object') {
         showToast({
+          ...input,
           type: 'info',
           title: input.title || title,
           durationMs: input.durationMs || input.duration || 5000,
-          ...input,
         });
       } else {
         showToast({

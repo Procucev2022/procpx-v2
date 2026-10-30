@@ -1,0 +1,306 @@
+/** @jest-environment jsdom */
+import React from 'react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import * as XLSX from 'xlsx';
+import InitiateRateCardWorkspace from '../src/components/rate-cards/InitiateRateCardWorkspace';
+
+jest.mock('xlsx', () => ({
+  utils: {
+    aoa_to_sheet: jest.fn(() => ({})),
+    book_new: jest.fn(() => ({})),
+    book_append_sheet: jest.fn(),
+    json_to_sheet: jest.fn(() => ({})),
+    sheet_to_json: jest.fn(() => []),
+  },
+  read: jest.fn(() => ({ SheetNames: ['Rate_Lines'], Sheets: { Rate_Lines: {} } })),
+  writeFile: jest.fn(),
+}));
+
+function makeWorkbook(rows: Record<string, unknown>[]) {
+  (XLSX.utils.sheet_to_json as jest.Mock).mockReturnValueOnce(rows);
+  return new File(['test workbook'], 'rate-lines.xlsx', {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+async function openRateLines() {
+  fireEvent.click(screen.getByRole('button', { name: /Continue to Rate Lines/i }));
+  expect(await screen.findByText(/Step 2: Rate Lines/)).toBeInTheDocument();
+}
+
+async function uploadFile(file: File) {
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(await screen.findByText(/Excel Rate Card Import Preview/)).toBeInTheDocument();
+}
+
+describe('rate card initiation workspace', () => {
+  const onBack = jest.fn();
+  const onSubmit = jest.fn();
+
+  beforeEach(() => {
+    localStorage.clear();
+    onBack.mockReset();
+    onSubmit.mockReset();
+    (XLSX.read as jest.Mock).mockReset().mockReturnValue({ SheetNames: ['Rate_Lines'], Sheets: { Rate_Lines: {} } });
+    (XLSX.utils.sheet_to_json as jest.Mock).mockReset().mockReturnValue([]);
+    (XLSX.writeFile as jest.Mock).mockReset();
+  });
+
+  it('recovers the saved form, edits a line, adds/removes rows, downloads a template, and reviews a draft', async () => {
+    const savedItem = {
+      id: 'saved', itemCode: 'SAVE-1', category: 'Civil', subcategory: 'General',
+      description: 'Saved line', specification: 'Saved specification', uom: 'EA', qty: 3,
+      aiRate: null, aiCost: null, previousPpoRate: null, previousPpoAmount: null, targetRate: 10, targetAmount: 30,
+    };
+    localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({
+      form: { title: 'Recovered card', vendor: 'Saved vendor', vendorId: 'saved-vendor', category: 'Civil', subcategory: '', location: '', effectiveFrom: '', validUntil: '', scope: '', commercialTerms: '' },
+      items: [savedItem],
+    }));
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+
+    expect(screen.getByDisplayValue('Recovered card')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27'), { target: { value: 'Recovered card' } });
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'BuildRight Solutions (VND-0007)' } });
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'Electrical' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Turnkey Fitouts'), { target: { value: 'Retail' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. All India or Regional Hubs'), { target: { value: 'West' } });
+    const dates = document.querySelectorAll('input[type="date"]');
+    fireEvent.change(dates[0], { target: { value: '2026-01-01' } });
+    fireEvent.change(dates[1], { target: { value: '2026-12-31' } });
+    fireEvent.change(screen.getByPlaceholderText('Detailed scope of supply and execution...'), { target: { value: 'Retail interiors' } });
+    fireEvent.change(screen.getByPlaceholderText('Pricing terms, taxes, payment conditions, escalation clauses...'), { target: { value: 'Net 30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    await openRateLines();
+    expect(await screen.findByText('SAVE-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /1\. Basic Details/ }));
+    expect(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27')).toHaveValue('Recovered card');
+    await openRateLines();
+    expect(screen.getByText('1 items')).toBeInTheDocument();
+    const row = screen.getByRole('row', { name: /SAVE-1/ });
+    const numericInputs = within(row).getAllByRole('spinbutton');
+    fireEvent.change(numericInputs[0], { target: { value: '-4' } });
+    fireEvent.change(numericInputs[1], { target: { value: '12.5' } });
+    expect(numericInputs[0]).toHaveValue(0);
+    expect(numericInputs[1]).toHaveValue(12.5);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Item Line' }));
+    expect(screen.getByText('2 items')).toBeInTheDocument();
+    expect(await screen.findByText(/Added new line/)).toBeInTheDocument();
+    const toast = screen.getByText(/Added new line/).parentElement?.parentElement;
+    fireEvent.click(toast?.querySelector('button') as HTMLButtonElement);
+    const deleteButtons = screen.getAllByTitle('Delete item line');
+    fireEvent.click(deleteButtons[1]);
+    expect(screen.getByText('1 items')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Delete item line'));
+    expect(await screen.findByText('At least one rate line is required.')).toBeInTheDocument();
+    const errorToast = screen.getByText('At least one rate line is required.').parentElement?.parentElement;
+    fireEvent.click(errorToast?.querySelector('button') as HTMLButtonElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Item Line' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Template' }));
+    expect(XLSX.writeFile).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/Template downloaded/)).toBeInTheDocument();
+    (XLSX.writeFile as jest.Mock).mockImplementationOnce(() => { throw new Error('disk unavailable'); });
+    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Template' }));
+    expect(await screen.findByText('Failed to generate Excel download.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
+    expect(await screen.findByText('Step 3: Review & Initiate')).toBeInTheDocument();
+    expect(screen.getByText(/Initial target baseline/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recovered card', status: 'DRAFT', items: expect.any(Array) }));
+    expect(localStorage.getItem('procpx_rate_card_initiate_draft')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous: Rate Lines' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
+    const initiate = screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ });
+    expect(initiate).toBeEnabled();
+    fireEvent.click(initiate);
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Recovered card', status: 'ROUND_1_BUYER_OFFER' }));
+  });
+
+  it('validates required details and line rules before enabling initiation', async () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27'), { target: { value: '   ' } });
+    await openRateLines();
+    const firstRow = screen.getByRole('row', { name: /INT-001/ });
+    fireEvent.change(within(firstRow).getAllByRole('spinbutton')[1], { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
+    expect(await screen.findByText('Step 3: Review & Initiate')).toBeInTheDocument();
+    expect(screen.getByText('Title is required.')).toBeInTheDocument();
+    expect(screen.getByText(/item\(s\) have invalid target rate/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous: Rate Lines' }));
+    expect(await screen.findByText(/Step 2: Rate Lines/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous: Basic Details' }));
+    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27'), { target: { value: 'Valid rate card' } });
+    fireEvent.click(screen.getByRole('button', { name: /Continue to Rate Lines/ }));
+    const first = screen.getByRole('row', { name: /INT-001/ });
+    fireEvent.change(within(first).getAllByRole('spinbutton')[1], { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
+    expect(await screen.findByText('Validation Passed (Ready to Initiate)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Valid rate card', status: 'ROUND_1_BUYER_OFFER' }));
+  });
+
+  it('previews workbook changes, flags invalid and missing rows, and applies valid updates', async () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    await openRateLines();
+    await uploadFile(makeWorkbook([
+      { 'Item Code': 'INT-001', 'Target Rate': '145' },
+      { 'Item Code': 'INT-001', 'Target Rate': '150' },
+      { 'Item Code': 'UNKNOWN', 'Target Rate': '0' },
+      { 'Item Code': 'INT-002', 'Target Rate': '0' },
+      { 'Item Code': '', 'Target Rate': '10' },
+    ]));
+    expect(screen.getByText(/not in workbook/)).toBeInTheDocument();
+    expect(document.querySelector('[title*="Duplicate Item Code"]')).toBeInTheDocument();
+    expect(document.querySelector('[title*="must be greater than zero"]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument();
+
+    await uploadFile(makeWorkbook([
+      { 'Item Code': 'INT-001', 'Target Rate': '150' },
+      { 'Item Code': 'INT-002', 'Target Rate': '100' },
+    ]));
+    expect(screen.getAllByText('2', { selector: 'span' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply Changes' }));
+    await waitFor(() => expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument());
+    expect(await screen.findByText(/Updated \d+ rate line\(s\) from Excel/)).toBeInTheDocument();
+  });
+
+  it('handles empty sheets and parse errors without changing draft lines', async () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    await openRateLines();
+    await uploadFile(makeWorkbook([]));
+    expect(screen.getByText('Workbook contains no data rows.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const read = XLSX.read as jest.Mock;
+    read.mockImplementationOnce(() => { throw new Error('bad workbook'); });
+    await uploadFile(new File(['broken'], 'broken.xlsx'));
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('Failed to parse file: bad workbook')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  });
+
+  it('uses fallback workbook headers and sheets and previews positive, negative, and unchanged rates', async () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    await openRateLines();
+    (XLSX.read as jest.Mock).mockReturnValueOnce({ SheetNames: ['Rates'], Sheets: { Rates: {} } });
+    await uploadFile(makeWorkbook([
+      { itemCode: 'INT-001', 'Target Rate per Unit': '125' },
+      { ItemCode: 'INT-002', 'Target Rate per Unit (₹)': '90' },
+      { 'ITEM CODE': 'INT-003', 'Target Rate per Unit (₹) [EDITABLE]': '350' },
+      { 'Item Code': 'INT-004', 'Target Rate (₹)': '460' },
+      { 'Item Code': 'INT-005', 'TARGET RATE': '80' },
+    ]));
+
+    expect(screen.getByText(/\+5\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/-5\.00/)).toBeInTheDocument();
+    expect(screen.getAllByText('Unchanged').length).toBeGreaterThan(1);
+    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply Changes' }));
+    await waitFor(() => expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument());
+    expect(await screen.findByText(/Updated 3 rate line\(s\) from Excel/)).toBeInTheDocument();
+  });
+
+  it('opens and closes the upload picker and preview, and reports missing or non-numeric rates', async () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    await openRateLines();
+    const uploadButton = screen.getByRole('button', { name: /Upload Completed Excel/i });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const clickSpy = jest.spyOn(fileInput, 'click');
+    fireEvent.click(uploadButton);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    fireEvent.change(fileInput, { target: { files: [] } });
+    expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument();
+
+    await uploadFile(makeWorkbook([
+      { 'Item Code': 'INT-001' },
+      { 'Item Code': 'INT-002', 'Target Rate': 'not a number' },
+      { 'Item Code': 'INT-003', 'Target Rate': '200' },
+    ]));
+    expect(document.querySelector('[title*="Target Rate must be a valid number"]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeDisabled();
+
+    const previewTitle = screen.getByText(/Excel Rate Card Import Preview/);
+    const modalHeader = previewTitle.parentElement?.parentElement;
+    fireEvent.click(modalHeader?.querySelector('button') as HTMLButtonElement);
+    expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument();
+  });
+
+  it('recalculates optional benchmarks, exports blank references, and falls back for an unknown vendor option', async () => {
+    const item = {
+      id: 'reference', itemCode: 'REF-1', category: 'Civil', subcategory: 'General',
+      description: 'Reference line', specification: 'Reference spec', uom: 'EA', qty: 2,
+      aiRate: 3, aiCost: 6, previousPpoRate: 4, previousPpoAmount: 8, targetRate: 5, targetAmount: 10,
+    };
+    localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({
+      form: { title: 'Reference card', vendor: 'Saved vendor', vendorId: 'saved-vendor', category: 'Civil', subcategory: 'General', location: 'West', effectiveFrom: '2026-01-01', validUntil: '2026-12-31', scope: 'Scope', commercialTerms: 'Terms' },
+      items: [item, {
+        ...item, id: 'optional', itemCode: 'REF-2', qty: null, aiRate: null, aiCost: null,
+        previousPpoRate: null, previousPpoAmount: null, targetRate: 8, targetAmount: 0,
+      }],
+    }));
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    const vendor = screen.getAllByRole('combobox')[0];
+    const unknownVendor = document.createElement('option');
+    unknownVendor.value = 'Unknown vendor';
+    unknownVendor.textContent = 'Unknown vendor';
+    vendor.appendChild(unknownVendor);
+    fireEvent.change(vendor, { target: { value: 'Unknown vendor' } });
+    expect(vendor).toHaveValue('Unknown vendor');
+    await openRateLines();
+
+    const row = screen.getByRole('row', { name: /REF-1/ });
+    const quantity = within(row).getAllByRole('spinbutton')[0];
+    fireEvent.change(quantity, { target: { value: '' } });
+    expect(quantity).toHaveValue(null);
+    fireEvent.change(quantity, { target: { value: '4' } });
+    expect(quantity).toHaveValue(4);
+    expect(within(row).getByText(/12/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Template' }));
+    const exportedRows = (XLSX.utils.aoa_to_sheet as jest.Mock).mock.calls.at(-1)?.[0];
+    expect(exportedRows[2]).toContain('Not Available');
+    expect(exportedRows[2]).toContain('Not Generated');
+  });
+
+  it('recovers from corrupt saved data and keeps running when storage writes fail', async () => {
+    localStorage.setItem('procpx_rate_card_initiate_draft', '{broken json');
+    const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('storage disabled');
+    });
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    expect(screen.getByDisplayValue('Retail Store Interior Works - FY 2026-27')).toBeInTheDocument();
+    await openRateLines();
+    expect(screen.getByText('5 items')).toBeInTheDocument();
+    setItem.mockRestore();
+  });
+
+  it('reports all required-field and duplicate-code validation errors for a restored draft', async () => {
+    const duplicateItems = [
+      { id: 'dup-1', itemCode: 'DUP', category: 'Civil', subcategory: '', description: 'One', specification: 'Spec', uom: 'EA', qty: null, aiRate: null, aiCost: null, previousPpoRate: null, previousPpoAmount: null, targetRate: 10, targetAmount: 0 },
+      { id: 'dup-2', itemCode: ' dup ', category: 'Civil', subcategory: '', description: 'Two', specification: 'Spec', uom: 'EA', qty: null, aiRate: null, aiCost: null, previousPpoRate: null, previousPpoAmount: null, targetRate: 20, targetAmount: 0 },
+    ];
+    localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({
+      form: { title: ' ', vendor: '', vendorId: '', category: ' ', subcategory: '', location: '', effectiveFrom: '', validUntil: '', scope: '', commercialTerms: '' },
+      items: duplicateItems,
+    }));
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    await openRateLines();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
+    expect(await screen.findByText('Title is required.')).toBeInTheDocument();
+    expect(screen.getByText('Vendor is required.')).toBeInTheDocument();
+    expect(screen.getByText('Category is required.')).toBeInTheDocument();
+    expect(screen.getByText('Effective From date is required.')).toBeInTheDocument();
+    expect(screen.getByText('Valid Until date is required.')).toBeInTheDocument();
+    expect(screen.getByText('Duplicate item codes: dup')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ })).toBeDisabled();
+  });
+});

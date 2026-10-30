@@ -1,0 +1,1 @@
+Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. For every code change, add unit tests and run `npm run test:coverage`. Coverage must reach 90% for statements, branches, functions, and lines both overall and for every file under `src/`; do not skip files or lower the thresholds. The Jest configuration uses a 30-second timeout and `--detectOpenHandles`.

@@ -111,10 +111,14 @@ export async function POST(req: NextRequest) {
 
       // Helper to match column aliases case-insensitively
       const getField = (aliases: string[]): string => {
-        for (const key of Object.keys(r)) {
-          const cleanKey = key.trim().toLowerCase().replace(/[*_#:]/g, '');
-          for (const alias of aliases) {
-            if (cleanKey === alias.toLowerCase() || cleanKey.includes(alias.toLowerCase())) {
+        for (const alias of aliases) {
+          for (const key of Object.keys(r)) {
+            const cleanKey = key.trim().toLowerCase().replace(/[*_#:]/g, '');
+            const normalizedAlias = alias.toLowerCase();
+            const matchesAlias = normalizedAlias === 'item'
+              ? cleanKey === normalizedAlias
+              : cleanKey === normalizedAlias || cleanKey.includes(normalizedAlias);
+            if (matchesAlias) {
               const val = r[key];
               if (val !== undefined && val !== null && String(val).trim() !== '') {
                 return String(val).trim();
@@ -149,20 +153,7 @@ export async function POST(req: NextRequest) {
       let rowHasError = false;
       const finalDesc = description || itemCode;
 
-      // 1. Missing Description check
-      if (!finalDesc) {
-        issues.push({
-          rowNumber: rowNum,
-          itemCode: itemCode || `ROW-${rowNum}`,
-          description: '(Missing)',
-          issue: 'Item description is required',
-          action: 'Provide a valid description',
-          severity: 'ERROR',
-        });
-        rowHasError = true;
-      }
-
-      // 2. UOM check with safe fallback
+      // 1. UOM check with safe fallback
       let finalUom = uomRaw;
       if (!finalUom) {
         finalUom = 'NOS';
@@ -204,7 +195,7 @@ export async function POST(req: NextRequest) {
 
       // 4. Quantity evaluation - PROCPX COMMERCIAL BOQ WORKFLOW:
       // A blank quantity means "user has not entered quantity yet". NEVER default to 1!
-      const rawQtyStr = rawQty !== undefined && rawQty !== null ? String(rawQty).trim() : '';
+      const rawQtyStr = rawQty.trim();
       const qtyClean = rawQtyStr.replace(/,/g, '').trim();
       let finalQty: number | null = null;
       let lineStatus = 'VALID';

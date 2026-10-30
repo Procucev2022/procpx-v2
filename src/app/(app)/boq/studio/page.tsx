@@ -181,7 +181,6 @@ export default function BoqStudioPage() {
   const [expandedCostLineId, setExpandedCostLineId] = useState<string | null>(null);
 
   // Method 3: Drawing to BOQ
-  const [drawingFile, setDrawingFile] = useState<File | null>(null);
   const [drawingNumber, setDrawingNumber] = useState('DWG-A-101');
   const [extractingDrawing, setExtractingDrawing] = useState(false);
   const [drawingProgressText, setDrawingProgressText] = useState('');
@@ -263,12 +262,7 @@ export default function BoqStudioPage() {
   const [creatingPr, setCreatingPr] = useState(false);
 
   // Existing BOQs Filtering (Section 21)
-  const [filterProject, setFilterProject] = useState('');
-  const [filterCostCentre, setFilterCostCentre] = useState('');
-  const [filterPurpose, setFilterPurpose] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
   const [filterSearch, setFilterSearch] = useState('');
-  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   // Search filter for lines within workspace
   const [linesSearch, setLinesSearch] = useState('');
@@ -618,7 +612,6 @@ export default function BoqStudioPage() {
   };
 
   const handleUploadExistingBoq = async (file: File) => {
-    if (!file) return;
     setUploadingMethod1(true);
     setStatusMessage('');
 
@@ -708,7 +701,6 @@ export default function BoqStudioPage() {
   };
 
   const handleUploadCompletedStandardBoq = async (file: File) => {
-    if (!file) return;
     setUploadingMethod2(true);
     setStatusMessage('');
 
@@ -828,13 +820,7 @@ export default function BoqStudioPage() {
   // -------------------------------------------------------------
   // METHOD 3: DRAWING TO BOQ
   // -------------------------------------------------------------
-  const handleDrawingExtract = async (fileToUpload?: File) => {
-    const file = fileToUpload || drawingFile;
-    if (!file) {
-      toast.error('Please select an architectural drawing file (.pdf, .png, .jpg, .jpeg).');
-      return;
-    }
-
+  const handleDrawingExtract = async (file: File) => {
     const projId = setupProject || selectedProjectId || projects[0]?.id;
     if (!projId) {
       toast.error('Please select or configure a target Project first.');
@@ -1180,32 +1166,6 @@ export default function BoqStudioPage() {
     }
   };
 
-  const handleRefineAi = async () => {
-    if (!activeRevision) return;
-    setRefiningAi(true);
-    setStatusMessage('');
-
-    try {
-      const res = await fetch('/api/boq/refine-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boqRevisionId: activeRevision.id }),
-      });
-
-      if (!res.ok) throw new Error('AI Refinement failed');
-      const data = await res.json();
-
-      setStatusType('success');
-      setStatusMessage(`✓ AI refinement complete! Standardized ${data.totalRefined} lines.`);
-      if (activeBoq) await loadBoqDetails(activeBoq.id);
-    } catch (e: any) {
-      setStatusType('error');
-      setStatusMessage(`Error: ${e.message}`);
-    } finally {
-      setRefiningAi(false);
-    }
-  };
-
   const handleAcceptAiSuggestion = async (line: any) => {
     if (!activeRevision) return;
     try {
@@ -1506,30 +1466,6 @@ export default function BoqStudioPage() {
     }
   };
 
-  const handleDuplicateBoq = async (boqId: string) => {
-    setDuplicatingId(boqId);
-    try {
-      const res = await fetch('/api/boq/duplicate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boqId }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to duplicate BOQ');
-      }
-      const data = await res.json();
-      setStatusType('success');
-      setStatusMessage(`✓ BOQ duplicated successfully as ${data.boqCode}`);
-      await loadAllBoqs();
-    } catch (e: any) {
-      setStatusType('error');
-      setStatusMessage(`Error: ${e.message}`);
-    } finally {
-      setDuplicatingId(null);
-    }
-  };
-
   // Helper metadata values
   const activeProjectObj = projects.find(p => p.id === (activeBoq?.projectId || setupProject || selectedProjectId));
   const activeCostCentreObj = costCentres.find(cc => cc.id === (activeBoq?.costCentreId || setupCostCentre || selectedCostCentreId));
@@ -1631,10 +1567,6 @@ export default function BoqStudioPage() {
 
   // Filtered BOQs for bottom list
   const filteredExistingBoqs = boqs.filter(b => {
-    if (filterProject && b.projectId !== filterProject) return false;
-    if (filterCostCentre && b.costCentreId !== filterCostCentre) return false;
-    if (filterPurpose && b.purpose !== filterPurpose) return false;
-    if (filterStatus && b.status !== filterStatus) return false;
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
       return (
@@ -2232,7 +2164,6 @@ export default function BoqStudioPage() {
                   onChange={e => {
                     if (e.target.files && e.target.files[0]) {
                       const file = e.target.files[0];
-                      setDrawingFile(file);
                       handleDrawingExtract(file);
                       e.target.value = '';
                     }

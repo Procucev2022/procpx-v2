@@ -48,8 +48,6 @@ import {
   getDemoComparison,
   getDemoRateCards,
   buildDemoQuotes,
-  buildDemoNegotiations,
-  buildDemoAwards,
   DEMO_QUOTES_DATA,
 } from '@/lib/procurement-demo-data';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
@@ -76,8 +74,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   }, [id, router]);
 
   const isDemoMode = id === 'RFQ-DEMO-001' || id === 'demo' || searchParams.get('demo') === 'true';
-  const [demoStep, setDemoStep] = useState<number>(1);
-  const [showDemoGuide, setShowDemoGuide] = useState<boolean>(searchParams.get('guide') === 'true');
 
   // Normalize initial tab to one of the 3 lifecycle tabs: 'quotes' | 'negotiation' | 'awarding'
   const initialTabParam = searchParams.get('tab') || 'quotes';
@@ -149,12 +145,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     return map;
   }, [comparison?.vendors, submittedQuotes, rfq?.lines]);
 
-  // Sub-view inside RFQ tab ('comparison' | 'scope' | 'vendors' | 'quotes' | 'terms')
-  const [rfqSubView, setRfqSubView] = useState<'comparison' | 'scope' | 'vendors' | 'quotes' | 'terms'>('comparison');
-
   // Modals state
-  const [showReRfqModal, setShowReRfqModal] = useState(false);
-  const [reRfqReason, setReRfqReason] = useState('');
 
   // 1. Record Quote Modal
   const [showRecordQuoteModal, setShowRecordQuoteModal] = useState(false);
@@ -163,23 +154,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [quoteCommercialTerms, setQuoteCommercialTerms] = useState('Payment net 30 days, FOB site delivery');
   const [quoteDeliveryDays, setQuoteDeliveryDays] = useState('30');
   const [quoteValidityDays, setQuoteValidityDays] = useState('60');
-
-  // 2. Negotiation Modal
-  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
-  const [negLevel, setNegLevel] = useState<'RFQ_LEVEL' | 'LINE_LEVEL'>('RFQ_LEVEL');
-  const [negVendorId, setNegVendorId] = useState('');
-  const [counterOffer, setCounterOffer] = useState('');
-  const [lineCounterRates, setLineCounterRates] = useState<Record<string, number>>({});
-  const [negTargetSavings, setNegTargetSavings] = useState('');
-  const [negDeadline, setNegDeadline] = useState(new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0]);
-  const [negNotes, setNegNotes] = useState('');
-
-  // 3. Record Revised Vendor Quote Modal
-  const [showRevisedQuoteModal, setShowRevisedQuoteModal] = useState(false);
-  const [revisedVendorId, setRevisedVendorId] = useState('');
-  const [revisedTotalAmount, setRevisedTotalAmount] = useState('');
-  const [revisedLineRates, setRevisedLineRates] = useState<Record<string, number>>({});
-  const [revisedRemarks, setRevisedRemarks] = useState('');
 
   // 4. Award Recommendation Modal
   const [showAwardModal, setShowAwardModal] = useState(false);
@@ -200,7 +174,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [ppoPaymentTerms, setPpoPaymentTerms] = useState('30 days net from certified invoice');
 
   // Specification preview modal
-  const [previewSpec, setPreviewSpec] = useState<{ title: string; spec: string } | null>(null);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -211,9 +184,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setComparison(getDemoComparison(demoData));
       setRateCardMatch(getDemoRateCards());
       setAwardVendorId('v-demo-001');
-      setNegVendorId('v-demo-001');
       setQuoteVendorId('v-demo-001');
-      setRevisedVendorId('v-demo-001');
       setLoading(false);
       setLoadingCompare(false);
       setLoadingRateCard(false);
@@ -223,23 +194,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     fetchComparison();
     fetchRateCardMatch();
   }, [id, isDemoMode, searchParams]);
-
-  const handleResetDemo = (startWithZero: boolean = true) => {
-    const freshRfq = getInitialDemoRfq(startWithZero);
-    setRfq(freshRfq);
-    setComparison(getDemoComparison(freshRfq));
-    setRateCardMatch(getDemoRateCards());
-    setActiveTab('quotes');
-    setRfqSubView('comparison');
-    setDemoStep(startWithZero ? 1 : 2);
-    setMsg(null);
-    toast.info({
-      title: 'Demonstration Reset',
-      message: startWithZero
-        ? 'Demonstration reset to 0 received quotes for Kundanahalli Retail Project (CC45).'
-        : 'Full end-to-end sample data loaded across RFQ, Negotiation and Awarding.',
-    });
-  };
 
   const handleSimulateReceiveAllQuotes = () => {
     if (!rfq) return;
@@ -274,9 +228,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         setRfq(data.rfq);
         if (data.rfq.quotes?.length > 0 && !awardVendorId) {
           setAwardVendorId(data.rfq.quotes[0].vendorId);
-          setNegVendorId(data.rfq.quotes[0].vendorId);
           setQuoteVendorId(data.rfq.quotes[0].vendorId);
-          setRevisedVendorId(data.rfq.quotes[0].vendorId);
         }
       }
     } catch (err) {
@@ -296,7 +248,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         // Default to L1 vendor
         const l1 = data.vendors[0];
         setAwardVendorId(l1.vendorId);
-        setNegVendorId(l1.vendorId);
       }
     } catch (err) {
       console.error('Failed to load quote comparison:', err);
@@ -370,102 +321,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  // Lock Rates Action
-  const handleLockRates = async (vendorId: string, quoteAmount: number) => {
-    if (!confirm('Are you sure you want to lock the commercial rates with this vendor?')) return;
-    const vendorName = rfq.invitedVendors?.find((iv: any) => iv.vendorId === vendorId)?.vendor?.name || 'Selected Vendor';
-
-    if (isDemoMode) {
-      const updated = {
-        ...rfq,
-        status: 'FINAL_RATE_LOCKED',
-        finalLockedAmount: quoteAmount,
-        lockedVendorId: vendorId,
-      };
-      setRfq(updated);
-      setComparison(getDemoComparison(updated));
-      setMsg({ text: 'Commercial rates successfully locked. Ready for Award Recommendation. (Demonstration Mode)', type: 'success' });
-      toast.success({
-        title: '[DEMO] Commercial Rates Locked',
-        message: `Rates locked at ₹${quoteAmount.toLocaleString()} with ${vendorName}. Prepare award recommendation.`,
-        recordNumber: rfq.rfqNumber,
-        vendorName,
-        nextStage: 'Award Recommendation',
-      });
-      setActiveTab('awarding');
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/procurement/rfqs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'LOCK_RATE',
-          lockedVendorId: vendorId,
-          finalRateLockedAmount: quoteAmount,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to lock commercial rates');
-      setMsg({ text: 'Commercial rates successfully locked. Ready for Award Recommendation.', type: 'success' });
-      toast.success({
-        title: 'Commercial Rates Locked',
-        message: `Rates locked at ₹${quoteAmount.toLocaleString()} with ${vendorName}. Prepare award recommendation.`,
-        recordNumber: rfq.rfqNumber,
-        vendorName,
-        nextStage: 'Award Recommendation',
-      });
-      fetchRfq();
-      setActiveTab('awarding');
-    } catch (err: any) {
-      setMsg({ text: err.message, type: 'error' });
-      toast.error({
-        title: 'Rate Lock Failed',
-        message: err.message || 'An error occurred while locking commercial rates.',
-        recordNumber: rfq?.rfqNumber,
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const [rfqChatDrawerOpen, setRfqChatDrawerOpen] = useState(false);
-
-  // Buyer Decision Action (Accept Offer — PPO Awaited / Decline Offer)
-  const handleBuyerDecision = async (roundId: string, decision: 'ACCEPTED' | 'REJECTED') => {
-    const actionLabel = decision === 'ACCEPTED' ? 'Accept Offer (PPO Awaited)' : 'Decline Offer / Close Negotiation';
-    if (!confirm(`Are you sure you want to ${actionLabel}?`)) return;
-    try {
-      setActionLoading(true);
-      const res = await fetch('/api/procurement/negotiations/decision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roundId,
-          decision,
-          remarks: decision === 'ACCEPTED' ? 'Commercial offer accepted by procurement authority; formal PPO generation awaited.' : 'Negotiation closed.',
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to record decision');
-      toast.success({
-        title: decision === 'ACCEPTED' ? 'Offer Accepted — PPO Awaited' : 'Negotiation Closed',
-        message: data.statusLabel || `Buyer decision recorded: ${decision}`,
-        recordNumber: rfq?.rfqNumber,
-      });
-      await fetchRfq();
-      await fetchComparison();
-    } catch (err: any) {
-      toast.error({
-        title: 'Decision Error',
-        message: err.message,
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   // Capture / Record Vendor Quote Submission
   const handleRecordQuoteSubmit = async () => {
@@ -578,313 +434,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       toast.error({
         title: 'Quotation Recording Failed',
         message: err.message || 'Failed to record vendor quotation.',
-        recordNumber: rfq?.rfqNumber,
-        vendorName,
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Negotiation Counter-Offer Submission
-  const handleNegotiationSubmit = async () => {
-    if (!negVendorId) {
-      toast.error({ title: 'Validation Error', message: 'Please select a vendor to negotiate with.' });
-      return;
-    }
-    const vendorName = rfq.invitedVendors?.find((iv: any) => iv.vendorId === negVendorId)?.vendor?.name || 'Vendor';
-
-    if (isDemoMode) {
-      setActionLoading(true);
-      let counterAmount = Number(counterOffer) || 840000;
-      if (negLevel === 'LINE_LEVEL') {
-        const sum = rfq.lines.reduce((acc: number, l: any) => {
-          const rate = Number(lineCounterRates[l.id]) || 0;
-          return acc + (rate > 0 ? rate * l.quantity : 0);
-        }, 0);
-        if (sum > 0) counterAmount = sum;
-      }
-
-      const existingNeg = rfq.negotiations?.find((n: any) => n.vendorId === negVendorId);
-      const rounds = existingNeg?.rounds || [];
-      const newRoundNumber = rounds.length + 1;
-      const initialQuoteAmt = rfq.quotes?.find((q: any) => q.vendorId === negVendorId)?.totalQuoteAmount || 880000;
-
-      const newRound = {
-        id: `round-${newRoundNumber}`,
-        roundNumber: newRoundNumber,
-        vendorId: negVendorId,
-        vendorName,
-        previousQuoteAmount: rounds[rounds.length - 1]?.revisedQuoteAmount || initialQuoteAmt,
-        counterOfferAmount: counterAmount,
-        revisedQuoteAmount: 0,
-        savingsAmount: initialQuoteAmt - counterAmount,
-        savingsPercent: Number((((initialQuoteAmt - counterAmount) / initialQuoteAmt) * 100).toFixed(2)),
-        status: 'COUNTER_SENT',
-        deadline: negDeadline || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
-        notes: negNotes || (negLevel === 'LINE_LEVEL' ? 'Line-item negotiation counter-offer' : 'Package-level counter-offer of ₹8,40,000 seeking 4.5% volume discount'),
-        timestamp: new Date().toISOString(),
-      };
-
-      const updatedNegs = [
-        {
-          id: existingNeg?.id || `neg-demo-${negVendorId}`,
-          vendorId: negVendorId,
-          status: 'ACTIVE',
-          currentRound: newRoundNumber,
-          targetSavingsPercent: 4.5,
-          bestQuoteAmount: counterAmount,
-          rounds: [...rounds, newRound],
-        },
-      ];
-
-      const updatedRfq = {
-        ...rfq,
-        status: 'NEGOTIATION',
-        negotiations: updatedNegs,
-      };
-
-      setRfq(updatedRfq);
-      setShowNegotiationModal(false);
-      setActionLoading(false);
-      setMsg({ text: 'Buyer offer submitted successfully. (Demonstration Mode)', type: 'success' });
-      toast.success(
-        'Buyer offer submitted successfully.',
-        rfq.rfqNumber,
-        'Awaiting Vendor Revised Offer'
-      );
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      let counterAmount = Number(counterOffer) || 0;
-      let lineItemsPayload: any[] | null = null;
-      if (negLevel === 'LINE_LEVEL') {
-        counterAmount = rfq.lines.reduce((acc: number, l: any) => {
-          const rate = Number(lineCounterRates[l.id]) || 0;
-          return acc + rate * l.quantity;
-        }, 0);
-        lineItemsPayload = (rfq.lines || []).map((l: any, idx: number) => {
-          const rate = Number(lineCounterRates[l.id]) || 0;
-          return {
-            rfqLineId: l.id,
-            lineNumber: l.lineNumber || idx + 1,
-            description: l.description,
-            counterRate: rate,
-            lineTotal: rate * (Number(l.quantity) || 1),
-          };
-        });
-      } else {
-        const previousTotal = rfq.quotes?.find((q: any) => q.vendorId === negVendorId)?.totalQuoteAmount || 1;
-        const ratio = counterAmount / (previousTotal || 1);
-        lineItemsPayload = (rfq.lines || []).map((l: any, idx: number) => {
-          const quoteLine = rfq.quotes?.find((q: any) => q.vendorId === negVendorId)?.lines?.find((ql: any) => ql.rfqLineId === l.id);
-          const origRate = Number(quoteLine?.unitRate) || Number(l.benchmarkRate) || 0;
-          const rate = Math.round(origRate * ratio);
-          return {
-            rfqLineId: l.id,
-            lineNumber: l.lineNumber || idx + 1,
-            description: l.description,
-            counterRate: rate,
-            lineTotal: rate * (Number(l.quantity) || 1),
-          };
-        });
-      }
-
-      const res = await fetch('/api/procurement/negotiations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rfqId: id,
-          vendorId: negVendorId,
-          counterOfferAmount: counterAmount,
-          deadline: negDeadline,
-          notes: negNotes || (negLevel === 'LINE_LEVEL' ? 'Line-item negotiation counter-offer' : 'Package-level counter-offer'),
-          lineItemsJson: lineItemsPayload ? JSON.stringify(lineItemsPayload) : null,
-          nextResponsibleParty: 'VENDOR',
-          allowSupersede: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit counter-offer');
-      setShowNegotiationModal(false);
-      setMsg({ text: 'Buyer offer submitted successfully.', type: 'success' });
-      toast.success(
-        'Buyer offer submitted successfully.',
-        rfq.rfqNumber,
-        'Awaiting Revised Quotation'
-      );
-      fetchRfq();
-    } catch (err: any) {
-      setMsg({ text: err.message, type: 'error' });
-      toast.error({
-        title: 'Counter-Offer Failed',
-        message: err.message || 'An error occurred while dispatching the counter-offer.',
-        recordNumber: rfq?.rfqNumber,
-        vendorName,
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Record Revised Quote from Vendor (without overwriting previous quotes!)
-  const handleRevisedQuoteSubmit = async () => {
-    if (!revisedVendorId) return;
-    const vendorName = rfq.invitedVendors?.find((iv: any) => iv.vendorId === revisedVendorId)?.vendor?.name || 'Vendor';
-
-    if (isDemoMode) {
-      setActionLoading(true);
-      const revisedAmt = Number(revisedTotalAmount) || 850000;
-      const existingNeg = rfq.negotiations?.find((n: any) => n.vendorId === revisedVendorId) || {
-        id: `neg-demo-${revisedVendorId}`,
-        vendorId: revisedVendorId,
-        status: 'ACTIVE',
-        currentRound: 1,
-        rounds: [],
-      };
-
-      const lastRound = existingNeg.rounds[existingNeg.rounds.length - 1];
-      const updatedRound = lastRound
-        ? {
-            ...lastRound,
-            revisedQuoteAmount: revisedAmt,
-            status: 'REVISED_SUBMITTED',
-            savingsAmount: (lastRound.previousQuoteAmount || 880000) - revisedAmt,
-            savingsPercent: Number(((((lastRound.previousQuoteAmount || 880000) - revisedAmt) / (lastRound.previousQuoteAmount || 880000)) * 100).toFixed(2)),
-            notes: `${lastRound.notes || ''} | Vendor revised quotation: ${revisedRemarks || 'Agreed to ₹8,50,000 revised package price.'}`,
-          }
-        : {
-            id: 'round-1',
-            roundNumber: 1,
-            vendorId: revisedVendorId,
-            vendorName,
-            previousQuoteAmount: 880000,
-            counterOfferAmount: 840000,
-            revisedQuoteAmount: revisedAmt,
-            savingsAmount: 30000,
-            savingsPercent: 3.41,
-            status: 'REVISED_SUBMITTED',
-            deadline: new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
-            notes: `Vendor revised quotation received: ${revisedRemarks || 'Agreed to ₹8,50,000'}`,
-            timestamp: new Date().toISOString(),
-          };
-
-      const updatedNegs = [
-        {
-          ...existingNeg,
-          bestQuoteAmount: revisedAmt,
-          rounds: lastRound ? [...existingNeg.rounds.slice(0, -1), updatedRound] : [updatedRound],
-        },
-      ];
-
-      // Add new immutable Quote revision record
-      const revisedQuote = {
-        id: `quote-${revisedVendorId}-rev2`,
-        quoteNumber: `QTE-ACME-001-R1`,
-        quoteVersion: 2,
-        vendorId: revisedVendorId,
-        totalQuoteAmount: revisedAmt,
-        status: 'SUBMITTED',
-        commercialTerms: `Revised terms: ${revisedRemarks || 'Agreed to ₹8,50,000 commercial fitout total'}`,
-        deliveryLeadTimeDays: 25,
-        validityDays: 60,
-        paymentTerms: 'Net 30 days from certified measurement invoice',
-        warranty: '12 months defect liability period',
-        freightTerms: 'Included in unit rates',
-        submittedAt: new Date().toISOString(),
-        lines: rfq.lines.map((l: any) => ({
-          id: `ql-${revisedVendorId}-rev-${l.id}`,
-          rfqLineId: l.id,
-          unitRate: Math.round(revisedAmt / rfq.lines.length),
-          lineTotal: Math.round(revisedAmt / rfq.lines.length) * l.quantity,
-          taxPercent: 18,
-        })),
-      };
-
-      const updatedQuotes = [...(rfq.quotes || []), revisedQuote];
-
-      const updatedRfq = {
-        ...rfq,
-        status: 'FINAL_RATE_LOCKED',
-        finalLockedAmount: revisedAmt,
-        lockedVendorId: revisedVendorId,
-        quotes: updatedQuotes,
-        negotiations: updatedNegs,
-      };
-
-      setRfq(updatedRfq);
-      setComparison(getDemoComparison(updatedRfq));
-      setShowRevisedQuoteModal(false);
-      setActionLoading(false);
-      setMsg({ text: 'Revised quotation successfully received. (Demonstration Mode)', type: 'success' });
-      toast.success({
-        title: '[DEMO] Revised Quotation Received',
-        message: 'Revised quotation successfully received.',
-        recordNumber: 'QTE-ACME-001-R1',
-        vendorName,
-        nextStage: 'Commercial Comparison / Rate Lock',
-      });
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      // 1. Log revised quote into negotiation round
-      const resNeg = await fetch('/api/procurement/negotiations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rfqId: id,
-          vendorId: revisedVendorId,
-          revisedQuoteAmount: Number(revisedTotalAmount) || 0,
-          notes: `Vendor revised quotation received: ${revisedRemarks}`,
-        }),
-      });
-      const dataNeg = await resNeg.json();
-      if (!resNeg.ok) throw new Error(dataNeg.error || 'Failed to record revised quote in negotiation');
-
-      // 2. Also register a new immutable Quote revision record
-      const linesPayload = rfq.lines.map((l: any) => {
-        const rate = Number(revisedLineRates[l.id]) || (Number(revisedTotalAmount) / (rfq.lines.length || 1));
-        return {
-          rfqLineId: l.id,
-          unitRate: rate,
-          taxPercent: 18,
-          discountPercent: 0,
-        };
-      });
-
-      const resQuote = await fetch('/api/procurement/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rfqId: id,
-          vendorId: revisedVendorId,
-          lines: linesPayload,
-          commercialTerms: `Revised terms: ${revisedRemarks}`,
-        }),
-      });
-      const dataQuote = await resQuote.json();
-      if (!resQuote.ok) throw new Error(dataQuote.error || 'Failed to capture revised quote lines');
-
-      setShowRevisedQuoteModal(false);
-      setMsg({ text: 'Revised quotation successfully received.', type: 'success' });
-      toast.success({
-        title: 'Revised Quote Recorded',
-        message: `Revised quotation successfully received. Revised quotation of ₹${(Number(revisedTotalAmount) || 0).toLocaleString()} recorded for ${vendorName}. Audit trail preserved.`,
-        recordNumber: dataQuote.quote?.quoteNumber || rfq.rfqNumber,
-        vendorName,
-        nextStage: 'Commercial Comparison / Rate Lock',
-      });
-      fetchRfq();
-      fetchComparison();
-    } catch (err: any) {
-      setMsg({ text: err.message, type: 'error' });
-      toast.error({
-        title: 'Revised Quote Failed',
-        message: err.message || 'An error occurred while saving the revised quotation.',
         recordNumber: rfq?.rfqNumber,
         vendorName,
       });
@@ -2381,233 +1930,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ============================================================ */}
-      {/* MODAL 2: ISSUE NEGOTIATION COUNTER-OFFER                     */}
-      {/* ============================================================ */}
-      {showNegotiationModal && (
-        <Modal
-          isOpen={showNegotiationModal}
-          onClose={() => setShowNegotiationModal(false)}
-          title="Issue Negotiation Counter-Offer"
-          maxWidth="max-w-2xl"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label className="label">Negotiate With Vendor</label>
-              <select
-                value={negVendorId}
-                onChange={(e) => {
-                  const vid = e.target.value;
-                  setNegVendorId(vid);
-                  if (isDemoMode && vid === 'v-demo-001') {
-                    setCounterOffer('840000');
-                    setNegNotes('Counter-offer seeking 4.5% volume discount for consolidated CC45 retail package.');
-                  }
-                }}
-                className="input"
-              >
-                <option value="">-- Select Vendor --</option>
-                {comparison?.vendors?.map((v: any) => (
-                  <option key={v.vendorId} value={v.vendorId}>
-                    {v.vendorName} (Current Quote: ₹ {v.totalQuoteAmount?.toLocaleString()})
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            <div>
-              <label className="label">Negotiation Scope Level</label>
-              <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="negLevel"
-                    checked={negLevel === 'RFQ_LEVEL'}
-                    onChange={() => setNegLevel('RFQ_LEVEL')}
-                  />
-                  <span>Entire RFQ Package Level</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="negLevel"
-                    checked={negLevel === 'LINE_LEVEL'}
-                    onChange={() => setNegLevel('LINE_LEVEL')}
-                  />
-                  <span>Individual Line-Item Level</span>
-                </label>
-              </div>
-            </div>
-
-            {negLevel === 'RFQ_LEVEL' ? (
-              <div>
-                <label className="label">Target Counter-Offer Total Amount (₹)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 1450000"
-                  value={counterOffer}
-                  onChange={(e) => setCounterOffer(e.target.value)}
-                  className="input"
-                />
-              </div>
-            ) : (
-              <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8 }}>
-                <table className="table" style={{ fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      <th>S.No.</th>
-                      <th>Item Description</th>
-                      <th>Quantity</th>
-                      <th>Counter Unit Rate (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rfq.lines?.map((l: any) => (
-                      <tr key={l.id}>
-                        <td className="font-mono">{l.lineNumber}</td>
-                        <td>{l.description}</td>
-                        <td>{l.quantity}</td>
-                        <td>
-                          <input
-                            type="number"
-                            placeholder="Counter rate"
-                            value={lineCounterRates[l.id] || ''}
-                            onChange={(e) =>
-                              setLineCounterRates((prev) => ({
-                                ...prev,
-                                [l.id]: Number(e.target.value),
-                              }))
-                            }
-                            className="input input-sm"
-                            style={{ width: 120 }}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label className="label">Response Deadline</label>
-                <input
-                  type="date"
-                  value={negDeadline}
-                  onChange={(e) => setNegDeadline(e.target.value)}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="label">Negotiation Notes / Concessions</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Volume discount requested"
-                  value={negNotes}
-                  onChange={(e) => setNegNotes(e.target.value)}
-                  className="input"
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-              <button
-                type="button"
-                onClick={() => setShowNegotiationModal(false)}
-                className="btn btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleNegotiationSubmit}
-                disabled={actionLoading}
-                className="btn btn-primary"
-              >
-                {actionLoading ? 'Issuing...' : 'Issue Counter-Offer'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* ============================================================ */}
-      {/* MODAL 3: CAPTURE VENDOR REVISED QUOTE                        */}
-      {/* ============================================================ */}
-      {showRevisedQuoteModal && (
-        <Modal
-          isOpen={showRevisedQuoteModal}
-          onClose={() => setShowRevisedQuoteModal(false)}
-          title="Capture Vendor Revised Quotation"
-          maxWidth="max-w-lg"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label className="label">Select Vendor</label>
-              <select
-                value={revisedVendorId}
-                onChange={(e) => {
-                  const vid = e.target.value;
-                  setRevisedVendorId(vid);
-                  if (isDemoMode && vid === 'v-demo-001') {
-                    setRevisedTotalAmount('850000');
-                    setRevisedRemarks('Vendor agreed to revised commercial total of ₹8,50,000 conceding ₹30,000 discount.');
-                  }
-                }}
-                className="input"
-              >
-                {comparison?.vendors?.map((v: any) => (
-                  <option key={v.vendorId} value={v.vendorId}>
-                    {v.vendorName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Vendor's Final Revised Amount (₹)</label>
-              <input
-                type="number"
-                placeholder="e.g. 1420000"
-                value={revisedTotalAmount}
-                onChange={(e) => setRevisedTotalAmount(e.target.value)}
-                className="input"
-              />
-            </div>
-
-            <div>
-              <label className="label">Revised Commercial Remarks</label>
-              <input
-                type="text"
-                placeholder="e.g. Conceded 5% additional discount on payment term confirmation"
-                value={revisedRemarks}
-                onChange={(e) => setRevisedRemarks(e.target.value)}
-                className="input"
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-              <button
-                type="button"
-                onClick={() => setShowRevisedQuoteModal(false)}
-                className="btn btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleRevisedQuoteSubmit}
-                disabled={actionLoading}
-                className="btn btn-primary"
-              >
-                {actionLoading ? 'Recording...' : 'Record Revised Quote'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* ============================================================ */}
       {/* MODAL 4: AWARD RECOMMENDATION (L1 vs Non-L1 Exception)       */}
       {/* ============================================================ */}
       {showAwardModal && (
@@ -3061,21 +2384,6 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 Close
               </button>
             </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Specification Preview Modal */}
-      {previewSpec && (
-        <Modal
-          isOpen={!!previewSpec}
-          onClose={() => setPreviewSpec(null)}
-          title={previewSpec.title}
-          maxWidth="max-w-lg"
-        >
-          <div style={{ padding: 14, background: '#f8fafc', borderRadius: 6, fontSize: 13, color: '#334155' }}>
-            <h5 style={{ fontSize: 12, textTransform: 'uppercase', color: '#64748b', marginBottom: 6 }}>Full Technical Specification</h5>
-            <p style={{ lineHeight: 1.6 }}>{previewSpec.spec || 'Standard commercial specification'}</p>
           </div>
         </Modal>
       )}

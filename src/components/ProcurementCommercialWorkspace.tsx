@@ -11,11 +11,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Info,
-  Send,
   Save,
   RotateCcw,
   CheckCircle2,
-  Clock,
   FileText,
   AlertTriangle,
   MessageSquare,
@@ -389,19 +387,6 @@ export default function ProcurementCommercialWorkspace({
     return Math.max(1300, 1045 + vendorCount * 220);
   }, [invitedVendorsComparison]);
 
-  // Selection toggle for Table 1 and Dropdown vendors
-  const allVendorsSelected =
-    invitedVendorsComparison.length > 0 &&
-    selectedVendorIds.length === invitedVendorsComparison.length;
-
-  const toggleSelectAllVendors = () => {
-    if (allVendorsSelected) {
-      setSelectedVendorIds([]);
-    } else {
-      setSelectedVendorIds(invitedVendorsComparison.map((v) => v.vendorId));
-    }
-  };
-
   const toggleSelectVendor = (vendorId: string) => {
     setSelectedVendorIds((prev) =>
       prev.includes(vendorId) ? prev.filter((id) => id !== vendorId) : [...prev, vendorId]
@@ -495,21 +480,16 @@ export default function ProcurementCommercialWorkspace({
       const lineQty = selectedLineForDetail.quantity || 0;
       const lineAmount = Math.round(num * lineQty);
 
-      setLineCounterRates((prev) => {
-        const next = {
-          ...prev,
-          [selectedLineForDetail.id]: num,
-        };
-        const payload = {
-          rates: next,
-          notes: negNotes,
-          deadline: negDeadline,
-          timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-        };
-        localStorage.setItem(draftStorageKey, JSON.stringify(payload));
-        setDraftSavedTimestamp(payload.timestamp);
-        return next;
-      });
+      const next = { ...lineCounterRates, [selectedLineForDetail.id]: num };
+      const payload = {
+        rates: next,
+        notes: negNotes,
+        deadline: negDeadline,
+        timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      };
+      localStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      setLineCounterRates(next);
+      setDraftSavedTimestamp(payload.timestamp);
 
       setItemOfferFeedback(
         `Buyer offer rate applied to this item: ₹${num.toLocaleString('en-IN')} / ${selectedLineForDetail.uom} (Line Total: ₹${lineAmount.toLocaleString('en-IN')}). Saved to draft.`
@@ -535,21 +515,16 @@ export default function ProcurementCommercialWorkspace({
       const lineQty = selectedLineForDetail.quantity || 0;
       const lineAmount = Math.round(num * lineQty);
 
-      setLineCounterRates((prev) => {
-        const next = {
-          ...prev,
-          [selectedLineForDetail.id]: num,
-        };
-        const payload = {
-          rates: next,
-          notes: negNotes,
-          deadline: negDeadline,
-          timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-        };
-        localStorage.setItem(draftStorageKey, JSON.stringify(payload));
-        setDraftSavedTimestamp(payload.timestamp);
-        return next;
-      });
+      const next = { ...lineCounterRates, [selectedLineForDetail.id]: num };
+      const payload = {
+        rates: next,
+        notes: negNotes,
+        deadline: negDeadline,
+        timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      };
+      localStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      setLineCounterRates(next);
+      setDraftSavedTimestamp(payload.timestamp);
 
       setItemOfferFeedback(
         `Draft rate saved for this item: ₹${num.toLocaleString('en-IN')} / ${selectedLineForDetail.uom} (Line Total: ₹${lineAmount.toLocaleString('en-IN')}).`
@@ -615,181 +590,13 @@ export default function ProcurementCommercialWorkspace({
     });
   };
 
-  // Offer Dispatch State & Confirmation Modals
-  const [showDispatchModal, setShowDispatchModal] = useState<boolean>(false);
-  const [dispatchTargetVendors, setDispatchTargetVendors] = useState<any[]>([]);
-  const [dispatchScope, setDispatchScope] = useState<'SELECTED' | 'ALL_ELIGIBLE'>('SELECTED');
-  const [confirmSupersede, setConfirmSupersede] = useState<boolean>(true);
+  // Offer dispatch feedback and submission state
   const [submittingOffer, setSubmittingOffer] = useState<boolean>(false);
   const [submissionFeedback, setSubmissionFeedback] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
   const [bulkDispatchResults, setBulkDispatchResults] = useState<any | null>(null);
-
-  // Validate and initiate dispatch to Selected Vendors
-  const handleInitiateSendToSelected = () => {
-    if (selectedVendorIds.length === 0) {
-      toast.warning('Please select at least one vendor from the Vendor Comparison table above.');
-      return;
-    }
-
-    // Validate that entered rates are positive valid numbers
-    for (const [lineId, rate] of Object.entries(lineCounterRates)) {
-      if (typeof rate !== 'number' || isNaN(rate) || rate <= 0) {
-        toast.error('Invalid counteroffer rate entered. Rates must be positive numbers.');
-        return;
-      }
-    }
-
-    // Check if any selected vendor is ineligible
-    const ineligibles = invitedVendorsComparison.filter(
-      (v) => selectedVendorIds.includes(v.vendorId) && !v.isEligible
-    );
-    if (ineligibles.length > 0) {
-      toast.error(
-        `Cannot dispatch: ${ineligibles.map((v) => v.vendorName).join(', ')} has not submitted Quote 1 or has reached the 4-offer limit.`
-      );
-      return;
-    }
-
-    const targets = invitedVendorsComparison.filter((v) => selectedVendorIds.includes(v.vendorId));
-    setDispatchTargetVendors(targets);
-    setDispatchScope('SELECTED');
-    setConfirmSupersede(true);
-    setShowDispatchModal(true);
-  };
-
-  // Validate and initiate dispatch to All Eligible Vendors
-  const handleInitiateSendToAllEligible = () => {
-    if (eligibleVendors.length === 0) {
-      toast.warning(
-        'No vendors are currently eligible to receive a counteroffer. Eligible vendors must have submitted Quote 1 and have fewer than 4 offers.'
-      );
-      return;
-    }
-
-    for (const [lineId, rate] of Object.entries(lineCounterRates)) {
-      if (typeof rate !== 'number' || isNaN(rate) || rate <= 0) {
-        toast.error('Invalid counteroffer rate entered. Rates must be positive numbers.');
-        return;
-      }
-    }
-
-    setDispatchTargetVendors(eligibleVendors);
-    setDispatchScope('ALL_ELIGIBLE');
-    setConfirmSupersede(true);
-    setShowDispatchModal(true);
-  };
-
-  // Execute Dispatch after Confirmation
-  const handleExecuteDispatch = async () => {
-    if (dispatchTargetVendors.length === 0) return;
-
-    setSubmittingOffer(true);
-    setSubmissionFeedback(null);
-    setBulkDispatchResults(null);
-
-    const vendorIds = dispatchTargetVendors.map((v) => v.vendorId);
-
-    // Build line-level payload
-    const lineItemsPayload = allLines.map((line: any) => {
-      const counterRate =
-        lineCounterRates[line.id] !== undefined && lineCounterRates[line.id] > 0
-          ? lineCounterRates[line.id]
-          : line.benchmarkRate || 0;
-
-      return {
-        rfqLineId: line.id,
-        lineNumber: line.lineNumber,
-        description: line.description,
-        counterRate,
-        lineTotal: counterRate * line.quantity,
-      };
-    });
-
-    try {
-      if (isDemoMode) {
-        setTimeout(() => {
-          setShowDispatchModal(false);
-          toast.success(
-            `Buyer offer dispatched to ${vendorIds.length} vendor${vendorIds.length > 1 ? 's' : ''}.`,
-            rfq.rfqNumber,
-            'Awaiting Vendor Revised Offer'
-          );
-          setSubmissionFeedback({
-            type: 'success',
-            text: `Buyer offer dispatched successfully to ${vendorIds.length} vendor${vendorIds.length > 1 ? 's' : ''}.`,
-          });
-          setLineCounterRates({});
-          setSelectedVendorIds([]);
-          setSubmittingOffer(false);
-          if (onNegotiationSubmitted) onNegotiationSubmitted();
-        }, 600);
-        return;
-      }
-
-      const res = await fetch('/api/procurement/negotiations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rfqId: rfq.id,
-          vendorIds,
-          counterOfferAmount: proposedCounterTotal,
-          deadline: negDeadline,
-          notes:
-            negNotes ||
-            `Commercial counteroffer dispatched to ${vendorIds.length} vendor${vendorIds.length > 1 ? 's' : ''}.`,
-          lineItemsJson: JSON.stringify(lineItemsPayload),
-          nextResponsibleParty: 'VENDOR',
-          allowSupersede: confirmSupersede,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok && (!data.dispatched || data.dispatched.length === 0)) {
-        throw new Error(data.error || 'Failed to dispatch buyer offer');
-      }
-
-      setShowDispatchModal(false);
-      setBulkDispatchResults(data);
-
-      const dispatchedCount = data.summary?.dispatchedCount || data.dispatched?.length || (data.round ? 1 : 0);
-      const failedCount = data.summary?.failedCount || data.failed?.length || 0;
-
-      if (dispatchedCount > 0) {
-        localStorage.removeItem(draftStorageKey);
-        setDraftSavedTimestamp(null);
-        toast.success(
-          `Buyer offer dispatched to ${dispatchedCount} vendor${dispatchedCount > 1 ? 's' : ''}.`,
-          rfq.rfqNumber,
-          failedCount > 0 ? `${failedCount} vendors failed` : 'Awaiting Vendor Revised Offer'
-        );
-        setSubmissionFeedback({
-          type: failedCount > 0 ? 'error' : 'success',
-          text: `Offer dispatch completed: ${dispatchedCount} succeeded${failedCount > 0 ? `, ${failedCount} failed` : ''}.`,
-        });
-        setLineCounterRates({});
-        setSelectedVendorIds([]);
-      } else {
-        setSubmissionFeedback({
-          type: 'error',
-          text: `Offer dispatch failed: ${data.failed?.[0]?.reason || data.error || 'Check vendor eligibility'}`,
-        });
-      }
-
-      if (onNegotiationSubmitted) onNegotiationSubmitted();
-    } catch (err: any) {
-      setShowDispatchModal(false);
-      setSubmissionFeedback({
-        type: 'error',
-        text: err.message || 'Counteroffer dispatch failed. Entered rates have been preserved.',
-      });
-      toast.error(err.message || 'Counteroffer dispatch failed.');
-    } finally {
-      setSubmittingOffer(false);
-    }
-  };
 
   // Dropdown direct send offer handler
   const handleDropdownSendOffer = async () => {
@@ -811,8 +618,6 @@ export default function ProcurementCommercialWorkspace({
       return;
     }
 
-    setDispatchTargetVendors(targets);
-    setDispatchScope('SELECTED');
     setSubmittingOffer(true);
     setSubmissionFeedback(null);
     setBulkDispatchResults(null);
@@ -1836,198 +1641,6 @@ export default function ProcurementCommercialWorkspace({
                 className="btn btn-primary btn-sm text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium"
               >
                 Confirm Reset
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* DISPATCH CONFIRMATION MODAL (SELECTED OR ALL ELIGIBLE VENDORS)            */}
-      {/* ========================================================================= */}
-      {showDispatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-w-2xl w-full p-5 space-y-4 max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-2.5">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                  {dispatchScope === 'ALL_ELIGIBLE' ? 'Bulk Negotiation Dispatch' : 'Negotiation Dispatch'}
-                </span>
-                <h3 className="text-base font-bold text-slate-900 mt-1 m-0">
-                  Confirm Buyer Offer Dispatch
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5 m-0">
-                  RFQ: <span className="font-mono font-semibold">{rfq.rfqNumber}</span> • {dispatchTargetVendors.length} Recipient Vendor{dispatchTargetVendors.length > 1 ? 's' : ''}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDispatchModal(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Offer Summary */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 bg-blue-50/60 rounded border border-blue-200">
-                <span className="text-blue-900 block font-semibold">Proposed Counteroffer Total</span>
-                <strong className="text-blue-950 font-mono text-base font-black">
-                  ₹ {proposedCounterTotal.toLocaleString('en-IN')}
-                </strong>
-                <span className="text-[11px] text-blue-700 block mt-0.5">
-                  Applied across {modifiedLinesCount || allLines.length} line items
-                </span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded border border-slate-200">
-                <span className="text-slate-500 block font-semibold">Recipient Scope</span>
-                <strong className="text-slate-900 text-sm font-bold block mt-0.5">
-                  {dispatchTargetVendors.length} Vendor{dispatchTargetVendors.length > 1 ? 's' : ''}
-                </strong>
-                <span className="text-[11px] text-slate-500 block mt-0.5">
-                  Independent round recorded for each vendor
-                </span>
-              </div>
-            </div>
-
-            {/* Recipient Vendors Table */}
-            <div className="space-y-1 flex-1 overflow-hidden flex flex-col">
-              <div className="text-xs font-bold text-slate-700">Recipient Vendors</div>
-              <div className="max-h-44 overflow-y-auto border border-slate-200 rounded">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead className="bg-slate-100 text-slate-700 font-semibold sticky top-0">
-                    <tr>
-                      <th className="py-1.5 px-2.5">Vendor</th>
-                      <th className="py-1.5 px-2.5 text-right">Latest Quote</th>
-                      <th className="py-1.5 px-2.5 text-right">New Buyer Offer</th>
-                      <th className="py-1.5 px-2.5 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {dispatchTargetVendors.map((v) => {
-                      const hasPending = Boolean(v.pendingBuyerOffer);
-
-                      return (
-                        <tr key={v.vendorId}>
-                          <td className="py-1.5 px-2.5 font-medium text-slate-800">
-                            <div>{v.vendorName}</div>
-                            {v.vendorCode && (
-                              <div className="font-mono text-[10px] text-slate-400">
-                                {v.vendorCode}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-1.5 px-2.5 text-right font-mono font-medium text-slate-800">
-                            {v.latestSubmittedQuoteTotal !== null
-                              ? `₹ ${v.latestSubmittedQuoteTotal.toLocaleString('en-IN')}`
-                              : '—'}
-                          </td>
-                          <td className="py-1.5 px-2.5 text-right font-mono font-bold text-blue-900">
-                            ₹ {proposedCounterTotal.toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-1.5 px-2.5 text-center">
-                            {hasPending ? (
-                              <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                                Has Pending Offer
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                                Ready
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Supersede warning if any recipient vendor has a pending offer */}
-            {dispatchTargetVendors.some((v) => Boolean(v.pendingBuyerOffer)) && (
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-950 space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-amber-900">
-                  <AlertTriangle size={14} />
-                  <span>Pending Counteroffers Detected</span>
-                </div>
-                <p className="m-0 leading-relaxed text-amber-900 text-[11px]">
-                  One or more selected vendors currently have an active offer awaiting response.
-                  Issuing this new offer will mark pending offers as <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-800">SUPERSEDED</code> and preserve them in audit history.
-                </p>
-                <label className="flex items-center gap-2 pt-0.5 font-semibold text-amber-950 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={confirmSupersede}
-                    onChange={(e) => setConfirmSupersede(e.target.checked)}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>Confirm superseding pending counteroffers</span>
-                </label>
-              </div>
-            )}
-
-            {/* Deadline and Notes */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Vendor Response Deadline
-                </label>
-                <input
-                  type="date"
-                  value={negDeadline}
-                  onChange={(e) => setNegDeadline(e.target.value)}
-                  className="w-full text-xs py-1.5 px-2 rounded border border-slate-300 font-medium"
-                />
-              </div>
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Commercial Remarks / Note
-                </label>
-                <input
-                  type="text"
-                  value={negNotes}
-                  onChange={(e) => setNegNotes(e.target.value)}
-                  placeholder="e.g. Volume discount target requested."
-                  className="w-full text-xs py-1.5 px-2 rounded border border-slate-300 font-medium"
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowDispatchModal(false)}
-                disabled={submittingOffer}
-                className="btn btn-secondary btn-sm text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteDispatch}
-                disabled={
-                  submittingOffer ||
-                  dispatchTargetVendors.length === 0 ||
-                  (dispatchTargetVendors.some((v) => Boolean(v.pendingBuyerOffer)) && !confirmSupersede)
-                }
-                className={`btn btn-primary btn-sm text-xs font-semibold px-4 inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white ${
-                  dispatchTargetVendors.some((v) => Boolean(v.pendingBuyerOffer)) && !confirmSupersede
-                    ? 'opacity-50 cursor-not-allowed'
-                    : ''
-                }`}
-              >
-                {submittingOffer ? (
-                  <>
-                    <Clock size={13} className="animate-spin" /> Dispatching...
-                  </>
-                ) : (
-                  <>
-                    <Send size={13} /> Confirm & Dispatch ({dispatchTargetVendors.length})
-                  </>
-                )}
               </button>
             </div>
           </div>

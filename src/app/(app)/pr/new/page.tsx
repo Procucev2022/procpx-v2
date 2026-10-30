@@ -38,11 +38,17 @@ export default function CreatePrPage() {
 
   useEffect(() => {
     if (selectedProjectId) {
+      setCostCentres([]);
+      setBoqs([]);
+      setSelectedCostCentreId('');
+      setSelectedBoqId('');
       loadCostCentres(selectedProjectId);
       loadBoqs(selectedProjectId);
     } else {
       setCostCentres([]);
       setBoqs([]);
+      setSelectedCostCentreId('');
+      setSelectedBoqId('');
     }
   }, [selectedProjectId]);
 

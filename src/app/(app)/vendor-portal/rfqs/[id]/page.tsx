@@ -2,7 +2,7 @@
 // src/app/(app)/vendor-portal/rfqs/[id]/page.tsx
 // Dedicated Vendor RFQ Workspace: Itemized Quotation Submission & Clarifications
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -28,7 +28,6 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 export default function VendorRfqWorkspacePage() {
   const toast = useToast();
   const params = useParams();
-  const router = useRouter();
   const rfqId = params.id as string;
 
   const [rfq, setRfq] = useState<any>(null);
@@ -100,7 +99,11 @@ export default function VendorRfqWorkspacePage() {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed.lineQuotes && Object.keys(parsed.lineQuotes).length > 0) {
-            setLineQuotes(parsed.lineQuotes);
+            const restoredLines = { ...initialLines };
+            Object.entries(parsed.lineQuotes).forEach(([lineId, draftLine]: [string, any]) => {
+              restoredLines[lineId] = { ...initialLines[lineId], ...draftLine };
+            });
+            setLineQuotes(restoredLines);
             if (parsed.commercialNotes !== undefined) setCommercialNotes(parsed.commercialNotes);
             if (parsed.validUntil !== undefined) setValidUntil(parsed.validUntil);
             if (parsed.savedAt) setDraftSavedAt(parsed.savedAt);
@@ -174,17 +177,6 @@ export default function VendorRfqWorkspacePage() {
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch {
       setError('Failed to save draft locally in browser storage.');
-    }
-  };
-
-  const handleResetDraft = () => {
-    if (!confirm('Are you sure you want to reset your entered draft values to baseline?')) return;
-    try {
-      localStorage.removeItem(draftStorageKey);
-      setDraftSavedAt(null);
-      loadRfqDetail();
-    } catch {
-      // ignore
     }
   };
 
