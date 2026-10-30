@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **211**. Files meeting all four 90% thresholds: **211/211**.
+Files included: **215**. Files meeting all four 90% thresholds: **215/215**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.59% (82085/82418) |
-| branches | 94.34% (16617/17613) |
-| functions | 98.30% (1567/1594) |
-| lines | 99.59% (82085/82418) |
+| statements | 99.59% (82493/82828) |
+| branches | 94.38% (16770/17767) |
+| functions | 98.33% (1595/1622) |
+| lines | 99.59% (82493/82828) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -120,6 +120,7 @@ Files included: **211**. Files meeting all four 90% thresholds: **211/211**.
 | `src/app/api/masters/categories/route.ts` | 97.36% | 94.36% | 100.00% | 97.36% | PASS |
 | `src/app/api/masters/uom/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/notifications/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/observability/client/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/approve/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/reject/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/release-to-procurement/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -207,8 +208,9 @@ Files included: **211**. Files meeting all four 90% thresholds: **211/211**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.10% | 94.24% | 92.85% | 99.10% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.10% | 94.23% | 92.85% | 99.10% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.13% | 96.15% | 99.91% | PASS |
+| `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auth.ts` | 100.00% | 95.45% | 100.00% | 100.00% | PASS |
@@ -217,6 +219,8 @@ Files included: **211**. Files meeting all four 90% thresholds: **211/211**.
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
 | `src/lib/drawing-parser.ts` | 99.29% | 93.27% | 100.00% | 99.29% | PASS |
 | `src/lib/notifications.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 100.00% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/shared.ts` | 100.00% | 98.14% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/prisma.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/procurement-demo-data.ts` | 100.00% | 97.75% | 100.00% | 100.00% | PASS |

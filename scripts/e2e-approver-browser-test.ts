@@ -1,12 +1,13 @@
-import puppeteer from 'puppeteer-core';
+import puppeteer, { type Page } from 'puppeteer-core';
 import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import fs from 'fs';
+import { attachPlaywrightDebugCapture, captureDebugCheckpoint } from './observability/debug-capture';
 
 const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const PROOF_DIR = path.join(process.cwd(), 'prisma', 'backups', 'browser-proof');
+const PROOF_DIR = path.join(process.cwd(), 'logs', 'screenshots');
 
 if (!fs.existsSync(PROOF_DIR)) {
   fs.mkdirSync(PROOF_DIR, { recursive: true });
@@ -26,12 +27,24 @@ function recordResult(testId: string, name: string, status: 'PASS' | 'FAIL', det
   console.log(`\n[${status}] Test ${testId}: ${name}\n  -> ${details}`);
 }
 
-async function loginInBrowser(page: any, email: string, password = 'Demo@1234') {
+async function captureWorkflowCheckpoint(page: Page, checkpoint: string): Promise<void> {
+  const latestResult = results[results.length - 1];
+  try {
+    await captureDebugCheckpoint(page, `approver-workflow-${checkpoint}`, {
+      testId: latestResult?.testId || checkpoint,
+      status: latestResult?.status || 'INCOMPLETE',
+    });
+  } catch (error: unknown) {
+    console.warn('Workflow debug checkpoint could not be captured:', error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function loginInBrowser(page: Page, email: string, password = 'Demo@1234') {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('input[type="email"]');
-  await page.$eval('input[type="email"]', (el: any) => el.value = '');
+  await page.$eval('input[type="email"]', (el) => { (el as HTMLInputElement).value = ''; });
   await page.type('input[type="email"]', email);
-  await page.$eval('input[type="password"]', (el: any) => el.value = '');
+  await page.$eval('input[type="password"]', (el) => { (el as HTMLInputElement).value = ''; });
   await page.type('input[type="password"]', password);
   
   await Promise.all([
@@ -54,6 +67,7 @@ async function runTests() {
   });
 
   const page = await browser.newPage();
+  attachPlaywrightDebugCapture(page, 'approver-workflow');
 
   try {
     // -------------------------------------------------------------
@@ -194,6 +208,7 @@ async function runTests() {
     } else {
       recordResult('A', 'Submit BOQ as Project User & verify visibility', 'FAIL', `Dashboard: ${appearsInDashboard}, Approvals Page: ${appearsInApprovals}`);
     }
+    await captureWorkflowCheckpoint(page, 'A');
 
     // -------------------------------------------------------------
     // TEST B: Confirm all six actions are visible for pending BOQ
@@ -223,6 +238,7 @@ async function runTests() {
     } else {
       recordResult('B', 'Confirm all six actions are visible on Dashboard and BOQ Approvals', 'FAIL', `Approvals page: ${allSixInApprovals}, Dashboard: ${allSixInDashboard}`);
     }
+    await captureWorkflowCheckpoint(page, 'B');
 
     // -------------------------------------------------------------
     // TEST C: Open Review and verify BOQ details and line items
@@ -247,11 +263,12 @@ async function runTests() {
     const hasLineItem2 = modalHtml.includes('Acoustic Ceiling Tiles') || modalHtml.includes('600x600mm');
     const hasMetadata = modalHtml.includes('Source BOQ') && modalHtml.includes('Requested Value');
 
-    if (clickedReview && hasLineItem1 && hasMetadata) {
+    if (clickedReview && hasLineItem1 && hasLineItem2 && hasMetadata) {
       recordResult('C', 'Open Review and verify complete BOQ details and line items', 'PASS', 'BOQ details metadata and all line items loaded accurately in the Review modal.');
     } else {
-      recordResult('C', 'Open Review and verify complete BOQ details and line items', 'FAIL', `Clicked: ${clickedReview}, Line items loaded: ${hasLineItem1}, Metadata: ${hasMetadata}`);
+      recordResult('C', 'Open Review and verify complete BOQ details and line items', 'FAIL', `Clicked: ${clickedReview}, line items: ${hasLineItem1}/${hasLineItem2}, metadata: ${hasMetadata}`);
     }
+    await captureWorkflowCheckpoint(page, 'C');
 
     // Close review modal
     const closeButtons = await page.$$('button');
@@ -316,6 +333,7 @@ async function runTests() {
     } else {
       recordResult('D', 'Send message and chat; verify persistence and history', 'FAIL', 'Message was not found in persisted PRApproval records.');
     }
+    await captureWorkflowCheckpoint(page, 'D');
 
     // Close chat drawer
     const closeDrawerBtn = await page.$('button[title="Close panel"]');
@@ -377,6 +395,7 @@ async function runTests() {
     } else {
       recordResult('E', 'Revert test BOQ with reason & Project User receives it', 'FAIL', `isReverted: ${isReverted}, hasAudit: ${hasRevertAudit}, userSeesReason: ${userSeesReturned}`);
     }
+    await captureWorkflowCheckpoint(page, 'E');
 
     // -------------------------------------------------------------
     // TEST F: Resubmit corrected BOQ & Approver reviews and approves
@@ -398,7 +417,7 @@ async function runTests() {
 
     // Verify DB status transitioned back to PR_PENDING_PROJECT_APPROVAL
     const resubmittedPr = await prisma.procurementRequest.findUnique({ where: { id: prAlpha.id } });
-    const isBackPending = resubmittedPr?.status === 'PR_PENDING_PROJECT_APPROVAL';
+    const isBackPending = resubmitted && resubmittedPr?.status === 'PR_PENDING_PROJECT_APPROVAL';
 
     // Log in as Project Approver to approve
     await loginInBrowser(page, 'project.approver@procucev-demo.local');
@@ -425,6 +444,7 @@ async function runTests() {
     } else {
       recordResult('F', 'Resubmit corrected BOQ & Approver approves; verify audit trail', 'FAIL', `isBackPending: ${isBackPending}, isApproved: ${isApproved}, hasApprovalRecord: ${hasApprovalRecord}`);
     }
+    await captureWorkflowCheckpoint(page, 'F');
 
     // -------------------------------------------------------------
     // TEST G: Create separate test BOQ and verify Reject action
@@ -546,6 +566,7 @@ async function runTests() {
     } else {
       recordResult('G', 'Create separate test BOQ & verify Reject action with reason', 'FAIL', `isRejected: ${isRejected}, hasRejectAudit: ${hasRejectAudit}`);
     }
+    await captureWorkflowCheckpoint(page, 'G');
 
     // -------------------------------------------------------------
     // TEST H: Re-login checks, unauthorized role protection, queue clearance
@@ -580,10 +601,12 @@ async function runTests() {
     } else {
       recordResult('H', 'Queue clearance & unauthorized role permissions check', 'FAIL', `queueClear: ${queueClearOfActioned}, unauthorizedBlocked (status ${unauthorizedResp.status}): ${unauthorizedBlocked}`);
     }
+    await captureWorkflowCheckpoint(page, 'H');
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Test execution error:', error);
-    recordResult('ERROR', 'Test Execution Failure', 'FAIL', error.message);
+    recordResult('ERROR', 'Test Execution Failure', 'FAIL', error instanceof Error ? error.message : String(error));
+    await captureWorkflowCheckpoint(page, 'error');
   } finally {
     await browser.close();
     await prisma.$disconnect();

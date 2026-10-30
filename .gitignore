@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# local structured logs, snapshots, and screenshots
+/logs
+
 # next.js
 /.next/
 /out/
