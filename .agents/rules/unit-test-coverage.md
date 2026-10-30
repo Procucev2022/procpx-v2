@@ -16,3 +16,5 @@ description: "Apply workspace-wide build, test coverage, typecheck, lint, and sa
 - If a project uses a different build, coverage, typecheck, lint, migration, or integrity command, expose it as a package script for the workspace runner.
 - Follow the structured logging and debug evidence policy in `AGENTS.md`. Use the shared logger for new server events, keep secrets and raw user content out of logs, and retain local logs/snapshots/screenshots for 30 days with automatic startup cleanup.
 - Use `npm run logs:search -- --level error --since 24h` to search local JSONL records. Attach `attachPlaywrightDebugCapture` to browser test pages and capture a named checkpoint after each meaningful workflow state; keep screenshots in the managed `logs/` directory so retention purges them.
+
+- Follow `.agents/rules/application-structure.md` for the required dedicated constants and type/interface modules.

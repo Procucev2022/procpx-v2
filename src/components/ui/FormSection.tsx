@@ -2,21 +2,9 @@
 // src/components/ui/FormSection.tsx
 // Standardized Enterprise Reusable Form Section Container (1px neutral border, 16-20px padding, subtle header)
 import React from 'react';
+import type { FormSectionProps } from "@app-types/components/ui/FormSection.types";
+export type { FormSectionProps };
 
-export interface FormSectionProps {
-  /** Section number or identifier, e.g. "1" or "A" */
-  sectionNumber?: number | string;
-  /** Section title (16-18px semibold) */
-  title: string;
-  /** Optional concise subtitle / guidance */
-  subtitle?: string;
-  /** Optional action on the right side of header */
-  headerAction?: React.ReactNode;
-  /** Section fields / form content */
-  children: React.ReactNode;
-  /** Optional wrapper class */
-  className?: string;
-}
 
 export default function FormSection({
   sectionNumber,

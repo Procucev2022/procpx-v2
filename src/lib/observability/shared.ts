@@ -1,21 +1,8 @@
-export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+import type { LogLevel, LogSource, LogRecord } from "@app-types/lib/observability/shared.types";
+export type { LogLevel, LogSource, LogRecord };
+import { LOG_LEVELS, sensitiveKeyPattern, secretTextPattern, emailPattern } from "./shared.constants";
+export { LOG_LEVELS };
 
-export type LogLevel = (typeof LOG_LEVELS)[number];
-export type LogSource = 'application' | 'browser' | 'next' | 'playwright';
-
-export type LogRecord = {
-  timestamp: string;
-  level: LogLevel;
-  message: string;
-  service: 'procpx';
-  environment: string;
-  source: LogSource;
-  context?: Record<string, unknown>;
-};
-
-const sensitiveKeyPattern = /password|passwd|secret|token|authorization|cookie|session|api[-_]?key|credential|private[-_]?key/i;
-const secretTextPattern = /\b(password|passwd|secret|token|authorization|cookie|api[-_]?key)\b(\s*[:=]\s*)([^\s&,;]+)/gi;
-const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 
 export function redactText(value: string): string {
   return value

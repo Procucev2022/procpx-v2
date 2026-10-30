@@ -6,10 +6,8 @@ import Link from 'next/link';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import FormSection from '@/components/ui/FormSection';
+import { SECTORS, PROJECT_TYPES, CURRENCIES } from "./page.constants";
 
-const SECTORS = ['RETAIL', 'HOSPITALITY', 'BANKING', 'INSURANCE', 'OTHER'];
-const PROJECT_TYPES = ['NEW_BUILD', 'RENOVATION', 'REFURBISHMENT', 'EXPANSION', 'REPLACEMENT', 'FIT_OUT', 'MAINTENANCE_CAPEX', 'OTHER'];
-const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED'];
 
 export default function NewProjectPage() {
   const router = useRouter();

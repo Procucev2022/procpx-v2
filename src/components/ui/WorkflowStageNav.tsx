@@ -4,19 +4,9 @@
 // Prominent 44-48px clickable tabs with clear Procucev blue styling and discrete status indicators
 import React from 'react';
 import { Check } from 'lucide-react';
+import type { WorkflowStageItem, WorkflowStageNavProps } from "@app-types/components/ui/WorkflowStageNav.types";
+export type { WorkflowStageItem, WorkflowStageNavProps };
 
-export interface WorkflowStageItem {
-  id: string;
-  stageNumber: number | string;
-  label: string;
-  status: 'CURRENT' | 'COMPLETED' | 'PENDING' | 'DISABLED';
-  onClick?: () => void;
-}
-
-export interface WorkflowStageNavProps {
-  stages: WorkflowStageItem[];
-  className?: string;
-}
 
 export default function WorkflowStageNav({
   stages,

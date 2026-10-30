@@ -1,10 +1,7 @@
 'use client';
-// components/ui/StatusBadge.tsx - Enterprise Status Badge System
+import type { StatusBadgeProps } from "@app-types/components/ui/StatusBadge.types";
+export type { StatusBadgeProps };
 
-export interface StatusBadgeProps {
-  status: string;
-  size?: 'sm' | 'md';
-}
 
 export default function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
   const norm = (status || '').toUpperCase().trim();

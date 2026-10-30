@@ -31,13 +31,8 @@ import {
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
+import type { VendorSourcingDashboardProps } from "@app-types/components/VendorSourcingDashboard.types";
 
-interface VendorSourcingDashboardProps {
-  vendorId: string;
-  vendorName: string;
-  vendorCode: string;
-  isBuyer?: boolean;
-}
 
 export default function VendorSourcingDashboard({
   vendorId,

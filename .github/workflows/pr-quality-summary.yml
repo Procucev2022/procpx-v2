@@ -1,0 +1,189 @@
+name: Pull request quality summary
+
+on:
+  workflow_run:
+    workflows: [Pull request quality]
+    types: [completed]
+
+permissions:
+  actions: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    name: Comment test and coverage results
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download quality report artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        timeout-minutes: 5
+        with:
+          name: unit-test-coverage-${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/quality-reports
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish or update the pull request summary comment
+        uses: actions/github-script@v9
+        timeout-minutes: 5
+        env:
+          REPORT_DIRECTORY: ${{ runner.temp }}/quality-reports
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const marker = '<!-- procpx-pull-request-quality-summary -->';
+            const reportDirectory = process.env.REPORT_DIRECTORY;
+            const readJson = (filename) => {
+              const file = path.join(reportDirectory, filename);
+              try {
+                return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+              } catch (error) {
+                core.warning(`Could not read ${filename}: ${error.message}`);
+                return null;
+              }
+            };
+
+            const results = readJson('quality-outcomes.json');
+            const tests = readJson('jest-results.json');
+            const coverage = readJson('coverage-summary.json');
+            const run = context.payload.workflow_run;
+            const dimensions = ['statements', 'branches', 'functions', 'lines'];
+            const files = coverage
+              ? Object.entries(coverage).filter(([filename]) => filename !== 'total')
+              : [];
+            const passingFiles = files.filter(([, metrics]) =>
+              dimensions.every((dimension) => metrics[dimension]?.pct >= 90),
+            ).length;
+            const totalCoverage = coverage?.total;
+            const coveragePasses = Boolean(totalCoverage)
+              && dimensions.every((dimension) => totalCoverage[dimension]?.pct >= 90)
+              && files.length > 0
+              && passingFiles === files.length;
+            const outcomeLabels = {
+              install: 'Install',
+              build: 'Build',
+              unitTests: 'Unit tests and coverage',
+              typecheck: 'Typecheck',
+              lint: 'Lint',
+            };
+            const outcomeRows = Object.entries(outcomeLabels).map(([key, label]) => {
+              const outcome = results?.[key] || 'not run';
+              const icon = outcome === 'success' ? '✅' : outcome === 'failure' ? '❌' : '⏭️';
+              return `| ${label} | ${icon} ${outcome} |`;
+            });
+            const qualityChecksPass = Object.keys(outcomeLabels)
+              .every((key) => results?.[key] === 'success');
+            const testsPass = tests?.success === true;
+            const passed = run.conclusion === 'success'
+              && qualityChecksPass
+              && testsPass
+              && coveragePasses;
+            const formatMetric = (metric) => {
+              const value = totalCoverage?.[metric];
+              return value ? `${value.pct.toFixed(2)}% (${value.covered}/${value.total})` : 'Unavailable';
+            };
+            const testCounts = tests
+              ? `${tests.numPassedTests ?? 0} passed · ${tests.numFailedTests ?? 0} failed · ${tests.numPendingTests ?? 0} pending · ${tests.numTotalTests ?? 0} total`
+              : 'Unavailable (Jest result file was not produced)';
+            const suiteCounts = tests
+              ? `${tests.numPassedTestSuites ?? 0} passed · ${tests.numFailedTestSuites ?? 0} failed · ${tests.numTotalTestSuites ?? 0} total`
+              : 'Unavailable';
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${run.id}`;
+            const body = [
+              marker,
+              '## Pull request quality summary',
+              `**Overall: ${passed ? '✅ PASS' : '❌ FAIL'}**`,
+              '',
+              '| Check | Result |',
+              '| --- | --- |',
+              ...outcomeRows,
+              '',
+              `**Unit tests:** ${testCounts}`,
+              `**Test suites:** ${suiteCounts}`,
+              '',
+              '**Overall coverage** (90% required for statements, branches, functions, and lines in every source file):',
+              '',
+              '| Metric | Coverage |',
+              '| --- | ---: |',
+              ...dimensions.map((dimension) => `| ${dimension} | ${formatMetric(dimension)} |`),
+              '',
+              `**Per-file coverage:** ${files.length ? `${passingFiles}/${files.length} files pass all four thresholds` : 'Unavailable'}.`,
+              '',
+              `[View workflow logs and download the full per-file report](${runUrl}).`,
+            ].join('\n');
+
+            await core.summary
+              .addHeading('Pull request quality summary', 2)
+              .addRaw(body.replace(`${marker}\n`, ''), true)
+              .write();
+
+            const metadata = results || {};
+            const pullNumber = Number(metadata.prNumber);
+            const expectedHeadSha = metadata.prHeadSha;
+            if (!Number.isInteger(pullNumber) || pullNumber < 1 || typeof expectedHeadSha !== 'string') {
+              core.warning('The quality artifact has no valid pull request metadata; only the workflow summary was written.');
+              return;
+            }
+
+            try {
+              const associatedPullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: expectedHeadSha,
+                  per_page: 100,
+                },
+              );
+              const isAssociated = associatedPullRequests.some((pullRequest) =>
+                pullRequest.number === pullNumber,
+              );
+              if (!isAssociated) {
+                core.warning('The pull request number in the quality artifact is not associated with its recorded commit.');
+                return;
+              }
+
+              const pullRequest = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pullNumber,
+              });
+              if (pullRequest.data.state !== 'open' || pullRequest.data.head.sha !== expectedHeadSha) {
+                core.info('Skipping a stale quality result; the pull request is closed or its head has changed.');
+                return;
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pullNumber,
+                per_page: 100,
+              });
+              const existing = comments.find((comment) =>
+                comment.user?.type === 'Bot' && comment.body?.includes(marker),
+              );
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pullNumber,
+                  body,
+                });
+              }
+            } catch (error) {
+              core.warning(`Could not publish the PR comment; the workflow summary is still available: ${error.message}`);
+            }

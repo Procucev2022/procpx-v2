@@ -34,10 +34,8 @@ import {
   Scale,
   Tag,
 } from 'lucide-react';
+import type { SidebarProps } from "@app-types/components/Sidebar.types";
 
-interface SidebarProps {
-  user: { name?: string | null; email?: string | null; role: string; tenantName: string };
-}
 
 export default function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();

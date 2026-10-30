@@ -6,3 +6,5 @@ alwaysApply: true
 Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. After every code change, run `npm run check:quality` at the workspace root to check all discovered npm projects. It runs build and unit-test coverage first, then typecheck, lint, safe pending migrations, and database integrity. Use `npm run check:changed` for fast changed-file lint, affected-project TypeScript checks, and changed or related unit tests while editing; it does not replace the full gate. Every `src/**/*.ts` and `src/**/*.tsx` file must meet 90% statements, branches, functions, and lines individually and overall. Jest uses a 30-second global timeout and `--detectOpenHandles`.
 
 Use the shared structured logger and follow `AGENTS.md` for redaction, local log search/retention, diagnostic snapshots, and Playwright screenshots at workflow checkpoints.
+
+Follow `.agents/rules/application-structure.md` for dedicated constants and type/interface modules.

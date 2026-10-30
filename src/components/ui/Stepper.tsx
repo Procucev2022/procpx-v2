@@ -2,23 +2,9 @@
 // components/ui/Stepper.tsx - Enterprise Horizontal Stepper with Exact Five-Step Colour Coding
 import React from 'react';
 import { Check } from 'lucide-react';
+import type { StepItem, StepperProps } from "@app-types/components/ui/Stepper.types";
+export type { StepItem };
 
-export interface StepItem {
-  number: number;
-  icon?: React.ReactNode;
-  title: string;
-  description: string;
-  primaryColor?: string;
-  lightBg?: string;
-  accentBorder?: string;
-  isClickable?: boolean;
-}
-
-interface StepperProps {
-  steps: StepItem[];
-  currentStep: number;
-  onStepClick?: (stepNumber: number) => void;
-}
 
 export default function Stepper({ steps, currentStep, onStepClick }: StepperProps) {
   return (

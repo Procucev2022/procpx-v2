@@ -5,26 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Check, AlertTriangle, FileSpreadsheet, CheckCircle2, CheckCircle, AlertOctagon } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
+import type { WizardStep } from "@app-types/app/(app)/boq/upload/page.types";
+import { BOQ_FIELDS } from "./page.constants";
 
-type WizardStep = 'upload' | 'map' | 'preview' | 'importing' | 'done';
-
-const BOQ_FIELDS = [
-  { key: 'lineNumber', label: 'S.No.', required: false },
-  { key: 'itemCode', label: 'Item Code', required: false },
-  { key: 'category', label: 'Category', required: false },
-  { key: 'subcategory', label: 'Sub-category', required: false },
-  { key: 'description', label: 'Item Description', required: true },
-  { key: 'specification', label: 'BOQ Description', required: false },
-  { key: 'uom', label: 'UOM', required: true },
-  { key: 'quantity', label: 'Quantity', required: true },
-  { key: 'location', label: 'Location', required: false },
-  { key: 'drawingReference', label: 'Drawing Reference', required: false },
-  { key: 'brand', label: 'Brand', required: false },
-  { key: 'model', label: 'Model', required: false },
-  { key: 'material', label: 'Material', required: false },
-  { key: 'grade', label: 'Grade', required: false },
-  { key: 'remarks', label: 'Remarks', required: false },
-];
 
 export default function BoqUploadPage() {
   const searchParams = useSearchParams();

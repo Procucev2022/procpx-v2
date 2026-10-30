@@ -13,20 +13,9 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import type { ApprovalChatDrawerProps } from "@app-types/components/ApprovalChatDrawer.types";
+export type { ApprovalChatDrawerProps };
 
-export interface ApprovalChatDrawerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  entityType: 'PR' | 'BUDGET';
-  entityId: string;
-  entityCode: string; // e.g. PR-2026-000001 or BOQ-CPX-P-001
-  title?: string;
-  costCentre?: string;
-  category?: string;
-  amount?: number;
-  initialEnquiryMode?: boolean;
-  onMessageSent?: () => void;
-}
 
 export default function ApprovalChatDrawer({
   isOpen,

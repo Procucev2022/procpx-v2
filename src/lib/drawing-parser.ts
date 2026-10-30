@@ -2,102 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
 import { createWorker } from 'tesseract.js';
+import type { ExtractedDrawingItem, DrawingParseResult } from "@app-types/lib/drawing-parser.types";
+export type { ExtractedDrawingItem, DrawingParseResult };
+import { CATEGORY_RULES, KNOWN_UOMS } from "./drawing-parser.constants";
 
-export interface ExtractedDrawingItem {
-  lineNumber: string;
-  mark?: string;
-  description: string;
-  specification: string;
-  category: string;
-  subCategory?: string;
-  uom: string;
-  quantity: number | null;
-  quantityType: 'EXPLICIT' | 'CALCULATED' | 'UNCERTAIN';
-  uncertainReason?: string;
-  location?: string;
-  confidence: number;
-  drawingReference?: string;
-  sheet?: string;
-}
-
-export interface DrawingParseResult {
-  success: boolean;
-  parserUsed: 'NATIVE_PDF_SCHEDULE' | 'AI_GEMINI_VISION' | 'AI_OPENAI_VISION' | 'LOCAL_OCR_TESSERACT';
-  providerMessage?: string;
-  drawingReference?: string;
-  totalDetected: number;
-  explicitCount: number;
-  uncertainCount: number;
-  items: ExtractedDrawingItem[];
-  warnings: string[];
-}
-
-// Category matching heuristics based on industry CaPex keywords
-const CATEGORY_RULES: Array<{ category: string; keywords: string[] }> = [
-  {
-    category: 'Civil & Interior',
-    keywords: [
-      'tile', 'vitrified', 'granite', 'marble', 'flooring', 'ceiling', 'gypsum', 'partition',
-      'glass', 'door', 'window', 'flush door', 'paint', 'putty', 'plaster', 'veneer', 'laminate',
-      'skirting', 'hardware', 'lock', 'hinge', 'joinery', 'wood', 'plywood', 'corian', 'boxing', 'beam',
-    ],
-  },
-  {
-    category: 'Electrical',
-    keywords: [
-      'light', 'led', 'downlight', 'cable', 'wire', 'conduit', 'switch', 'socket', 'panel',
-      'db', 'distribution board', 'mcb', 'mccb', 'ups', 'circuit', 'wiring', 'luminaire', 'track light',
-      'power point', 'ups socket',
-    ],
-  },
-  {
-    category: 'HVAC',
-    keywords: [
-      'ac', 'air conditioning', 'split ac', 'cassette', 'chiller', 'duct', 'diffuser', 'grille',
-      'vrf', 'vrv', 'fan coil', 'exhaust fan', 'ventilation', 'copper piping', 'refrigerant',
-    ],
-  },
-  {
-    category: 'Plumbing',
-    keywords: [
-      'plumbing', 'pipe', 'pvc', 'cpvc', 'drain', 'basin', 'wash basin', 'water closet', 'wc',
-      'urinal', 'faucet', 'tap', 'trap', 'valve', 'pump', 'water heater', 'geyser', 'sanitary',
-    ],
-  },
-  {
-    category: 'Fire Fighting',
-    keywords: [
-      'fire', 'extinguisher', 'sprinkler', 'hydrant', 'smoke detector', 'fire alarm', 'hose reel',
-      'alarm valve', 'fire suppression',
-    ],
-  },
-  {
-    category: 'ELV / IT',
-    keywords: [
-      'cat6', 'data point', 'rj45', 'rack', 'server', 'cctv', 'camera', 'access control',
-      'biometric', 'pa system', 'speaker', 'wifi', 'access point', 'intercom', 'screen', 'display', 'menu board', 'dmb',
-    ],
-  },
-  {
-    category: 'Furniture',
-    keywords: [
-      'table', 'desk', 'chair', 'sofa', 'workstation', 'counter', 'reception', 'credenza',
-      'storage unit', 'filing cabinet', 'podium', 'bench',
-    ],
-  },
-  {
-    category: 'Signage & Branding',
-    keywords: [
-      'signage', 'branding', 'logo', 'fascia', 'acrylic', 'glow sign', 'neon', 'directional sign',
-      'wayfinding', 'pylon', 'manifestation',
-    ],
-  },
-];
-
-// Standard CaPex UOMs
-const KNOWN_UOMS = [
-  'SQFT', 'SQM', 'NOS', 'MTR', 'RFT', 'CUM', 'SET', 'LOT', 'EA', 'KG', 'PAC', 'BAG',
-];
 
 function resolveCategory(text: string): string {
   const lower = text.toLowerCase();

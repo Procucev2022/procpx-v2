@@ -14,15 +14,8 @@ import {
   Shield,
   LogOut,
 } from 'lucide-react';
+import type { TopNavProps } from "@app-types/components/ui/TopNav.types";
 
-interface TopNavProps {
-  user: {
-    name?: string | null;
-    email?: string | null;
-    role: string;
-    tenantName: string;
-  };
-}
 
 export default function TopNav({ user }: TopNavProps) {
   const [searchFocused, setSearchFocused] = useState(false);

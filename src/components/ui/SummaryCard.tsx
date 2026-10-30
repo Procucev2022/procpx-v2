@@ -3,25 +3,9 @@
 // Standardized Enterprise Reusable Summary Card & Grid Component
 // Compact 100-120px height, grouped label-amount-description layout, restrained accents
 import React from 'react';
+import type { SummaryCardProps, SummaryCardGridProps } from "@app-types/components/ui/SummaryCard.types";
+export type { SummaryCardProps, SummaryCardGridProps };
 
-export interface SummaryCardProps {
-  /** Label / Metric Title (styled at ~12-13px semibold) */
-  label: string;
-  /** Primary metric value or amount (styled at ~20-24px bold) */
-  value: React.ReactNode;
-  /** Supporting description or secondary information, directly below amount (~12-13px) */
-  secondary?: React.ReactNode;
-  /** Optional icon displayed next to label */
-  icon?: React.ReactNode;
-  /** Optional badge or trend indicator */
-  badge?: React.ReactNode;
-  /** Restrained accent style */
-  accent?: 'default' | 'neutral' | 'blue' | 'emerald' | 'amber' | 'rose' | 'slate';
-  /** Extra CSS classes */
-  className?: string;
-  /** Optional subtitle or description (alias for secondary) */
-  description?: string;
-}
 
 export function SummaryCard({
   label,
@@ -76,12 +60,6 @@ export function SummaryCard({
       )}
     </div>
   );
-}
-
-export interface SummaryCardGridProps {
-  children: React.ReactNode;
-  columns?: 1 | 2 | 3 | 4 | 5 | 6;
-  className?: string;
 }
 
 export function SummaryCardGrid({

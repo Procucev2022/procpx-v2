@@ -1,26 +1,6 @@
-// lib/boq-validate.ts - BOQ line validation rules
-export interface BoqLineInput {
-  originalDescription?: string;
-  standardDescription?: string;
-  uomRaw?: string;
-  uomId?: string;
-  quantity?: number | null;
-  categoryId?: string;
-  lineNumber?: string;
-  isDuplicate?: boolean;
-  isInvalidUom?: boolean;
-}
+import type { BoqLineInput, ValidationMessage, ValidationResult } from "@app-types/lib/boq-validate.types";
+export type { BoqLineInput, ValidationMessage, ValidationResult };
 
-export interface ValidationMessage {
-  level: 'ERROR' | 'WARNING' | 'INFO';
-  code: string;
-  message: string;
-}
-
-export interface ValidationResult {
-  status: 'VALID' | 'WARNING' | 'ERROR';
-  messages: ValidationMessage[];
-}
 
 export function validateBoqLine(line: BoqLineInput): ValidationResult {
   const messages: ValidationMessage[] = [];

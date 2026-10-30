@@ -13,30 +13,8 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
+import type { Section6Props } from "@app-types/components/rate-cards/Section6ApproverView.types";
 
-interface Section6Props {
-  role?: 'PROJECT_APPROVER' | 'FINANCE_APPROVER' | 'CATEGORY_MANAGER';
-  rateCardId?: string;
-  vendorName?: string;
-  vendorCode?: string;
-  category?: string;
-  vendorAcceptanceDate?: string;
-  projectApproved?: boolean;
-  financeApproved?: boolean;
-  agreement?: AgreementDocumentData | null;
-  items?: Array<{
-    id?: string;
-    itemCode?: string;
-    description: string;
-    uom: string;
-    qty?: number;
-    agreedRate?: number;
-    rate?: number;
-  }>;
-  onApproveProject?: (comments: string) => void;
-  onApproveFinance?: (comments: string) => void;
-  onReject?: (comments: string) => void;
-}
 
 export default function Section6ApproverView({
   role = 'PROJECT_APPROVER',

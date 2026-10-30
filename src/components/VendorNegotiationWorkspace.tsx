@@ -23,16 +23,9 @@ import {
   FileText,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import type { VendorNegotiationWorkspaceProps } from "@app-types/components/VendorNegotiationWorkspace.types";
+export type { VendorNegotiationWorkspaceProps };
 
-export interface VendorNegotiationWorkspaceProps {
-  mode: 'RFQ' | 'RATE_CARD';
-  data: any; // RFQ object or Rate Card object
-  vendorId?: string;
-  vendorName?: string;
-  isBuyer?: boolean;
-  onBack: () => void;
-  onSuccess?: () => void;
-}
 
 export default function VendorNegotiationWorkspace({
   mode,

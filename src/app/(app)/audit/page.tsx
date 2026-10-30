@@ -4,38 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { Eye, ShieldCheck, Activity, Layers, Filter } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
+import type { AuditLogItem } from "@app-types/app/(app)/audit/page.types";
+import { ACTION_COLORS } from "./page.constants";
 
-interface AuditLogItem {
-  id: string;
-  entityType: string;
-  entityId: string;
-  action: string;
-  description: string;
-  oldValue?: string | null;
-  newValue?: string | null;
-  oldValues?: string | null;
-  newValues?: string | null;
-  ipAddress?: string | null;
-  createdAt: string;
-  user?: {
-    name: string | null;
-    email: string;
-  } | null;
-}
-
-const ACTION_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  CREATE: { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
-  UPDATE: { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
-  DELETE: { bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
-  SUBMIT: { bg: '#fef3c7', text: '#b45309', border: '#fde68a' },
-  APPROVE: { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
-  REJECT: { bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
-  IMPORT: { bg: '#f3e8ff', text: '#7e22ce', border: '#e9d5ff' },
-  UPLOAD: { bg: '#f3e8ff', text: '#7e22ce', border: '#e9d5ff' },
-  STANDARDISE: { bg: '#fce7f3', text: '#be185d', border: '#fbcfe8' },
-  VALIDATE: { bg: '#cffafe', text: '#0e7490', border: '#a5f3fc' },
-  LOGIN: { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' },
-};
 
 export default function AuditTrailPage() {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);

@@ -1,11 +1,9 @@
 'use client';
 // components/ui/Breadcrumbs.tsx
 import Link from 'next/link';
+import type { BreadcrumbItem } from "@app-types/components/ui/Breadcrumbs.types";
+export type { BreadcrumbItem };
 
-export interface BreadcrumbItem {
-  label: string;
-  href?: string;
-}
 
 export default function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   return (

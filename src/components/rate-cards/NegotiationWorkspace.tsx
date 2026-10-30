@@ -7,33 +7,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
+import type { NegotiationItem, NegotiationWorkspaceProps } from "@app-types/components/rate-cards/NegotiationWorkspace.types";
+export type { NegotiationItem };
 
-export interface NegotiationItem {
-  id: string;
-  itemCode: string;
-  description: string;
-  specification?: string;
-  uom: string;
-  qty: number;
-  buyerTargetRate: number;
-  latestVendorQuote: number;
-  currentBuyerOffer: number;
-  proposedAmount?: number;
-}
-
-interface NegotiationWorkspaceProps {
-  rateCardId?: string;
-  vendorName?: string;
-  category?: string;
-  round?: string;
-  items: NegotiationItem[];
-  onItemsChange: (updated: NegotiationItem[]) => void;
-  onReset: () => void;
-  onSaveDraft: () => void;
-  onSendOffer: () => void;
-  onAcceptQuoteClick?: () => void;
-  onBack: () => void;
-}
 
 export default function NegotiationWorkspace({
   rateCardId = 'RC-2026-0006',

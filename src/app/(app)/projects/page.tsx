@@ -6,9 +6,8 @@ import { Search, Folder, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
+import { STATUS_OPTIONS, SECTOR_OPTIONS } from "./page.constants";
 
-const STATUS_OPTIONS = ['', 'DRAFT', 'BOQ_PREPARATION', 'BOQ_REVIEW', 'BOQ_APPROVED', 'CANCELLED'];
-const SECTOR_OPTIONS = ['', 'RETAIL', 'HOSPITALITY', 'BANKING', 'INSURANCE', 'OTHER'];
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<any[]>([]);

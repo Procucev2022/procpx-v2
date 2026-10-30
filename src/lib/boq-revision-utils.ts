@@ -1,33 +1,9 @@
 // src/lib/boq-revision-utils.ts
 // Utility module for resilient, concurrency-safe BOQ revision number generation and lifecycle management.
 import { prisma } from '@/lib/prisma';
+import type { CreateRevisionData } from "@app-types/lib/boq-revision-utils.types";
+export type { CreateRevisionData };
 
-export interface CreateRevisionData {
-  boqId: string;
-  tenantId: string;
-  createdById: string;
-  costCentreId?: string | null;
-  status?: string;
-  preparationStatus?: string;
-  budgetStatus?: string;
-  prStatus?: string;
-  sourceType?: string;
-  sourceFile?: string | null;
-  sourceReference?: string | null;
-  sourceConfidence?: number | null;
-  originalFileName?: string | null;
-  originalFilePath?: string | null;
-  originalFileSize?: number | null;
-  originalFileHash?: string | null;
-  uploadedAt?: Date | null;
-  columnMapping?: string | null;
-  notes?: string | null;
-  totalLines?: number;
-  validLines?: number;
-  errorLines?: number;
-  warningLines?: number;
-  qualityScore?: number | null;
-}
 
 /**
  * Returns the highest existing revision number for a specific BOQ, or -1 if no revisions exist.

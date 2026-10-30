@@ -28,18 +28,9 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
+import type { ProcurementCommercialWorkspaceProps } from "@app-types/components/ProcurementCommercialWorkspace.types";
+export type { ProcurementCommercialWorkspaceProps };
 
-export interface ProcurementCommercialWorkspaceProps {
-  rfq: any;
-  comparison: any;
-  rateCardMatch: any;
-  isDemoMode: boolean;
-  onRecordQuote: () => void;
-  onOpenRateCards: () => void;
-  onReleaseRfq?: () => void;
-  onNegotiationSubmitted?: () => void;
-  actionLoading?: boolean;
-}
 
 export default function ProcurementCommercialWorkspace({
   rfq,

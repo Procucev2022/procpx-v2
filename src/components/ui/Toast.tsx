@@ -10,40 +10,9 @@ import {
   ArrowRight,
   ExternalLink,
 } from 'lucide-react';
+import type { ToastType, ToastOptions, ToastInput, ToastItem, ToastContextType } from "@app-types/components/ui/Toast.types";
+export type { ToastType, ToastOptions, ToastInput };
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info';
-
-export interface ToastOptions {
-  id?: string;
-  type?: ToastType;
-  title?: string;
-  message?: string;
-  recordNumber?: string;
-  vendorName?: string;
-  nextStage?: string;
-  link?: string;
-  duration?: number;
-  durationMs?: number;
-  actionText?: string;
-  onAction?: () => void;
-}
-
-export type ToastInput = string | ToastOptions;
-
-interface ToastItem extends ToastOptions {
-  id: string;
-  message: string;
-  createdAt: number;
-}
-
-interface ToastContextType {
-  showToast: (options: ToastOptions) => void;
-  success: (input: ToastInput, recordNumber?: string, nextStage?: string) => void;
-  error: (input: ToastInput, title?: string) => void;
-  warning: (input: ToastInput, title?: string) => void;
-  info: (input: ToastInput, title?: string) => void;
-  dismissToast: (id: string) => void;
-}
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 

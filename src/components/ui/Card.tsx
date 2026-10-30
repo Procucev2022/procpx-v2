@@ -1,15 +1,6 @@
 'use client';
-// components/ui/Card.tsx - Standardized Enterprise Card
-interface CardProps {
-  children: React.ReactNode;
-  title?: React.ReactNode;
-  subtitle?: string;
-  badge?: React.ReactNode;
-  action?: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-  noPadding?: boolean;
-}
+import type { CardProps } from "@app-types/components/ui/Card.types";
+
 
 export default function Card({
   children,

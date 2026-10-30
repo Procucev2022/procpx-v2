@@ -3,55 +3,9 @@
 // Authoritative Rate Card Agreement Preview Modal supporting generated templates & uploaded documents
 import React from 'react';
 import { X, FileText, Download, CheckCircle2, ShieldCheck, Printer, Calendar, Building2, User, AlertTriangle } from 'lucide-react';
+import type { AgreementDocumentData, AgreementPreviewModalProps } from "@app-types/components/rate-cards/AgreementPreviewModal.types";
+export type { AgreementDocumentData };
 
-export interface AgreementDocumentData {
-  required: boolean;
-  type: 'NONE' | 'TEMPLATE' | 'UPLOAD';
-  templateId?: string;
-  documentTitle?: string;
-  documentNumber?: string;
-  fileName?: string;
-  fileSize?: string;
-  version?: number;
-  generatedAt?: string;
-  uploadedAt?: string;
-  governingLaw?: string;
-  effectiveFrom?: string;
-  effectiveTo?: string;
-  paymentTerms?: string;
-  defectLiabilityMonths?: number;
-  signatureRequired?: boolean;
-  status?: 'DRAFT' | 'SENT_TO_VENDOR' | 'VENDOR_ACCEPTED' | 'SIGNED' | 'REJECTED';
-  signature?: {
-    signedBy: string;
-    designation: string;
-    signedAt: string;
-    signatureType: 'DIGITAL_VERIFIED' | 'AADHAAR_ESIGN' | 'DSC';
-    signatureEvidenceId: string;
-    verified: boolean;
-  } | null;
-}
-
-interface AgreementPreviewModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  rateCardId: string;
-  vendorName: string;
-  vendorCode?: string;
-  category: string;
-  validity?: string;
-  items?: Array<{
-    id?: string;
-    itemCode?: string;
-    description: string;
-    uom: string;
-    qty?: number;
-    agreedRate?: number;
-    rate?: number;
-    vendorQuoteRate?: number;
-  }>;
-  agreement?: AgreementDocumentData | null;
-}
 
 export default function AgreementPreviewModal({
   isOpen,

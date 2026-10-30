@@ -1,15 +1,6 @@
 'use client';
-// components/ui/ContextBanner.tsx - Compact Sourcing Context Bar with Lucide Icons
-interface ContextItem {
-  label: string;
-  value: React.ReactNode;
-  icon?: React.ReactNode;
-  badge?: boolean;
-}
+import type { ContextItem, ContextBannerProps } from "@app-types/components/ui/ContextBanner.types";
 
-interface ContextBannerProps {
-  items: ContextItem[];
-}
 
 export default function ContextBanner({ items }: ContextBannerProps) {
   return (

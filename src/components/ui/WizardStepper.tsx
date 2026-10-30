@@ -3,19 +3,9 @@
 // Standardized Enterprise Reusable Wizard Stepper (44-48px height, 14-15px typography, clear current/completed/pending states)
 import React from 'react';
 import { Check, ChevronRight } from 'lucide-react';
+import type { WizardStep, WizardStepperProps } from "@app-types/components/ui/WizardStepper.types";
+export type { WizardStep, WizardStepperProps };
 
-export interface WizardStep {
-  stepNumber: number;
-  label: string;
-  subtitle?: string;
-}
-
-export interface WizardStepperProps {
-  steps: WizardStep[];
-  currentStep: number;
-  onStepClick?: (stepNumber: number) => void;
-  className?: string;
-}
 
 export default function WizardStepper({
   steps,

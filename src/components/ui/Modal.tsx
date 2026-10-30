@@ -2,16 +2,8 @@
 // components/ui/Modal.tsx - Enterprise Modal / Dialog
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import type { ModalProps } from "@app-types/components/ui/Modal.types";
 
-interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  maxWidth?: number | string;
-}
 
 export default function Modal({
   isOpen,

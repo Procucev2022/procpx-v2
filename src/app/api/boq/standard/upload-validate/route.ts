@@ -3,15 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
+import type { ValidationIssue } from "@app-types/app/api/boq/standard/upload-validate/route.types";
+export type { ValidationIssue };
 
-export interface ValidationIssue {
-  rowNumber: number;
-  itemCode: string;
-  description: string;
-  issue: string;
-  action: string;
-  severity: 'ERROR' | 'WARNING';
-}
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');

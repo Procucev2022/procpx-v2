@@ -26,25 +26,9 @@ import {
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import SpecificationCell from '@/components/ui/SpecificationCell';
+import type { StandardItem } from "@app-types/app/(app)/masters/standard-boq/page.types";
+import { COMMON_UOMS, SECTORS } from "./page.constants";
 
-interface StandardItem {
-  id: string;
-  itemCode: string;
-  sector: string;
-  projectType: string;
-  category: string;
-  subcategory: string;
-  standardDescription: string;
-  detailedSpecification: string;
-  uom: string;
-  brandMake: string | null;
-  benchmarkRate: number | null;
-  isActive: boolean;
-  createdAt: string;
-}
-
-const COMMON_UOMS = ['SQFT', 'NOS', 'RMT', 'SQM', 'KG', 'LOT', 'MTR', 'SET', 'TON', 'BAG', 'LTR'];
-const SECTORS = ['RETAIL', 'HOSPITALITY', 'BANKING', 'INSURANCE', 'OFFICE', 'OTHER'];
 
 export default function StandardBoqCreationPage() {
   const [items, setItems] = useState<StandardItem[]>([]);

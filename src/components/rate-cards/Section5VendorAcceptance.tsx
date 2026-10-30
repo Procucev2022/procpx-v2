@@ -17,39 +17,8 @@ import {
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
+import type { VendorAcceptanceItem, Section5Props } from "@app-types/components/rate-cards/Section5VendorAcceptance.types";
 
-interface VendorAcceptanceItem {
-  id: string;
-  itemCode: string;
-  description: string;
-  specification?: string;
-  uom: string;
-  qty: number;
-  agreedRate: number;
-}
-
-interface Section5Props {
-  rateCardId?: string;
-  category?: string;
-  validity?: string;
-  buyerAcceptanceDate?: string;
-  vendorName?: string;
-  vendorCode?: string;
-  items?: VendorAcceptanceItem[];
-  agreement?: AgreementDocumentData | null;
-  onAccept?: (
-    remarks: string,
-    signature?: {
-      signedBy: string;
-      designation: string;
-      signatureEvidenceId: string;
-      signatureType: 'DIGITAL_VERIFIED' | 'AADHAAR_ESIGN' | 'DSC';
-      signedAt: string;
-      verified: boolean;
-    } | null
-  ) => void;
-  onReject?: (remarks: string) => void;
-}
 
 export default function Section5VendorAcceptance({
   rateCardId = 'RC-2026-0006',

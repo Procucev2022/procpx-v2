@@ -13,17 +13,9 @@ import {
   Loader2,
   Paperclip,
 } from 'lucide-react';
+import type { RfqChatDrawerProps } from "@app-types/components/RfqChatDrawer.types";
+export type { RfqChatDrawerProps };
 
-export interface RfqChatDrawerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  rfqId: string;
-  rfqNumber: string;
-  title?: string;
-  vendorId?: string;
-  vendorName?: string;
-  isVendorUser?: boolean;
-}
 
 export default function RfqChatDrawer({
   isOpen,

@@ -21,31 +21,9 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
+import type { BuyerAcceptanceItem, AgreementPreparationMode, BuyerAcceptanceWorkspaceProps } from "@app-types/components/rate-cards/BuyerAcceptanceWorkspace.types";
+export type { BuyerAcceptanceItem, AgreementPreparationMode };
 
-export interface BuyerAcceptanceItem {
-  id: string;
-  itemCode: string;
-  description: string;
-  specification?: string;
-  uom: string;
-  qty: number;
-  vendorQuoteRate: number;
-}
-
-export type AgreementPreparationMode = 'NONE' | 'TEMPLATE' | 'UPLOAD';
-
-interface BuyerAcceptanceWorkspaceProps {
-  rateCardId?: string;
-  vendorName?: string;
-  vendorCode?: string;
-  category?: string;
-  round?: string;
-  vendorQuoteTotal?: number;
-  receivedDate?: string;
-  items?: BuyerAcceptanceItem[];
-  onAccept: (remarks: string, agreementData?: AgreementDocumentData | null) => void;
-  onCancel: () => void;
-}
 
 export default function BuyerAcceptanceWorkspace({
   rateCardId = 'RC-2026-0006',

@@ -15,8 +15,9 @@ import BuyerAcceptanceWorkspace from '@/components/rate-cards/BuyerAcceptanceWor
 import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedDetails';
 import PageHeader from '@/components/ui/PageHeader';
 import WorkflowStageNav from '@/components/ui/WorkflowStageNav';
+import type { ViewMode } from "@app-types/app/(app)/procurement/rate-cards/page.types";
+export type { ViewMode };
 
-export type ViewMode = 'HOME' | 'INITIATE' | 'NEGOTIATION' | 'BUYER_ACCEPTANCE' | 'DETAILS';
 
 export default function RateCardManagementPage() {
   // Current active full-width workspace

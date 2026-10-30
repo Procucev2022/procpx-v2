@@ -7,37 +7,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
+import type { BoqSummary } from "@app-types/app/(app)/boq/page.types";
+import { STATUS_FILTERS } from "./page.constants";
 
-interface BoqSummary {
-  id: string;
-  projectId: string;
-  boqCode: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  project: {
-    id: string;
-    projectCode: string;
-    name: string;
-    sector: string;
-    status: string;
-  };
-  revisions: Array<{
-    id: string;
-    revisionNumber: number;
-    status: string;
-    totalLines: number;
-    validLines: number;
-    errorLines: number;
-    warningLines: number;
-    qualityScore: number | null;
-    submittedAt: string | null;
-    approvedAt: string | null;
-    createdAt: string;
-  }>;
-}
-
-const STATUS_FILTERS = ['', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
 
 export default function BoqListPage() {
   const [boqs, setBoqs] = useState<BoqSummary[]>([]);

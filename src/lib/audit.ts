@@ -1,19 +1,7 @@
 // lib/audit.ts - Audit log helper
 import { prisma } from './prisma';
+import type { AuditParams } from "@app-types/lib/audit.types";
 
-interface AuditParams {
-  tenantId: string;
-  userId?: string;
-  projectId?: string;
-  entityType: string;
-  entityId: string;
-  action: string;
-  description: string;
-  oldValue?: object;
-  newValue?: object;
-  ipAddress?: string;
-  userAgent?: string;
-}
 
 export async function createAuditLog(params: AuditParams) {
   try {

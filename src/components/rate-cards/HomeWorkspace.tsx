@@ -5,46 +5,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Plus, Eye, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LongTextCell from '@/components/ui/LongTextCell';
+import type { RateCardRow, HomeWorkspaceProps } from "@app-types/components/rate-cards/HomeWorkspace.types";
+export type { RateCardRow };
 
-export interface RateCardRow {
-  id: string;
-  rateCardId: string;
-  vendor: string;
-  vendorCode?: string;
-  category: string;
-  scope: string;
-  items: number;
-  validFrom: string;
-  validUntil: string;
-  status: 'Active' | 'In Progress' | 'Draft' | 'Pending Approval';
-  detailedStatus?: string;
-  currentStage?: string;
-  latestBuyerOffer?: string;
-  latestSubmittedVendorQuote?: string;
-  latestVendorQuote?: string;
-  lastUpdated?: string;
-  nextResponsible?: string;
-  round?: string;
-}
-
-interface HomeWorkspaceProps {
-  cards: RateCardRow[];
-  activeSummaryTab: 'finalised' | 'in_progress';
-  onTabChange: (tab: 'finalised' | 'in_progress') => void;
-  searchTerm: string;
-  onSearchChange: (val: string) => void;
-  categoryFilter: string;
-  onCategoryFilterChange: (val: string) => void;
-  vendorFilter: string;
-  onVendorFilterChange: (val: string) => void;
-  statusFilter: string;
-  onStatusFilterChange: (val: string) => void;
-  onClearFilters: () => void;
-  onInitiateClick: () => void;
-  onNegotiateClick: (cardId: string) => void;
-  onBuyerAcceptClick: (cardId: string) => void;
-  onDetailsClick: (cardId: string) => void;
-}
 
 export default function HomeWorkspace({
   cards,

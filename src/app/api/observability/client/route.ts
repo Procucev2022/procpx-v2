@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LOG_LEVELS, safeRequestPath, type LogLevel } from '@/lib/observability/shared';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { MAX_BODY_BYTES, MAX_BATCH_SIZE, RATE_LIMIT_PER_MINUTE } from "./route.constants";
+
 
 export const runtime = 'nodejs';
-
-const MAX_BODY_BYTES = 32 * 1024;
-const MAX_BATCH_SIZE = 20;
-const RATE_LIMIT_PER_MINUTE = 60;
 const rateLimitBuckets = new Map<string, { startedAt: number; count: number }>();
 
 function getClientKey(request: NextRequest): string {

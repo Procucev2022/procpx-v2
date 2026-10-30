@@ -6,21 +6,8 @@ import { createAuditLog } from '@/lib/audit';
 import { standardiseUom } from '@/lib/uom-standardise';
 import { validateBoqLine, computeQualityScore } from '@/lib/boq-validate';
 import { readFile } from 'fs/promises';
+import type { ColumnMapping } from "@app-types/app/api/boq/import/route.types";
 
-interface ColumnMapping {
-  lineNumber?: string;
-  description: string;
-  specification?: string;
-  uom: string;
-  quantity: string;
-  location?: string;
-  drawingReference?: string;
-  brand?: string;
-  model?: string;
-  material?: string;
-  grade?: string;
-  remarks?: string;
-}
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');

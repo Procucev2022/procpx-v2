@@ -7,24 +7,14 @@ import {
   type LogRecord,
   type LogSource,
 } from './shared';
+import type { CleanupOptions } from "@app-types/lib/observability/server-logger.types";
+import { RETENTION_DAYS, CLEANUP_INTERVAL_MS, PURGEABLE_EXTENSIONS, LOG_DIRECTORY_NAME, CONSOLE_LEVELS } from "./server-logger.constants";
 
-const RETENTION_DAYS = 30;
-const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1_000;
-const PURGEABLE_EXTENSIONS = new Set(['.jsonl', '.json', '.png', '.jpg', '.jpeg', '.webp']);
-const LOG_DIRECTORY_NAME = 'logs';
 
 let writeQueue: Promise<void> = Promise.resolve();
 let lastCleanupAt = 0;
 let initializedDirectory: string | null = null;
 let originalConsoleMethods: Partial<Record<'debug' | 'info' | 'log' | 'warn' | 'error', (...args: unknown[]) => void>> = {};
-
-type CleanupOptions = {
-  directory?: string;
-  environment?: NodeJS.ProcessEnv;
-  now?: number;
-  purgeAll?: boolean;
-  retentionDays?: number;
-};
 
 export function isFileLoggingEnabled(environment = process.env): boolean {
   return environment.APP_LOG_TO_FILE === 'true' || environment.NODE_ENV !== 'production';
@@ -150,17 +140,6 @@ export async function writeStructuredLog(
   }
   return record;
 }
-
-const CONSOLE_LEVELS: Array<{
-  method: 'debug' | 'info' | 'log' | 'warn' | 'error';
-  level: LogLevel;
-}> = [
-  { method: 'debug', level: 'debug' },
-  { method: 'info', level: 'info' },
-  { method: 'log', level: 'info' },
-  { method: 'warn', level: 'warn' },
-  { method: 'error', level: 'error' },
-];
 
 export function installConsoleCapture(): void {
   const globalState = globalThis as typeof globalThis & { __procpxConsoleCaptureInstalled?: boolean };

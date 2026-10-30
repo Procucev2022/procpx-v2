@@ -45,66 +45,8 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import PageHeader from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
+import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES } from "./page.constants";
 
-const SECTOR_PROJECT_TYPES: Record<string, string[]> = {
-  RETAIL: [
-    'Retail Store Fitout',
-    'QSR',
-    'Supermarket',
-    'Hypermarket',
-    'Lifestyle Store',
-    'Department Store',
-    'Convenience Store',
-  ],
-  HOSPITALITY: [
-    'Hotel',
-    'Restaurant',
-    'Cafe',
-    'QSR',
-    'Banquet',
-    'Guest Room',
-    'Kitchen',
-    'Back-of-House',
-  ],
-  BANKING: [
-    'Branch',
-    'ATM',
-    'Back Office',
-    'Corporate Office',
-    'Customer Area',
-    'Vault / Strong Room',
-  ],
-  INSURANCE: [
-    'Branch Office',
-    'Customer Service Centre',
-    'Operations Hub',
-  ],
-  OFFICE: [
-    'Office',
-    'Service Centre',
-    'Corporate Facility',
-    'Training Centre',
-  ],
-  SERVICES: [
-    'Service Centre',
-    'Corporate Facility',
-    'Training Centre',
-  ],
-};
-
-const ALL_STANDARD_CATEGORIES = [
-  'Civil & Interior',
-  'Electrical',
-  'HVAC',
-  'Plumbing',
-  'Fire Fighting',
-  'ELV / IT',
-  'Furniture',
-  'Signage & Branding',
-  'Kitchen / F&B Equipment',
-  'Security',
-  'External Development',
-];
 
 export default function BoqStudioPage() {
   const toast = useToast();

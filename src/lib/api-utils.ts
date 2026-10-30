@@ -2,16 +2,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from './auth';
 import { hasPermission, UserRole, Permission } from './permissions';
+import type { ApiContext } from "@app-types/lib/api-utils.types";
+export type { ApiContext };
 
-export type ApiContext = {
-  userId: string;
-  tenantId: string;
-  tenantName: string;
-  role: UserRole;
-  userName?: string;
-  userEmail?: string;
-  vendorId?: string | null;
-};
 
 let currentTestContext: { userId?: string; tenantId?: string } | null = null;
 

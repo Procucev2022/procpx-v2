@@ -1,26 +1,137 @@
-name: Unit coverage
+name: Pull request quality
 
 on:
   push:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  unit-coverage:
+  quality:
+    name: Build, test, coverage, typecheck, and lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      CI: true
+      DATABASE_URL: file:./ci.db
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        timeout-minutes: 5
+
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
+        timeout-minutes: 5
         with:
           node-version: 22
           cache: npm
+
       - name: Install dependencies
+        id: install
         run: npm ci
-      - name: Run unit tests and enforce coverage
-        run: npm run test:coverage
+        timeout-minutes: 15
+
+      - name: Build application
+        id: build
+        run: npm run build
+        timeout-minutes: 15
+        continue-on-error: true
+
+      - name: Run unit tests and enforce per-file coverage
+        id: unit_tests
+        run: npm run test:coverage -- --json --outputFile=coverage/unit/jest-results.json
+        timeout-minutes: 30
+        continue-on-error: true
+
+      - name: Typecheck application
+        id: typecheck
+        run: npm run typecheck
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Lint application
+        id: lint
+        run: npm run lint
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Prepare quality summary artifact
+        if: always()
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          PR_NUMBER: ${{ github.event.pull_request.number || 0 }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p ci-reports
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const summary = {
+            install: process.env.INSTALL_OUTCOME || 'not run',
+            build: process.env.BUILD_OUTCOME || 'not run',
+            unitTests: process.env.UNIT_TEST_OUTCOME || 'not run',
+            typecheck: process.env.TYPECHECK_OUTCOME || 'not run',
+            lint: process.env.LINT_OUTCOME || 'not run',
+            prNumber: Number(process.env.PR_NUMBER) || null,
+            prHeadSha: process.env.PR_HEAD_SHA || null,
+          };
+          fs.writeFileSync('ci-reports/quality-outcomes.json', JSON.stringify(summary, null, 2));
+
+          for (const file of [
+            'unit-test-coverage-report.md',
+            'coverage/unit/coverage-summary.json',
+            'coverage/unit/jest-results.json',
+            'coverage/unit/lcov.info',
+          ]) {
+            if (fs.existsSync(file)) {
+              fs.copyFileSync(file, path.join('ci-reports', path.basename(file)));
+            }
+          }
+          NODE
+        timeout-minutes: 2
+
+      - name: Upload unit test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: unit-test-coverage-${{ github.run_id }}
+          path: ci-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce all quality checks
+        id: quality_gate
+        if: always()
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          failed=0
+          for check in INSTALL BUILD UNIT_TEST TYPECHECK LINT; do
+            variable="${check}_OUTCOME"
+            outcome="${!variable}"
+            if [[ "$outcome" != "success" ]]; then
+              echo "::error::${check} check ended with outcome: ${outcome}"
+              failed=1
+            fi
+          done
+          exit "$failed"
+        timeout-minutes: 2

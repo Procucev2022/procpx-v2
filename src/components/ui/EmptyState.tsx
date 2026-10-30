@@ -2,15 +2,8 @@
 // components/ui/EmptyState.tsx - Enterprise Empty State Component with Lucide Icons
 import Link from 'next/link';
 import { Inbox } from 'lucide-react';
+import type { EmptyStateProps } from "@app-types/components/ui/EmptyState.types";
 
-interface EmptyStateProps {
-  icon?: React.ReactNode;
-  title: string;
-  description: string;
-  actionText?: string;
-  actionHref?: string;
-  onAction?: () => void;
-}
 
 export default function EmptyState({
   icon,
