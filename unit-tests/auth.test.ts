@@ -121,6 +121,17 @@ describe('NextAuth credentials provider', () => {
       where: { role: UI_STRINGS.common.vENDOR, status: UI_STRINGS.common.aCTIVE, vendorId: { not: null } },
       include: { tenant: true, vendor: true },
     });
+
+    userModel.findMany.mockResolvedValueOnce([{
+      ...dbUser,
+      name: '  Vendor   Contact ',
+      role: 'VENDOR',
+      vendorId: 'vendor-2',
+      vendor: { name: 'Different Supplier', code: 'DIFFERENT-02' },
+    }]);
+    await expect(authorize({ email: '  VENDOR CONTACT ', password: 'secret' })).resolves.toMatchObject({
+      id: 'user-1', role: 'VENDOR', vendorId: 'vendor-2',
+    });
   });
 
   it('disambiguates same-name vendors by a matching vendor code', async () => {
