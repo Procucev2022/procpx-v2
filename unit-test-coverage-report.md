@@ -7,7 +7,7 @@ Files included: **240**. Files meeting all four 90% thresholds: **240/240**.
 | Overall | Coverage |
 | --- | ---: |
 | statements | 99.62% (84695/85010) |
-| branches | 94.37% (16794/17795) |
+| branches | 94.37% (16797/17798) |
 | functions | 98.28% (1604/1632) |
 | lines | 99.62% (84695/85010) |
 
@@ -223,12 +223,12 @@ Files included: **240**. Files meeting all four 90% thresholds: **240/240**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.23% | 92.85% | 99.18% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.24% | 92.85% | 99.18% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.13% | 96.15% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/auth.ts` | 100.00% | 95.45% | 100.00% | 100.00% | PASS |
+| `src/lib/auth.ts` | 100.00% | 95.83% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |

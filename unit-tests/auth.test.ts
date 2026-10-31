@@ -134,7 +134,7 @@ describe('NextAuth credentials provider', () => {
 
   it('rejects ambiguous names, unlinked vendors, and invalid vendor passwords', async () => {
     userModel.findMany.mockResolvedValueOnce([
-      { ...dbUser, role: 'VENDOR', vendor: { name: 'Acme', code: 'ONE' } },
+      { ...dbUser, role: 'VENDOR', vendor: { name: 'Acme', code: null } },
       { ...dbUser, id: 'user-2', role: 'VENDOR', vendor: { name: 'Acme', code: 'TWO' } },
       { ...dbUser, id: 'user-3', role: 'VENDOR', name: 'Acme', vendor: null },
     ]);

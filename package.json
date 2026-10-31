@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "typecheck": "tsc --noEmit",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "node scripts/check-lint-baseline.cjs",
     "db:integrity": "node scripts/check-d1-integrity.cjs",
     "db:integrity:remote": "node scripts/check-d1-integrity.cjs --remote",
     "db:migrate:safe": "node scripts/apply-d1-migrations.cjs --local",
