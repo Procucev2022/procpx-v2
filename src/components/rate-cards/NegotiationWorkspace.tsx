@@ -8,6 +8,9 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import type { NegotiationItem, NegotiationWorkspaceProps } from "@app-types/components/rate-cards/NegotiationWorkspace.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { NegotiationItem };
 
 
@@ -51,8 +54,8 @@ export default function NegotiationWorkspace({
     <div className="w-full space-y-6">
       {/* ── BREADCRUMB & HEADER ────────────────────────────────────────── */}
       <PageHeader
-        title="Rate Card Negotiation (Item Level)"
-        subtitle="Conduct line-item commercial negotiations, review vendor quotes across named rounds, and submit counter offers."
+        title={UI_STRINGS.componentsRateCardsNegotiationWorkspace.rateCardNegotiationItemLevel}
+        subtitle={UI_STRINGS.componentsRateCardsNegotiationWorkspace.conductLineItemCommercialNegotiationsReviewVendorQuotesAcrossNamedRoundsAndSubmitCounterOffers}
         onBack={onBack}
         backLabel="Back to Rate Cards"
         stepNumber={3}
@@ -65,9 +68,7 @@ export default function NegotiationWorkspace({
               {round}
             </span>
             <span className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-xs font-semibold text-amber-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              Awaiting Vendor Quote
-            </span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />{UI_STRINGS.componentsRateCardsNegotiationWorkspace.awaitingVendorQuote}</span>
           </div>
         }
       />
@@ -75,30 +76,29 @@ export default function NegotiationWorkspace({
       {/* ── METADATA & METRICS SUMMARY CARDS ───────────────────────────── */}
       <SummaryCardGrid columns={4}>
         <SummaryCard
-          label="Buyer Target Total"
+          label={UI_STRINGS.componentsRateCardsNegotiationWorkspace.buyerTargetTotal}
           value={`₹ ${targetTotal.toLocaleString()}`}
-          secondary="Benchmark baseline"
+          secondary={UI_STRINGS.componentsRateCardsNegotiationWorkspace.benchmarkBaseline}
           accent="neutral"
         />
         <SummaryCard
-          label="Latest Vendor Quote Total"
+          label={UI_STRINGS.componentsRateCardsNegotiationWorkspace.latestVendorQuoteTotal}
           value={`₹ ${vendorQuoteTotal.toLocaleString()}`}
-          secondary="Round 2 submitted quotes"
+          secondary={UI_STRINGS.componentsRateCardsNegotiationWorkspace.round2SubmittedQuotes}
           accent="amber"
         />
         <SummaryCard
-          label="Current Buyer Offer Total"
+          label={UI_STRINGS.componentsRateCardsNegotiationWorkspace.currentBuyerOfferTotal}
           value={`₹ ${currentBuyerOfferTotal.toLocaleString()}`}
-          secondary="Proposed contract value"
+          secondary={UI_STRINGS.componentsRateCardsNegotiationWorkspace.proposedContractValue}
           accent="blue"
         />
         <SummaryCard
-          label="Negotiated Variance"
+          label={UI_STRINGS.componentsRateCardsNegotiationWorkspace.negotiatedVariance}
           value={savingsVsQuote >= 0 ? `- ₹ ${savingsVsQuote.toLocaleString()}` : `+ ₹ ${Math.abs(savingsVsQuote).toLocaleString()}`}
           secondary={
             <span className={savingsVsTarget >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
-              {targetTotal > 0 ? ((savingsVsTarget / targetTotal) * 100).toFixed(1) : 0}% vs Target
-            </span>
+              {targetTotal > 0 ? ((savingsVsTarget / targetTotal) * 100).toFixed(1) : 0}{UI_STRINGS.componentsRateCardsNegotiationWorkspace.vsTarget}</span>
           }
           accent={savingsVsQuote >= 0 ? 'emerald' : 'rose'}
         />
@@ -119,7 +119,7 @@ export default function NegotiationWorkspace({
               }`}
             >
               <Layers size={16} />
-              <span>Item-Level Offers & Calculations</span>
+              <span>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.itemLevelOffersCalculations}</span>
               <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-[#0f52ba] font-bold">
                 {items.length}
               </span>
@@ -135,12 +135,11 @@ export default function NegotiationWorkspace({
               }`}
             >
               <History size={16} />
-              <span>Negotiation History & Round Audit</span>
+              <span>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.negotiationHistoryRoundAudit}</span>
             </button>
           </div>
 
-          <div className="text-xs md:text-sm text-slate-500 font-medium py-2 sm:py-0">
-            Vendor: <span className="font-bold text-slate-800">{vendorName}</span> | Category: <span className="font-semibold text-slate-800">{category}</span>
+          <div className="text-xs md:text-sm text-slate-500 font-medium py-2 sm:py-0">{UI_STRINGS.common.vendor2}<span className="font-bold text-slate-800">{vendorName}</span>{UI_STRINGS.common.category}<span className="font-semibold text-slate-800">{category}</span>
           </div>
         </div>
 
@@ -166,36 +165,16 @@ export default function NegotiationWorkspace({
                 </colgroup>
                 <thead>
                   <tr className="bg-[#f8fafc] text-slate-700 border-b border-slate-200 font-bold text-xs tracking-wider uppercase">
-                    <th style={{ width: '55px' }} className="py-3.5 px-3 text-center border-r border-slate-200">
-                      S.No.
-                    </th>
-                    <th style={{ width: '110px' }} className="py-3.5 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Item Code
-                    </th>
-                    <th style={{ width: '195px' }} className="py-3.5 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Item Description
-                    </th>
-                    <th style={{ width: '215px' }} className="py-3.5 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      BOQ Description
-                    </th>
-                    <th style={{ width: '75px' }} className="py-3.5 px-3 text-center border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      UOM
-                    </th>
-                    <th style={{ width: '85px' }} className="py-3.5 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Qty
-                    </th>
-                    <th style={{ width: '135px' }} className="py-3.5 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Buyer Target Rate (₹)
-                    </th>
-                    <th style={{ width: '145px' }} className="py-3.5 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Latest Vendor Quote (₹)
-                    </th>
-                    <th style={{ width: '165px' }} className="py-3.5 px-3.5 text-right bg-blue-50/40 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Current Buyer Offer (₹)
-                    </th>
-                    <th style={{ width: '150px' }} className="py-3.5 px-3.5 text-right font-bold whitespace-normal break-words leading-tight">
-                      Proposed Amount (₹)
-                    </th>
+                    <th style={{ width: '55px' }} className="py-3.5 px-3 text-center border-r border-slate-200">{UI_STRINGS.common.sNo2}</th>
+                    <th style={{ width: '110px' }} className="py-3.5 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.itemCode}</th>
+                    <th style={{ width: '195px' }} className="py-3.5 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.itemDescription}</th>
+                    <th style={{ width: '215px' }} className="py-3.5 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.bOQDescription}</th>
+                    <th style={{ width: '75px' }} className="py-3.5 px-3 text-center border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.uOM}</th>
+                    <th style={{ width: '85px' }} className="py-3.5 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.qty}</th>
+                    <th style={{ width: '135px' }} className="py-3.5 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.buyerTargetRate}</th>
+                    <th style={{ width: '145px' }} className="py-3.5 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.latestVendorQuote}</th>
+                    <th style={{ width: '165px' }} className="py-3.5 px-3.5 text-right bg-blue-50/40 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.currentBuyerOffer}</th>
+                    <th style={{ width: '150px' }} className="py-3.5 px-3.5 text-right font-bold whitespace-normal break-words leading-tight">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.proposedAmount}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
@@ -213,8 +192,8 @@ export default function NegotiationWorkspace({
                         <td style={{ width: '195px' }} className="py-3 px-3.5 border-r border-slate-100 overflow-hidden">
                           <LongTextCell
                             text={row.description}
-                            title={`Item: ${row.itemCode} — Description`}
-                            subtitle="Core Item Master Description"
+                            title={interpolateUiString(UI_STRINGS.common.itemItemCodeDescription, { "itemCode": row.itemCode })}
+                            subtitle={UI_STRINGS.common.coreItemMasterDescription}
                             maxWidth="100%"
                           />
                         </td>
@@ -235,15 +214,13 @@ export default function NegotiationWorkspace({
                         <td style={{ width: '85px' }} className="py-3 px-3.5 text-right text-slate-700 font-semibold border-r border-slate-100 whitespace-nowrap font-mono">
                           {row.qty.toLocaleString()}
                         </td>
-                        <td style={{ width: '135px' }} className="py-3 px-3.5 text-right text-slate-700 font-medium border-r border-slate-100 whitespace-nowrap font-mono">
-                          ₹ {row.buyerTargetRate.toLocaleString()}
+                        <td style={{ width: '135px' }} className="py-3 px-3.5 text-right text-slate-700 font-medium border-r border-slate-100 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{row.buyerTargetRate.toLocaleString()}
                         </td>
-                        <td style={{ width: '145px' }} className="py-3 px-3.5 text-right font-bold text-amber-700 border-r border-slate-100 whitespace-nowrap font-mono">
-                          ₹ {row.latestVendorQuote.toLocaleString()}
+                        <td style={{ width: '145px' }} className="py-3 px-3.5 text-right font-bold text-amber-700 border-r border-slate-100 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{row.latestVendorQuote.toLocaleString()}
                         </td>
                         <td style={{ width: '165px' }} className="py-2.5 px-3.5 text-right bg-blue-50/30 border-r border-slate-100">
                           <div className="flex items-center justify-end gap-1.5">
-                            <span className="text-slate-400 font-semibold text-xs">₹</span>
+                            <span className="text-slate-400 font-semibold text-xs">{UI_STRINGS.common.copy1g8b5tg}</span>
                             <input
                               type="number"
                               value={row.currentBuyerOffer}
@@ -252,8 +229,7 @@ export default function NegotiationWorkspace({
                             />
                           </div>
                         </td>
-                        <td style={{ width: '150px' }} className="py-3 px-3.5 text-right font-bold text-slate-900 whitespace-nowrap font-mono">
-                          ₹ {rowProposedAmt.toLocaleString()}
+                        <td style={{ width: '150px' }} className="py-3 px-3.5 text-right font-bold text-slate-900 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{rowProposedAmt.toLocaleString()}
                         </td>
                       </tr>
                     );
@@ -261,20 +237,14 @@ export default function NegotiationWorkspace({
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-bold border-t-2 border-slate-300 text-sm text-slate-900">
-                    <td colSpan={6} className="py-3.5 px-3.5 text-right font-bold uppercase tracking-wider text-xs text-slate-600 border-r border-slate-200">
-                      Total Commercial Valuation:
+                    <td colSpan={6} className="py-3.5 px-3.5 text-right font-bold uppercase tracking-wider text-xs text-slate-600 border-r border-slate-200">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.totalCommercialValuation}</td>
+                    <td style={{ width: '135px' }} className="py-3.5 px-3.5 text-right text-slate-700 border-r border-slate-200 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{targetTotal.toLocaleString()}
                     </td>
-                    <td style={{ width: '135px' }} className="py-3.5 px-3.5 text-right text-slate-700 border-r border-slate-200 whitespace-nowrap font-mono">
-                      ₹ {targetTotal.toLocaleString()}
+                    <td style={{ width: '145px' }} className="py-3.5 px-3.5 text-right text-amber-700 border-r border-slate-200 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{vendorQuoteTotal.toLocaleString()}
                     </td>
-                    <td style={{ width: '145px' }} className="py-3.5 px-3.5 text-right text-amber-700 border-r border-slate-200 whitespace-nowrap font-mono">
-                      ₹ {vendorQuoteTotal.toLocaleString()}
+                    <td style={{ width: '165px' }} className="py-3.5 px-3.5 text-right text-[#0f52ba] bg-blue-50/60 border-r border-slate-200 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{currentBuyerOfferTotal.toLocaleString()}
                     </td>
-                    <td style={{ width: '165px' }} className="py-3.5 px-3.5 text-right text-[#0f52ba] bg-blue-50/60 border-r border-slate-200 whitespace-nowrap font-mono">
-                      ₹ {currentBuyerOfferTotal.toLocaleString()}
-                    </td>
-                    <td style={{ width: '150px' }} className="py-3.5 px-3.5 text-right text-slate-900 font-extrabold text-base whitespace-nowrap font-mono">
-                      ₹ {currentBuyerOfferTotal.toLocaleString()}
+                    <td style={{ width: '150px' }} className="py-3.5 px-3.5 text-right text-slate-900 font-extrabold text-base whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{currentBuyerOfferTotal.toLocaleString()}
                     </td>
                   </tr>
                 </tfoot>
@@ -290,7 +260,7 @@ export default function NegotiationWorkspace({
                   className="h-10 px-4 border border-slate-300 rounded-lg text-slate-700 bg-white hover:bg-slate-50 text-sm font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
                 >
                   <RotateCcw size={14} />
-                  <span>Reset to Target</span>
+                  <span>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.resetToTarget}</span>
                 </button>
                 <button
                   type="button"
@@ -298,7 +268,7 @@ export default function NegotiationWorkspace({
                   className="h-10 px-4 border border-slate-300 rounded-lg text-slate-700 bg-white hover:bg-slate-50 text-sm font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
                 >
                   <Save size={14} />
-                  <span>Save Draft</span>
+                  <span>{UI_STRINGS.common.saveDraft}</span>
                 </button>
               </div>
 
@@ -309,7 +279,7 @@ export default function NegotiationWorkspace({
                   className="h-11 px-6 bg-[#0f52ba] hover:bg-blue-800 text-white text-sm font-semibold rounded-lg flex items-center gap-2 transition-colors shadow-sm"
                 >
                   <Send size={15} />
-                  <span>Send Proposed Offer to Vendor</span>
+                  <span>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.sendProposedOfferToVendor}</span>
                 </button>
               </div>
             </div>
@@ -319,9 +289,7 @@ export default function NegotiationWorkspace({
         {/* ── TAB 2: NEGOTIATION HISTORY ──────────────────────────────── */}
         {activeTab === 'history' && (
           <div className="p-6 space-y-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600 mb-2">
-              Multi-Round Commercial Negotiation Audit Trail
-            </h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600 mb-2">{UI_STRINGS.common.multiRoundCommercialNegotiationAuditTrail}</h3>
 
             <div className="overflow-x-auto border border-slate-200 rounded-lg">
               <table
@@ -338,24 +306,12 @@ export default function NegotiationWorkspace({
                 </colgroup>
                 <thead>
                   <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 font-bold text-xs uppercase tracking-wider">
-                    <th style={{ width: '280px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Item Code & Description
-                    </th>
-                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Round 1: Buyer Offer
-                    </th>
-                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Round 1: Vendor Quote
-                    </th>
-                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Round 2: Buyer Offer
-                    </th>
-                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                      Round 2: Vendor Quote
-                    </th>
-                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right whitespace-normal break-words leading-tight">
-                      Final Agreed Rate
-                    </th>
+                    <th style={{ width: '280px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.itemCodeDescription}</th>
+                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.round1BuyerOffer}</th>
+                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.round1VendorQuote}</th>
+                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.round2BuyerOffer}</th>
+                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.round2VendorQuote}</th>
+                    <th style={{ width: '145px' }} className="py-3 px-3.5 text-right whitespace-normal break-words leading-tight">{UI_STRINGS.common.finalAgreedRate}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
@@ -365,20 +321,15 @@ export default function NegotiationWorkspace({
                         <span className="font-bold text-slate-900 mr-2">{it.itemCode}</span>
                         <span className="text-slate-700">{it.description}</span>
                       </td>
-                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-slate-600 border-r border-slate-100 whitespace-nowrap font-mono">
-                        ₹ {it.buyerTargetRate.toLocaleString()}
+                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-slate-600 border-r border-slate-100 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{it.buyerTargetRate.toLocaleString()}
                       </td>
-                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-slate-600 border-r border-slate-100 whitespace-nowrap font-mono">
-                        ₹ {(it.latestVendorQuote + 5).toLocaleString()}
+                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-slate-600 border-r border-slate-100 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{(it.latestVendorQuote + 5).toLocaleString()}
                       </td>
-                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-[#0f52ba] font-bold border-r border-slate-100 whitespace-nowrap font-mono">
-                        ₹ {it.currentBuyerOffer.toLocaleString()}
+                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-[#0f52ba] font-bold border-r border-slate-100 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{it.currentBuyerOffer.toLocaleString()}
                       </td>
-                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-amber-700 font-bold border-r border-slate-100 whitespace-nowrap font-mono">
-                        ₹ {it.latestVendorQuote.toLocaleString()}
+                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-amber-700 font-bold border-r border-slate-100 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{it.latestVendorQuote.toLocaleString()}
                       </td>
-                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-emerald-700 font-extrabold whitespace-nowrap font-mono">
-                        ₹ {it.currentBuyerOffer.toLocaleString()}
+                      <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-emerald-700 font-extrabold whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{it.currentBuyerOffer.toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -387,11 +338,11 @@ export default function NegotiationWorkspace({
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs md:text-sm text-slate-600 space-y-2">
-              <div className="font-bold text-slate-800 text-sm">Governance History Summary:</div>
-              <div>• <strong>10 Oct 2026:</strong> Rate Card initiated by Category Manager with target rates.</div>
-              <div>• <strong>15 Oct 2026:</strong> Vendor submitted Round 1 Quote (Total: ₹ 5,15,000).</div>
-              <div>• <strong>18 Oct 2026:</strong> Category Manager submitted Counter Offer 2 (Total: ₹ 4,83,000).</div>
-              <div>• <strong>20 Oct 2026:</strong> Vendor submitted revised Round 2 Quote (Total: ₹ 4,99,000 / Final Agreed items match ₹ 4,83,000).</div>
+              <div className="font-bold text-slate-800 text-sm">{UI_STRINGS.componentsRateCardsNegotiationWorkspace.governanceHistorySummary}</div>
+              <div>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copyle24wv}<strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copyh3wfg6}</strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.rateCardInitiatedByCategoryManagerWithTargetRates}</div>
+              <div>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copyle24wv}<strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copy18x5ggx}</strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.vendorSubmittedRound1QuoteTotal515000}</div>
+              <div>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copyle24wv}<strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copy1e5bvni}</strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.categoryManagerSubmittedCounterOffer2Total483000}</div>
+              <div>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copyle24wv}<strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.copyi1na0t}</strong>{UI_STRINGS.componentsRateCardsNegotiationWorkspace.vendorSubmittedRevisedRound2QuoteTotal499000FinalAgreedItemsMatch483000}</div>
             </div>
           </div>
         )}

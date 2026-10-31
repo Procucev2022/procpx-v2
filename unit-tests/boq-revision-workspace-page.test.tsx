@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BoqWorkspacePage from '../src/app/(app)/boq/[revisionId]/page';
@@ -132,36 +136,36 @@ describe('BOQ revision workspace page', () => {
   it('loads draft lines, searches and filters, paginates, and renders quality and comparison tabs', async () => {
     render(<BoqWorkspacePage />);
     expect(await screen.findByText('Power Cable')).toBeInTheDocument();
-    expect(screen.getByText('BOQ Workspace — R2')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppBoqRevisionIdPage.bOQWorkspaceRevisionCode, {"revisionCode":"R2"})))).toBeInTheDocument();
     expect(screen.getByText('72%')).toBeInTheDocument();
     expect(screen.getByText('Copper conductor, XLPE insulated')).toBeInTheDocument();
     expect(screen.getByText(/Verify route/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Submit for Approval' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"for Approval"})) })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '← Back to BOQ Register' })).toHaveAttribute('href', '/boq');
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {"value1":"1","value2":"2"})))).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Search descriptions, line numbers...'), { target: { value: 'cable' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.searchDescriptionsLineNumbers)), { target: { value: 'cable' } });
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('search=cable'))).toBe(true));
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ERROR' } });
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('validationStatus=ERROR'))).toBe(true));
-    fireEvent.click(screen.getByText('Page 1 of 2').parentElement!.querySelectorAll('button')[2]);
+    fireEvent.click(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {"value1":"1","value2":"2"}))).parentElement!.querySelectorAll('button')[2]);
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('page=2'))).toBe(true));
-    fireEvent.click(screen.getByText('Page 2 of 2').parentElement!.querySelectorAll('button')[1]);
+    fireEvent.click(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {"value1":"2","value2":"2"}))).parentElement!.querySelectorAll('button')[1]);
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('page=1'))).toBe(true));
-    fireEvent.click(screen.getByText('Page 1 of 2').parentElement!.querySelectorAll('button')[3]);
+    fireEvent.click(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {"value1":"1","value2":"2"}))).parentElement!.querySelectorAll('button')[3]);
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('page=2'))).toBe(true));
     fireEvent.click(screen.getByText('BOQ Lines (51)'));
 
-    fireEvent.click(screen.getByText('Quality & Summary'));
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.qualitySummary)));
     expect(screen.getByText('72 / 100')).toBeInTheDocument();
-    expect(screen.getByText('Revision Metadata')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.revisionMetadata))).toBeInTheDocument();
     expect(screen.getByText('boq.xlsx')).toBeInTheDocument();
     expect(screen.getByText('Review quantities')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText(/Revision Comparison/));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/rev-1/compare'));
-    expect(screen.getByText('Lines Added')).toBeInTheDocument();
-    expect(screen.getByText('Modified Line Items')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.linesAdded))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.modifiedLineItems))).toBeInTheDocument();
     expect(screen.getByText('Switchgear')).toBeInTheDocument();
     expect(screen.getByText('Copper cable')).toBeInTheDocument();
     const compareSelect = screen.getByRole('combobox');
@@ -173,12 +177,12 @@ describe('BOQ revision workspace page', () => {
   it('edits line fields and saves successfully or displays save errors', async () => {
     render(<BoqWorkspacePage />);
     expect(await screen.findByText('Power Cable')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByTitle('Edit Line')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))[0]);
     expect(screen.getByText(/Edit BOQ Line/)).toBeInTheDocument();
     const modal = document.querySelector('.modal') as HTMLElement;
     fireEvent.click(modal.parentElement!);
     expect(screen.queryByText(/Edit BOQ Line/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByTitle('Edit Line')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))[0]);
     const reopenedModal = document.querySelector('.modal') as HTMLElement;
     fireEvent.change(reopenedModal.querySelector('input')!, { target: { value: 'Revised Power Cable' } });
     fireEvent.change(reopenedModal.querySelector('textarea')!, { target: { value: 'XLPE armoured cable' } });
@@ -196,107 +200,107 @@ describe('BOQ revision workspace page', () => {
     fireEvent.change(modalInputs[2], { target: { value: 'Zone B' } });
     fireEvent.change(modalInputs[3], { target: { value: 'DWG-3' } });
     fireEvent.change(modalInputs[4], { target: { value: 'Handle with care' } });
-    fireEvent.click(within(reopenedModal).getByRole('button', { name: 'Save Changes' }));
+    fireEvent.click(within(reopenedModal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges) }));
     await waitFor(() => expect(mockFetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(true));
     expect(screen.queryByText(/Edit BOQ Line/)).not.toBeInTheDocument();
     expect(JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'PUT')![1].body as string)).toMatchObject({
       lineId: 'line-1', updates: { standardDescription: 'Revised Power Cable', specification: 'XLPE armoured cable', categoryId: 'cat-1', subcategoryId: 'sub-1', uomId: 'uom-1', location: 'Zone B', drawingReference: 'DWG-3', remarks: 'Handle with care' },
     });
 
-    fireEvent.click(screen.getAllByTitle('Edit Line')[1]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))[1]);
     const fallbackModal = document.querySelector('.modal') as HTMLElement;
     expect(within(fallbackModal).getAllByRole('combobox')[0]).toHaveValue('');
-    fireEvent.change(within(fallbackModal).getByRole('button', { name: 'Cancel' }).parentElement!.parentElement!.querySelectorAll('select')[0], { target: { value: 'cat-2' } });
-    fireEvent.click(within(fallbackModal).getByRole('button', { name: 'Cancel' }));
+    fireEvent.change(within(fallbackModal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }).parentElement!.parentElement!.querySelectorAll('select')[0], { target: { value: 'cat-2' } });
+    fireEvent.click(within(fallbackModal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
-    fireEvent.click(screen.getAllByTitle('Edit Line')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))[0]);
     saveResult = { ok: false, body: { error: 'Save failed due to a conflict' } };
-    fireEvent.click(within(document.querySelector('.modal') as HTMLElement).getByRole('button', { name: 'Save Changes' }));
+    fireEvent.click(within(document.querySelector('.modal') as HTMLElement).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges) }));
     expect(await screen.findByText('Save failed due to a conflict')).toBeInTheDocument();
     fireEvent.click(document.querySelector('.modal-header .btn-icon')!);
-    fireEvent.click(screen.getAllByTitle('Edit Line')[0]);
-    fireEvent.click(within(document.querySelector('.modal') as HTMLElement).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))[0]);
+    fireEvent.click(within(document.querySelector('.modal') as HTMLElement).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
   });
 
   it('runs standardisation and validation, then submits with confirmation and handles result errors', async () => {
     render(<BoqWorkspacePage />);
     expect(await screen.findByText('Power Cable')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Standardise' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Standardise"})) }));
     expect(await screen.findByText(/Descriptions standardised \(Score: 88%\)/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.validate) }));
     expect(await screen.findByText(/Quality Score is 92%, 0 errors, 2 warnings/)).toBeInTheDocument();
 
     standardiseResult = { ok: false, body: { error: 'Standardisation unavailable' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Standardise' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Standardise"})) }));
     expect(await screen.findByText('Standardisation unavailable')).toBeInTheDocument();
     validateResult = { ok: false, body: { error: 'Validation service unavailable' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.validate) }));
     expect(await screen.findByText('Validation service unavailable')).toBeInTheDocument();
 
     revision.errorLines = 0;
     window.confirm = jest.fn(() => false);
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Approval' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"for Approval"})) }));
     expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/submit'))).toBe(false);
     window.confirm = jest.fn(() => true);
     submitResult = { ok: false, body: { error: 'Submit blocked' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Approval' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"for Approval"})) }));
     expect(window.confirm).toHaveBeenCalledWith('Submit this BOQ for approval?');
     expect(await screen.findByText('Submit blocked')).toBeInTheDocument();
     expect(mockToastError).toHaveBeenCalledWith('Submit blocked');
 
     submitResult = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Approval' }));
-    expect(await screen.findByText('BOQ submitted successfully.')).toBeInTheDocument();
-    expect(mockToastSuccess).toHaveBeenCalledWith('BOQ submitted successfully.', 'R2', 'Awaiting Project Approver');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"for Approval"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.bOQSubmittedSuccessfully))).toBeInTheDocument();
+    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.bOQSubmittedSuccessfully, 'R2', UI_STRINGS.appAppProcurementPposPage.awaitingProjectApprover);
     fireEvent.click(document.querySelector('.alert .btn-ghost')!);
-    expect(screen.queryByText('BOQ submitted successfully.')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.bOQSubmittedSuccessfully))).not.toBeInTheDocument();
   });
 
   it('approves and rejects submitted revisions with confirmation and mandatory reason', async () => {
     revision = { ...draftRevision, status: 'SUBMITTED', errorLines: 2, qualityScore: 48 };
     render(<BoqWorkspacePage />);
-    expect(await screen.findByText('Approve BOQ')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"BOQ"})))).toBeInTheDocument();
     expect(screen.getByText('48%')).toBeInTheDocument();
     window.confirm = jest.fn(() => false);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve BOQ' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"BOQ"})) }));
     expect(window.confirm).toHaveBeenCalledWith('Approve this BOQ? This action will make it an immutable commercial baseline.');
     expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/approve'))).toBe(false);
 
     window.confirm = jest.fn(() => true);
     approveResult = { ok: false, body: { error: 'Approval rejected by policy' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Approve BOQ' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"BOQ"})) }));
     expect(await screen.findByText('Approval rejected by policy')).toBeInTheDocument();
     expect(mockToastError).toHaveBeenCalledWith('Approval rejected by policy');
     approveResult = { ok: false, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Approve BOQ' }));
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Failed to approve BOQ'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"BOQ"})) }));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToApproveBoq));
     approveResult = { ok: false, body: { error: 'Approval rejected by policy' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Approve BOQ' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"BOQ"})) }));
     expect(await screen.findByText('Approval rejected by policy')).toBeInTheDocument();
     approveResult = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Approve BOQ' }));
-    expect(await screen.findByText('BOQ approved successfully.')).toBeInTheDocument();
-    expect(mockToastSuccess).toHaveBeenCalledWith('BOQ approved successfully.');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"BOQ"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.bOQApprovedSuccessfully))).toBeInTheDocument();
+    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reject BOQ' }));
-    expect(screen.getByText('Reject BOQ Revision')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm Rejection' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Reject","toLocaleString":"BOQ"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.rejectBOQRevision))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) })).toBeDisabled();
     fireEvent.click(document.querySelector('.modal-footer .btn-danger')!);
     expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/reject'))).toBe(false);
     fireEvent.click(document.querySelector('.modal-header .btn-icon')!);
-    fireEvent.click(screen.getByRole('button', { name: 'Reject BOQ' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject BOQ' }));
-    fireEvent.change(screen.getByPlaceholderText('Specify technical discrepancies or corrections required...'), { target: { value: '   ' } });
-    expect(screen.getByRole('button', { name: 'Confirm Rejection' })).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText('Specify technical discrepancies or corrections required...'), { target: { value: 'Update quantities' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Reject","toLocaleString":"BOQ"})) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Reject","toLocaleString":"BOQ"})) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.specifyTechnicalDiscrepanciesOrCorrectionsRequired)), { target: { value: '   ' } });
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) })).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.specifyTechnicalDiscrepanciesOrCorrectionsRequired)), { target: { value: 'Update quantities' } });
     rejectResult = { ok: false, body: { error: 'Rejection failed' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Rejection failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.rejectionFailed))).toBeInTheDocument();
     rejectResult = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Reject BOQ' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('BOQ rejected with mandatory reason.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Reject","toLocaleString":"BOQ"})) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.bOQRejectedWithMandatoryReason))).toBeInTheDocument();
     const rejectCall = mockFetch.mock.calls.find(([url, init]) => String(url).endsWith('/reject') && init?.method === 'POST');
     expect(JSON.parse(rejectCall![1].body as string)).toEqual({ reason: 'Update quantities' });
   });
@@ -315,37 +319,37 @@ describe('BOQ revision workspace page', () => {
       currentRevision: { revisionCode: 'R2' }, compareRevision: { revisionCode: 'R1' },
     } };
     const rejectedView = render(<BoqWorkspacePage />);
-    expect(await screen.findByText('No BOQ lines found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.noBOQLinesFound))).toBeInTheDocument();
     expect(screen.getByText('Incorrect quantities')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Quality & Summary'));
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.qualitySummary)));
     expect(screen.getByText('40%')).toBeInTheDocument();
     fireEvent.click(screen.getByText(/Revision Comparison/));
-    expect(await screen.findByText('Revisions Are Identical')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.revisionsAreIdentical))).toBeInTheDocument();
     rejectedView.unmount();
 
     revision = { ...draftRevision, status: 'APPROVED', qualityScore: 88 };
     const approvedView = render(<BoqWorkspacePage />);
-    expect(await screen.findByText('Immutable Commercial Baseline:')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Quality & Summary'));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.immutableCommercialBaseline))).toBeInTheDocument();
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.qualitySummary)));
     expect(screen.getByText('88 / 100')).toBeInTheDocument();
     window.confirm = jest.fn(() => false);
-    fireEvent.click(screen.getByRole('button', { name: '+ Create New Revision' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.createNewRevision) }));
     expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/new-revision'))).toBe(false);
     window.confirm = jest.fn(() => true);
     newRevisionResult = { ok: false, body: { error: 'Revision creation unavailable' } };
-    fireEvent.click(screen.getByRole('button', { name: '+ Create New Revision' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.createNewRevision) }));
     expect(await screen.findByText('Revision creation unavailable')).toBeInTheDocument();
     newRevisionResult = { ok: true, body: { revisionId: 'rev-3' } };
     const navigationError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    fireEvent.click(screen.getByRole('button', { name: '+ Create New Revision' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.createNewRevision) }));
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/new-revision'))).toBe(true));
     navigationError.mockRestore();
     approvedView.unmount();
 
     revision = { ...draftRevision, qualityScore: null };
     render(<BoqWorkspacePage />);
-    expect(await screen.findByText('BOQ Workspace')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Quality & Summary'));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.bOQWorkspace))).toBeInTheDocument();
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqRevisionIdPage.qualitySummary)));
     expect(screen.getByText('0 / 100')).toBeInTheDocument();
   });
 });

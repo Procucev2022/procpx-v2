@@ -3,6 +3,8 @@ import { POST } from '../src/app/api/procurement/auctions/[id]/bid/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -78,21 +80,21 @@ describe('auction bid API', () => {
     await expect(POST(request(), params())).resolves.toBe(denied);
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER' });
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Project Users have read-only observer access and cannot submit bids.', status: 403 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.projectUsersHaveReadOnlyObserverAccessAndCannotSubmitBids, status: 403 });
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_APPROVER' });
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Project Users have read-only observer access and cannot submit bids.', status: 403 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.projectUsersHaveReadOnlyObserverAccessAndCannotSubmitBids, status: 403 });
 
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Vendor profile not found for this account.', status: 403 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorProfileNotFoundForThisAccount, status: 403 });
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_MANAGER', vendorId: undefined });
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Vendor ID is required.', status: 400 });
-    await expect(POST(request({ vendorId: 'vendor-1', bidAmount: 'invalid' }), params())).resolves.toEqual({ ok: false, error: 'Please enter a valid positive bid amount.', status: 400 });
-    await expect(POST(request({ vendorId: 'vendor-1', bidAmount: 0 }), params())).resolves.toEqual({ ok: false, error: 'Please enter a valid positive bid amount.', status: 400 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIDIsRequired, status: 400 });
+    await expect(POST(request({ vendorId: 'vendor-1', bidAmount: 'invalid' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.pleaseEnterAValidPositiveBidAmount, status: 400 });
+    await expect(POST(request({ vendorId: 'vendor-1', bidAmount: 0 }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.pleaseEnterAValidPositiveBidAmount, status: 400 });
   });
 
   it('rejects unavailable auctions, closed states, expired times, and unqualified participants', async () => {
     db.auction.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Auction not found or access denied.', status: 404 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionNotFoundOrAccessDenied, status: 404 });
     for (const [status, message] of [
       ['PAUSED', 'Bidding is temporarily paused by the auction administrator.'],
       ['CLOSED', 'This auction has concluded. Further bids cannot be accepted.'],
@@ -106,19 +108,19 @@ describe('auction bid API', () => {
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'SCHEDULED', startTime: new Date(Date.now() + 60_000) }));
     await expect(POST(request(), params())).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Auction has not started yet.'), status: 400 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ endTime: new Date(Date.now() - 1) }));
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Auction time has expired. No further bids are accepted.', status: 400 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionTimeHasExpiredNoFurtherBidsAreAccepted, status: 400 });
     expect(db.auction.update).toHaveBeenCalledWith({ where: { id: 'auction-1' }, data: { status: 'CLOSED' } });
 
     db.auction.findFirst.mockResolvedValueOnce(auction({ vendors: [] }));
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Vendor is not invited to participate in this auction.', status: 403 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, status: 403 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ vendors: [{ id: 'participant-1', termsAcceptedAt: null }] }));
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'You must review and accept the auction Terms & Conditions before placing your first bid.', status: 400 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.youMustReviewAndAcceptTheAuctionTermsConditionsBeforePlacingYourFirstBid, status: 400 });
   });
 
   it('enforces sealed-bid and participant limits and item-wise auction requirements', async () => {
     db.auction.findFirst.mockResolvedValueOnce(auction({ auctionType: 'SEALED_BID', bids: [{ vendorId: 'vendor-1' }] }));
     await expect(POST(request(), params())).resolves.toEqual({
-      ok: false, error: 'Sealed Bid Protocol: You have already submitted your single permitted sealed bid for this auction.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.sealedBidProtocolYouHaveAlreadySubmittedYourSinglePermittedSealedBidForThisAuction, status: 400,
     });
     db.auction.findFirst.mockResolvedValueOnce(auction({ hasBidLimit: true, maxBidsPerParticipant: 2, bids: [
       { vendorId: 'vendor-1' }, { vendorId: 'vendor-1' }, { vendorId: 'other-vendor' },
@@ -126,9 +128,9 @@ describe('auction bid API', () => {
     await expect(POST(request(), params())).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Bid limit reached.'), status: 400 });
 
     db.auction.findFirst.mockResolvedValueOnce(auction({ auctionCategory: 'ITEM_WISE' }));
-    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: 'Item ID is required for an Item-Wise auction bid.', status: 400 });
+    await expect(POST(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.itemIDIsRequiredForAnItemWiseAuctionBid, status: 400 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ auctionCategory: 'ITEM_WISE', items: [] }));
-    await expect(POST(request({ bidAmount: 90, auctionItemId: 'missing' }), params())).resolves.toEqual({ ok: false, error: 'Selected auction item was not found.', status: 404 });
+    await expect(POST(request({ bidAmount: 90, auctionItemId: 'missing' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdBidRoute.selectedAuctionItemWasNotFound, status: 404 });
   });
 
   it('validates reverse and forward first bids and required bid reductions or increments', async () => {

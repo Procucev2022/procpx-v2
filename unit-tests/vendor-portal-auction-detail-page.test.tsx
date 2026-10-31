@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React, { Suspense } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VendorAuctionBiddingRoomPage from '../src/app/(app)/vendor-portal/auctions/[id]/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockPush = jest.fn();
 const mockSuccess = jest.fn();
@@ -68,35 +72,35 @@ describe('vendor portal auction detail page', () => {
 
     renderRoom();
     await flush();
-    expect(await screen.findByText('Auction Terms & Conditions Acknowledgement')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.auctionTermsConditionsAcknowledgement))).toBeInTheDocument();
     expect(screen.getByText('All bids are binding.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /I Accept the Terms/ }));
-    await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith({ title: 'Terms Accepted', message: 'Terms recorded' }));
-    expect(screen.queryByText('Auction Terms & Conditions Acknowledgement')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith({ title: UI_STRINGS.common.termsAccepted, message: 'Terms recorded' }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.auctionTermsConditionsAcknowledgement))).not.toBeInTheDocument();
     expect(screen.getByText('Submit final offers before closing')).toBeInTheDocument();
-    expect(screen.getByText(/EXTENDED 2X/)).toBeInTheDocument();
-    expect(screen.getByText(/less than or equal to/)).toHaveTextContent('INR 19,500');
-    expect(screen.getByText(/Bids Submitted:/)).toHaveTextContent('2');
-    expect(screen.getByText(/My Last Bid:/)).toHaveTextContent('INR 20,500');
-    expect(screen.getByText(/Current Rank:/)).toHaveTextContent('L1');
-    expect(screen.getByText(/Invalid Date/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.eXTENDEDExtensionCountX))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.lessThanOrEqualTo))).toHaveTextContent('INR 19,500');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.bidsSubmitted))).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyf9vgt1));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.myLastBid))).toHaveTextContent('INR 20,500');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.currentRankL))).toHaveTextContent(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.l1));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.invalid))).toBeInTheDocument();
     expect(screen.getByText('INR 19,950')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Submit Bid/ }));
-    expect(mockError).toHaveBeenCalledWith({ title: 'Validation', message: 'Please enter a valid bid amount.' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
+    expect(mockError).toHaveBeenCalledWith({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppVendorPortalAuctionsIdPage.pleaseEnterAValidBidAmount });
     const decrementPreset = screen.getAllByRole('button').find((button) => button.textContent?.includes('5,000') && !button.textContent.includes('50,000'));
     expect(decrementPreset).toBeDefined();
     fireEvent.click(decrementPreset!);
-    expect(screen.getByPlaceholderText('Enter amount...')).toHaveValue(15000);
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount))).toHaveValue(15000);
     const largerDecrement = screen.getAllByRole('button').find((button) => button.textContent?.includes('25,000'));
     fireEvent.click(largerDecrement!);
-    expect(screen.getByPlaceholderText('Enter amount...')).toHaveValue(15000);
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount))).toHaveValue(15000);
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'item-1' } });
-    fireEvent.click(screen.getByRole('button', { name: /Submit Bid/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
     await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith({ title: 'Bid Placed & Extension Triggered!', message: 'Bid accepted' }));
     expect((global.fetch as jest.Mock).mock.calls.some(([, init]) => init?.method === 'POST' && String(init.body).includes('item-1'))).toBe(true);
-    expect(screen.getByPlaceholderText('Enter amount...')).toHaveValue(null);
-    expect(screen.getByRole('link', { name: /Exit Room/ })).toHaveAttribute('href', '/vendor-portal/auctions');
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount))).toHaveValue(null);
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.exitRoom) })).toHaveAttribute('href', '/vendor-portal/auctions');
   });
 
   it('handles term rejection, term acceptance failure, and inaccessible auctions', async () => {
@@ -106,18 +110,18 @@ describe('vendor portal auction detail page', () => {
     });
     const { unmount } = renderRoom();
     await flush();
-    expect(await screen.findByText('Auction Terms & Conditions Acknowledgement')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Decline & Exit' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.auctionTermsConditionsAcknowledgement))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.declineExit) }));
     expect(mockPush).toHaveBeenCalledWith('/vendor-portal/auctions');
     fireEvent.click(screen.getByRole('button', { name: /I Accept the Terms/ }));
-    await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: 'Error', message: 'Terms service unavailable' }));
+    await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: 'Terms service unavailable' }));
     unmount();
 
     global.fetch = jest.fn().mockResolvedValue(ok({}));
     renderRoom();
     await flush();
-    expect(await screen.findByText('Auction not accessible')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Return to My Auctions' })).toHaveAttribute('href', '/vendor-portal/auctions');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.auctionNotAccessible))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.returnToMyAuctions) })).toHaveAttribute('href', '/vendor-portal/auctions');
   });
 
   it('shows sealed bid confidentiality, confirms once, and displays already submitted sealed bids', async () => {
@@ -130,16 +134,16 @@ describe('vendor portal auction detail page', () => {
       : ok({ auction: sealed, currentVendorParticipation: { termsAcceptedAt: '2026-10-28', bidCount: 0 } }));
     const view = renderRoom();
     await flush();
-    expect(await screen.findByText('Confidential Sealed Bid')).toBeInTheDocument();
-    expect(screen.getByText(/Competitor bids and prices are strictly confidential/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Select Auction Scope Item/)).not.toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Enter amount...'), { target: { value: '8750' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Lock Sealed Bid' }));
-    expect(screen.getByText('Confirm Final Sealed Bid')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Confirm Final Sealed Bid')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Lock Sealed Bid' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Submit Sealed Bid' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.confidentialSealedBid))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.competitorBidsAndPricesAreStrictlyConfidential))).toBeInTheDocument();
+    expect(screen.queryByLabelText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.selectAuctionScopeItem))).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount)), { target: { value: '8750' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.lockSealedBid) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.confirmFinalSealedBid))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.confirmFinalSealedBid))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.lockSealedBid) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.yesSubmitSealedBid) }));
     await waitFor(() => expect(mockSuccess).toHaveBeenCalledWith({ title: 'Bid Accepted', message: 'Sealed bid secured' }));
     view.unmount();
 
@@ -149,7 +153,7 @@ describe('vendor portal auction detail page', () => {
     }));
     renderRoom();
     await flush();
-    expect(await screen.findByText('Sealed Bid Submitted & Secured')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.sealedBidSubmittedSecured))).toBeInTheDocument();
     expect(screen.getAllByText('INR 8,750').length).toBeGreaterThan(0);
   });
 
@@ -164,14 +168,14 @@ describe('vendor portal auction detail page', () => {
       : ok({ auction: closed, currentVendorParticipation: { termsAcceptedAt: '2026-10-28', bidCount: 0 } }));
     renderRoom();
     await flush();
-    expect(await screen.findByText('CONCLUDED')).toBeInTheDocument();
-    expect(screen.getByText('Bidding is currently CLOSED')).toBeInTheDocument();
-    expect(screen.getByText('You have not submitted any bids yet.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh Telemetry' })).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.cONCLUDED))).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppVendorPortalAuctionsIdPage.biddingIsCurrently, { status: 'CLOSED' }))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.youHaveNotSubmittedAnyBidsYet))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refreshTelemetry) })).toBeInTheDocument();
 
     global.fetch = jest.fn().mockRejectedValue(new Error('telemetry offline'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh Telemetry' }));
-    await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: 'Error', message: 'telemetry offline' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refreshTelemetry) }));
+    await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: 'telemetry offline' }));
   });
 
   it('calculates forward bids, handles the default bid rejection message, and formats dates', async () => {
@@ -188,12 +192,12 @@ describe('vendor portal auction detail page', () => {
     await flush();
     expect(await screen.findByText(/greater than or equal to INR 1,001/)).toBeInTheDocument();
     expect(screen.getByText('Starting at INR 1,000')).toBeInTheDocument();
-    expect(screen.getByText(/Current Rank:/)).toHaveTextContent('L2');
-    fireEvent.change(screen.getByPlaceholderText('Enter amount...'), { target: { value: '' } });
-    expect(screen.getByPlaceholderText('Enter amount...')).toHaveValue(null);
-    fireEvent.change(screen.getByPlaceholderText('Enter amount...'), { target: { value: '1100' } });
-    fireEvent.click(screen.getByRole('button', { name: /Submit Bid/ }));
-    await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: 'Bid Rejected', message: 'Bid submission rejected' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.currentRankL))).toHaveTextContent('L2');
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount)), { target: { value: '' } });
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount))).toHaveValue(null);
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount)), { target: { value: '1100' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
+    await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: UI_STRINGS.common.bidRejected, message: 'Bid submission rejected' }));
   });
 
   it('renders a paused zero-price auction with its fallback end time and no qualifying next bid', async () => {
@@ -210,9 +214,9 @@ describe('vendor portal auction detail page', () => {
     renderRoom();
     await flush();
     expect(await screen.findByText('PAUSED')).toBeInTheDocument();
-    expect(screen.queryByText('(EXTENDED 0X)')).not.toBeInTheDocument();
-    expect(screen.getByText(/Starting at INR 0/)).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.eXTENDEDExtensionCountX))).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.startingAt))).toBeInTheDocument();
     expect(screen.queryByText(/Next qualifying bid/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Scheduled End:/)).toHaveTextContent('IST');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.scheduledEnd))).toHaveTextContent(UI_STRINGS.appAppProcurementAuctionsPage.iST.trim());
   });
 });

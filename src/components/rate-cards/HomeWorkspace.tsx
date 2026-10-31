@@ -6,6 +6,9 @@ import { Search, Plus, Eye, ArrowRight, CheckCircle2, Clock } from 'lucide-react
 import PageHeader from '@/components/ui/PageHeader';
 import LongTextCell from '@/components/ui/LongTextCell';
 import type { RateCardRow, HomeWorkspaceProps } from "@app-types/components/rate-cards/HomeWorkspace.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { RateCardRow };
 
 
@@ -146,8 +149,8 @@ export default function HomeWorkspace({
     <div className="w-full space-y-6">
       {/* ── STANDARDIZED PAGE HEADER ───────────────────────────────────── */}
       <PageHeader
-        title="Rate Card Management - Home"
-        subtitle="Centrally manage category-level vendor rate cards, standard BOQ items, multi-round commercial negotiations, and governance approvals."
+        title={UI_STRINGS.componentsRateCardsHomeWorkspace.rateCardManagementHome}
+        subtitle={UI_STRINGS.componentsRateCardsHomeWorkspace.centrallyManageCategoryLevelVendorRateCardsStandardBOQItemsMultiRoundCommercialNegotiationsAndGovernanceApprovals}
         stepNumber={1}
         actions={
           <button
@@ -156,7 +159,7 @@ export default function HomeWorkspace({
             className="pro-btn pro-btn-primary"
           >
             <Plus size={18} strokeWidth={2.5} />
-            <span>Initiate Rate Card</span>
+            <span>{UI_STRINGS.common.initiateRateCard}</span>
           </button>
         }
       />
@@ -174,7 +177,7 @@ export default function HomeWorkspace({
               size={16}
               className={activeSummaryTab === 'finalised' ? 'text-[#0f52ba]' : 'text-slate-400'}
             />
-            <span>Finalised Summary</span>
+            <span>{UI_STRINGS.componentsRateCardsHomeWorkspace.finalisedSummary}</span>
             <span
               className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${
                 activeSummaryTab === 'finalised'
@@ -195,7 +198,7 @@ export default function HomeWorkspace({
               size={16}
               className={activeSummaryTab === 'in_progress' ? 'text-[#0f52ba]' : 'text-slate-400'}
             />
-            <span>Rate Cards in Progress</span>
+            <span>{UI_STRINGS.componentsRateCardsHomeWorkspace.rateCardsInProgress}</span>
             <span
               className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${
                 activeSummaryTab === 'in_progress'
@@ -218,7 +221,7 @@ export default function HomeWorkspace({
                 type="text"
                 value={searchTerm}
                 onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search by Rate Card ID, Title, Vendor or Category..."
+                placeholder={UI_STRINGS.componentsRateCardsHomeWorkspace.searchByRateCardIDTitleVendorOrCategory}
                 className="pro-input pl-10"
               />
             </div>
@@ -230,7 +233,7 @@ export default function HomeWorkspace({
                 onChange={(e) => handleCategory(e.target.value)}
                 className="pro-select"
               >
-                <option value="ALL">All Categories</option>
+                <option value="ALL">{UI_STRINGS.common.allCategories}</option>
                 {availableCategories.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
@@ -246,7 +249,7 @@ export default function HomeWorkspace({
                 onChange={(e) => handleVendor(e.target.value)}
                 className="pro-select"
               >
-                <option value="ALL">All Vendors</option>
+                <option value="ALL">{UI_STRINGS.componentsRateCardsHomeWorkspace.allVendors}</option>
                 {availableVendors.map((vnd) => (
                   <option key={vnd} value={vnd}>
                     {vnd}
@@ -262,9 +265,9 @@ export default function HomeWorkspace({
                 onChange={(e) => handleStatus(e.target.value)}
                 className="pro-select"
               >
-                <option value="ALL">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="In Progress">In Progress</option>
+                <option value="ALL">{UI_STRINGS.common.allStatuses}</option>
+                <option value="Active">{UI_STRINGS.common.active}</option>
+                <option value="In Progress">{UI_STRINGS.common.inProgress}</option>
               </select>
             </div>
 
@@ -274,9 +277,7 @@ export default function HomeWorkspace({
                 type="button"
                 onClick={handleClear}
                 className="pro-btn pro-btn-secondary w-full"
-              >
-                Clear
-              </button>
+              >{UI_STRINGS.common.clear}</button>
             </div>
           </div>
         </div>
@@ -301,25 +302,23 @@ export default function HomeWorkspace({
               </colgroup>
               <thead>
                 <tr className="bg-slate-50 text-slate-700 border-b border-slate-300 font-bold text-xs uppercase tracking-wider">
-                  <th className="py-3 px-2 text-center border-r border-slate-200" style={{ width: '55px' }}>S.No.</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '185px' }}>Rate Card ID</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '180px' }}>Vendor</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '145px' }}>Category</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '230px' }}>Scope / Description</th>
-                  <th className="py-3 px-2 text-center border-r border-slate-200" style={{ width: '65px' }}>Items</th>
-                  <th className="py-3 px-2.5 border-r border-slate-200" style={{ width: '105px' }}>Valid From</th>
-                  <th className="py-3 px-2.5 border-r border-slate-200" style={{ width: '105px' }}>Valid Until</th>
-                  <th className="py-3 px-2.5 border-r border-slate-200" style={{ width: '100px' }}>Status</th>
-                  <th className="py-3 px-3 border-r border-slate-200 leading-tight" style={{ width: '155px' }}>Next Responsible Party</th>
-                  <th className="py-3 px-3 text-right" style={{ width: '120px' }}>Actions</th>
+                  <th className="py-3 px-2 text-center border-r border-slate-200" style={{ width: '55px' }}>{UI_STRINGS.common.sNo2}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '185px' }}>{UI_STRINGS.common.rateCardID}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '180px' }}>{UI_STRINGS.common.vendor}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '145px' }}>{UI_STRINGS.common.category2}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '230px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.scopeDescription}</th>
+                  <th className="py-3 px-2 text-center border-r border-slate-200" style={{ width: '65px' }}>{UI_STRINGS.common.items4}</th>
+                  <th className="py-3 px-2.5 border-r border-slate-200" style={{ width: '105px' }}>{UI_STRINGS.common.validFrom}</th>
+                  <th className="py-3 px-2.5 border-r border-slate-200" style={{ width: '105px' }}>{UI_STRINGS.common.validUntil}</th>
+                  <th className="py-3 px-2.5 border-r border-slate-200" style={{ width: '100px' }}>{UI_STRINGS.common.status}</th>
+                  <th className="py-3 px-3 border-r border-slate-200 leading-tight" style={{ width: '155px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.nextResponsibleParty}</th>
+                  <th className="py-3 px-3 text-right" style={{ width: '120px' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {pagedRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-500 text-sm">
-                      No finalised rate cards found matching the criteria.
-                    </td>
+                    <td colSpan={11} className="py-12 text-center text-slate-500 text-sm">{UI_STRINGS.componentsRateCardsHomeWorkspace.noFinalisedRateCardsFoundMatchingTheCriteria}</td>
                   </tr>
                 ) : (
                   pagedRecords.map((row, idx) => {
@@ -345,8 +344,8 @@ export default function HomeWorkspace({
                         <td className="py-2.5 px-3 text-slate-800 font-medium border-r border-slate-200 overflow-hidden" style={{ width: '180px' }}>
                           <LongTextCell
                             text={row.vendor}
-                            title={`Vendor Details — ${row.vendor}`}
-                            subtitle={row.vendorCode ? `Vendor Code: ${row.vendorCode}` : undefined}
+                            title={interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.vendorDetailsVendor, { "vendor": row.vendor })}
+                            subtitle={row.vendorCode ? interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.vendorCodeVendorCode, { "vendorCode": row.vendorCode }) : undefined}
                             maxWidth="100%"
                             showIcon={false}
                           />
@@ -360,8 +359,8 @@ export default function HomeWorkspace({
                         <td className="py-2.5 px-3 border-r border-slate-200 overflow-hidden" style={{ width: '230px' }}>
                           <LongTextCell
                             text={row.scope}
-                            title={`Scope / Description — ${row.rateCardId}`}
-                            subtitle={`${row.vendor} | ${row.category}`}
+                            title={interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.scopeDescriptionRateCardId, { "rateCardId": row.rateCardId })}
+                            subtitle={interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.vendorCategory, { "vendor": row.vendor, "category": row.category })}
                             maxWidth="100%"
                           />
                         </td>
@@ -378,13 +377,11 @@ export default function HomeWorkspace({
                         </td>
                         <td className="py-2.5 px-2.5 whitespace-nowrap border-r border-slate-200" style={{ width: '100px' }}>
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            Active
-                          </span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />{UI_STRINGS.common.active}</span>
                         </td>
                         <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200" style={{ width: '155px' }}>
                           <span className="inline-flex items-center gap-1.5 text-slate-700 text-xs font-medium truncate block max-w-full">
-                            {row.nextResponsible || 'Active Contract'}
+                            {row.nextResponsible || UI_STRINGS.componentsRateCardsHomeWorkspace.activeContract}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-right whitespace-nowrap" style={{ width: '120px' }}>
@@ -394,7 +391,7 @@ export default function HomeWorkspace({
                             className="px-3 py-1.5 text-xs font-semibold border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                           >
                             <Eye size={14} />
-                            <span>View Details</span>
+                            <span>{UI_STRINGS.common.viewDetails}</span>
                           </button>
                         </td>
                       </tr>
@@ -421,25 +418,23 @@ export default function HomeWorkspace({
               </colgroup>
               <thead>
                 <tr className="bg-slate-50 text-slate-700 border-b border-slate-300 font-bold text-xs uppercase tracking-wider">
-                  <th className="py-3 px-2 text-center border-r border-slate-200" style={{ width: '55px' }}>S.No.</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '175px' }}>Rate Card ID</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '170px' }}>Vendor</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '135px' }}>Category</th>
-                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '210px' }}>Scope / Description</th>
-                  <th className="py-3 px-3 border-r border-slate-200 leading-tight" style={{ width: '150px' }}>Current Stage</th>
-                  <th className="py-3 px-2.5 text-right border-r border-slate-200 leading-tight" style={{ width: '125px' }}>Latest Buyer Offer</th>
-                  <th className="py-3 px-2.5 text-right border-r border-slate-200 leading-tight" style={{ width: '145px' }}>Latest Submitted Vendor Quote</th>
-                  <th className="py-3 px-2.5 border-r border-slate-200 leading-tight" style={{ width: '120px' }}>Last Updated</th>
-                  <th className="py-3 px-3 border-r border-slate-200 leading-tight" style={{ width: '155px' }}>Next Responsible Party</th>
-                  <th className="py-3 px-3 text-right" style={{ width: '110px' }}>Actions</th>
+                  <th className="py-3 px-2 text-center border-r border-slate-200" style={{ width: '55px' }}>{UI_STRINGS.common.sNo2}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '175px' }}>{UI_STRINGS.common.rateCardID}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '170px' }}>{UI_STRINGS.common.vendor}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '135px' }}>{UI_STRINGS.common.category2}</th>
+                  <th className="py-3 px-3 border-r border-slate-200" style={{ width: '210px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.scopeDescription}</th>
+                  <th className="py-3 px-3 border-r border-slate-200 leading-tight" style={{ width: '150px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.currentStage}</th>
+                  <th className="py-3 px-2.5 text-right border-r border-slate-200 leading-tight" style={{ width: '125px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.latestBuyerOffer}</th>
+                  <th className="py-3 px-2.5 text-right border-r border-slate-200 leading-tight" style={{ width: '145px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.latestSubmittedVendorQuote}</th>
+                  <th className="py-3 px-2.5 border-r border-slate-200 leading-tight" style={{ width: '120px' }}>{UI_STRINGS.common.lastUpdated}</th>
+                  <th className="py-3 px-3 border-r border-slate-200 leading-tight" style={{ width: '155px' }}>{UI_STRINGS.componentsRateCardsHomeWorkspace.nextResponsibleParty}</th>
+                  <th className="py-3 px-3 text-right" style={{ width: '110px' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {pagedRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-500 text-sm">
-                      No rate cards in progress found matching the criteria.
-                    </td>
+                    <td colSpan={11} className="py-12 text-center text-slate-500 text-sm">{UI_STRINGS.componentsRateCardsHomeWorkspace.noRateCardsInProgressFoundMatchingTheCriteria}</td>
                   </tr>
                 ) : (
                   pagedRecords.map((row, idx) => {
@@ -467,8 +462,8 @@ export default function HomeWorkspace({
                         <td className="py-2.5 px-3 text-slate-800 font-medium border-r border-slate-200 overflow-hidden" style={{ width: '170px' }}>
                           <LongTextCell
                             text={row.vendor}
-                            title={`Vendor Details — ${row.vendor}`}
-                            subtitle={row.vendorCode ? `Vendor Code: ${row.vendorCode}` : undefined}
+                            title={interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.vendorDetailsVendor, { "vendor": row.vendor })}
+                            subtitle={row.vendorCode ? interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.vendorCodeVendorCode, { "vendorCode": row.vendorCode }) : undefined}
                             maxWidth="100%"
                             showIcon={false}
                           />
@@ -482,8 +477,8 @@ export default function HomeWorkspace({
                         <td className="py-2.5 px-3 border-r border-slate-200 overflow-hidden" style={{ width: '210px' }}>
                           <LongTextCell
                             text={row.scope}
-                            title={`Scope / Description — ${row.rateCardId}`}
-                            subtitle={`${row.vendor} | ${row.category}`}
+                            title={interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.scopeDescriptionRateCardId, { "rateCardId": row.rateCardId })}
+                            subtitle={interpolateUiString(UI_STRINGS.componentsRateCardsHomeWorkspace.vendorCategory, { "vendor": row.vendor, "category": row.category })}
                             maxWidth="100%"
                           />
                         </td>
@@ -494,17 +489,17 @@ export default function HomeWorkspace({
                           </span>
                         </td>
                         <td className="py-2.5 px-2.5 text-right font-mono font-bold text-slate-900 text-xs border-r border-slate-200 whitespace-nowrap" style={{ width: '125px' }}>
-                          {row.latestBuyerOffer || '₹ 4,83,000'}
+                          {row.latestBuyerOffer || UI_STRINGS.componentsRateCardsHomeWorkspace.copyahiv41}
                         </td>
                         <td className="py-2.5 px-2.5 text-right font-mono font-bold text-amber-800 text-xs border-r border-slate-200 whitespace-nowrap" style={{ width: '145px' }}>
-                          {row.latestSubmittedVendorQuote || row.latestVendorQuote || '₹ 5,08,000'}
+                          {row.latestSubmittedVendorQuote || row.latestVendorQuote || UI_STRINGS.componentsRateCardsHomeWorkspace.copy19cqvo9}
                         </td>
                         <td className="py-2.5 px-2.5 text-slate-600 font-mono text-xs whitespace-nowrap border-r border-slate-200" style={{ width: '120px' }}>
                           {row.lastUpdated || row.validFrom}
                         </td>
                         <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200" style={{ width: '155px' }}>
                           <span className="inline-flex items-center gap-1.5 text-slate-700 text-xs font-medium truncate block max-w-full">
-                            {row.nextResponsible || 'Category Manager'}
+                            {row.nextResponsible || UI_STRINGS.common.categoryManager}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-right whitespace-nowrap" style={{ width: '110px' }}>
@@ -513,9 +508,9 @@ export default function HomeWorkspace({
                               type="button"
                               onClick={() => onNegotiateClick(row.rateCardId)}
                               className="px-2.5 py-1.5 text-xs font-semibold bg-[#0f52ba] hover:bg-blue-800 text-white rounded-md flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                              title="Open Negotiation Workspace"
+                              title={UI_STRINGS.common.openNegotiationWorkspace}
                             >
-                              <span>Negotiate</span>
+                              <span>{UI_STRINGS.common.negotiate}</span>
                               <ArrowRight size={12} />
                             </button>
                           </div>
@@ -533,27 +528,23 @@ export default function HomeWorkspace({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3.5 border-t border-slate-200 bg-[#fbfcfd] text-xs text-slate-600">
           <div>
             {totalRecords === 0 ? (
-              <span>Showing 0 records</span>
+              <span>{UI_STRINGS.componentsRateCardsHomeWorkspace.showing0Records}</span>
             ) : (
-              <span>
-                Showing <span className="font-bold text-slate-800">{startIndex + 1}</span> to{' '}
-                <span className="font-bold text-slate-800">{endIndex}</span> of{' '}
-                <span className="font-bold text-slate-800">{totalRecords}</span> records
-              </span>
+              <span>{UI_STRINGS.common.showing}<span className="font-bold text-slate-800">{startIndex + 1}</span>{UI_STRINGS.common.to}{' '}
+                <span className="font-bold text-slate-800">{endIndex}</span>{UI_STRINGS.componentsRateCardsHomeWorkspace.of}{' '}
+                <span className="font-bold text-slate-800">{totalRecords}</span>{UI_STRINGS.common.records}</span>
             )}
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center gap-1.5" role="navigation" aria-label="Pagination">
+            <div className="flex items-center gap-1.5" role="navigation" aria-label={UI_STRINGS.componentsRateCardsHomeWorkspace.pagination}>
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
                 className="px-3 py-1.5 border border-slate-200 rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                aria-label="Previous Page"
-              >
-                &lt;
-              </button>
+                aria-label={UI_STRINGS.componentsRateCardsHomeWorkspace.previousPage}
+              >{UI_STRINGS.componentsRateCardsHomeWorkspace.lt}</button>
 
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
                 const isSelected = pageNum === currentPage;
@@ -579,10 +570,8 @@ export default function HomeWorkspace({
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
                 className="px-3 py-1.5 border border-slate-200 rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                aria-label="Next Page"
-              >
-                &gt;
-              </button>
+                aria-label={UI_STRINGS.componentsRateCardsHomeWorkspace.nextPage}
+              >{UI_STRINGS.componentsRateCardsHomeWorkspace.gt}</button>
             </div>
           )}
         </div>

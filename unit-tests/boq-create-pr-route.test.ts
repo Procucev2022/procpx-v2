@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/create-pr/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -66,7 +68,7 @@ describe('create PR from BOQ route', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(request({}))).resolves.toBe(denied);
-    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: 'BOQ Revision ID or BOQ ID is required.', status: 400 });
+    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, status: 400 });
     expect(db.boqRevision.findFirst).not.toHaveBeenCalled();
   });
 
@@ -75,16 +77,16 @@ describe('create PR from BOQ route', () => {
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-1', revisions: [{ id: 'revision-latest', boqId: 'boq-1', lines: [] }] });
     db.costCentre.findFirst.mockResolvedValueOnce(null);
     await expect(POST(request({ boqId: 'boq-1', costCentreId: 'wrong-cc' }))).resolves.toEqual({
-      ok: false, error: 'Cost centre not found for this project.', status: 404,
+      ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404,
     });
     expect(db.boq.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'boq-1', tenantId: 'tenant-1' } }));
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-empty', revisions: [] });
-    await expect(POST(request({ boqId: 'boq-empty', costCentreId: 'cc-1' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(POST(request({ boqId: 'boq-empty', costCentreId: 'cc-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ boqId: 'missing', costCentreId: 'cc-1' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(POST(request({ boqId: 'missing', costCentreId: 'cc-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
   });
 
   it('requires a target cost centre, checks project scope, and rejects empty selected lines', async () => {
@@ -93,14 +95,14 @@ describe('create PR from BOQ route', () => {
       boq: { id: 'boq-1', projectId: 'project-1', costCentreId: null, title: 'Electrical BOQ', boqCode: 'BOQ-000001' },
     }));
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
-      ok: false, error: 'A valid Cost Centre is required to create a PR.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqCreatePrRoute.aValidCostCentreIsRequiredToCreateAPR, status: 400,
     });
     db.costCentre.findFirst.mockResolvedValueOnce(null);
     await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'wrong-cc', projectId: 'project-other' }))).resolves.toEqual({
-      ok: false, error: 'Cost centre not found for this project.', status: 404,
+      ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404,
     });
     await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', selectedLineIds: ['missing'] }))).resolves.toEqual({
-      ok: false, error: 'No valid BOQ lines available to generate PR.', status: 400,
+      ok: false, error: UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, status: 400,
     });
   });
 
@@ -147,12 +149,12 @@ describe('create PR from BOQ route', () => {
       totalEstimatedValue: 132, totalLines: 3, status: 'PR_PENDING_PROJECT_APPROVAL', requiredDate: new Date('2026-12-20'),
     }) });
     expect(db.pRLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      boqLineId: 'line-1', lineNumber: 'L-1', itemDescription: 'Cable', specification: 'Copper', category: 'Electrical',
+      boqLineId: 'line-1', lineNumber: 'L-1', itemDescription: 'Cable', specification: 'Copper', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
       subcategory: 'Wire', uom: 'MTR', quantity: 2, estimatedRate: 10, estimatedValue: 20, drawingReference: 'D-1', costCentre: 'CC01',
     }) });
     expect(db.pRLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      boqLineId: 'line-2', lineNumber: '1', itemDescription: 'Panel', specification: null, category: 'General',
-      subcategory: null, uom: 'NOS', quantity: 3, estimatedRate: 4, estimatedValue: 12, drawingReference: null,
+      boqLineId: 'line-2', lineNumber: UI_STRINGS.common.copyefwnq4, itemDescription: 'Panel', specification: null, category: UI_STRINGS.common.general,
+      subcategory: null, uom: UI_STRINGS.common.nOS, quantity: 3, estimatedRate: 4, estimatedValue: 12, drawingReference: null,
     }) });
     expect(db.pRLine.create).toHaveBeenNthCalledWith(3, { data: expect.objectContaining({
       boqLineId: 'line-3', itemDescription: 'Line Item', specification: null, quantity: 1, estimatedRate: 100, estimatedValue: 100,

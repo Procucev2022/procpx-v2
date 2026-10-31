@@ -4,6 +4,8 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -142,15 +144,15 @@ describe('RFQ collection API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({}))).resolves.toBe(denied);
     await expect(POST(postRequest({ projectId: 'p1', title: 'Missing BOQ' }))).resolves.toEqual({
-      ok: false, error: 'Project, Approved BOQ Revision, and Title are required', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.projectApprovedBOQRevisionAndTitleAreRequired, status: 400,
     });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     await expect(POST(postRequest({ projectId: 'p1', boqRevisionId: 'missing', title: 'Missing revision' }))).resolves.toEqual({
-      ok: false, error: 'Approved or Released BOQ Revision not found', status: 404,
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.approvedOrReleasedBOQRevisionNotFound, status: 404,
     });
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ prId: 'missing' }))).resolves.toEqual({ ok: false, error: 'Procurement Request not found or access denied', status: 404 });
+    await expect(POST(postRequest({ prId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.procurementRequestNotFoundOrAccessDenied, status: 404 });
     db.procurementRequest.findFirst.mockResolvedValueOnce(prFixture({ status: 'PR_SUBMITTED' }));
     await expect(POST(postRequest({ prId: 'pr-1' }))).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Sourcing is only permitted'), status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce({ rfqNumber: 'RFQ-EXISTING' });
@@ -158,7 +160,7 @@ describe('RFQ collection API', () => {
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(prFixture());
     await expect(POST(postRequest({ prId: 'pr-1', selectedLineIds: ['pr-line-1', 'pr-line-1'] }))).resolves.toEqual({
-      ok: false, error: 'Duplicate line item IDs found in RFQ line selection.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, status: 400,
     });
     db.procurementRequest.findFirst.mockResolvedValueOnce(prFixture());
     await expect(POST(postRequest({ prId: 'pr-1', selectedLineIds: ['outside'] }))).resolves.toMatchObject({
@@ -181,14 +183,14 @@ describe('RFQ collection API', () => {
       requiredDocuments: '["Drawing"]', estimatedBenchmarkValue: 220, totalLines: 2,
       releasedAt: expect.any(Date), lines: { create: [
         expect.objectContaining({ prLineId: 'pr-line-1', benchmarkRate: 40, benchmarkAmount: 120, quantity: 3,
-          lineNumber: 'L-1', specification: '4 core', category: 'General', boqLineId: null }),
+          lineNumber: 'L-1', specification: '4 core', category: UI_STRINGS.common.general, boqLineId: null }),
         expect.objectContaining({ prLineId: 'pr-line-2', benchmarkRate: 25, benchmarkAmount: 100, quantity: 1,
-          lineNumber: '2', specification: 'Panel spec', category: 'Electrical', subcategory: 'Switchgear', boqLineId: 'boq-line-2' }),
+          lineNumber: UI_STRINGS.common.copyf9vgt1, specification: 'Panel spec', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'Switchgear', boqLineId: 'boq-line-2' }),
       ] },
     }) });
     expect(db.rfqVendor.createMany).toHaveBeenCalledWith({ data: [
-      { tenantId: 'tenant-1', rfqId: 'rfq-new', vendorId: 'v1', invitationStatus: 'INVITED', submissionStatus: 'PENDING' },
-      { tenantId: 'tenant-1', rfqId: 'rfq-new', vendorId: 'v2', invitationStatus: 'INVITED', submissionStatus: 'PENDING' },
+      { tenantId: 'tenant-1', rfqId: 'rfq-new', vendorId: 'v1', invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED, submissionStatus: UI_STRINGS.common.pENDING },
+      { tenantId: 'tenant-1', rfqId: 'rfq-new', vendorId: 'v2', invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED, submissionStatus: UI_STRINGS.common.pENDING },
     ] });
     expect(audit).toHaveBeenCalledTimes(2);
     expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'RFQ_RELEASED', projectId: 'project-1' }));
@@ -202,7 +204,7 @@ describe('RFQ collection API', () => {
     expect(selected).toMatchObject({ ok: true, status: 201 });
     expect(db.rfq.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
       lines: { create: [expect.objectContaining({ lineNumber: 'L-1', specification: 'Standard technical specification',
-        category: 'General', benchmarkRate: 30, benchmarkAmount: 60, quantity: 2 })] },
+        category: UI_STRINGS.common.general, benchmarkRate: 30, benchmarkAmount: 60, quantity: 2 })] },
     }) });
   });
 
@@ -216,10 +218,10 @@ describe('RFQ collection API', () => {
       projectId: 'project-1', boqRevisionId: 'rev-1', prId: null, status: 'DRAFT', packageName: 'CATEGORY Package',
       estimatedBenchmarkValue: 60, totalLines: 1, releasedAt: null, lines: { create: [expect.objectContaining({
         boqLineId: 'boq-line-1', lineNumber: 'C-1', description: 'Copper cable', benchmarkRate: 30, benchmarkAmount: 60,
-        category: 'Electrical', subcategory: 'sub-1', uom: 'M', quantity: 2, specification: 'Commercial standard specification',
+        category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'sub-1', uom: 'M', quantity: 2, specification: 'Commercial standard specification',
       })] },
     }) });
-    expect(db.rfqVendor.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ invitationStatus: 'PENDING', vendorId: 'v1' })] });
+    expect(db.rfqVendor.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ invitationStatus: UI_STRINGS.common.pENDING, vendorId: 'v1' })] });
     expect(notify).not.toHaveBeenCalled();
 
     db.boqRevision.findFirst.mockResolvedValueOnce(boqFixture({ lines: [{ id: 'selected-boq-line', quantity: null, aiUnitCost: 0,
@@ -229,7 +231,7 @@ describe('RFQ collection API', () => {
       selectedLineIds: ['selected-boq-line'] }))).resolves.toMatchObject({ ok: true, status: 201 });
     expect(db.rfq.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
       estimatedBenchmarkValue: 100, lines: { create: [expect.objectContaining({ lineNumber: 'L-1', description: 'Line item',
-        specification: 'Commercial standard specification', category: 'General', subcategory: '', uom: 'NOS', quantity: 1,
+        specification: 'Commercial standard specification', category: UI_STRINGS.common.general, subcategory: '', uom: UI_STRINGS.common.nOS, quantity: 1,
         benchmarkRate: 100, benchmarkAmount: 100 })] },
     }) });
 
@@ -239,7 +241,7 @@ describe('RFQ collection API', () => {
 
     db.boqRevision.findFirst.mockResolvedValueOnce(boqFixture());
     await expect(POST(postRequest({ projectId: 'project-1', boqRevisionId: 'rev-1', title: 'Duplicate', selectedLineIds: ['boq-line-1', 'boq-line-1'] }))).resolves.toEqual({
-      ok: false, error: 'Duplicate line item IDs found in RFQ line selection.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, status: 400,
     });
     db.boqRevision.findFirst.mockResolvedValueOnce(boqFixture());
     await expect(POST(postRequest({ projectId: 'project-1', boqRevisionId: 'rev-1', title: 'Foreign', selectedLineIds: ['foreign'] }))).resolves.toMatchObject({
@@ -247,7 +249,7 @@ describe('RFQ collection API', () => {
     });
     db.boqRevision.findFirst.mockResolvedValueOnce(boqFixture({ lines: [] }));
     await expect(POST(postRequest({ projectId: 'project-1', boqRevisionId: 'rev-1', title: 'Empty' }))).resolves.toEqual({
-      ok: false, error: 'At least one BOQ line must be selected for the RFQ scope', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneBOQLineMustBeSelectedForTheRFQScope, status: 400,
     });
   });
 

@@ -14,6 +14,9 @@ import {
   Paperclip,
 } from 'lucide-react';
 import type { RfqChatDrawerProps } from "@app-types/components/RfqChatDrawer.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { RfqChatDrawerProps };
 
 
@@ -57,10 +60,10 @@ export default function RfqChatDrawer({
         setMessages(data.messages || data.data?.messages || []);
       } else {
         const err = await res.json();
-        setError(err.error || 'Failed to load message history.');
+        setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory }));
       }
     } catch (e: any) {
-      setError(e.message || 'Network error fetching messages.');
+      setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
     } finally {
       setLoading(false);
     }
@@ -93,10 +96,10 @@ export default function RfqChatDrawer({
         await loadMessages();
       } else {
         const err = await res.json();
-        setError(err.error || 'Failed to send message.');
+        setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSendMessage2 }));
       }
     } catch (e: any) {
-      setError(e.message || 'Network error sending message.');
+      setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorSendingMessage }));
     } finally {
       setSubmitting(false);
     }
@@ -135,13 +138,10 @@ export default function RfqChatDrawer({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <MessageSquare size={18} className="text-blue-400" />
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#ffffff' }}>
-              RFQ Clarifications & Queries
-            </h3>
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#ffffff' }}>{UI_STRINGS.componentsRfqChatDrawer.rFQClarificationsQueries}</h3>
           </div>
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-            Ref: <span className="font-mono text-white font-semibold">{rfqNumber}</span>
-            {title && ` — ${title}`}
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{UI_STRINGS.common.ref}<span className="font-mono text-white font-semibold">{rfqNumber}</span>
+            {title && interpolateUiString(UI_STRINGS.componentsRfqChatDrawer.title, { "title": title })}
           </div>
         </div>
         <button
@@ -175,15 +175,13 @@ export default function RfqChatDrawer({
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, color: '#64748b' }}>
             <Loader2 size={24} className="animate-spin" />
-            <span style={{ marginLeft: 8, fontSize: 13 }}>Loading messages...</span>
+            <span style={{ marginLeft: 8, fontSize: 13 }}>{UI_STRINGS.common.loadingMessages}</span>
           </div>
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
             <MessageSquare size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#475569' }}>No queries or clarifications yet</div>
-            <div style={{ fontSize: 11, marginTop: 4 }}>
-              Communicate commercial or technical queries with full audit persistence.
-            </div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#475569' }}>{UI_STRINGS.componentsRfqChatDrawer.noQueriesOrClarificationsYet}</div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>{UI_STRINGS.componentsRfqChatDrawer.communicateCommercialOrTechnicalQueriesWithFullAuditPersistence}</div>
           </div>
         ) : (
           messages.map((m) => {
@@ -210,9 +208,8 @@ export default function RfqChatDrawer({
                   }}
                 >
                   <span style={{ fontWeight: 600, color: isVendor ? '#059669' : '#1e40af' }}>
-                    {m.senderName} ({m.senderRole})
-                  </span>
-                  <span>•</span>
+                    {m.senderName}{UI_STRINGS.common.copy1b3t0c5}{m.senderRole}{UI_STRINGS.common.copyc7zu6c}</span>
+                  <span>{UI_STRINGS.common.copyaw0l2d}</span>
                   <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div
@@ -272,7 +269,7 @@ export default function RfqChatDrawer({
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Type query or clarification..."
+          placeholder={UI_STRINGS.componentsRfqChatDrawer.typeQueryOrClarification}
           disabled={submitting}
           style={{
             flex: 1,
@@ -301,9 +298,7 @@ export default function RfqChatDrawer({
             gap: 6,
           }}
         >
-          {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          Send
-        </button>
+          {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}{UI_STRINGS.componentsRfqChatDrawer.send}</button>
       </form>
     </div>
   );

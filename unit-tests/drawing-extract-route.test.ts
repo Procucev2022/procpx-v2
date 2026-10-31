@@ -3,6 +3,8 @@ import { POST } from '../src/app/api/boq/drawing-extract/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { processDrawingFile } from '../src/lib/drawing-parser';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -100,14 +102,14 @@ describe('BOQ drawing extraction route', () => {
     await expect(POST(jsonRequest({}))).resolves.toBe(denied);
 
     await expect(POST(jsonRequest({ lines: [{}] }))).resolves.toEqual({
-      ok: false, error: 'Project ID is required to generate Draft BOQ.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, status: 400,
     });
     await expect(POST(jsonRequest({ projectId: 'project-1', lines: [] }))).resolves.toEqual({
-      ok: false, error: 'At least one BOQ line item is required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, status: 400,
     });
     db.project.findFirst.mockResolvedValueOnce(null);
     await expect(POST(jsonRequest({ projectId: 'foreign-project', lines: [{}] }))).resolves.toEqual({
-      ok: false, error: 'Project not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404,
     });
     expect(db.project.findFirst).toHaveBeenCalledWith({ where: { id: 'foreign-project', tenantId: 'tenant-1' } });
   });
@@ -125,7 +127,7 @@ describe('BOQ drawing extraction route', () => {
       purpose: 'TENDER', lines,
     }))).resolves.toEqual({
       ok: true,
-      data: { boqId: 'boq-1', revisionId: 'revision-1', boqCode: 'BOQ-000005', revisionCode: 'R0', totalLines: 3, validLines: 1, drawingNumber: 'D-101' },
+      data: { boqId: 'boq-1', revisionId: 'revision-1', boqCode: 'BOQ-000005', revisionCode: UI_STRINGS.common.r0, totalLines: 3, validLines: 1, drawingNumber: 'D-101' },
       status: 201,
     });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
@@ -136,7 +138,7 @@ describe('BOQ drawing extraction route', () => {
       originalFileSize: 42, sourceFile: 'plans.pdf', sourceReference: 'D-101', totalLines: 3, validLines: 1, qualityScore: 33,
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      lineNumber: '1', categoryId: 'cat-electrical', uomId: 'uom-ea', quantity: 4, validationStatus: 'VALID',
+      lineNumber: UI_STRINGS.common.copyefwnq4, categoryId: 'cat-electrical', uomId: 'uom-ea', quantity: 4, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
       sourceReference: 'CT-01 - Cable tray', location: 'Roof',
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
@@ -155,7 +157,7 @@ describe('BOQ drawing extraction route', () => {
     }))).resolves.toMatchObject({ ok: true, data: { totalLines: 2, validLines: 0, drawingNumber: undefined } });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       costCentreId: null, title: 'Architectural Drawing — Clinic Extension',
-      description: 'Extracted from architectural drawing DWG', purpose: 'BUDGET',
+      description: 'Extracted from architectural drawing DWG', purpose: UI_STRINGS.componentsSidebar.bUDGET,
     }) });
     expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       sourceFile: 'drawing.pdf', sourceReference: 'DWG-A-101', originalFilePath: null, originalFileSize: 0,
@@ -168,13 +170,13 @@ describe('BOQ drawing extraction route', () => {
   });
 
   it('validates multipart uploads and tenant-scoped projects', async () => {
-    await expect(POST(formRequest())).resolves.toEqual({ ok: false, error: 'Drawing file and Project ID are required.', status: 400 });
+    await expect(POST(formRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, status: 400 });
     await expect(POST(formRequest({ file: upload('plan.pdf') }))).resolves.toEqual({
-      ok: false, error: 'Drawing file and Project ID are required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, status: 400,
     });
     db.project.findFirst.mockResolvedValueOnce(null);
     await expect(POST(formRequest({ file: upload('plan.pdf'), projectId: 'foreign' }))).resolves.toEqual({
-      ok: false, error: 'Project not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404,
     });
     await expect(POST(formRequest({ file: upload('plan.svg'), projectId: 'project-1' }))).resolves.toEqual({
       ok: false, error: 'Unsupported drawing format (.svg). Supported formats are PDF, PNG, JPG, and JPEG.', status: 400,

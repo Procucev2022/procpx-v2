@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_VIEW');
@@ -223,7 +226,7 @@ export async function GET(req: NextRequest) {
           boqRevision: boqRev,
           boqLineReference: boqLineRef,
           reference: tx.reference,
-          description: tx.reference || `${tx.category} Budget Allocation`,
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": tx.reference || `${tx.category} Budget Allocation` }),
           amount: tx.amount,
           quantity: tx.quantity,
           rate: tx.rate,

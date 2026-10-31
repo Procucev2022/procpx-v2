@@ -1,6 +1,7 @@
 'use client';
 // src/components/VendorNegotiationWorkspace.tsx
 // proCPX — Dedicated Full-Window Commercial Negotiation Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
@@ -24,6 +25,9 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { VendorNegotiationWorkspaceProps } from "@app-types/components/VendorNegotiationWorkspace.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { VendorNegotiationWorkspaceProps };
 
 
@@ -261,7 +265,7 @@ export default function VendorNegotiationWorkspace({
   // Save Draft to localStorage
   const handleSaveDraft = () => {
     try {
-      const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      const now = new Date().toLocaleTimeString(I18N_CONFIG.defaultLocale, { hour: '2-digit', minute: '2-digit' });
       localStorage.setItem(
         storageKey,
         JSON.stringify({
@@ -272,23 +276,23 @@ export default function VendorNegotiationWorkspace({
         })
       );
       setDraftSavedAt(now);
-      setServerSuccess(`Draft saved locally at ${now}. You can safely return to the register anytime.`);
+      setServerSuccess(interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.draftSavedLocallyAtNowYouCanSafelyReturnToTheRegisterAnytime, { "now": now }));
       setTimeout(() => setServerSuccess(null), 4000);
     } catch {
-      setServerError('Failed to save draft locally in browser storage.');
+      setServerError(UI_STRINGS.common.failedToSaveDraftLocallyInBrowserStorage);
     }
   };
 
   // Reset Draft
   const handleResetDraft = () => {
-    if (!confirm('Are you sure you want to clear your entered draft rates?')) return;
+    if (!confirm(UI_STRINGS.componentsVendorNegotiationWorkspace.areYouSureYouWantToClearYourEnteredDraftRates)) return;
     try {
       localStorage.removeItem(storageKey);
       setDraftSavedAt(null);
       setRates({});
       setNotes('');
       setIsFinalOffer(false);
-      setServerSuccess('Entered rates cleared.');
+      setServerSuccess(UI_STRINGS.componentsVendorNegotiationWorkspace.enteredRatesCleared);
       setTimeout(() => setServerSuccess(null), 3000);
     } catch {
       // ignore
@@ -338,7 +342,7 @@ export default function VendorNegotiationWorkspace({
 
     if (invalidItems.length > 0) {
       setServerError(
-        `Please enter a valid proposed rate greater than zero for all ${lines.length} line items.`
+        interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.pleaseEnterAValidProposedRateGreaterThanZeroForAllLengthLineItems, { "length": lines.length })
       );
       return;
     }
@@ -376,15 +380,15 @@ export default function VendorNegotiationWorkspace({
 
         const resData = await res.json();
         if (!res.ok) {
-          throw new Error(resData.error || 'Failed to submit negotiation offer');
+          throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": resData.error || UI_STRINGS.common.userMessages.failedToSubmitNegotiationOffer }));
         }
 
         try {
           localStorage.removeItem(storageKey);
         } catch {}
 
-        toast.success('Offer submitted successfully.', data?.rfqNumber, 'Awaiting Buyer Evaluation');
-        setServerSuccess('Offer submitted successfully.');
+        toast.success(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully, data?.rfqNumber, UI_STRINGS.common.userMessages.awaitingBuyerEvaluation);
+        setServerSuccess(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully);
 
         if (onSuccess) onSuccess();
 
@@ -410,15 +414,15 @@ export default function VendorNegotiationWorkspace({
 
         const resData = await res.json();
         if (!res.ok) {
-          throw new Error(resData.error || 'Failed to submit rate card proposals');
+          throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": resData.error || UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals }));
         }
 
         try {
           localStorage.removeItem(storageKey);
         } catch {}
 
-        toast.success('Offer submitted successfully.', data?.rateCardNumber, 'Awaiting Buyer Evaluation');
-        setServerSuccess('Offer submitted successfully.');
+        toast.success(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully, data?.rateCardNumber, UI_STRINGS.common.userMessages.awaitingBuyerEvaluation);
+        setServerSuccess(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully);
 
         if (onSuccess) onSuccess();
 
@@ -427,7 +431,7 @@ export default function VendorNegotiationWorkspace({
         }, 1800);
       }
     } catch (err: any) {
-      setServerError(err.message || 'An error occurred during submission. Please try again.');
+      setServerError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredDuringSubmissionPleaseTryAgain }));
     } finally {
       setSubmitting(false);
       setSubmitType(null);
@@ -489,13 +493,13 @@ export default function VendorNegotiationWorkspace({
             }}
           >
             <ArrowLeft size={16} />
-            <span>{isRfq ? 'Back to My RFQs & Bids' : 'Back to My Rate Cards'}</span>
+            <span>{isRfq ? UI_STRINGS.componentsVendorNegotiationWorkspace.backToMyRFQsBids : UI_STRINGS.componentsVendorNegotiationWorkspace.backToMyRateCards}</span>
           </button>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                {isRfq ? 'Commercial Negotiation Workspace' : 'Master Rate Card Negotiation'}
+                {isRfq ? UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace : UI_STRINGS.componentsVendorNegotiationWorkspace.masterRateCardNegotiation}
               </h1>
               <span className="badge badge-info" style={{ fontSize: 11, fontWeight: 700 }}>
                 {isRfq ? data.rfqNumber : data.rateCardNumber}
@@ -503,8 +507,8 @@ export default function VendorNegotiationWorkspace({
             </div>
             <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
               {isRfq
-                ? `${data.title} • ${data.project?.name || 'General Project'}`
-                : `${data.category} • Contracted Scope & Rates`}
+                ? interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.titleValue2, { "title": data.title, "value2": data.project?.name || UI_STRINGS.common.generalProject })
+                : interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.categoryContractedScopeRates, { "category": data.category })}
             </p>
           </div>
         </div>
@@ -517,15 +521,14 @@ export default function VendorNegotiationWorkspace({
               onClick={refreshRfqData}
               className="btn btn-secondary"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}
-              title="Refresh latest negotiation rounds and counteroffers from server"
+              title={UI_STRINGS.componentsVendorNegotiationWorkspace.refreshLatestNegotiationRoundsAndCounteroffersFromServer}
             >
               <RotateCcw size={13} className={isRefreshing ? 'animate-spin' : ''} />
-              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+              <span>{isRefreshing ? UI_STRINGS.componentsVendorNegotiationWorkspace.refreshing : UI_STRINGS.common.refresh2}</span>
             </button>
           )}
           {draftSavedAt && (
-            <span style={{ fontSize: 12, color: '#166534', fontWeight: 500 }}>
-              Draft saved at {draftSavedAt}
+            <span style={{ fontSize: 12, color: '#166534', fontWeight: 500 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.draftSavedAt}{draftSavedAt}
             </span>
           )}
           <button
@@ -533,20 +536,20 @@ export default function VendorNegotiationWorkspace({
             onClick={handleSaveDraft}
             className="btn btn-secondary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}
-            title="Save your proposed rates in this browser to resume later"
+            title={UI_STRINGS.componentsVendorNegotiationWorkspace.saveYourProposedRatesInThisBrowserToResumeLater}
           >
             <Save size={13} />
-            <span>Save Draft</span>
+            <span>{UI_STRINGS.common.saveDraft}</span>
           </button>
           <button
             type="button"
             onClick={handleResetDraft}
             className="btn btn-secondary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}
-            title="Reset proposed rates to baseline"
+            title={UI_STRINGS.componentsVendorNegotiationWorkspace.resetProposedRatesToBaseline}
           >
             <RotateCcw size={13} />
-            <span>Reset</span>
+            <span>{UI_STRINGS.common.reset}</span>
           </button>
         </div>
       </div>
@@ -574,39 +577,33 @@ export default function VendorNegotiationWorkspace({
           {isRfq ? (
             <>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Project & Package
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.projectPackage}</div>
                 <div
                   className="cell-compact-text"
                   style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 2 }}
-                  title={data.projectPackage || data.project?.name}
+                  title={interpolateUiString(UI_STRINGS.common.value1, { "value1": data.projectPackage || data.project?.name })}
                 >
-                  {data.projectPackage || data.project?.name || 'General Project'}
+                  {data.projectPackage || data.project?.name || UI_STRINGS.common.generalProject}
                 </div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>
-                  {data.packageName || data.project?.projectCode || 'Main Package'}
+                  {data.packageName || data.project?.projectCode || UI_STRINGS.common.mainPackage}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Buyer / Client
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.common.buyerClient}</div>
                 <div
                   className="cell-compact-text"
                   style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginTop: 2 }}
-                  title={data.clientTenant || data.tenant?.name}
+                  title={interpolateUiString(UI_STRINGS.common.value1, { "value1": data.clientTenant || data.tenant?.name })}
                 >
                   <Building2 size={12} className="inline mr-1 text-slate-400" />
-                  {data.clientTenant || data.tenant?.name || 'Enterprise Client'}
+                  {data.clientTenant || data.tenant?.name || UI_STRINGS.common.enterpriseClient}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Received Date
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.receivedDate}</div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b', marginTop: 2 }}>
                   <Calendar size={12} className="inline mr-1 text-slate-400" />
                   {formatDate(data.rfqReceivedDate, true)}
@@ -614,9 +611,7 @@ export default function VendorNegotiationWorkspace({
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Submission Deadline
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.common.submissionDeadline}</div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#d97706', marginTop: 2 }}>
                   <Clock size={12} className="inline mr-1 text-amber-500" />
                   {formatDate(data.submissionDeadline)}
@@ -624,20 +619,16 @@ export default function VendorNegotiationWorkspace({
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Negotiation Status
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.common.negotiationStatus}</div>
                 <div style={{ marginTop: 2 }}>
                   <span className="badge badge-info" style={{ fontSize: 11 }}>
-                    {data.buyerDecisionStatus || data.negotiationStatus || 'In Negotiation'}
+                    {data.buyerDecisionStatus || data.negotiationStatus || UI_STRINGS.common.inNegotiation}
                   </span>
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Responsible Party
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.responsibleParty}</div>
                 <div style={{ marginTop: 2 }}>
                   <span
                     className={`badge ${
@@ -648,8 +639,7 @@ export default function VendorNegotiationWorkspace({
                         : 'badge-draft'
                     }`}
                     style={{ fontSize: 11, fontWeight: 700 }}
-                  >
-                    Action Due: {data.nextResponsibleParty || 'VENDOR'}
+                  >{interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.actionDueForParty, { party: data.nextResponsibleParty || UI_STRINGS.common.vENDOR })}
                   </span>
                 </div>
               </div>
@@ -657,50 +647,40 @@ export default function VendorNegotiationWorkspace({
           ) : (
             <>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Category & Scope
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.categoryScope}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
-                  {data.category} {data.subcategory ? `> ${data.subcategory}` : ''}
+                  {data.category} {data.subcategory ? interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.subcategory, { "subcategory": data.subcategory }) : ''}
                 </div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>{data.scope || 'Standard Scope'}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{data.scope || UI_STRINGS.common.standardScope}</div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Contract Validity
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.common.contractValidity}</div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b', marginTop: 2 }}>
-                  {formatDate(data.validFrom)} – {formatDate(data.validTo)}
+                  {formatDate(data.validFrom)}{UI_STRINGS.componentsVendorNegotiationWorkspace.copy1ik91v0}{formatDate(data.validTo)}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Location / Territory
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.locationTerritory}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginTop: 2 }}>
-                  {data.location || 'Pan-India'}
+                  {data.location || UI_STRINGS.common.panIndia}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Current Status
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.common.currentStatus}</div>
                 <div style={{ marginTop: 2 }}>
                   <span className="badge badge-approved" style={{ fontSize: 11 }}>
-                    {data.status || 'APPROVED'}
+                    {data.status || UI_STRINGS.common.aPPROVED}
                   </span>
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>
-                  Approval Level
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.approvalLevel}</div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginTop: 2 }}>
-                  {data.approvalLevel || 'LEVEL_1_PROJECT'}
+                  {data.approvalLevel || UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT}
                 </div>
               </div>
             </>
@@ -766,41 +746,37 @@ export default function VendorNegotiationWorkspace({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-              Vendor Initial Quote Baseline
-            </div>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.vendorInitialQuoteBaseline}</div>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'monospace', color: '#475569' }}>
-              {previousTotal > 0 ? `₹ ${previousTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}
+              {previousTotal > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": previousTotal.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 }) }) : UI_STRINGS.common.copy4s9bsz}
             </div>
           </div>
 
-          <div style={{ color: '#cbd5e1', fontSize: 20 }}>➔</div>
+          <div style={{ color: '#cbd5e1', fontSize: 20 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.copy14alm6b}</div>
 
           <div>
             <div style={{ fontSize: 11, color: '#1e40af', fontWeight: 700, textTransform: 'uppercase' }}>
               {isVendorRevisionSubmitted
-                ? 'Vendor Submitted Revised Value'
+                ? UI_STRINGS.componentsVendorNegotiationWorkspace.vendorSubmittedRevisedValue
                 : isBuyerRole
-                ? 'Vendor Revised Value'
-                : 'Proposed Commercial Value (This Revision)'}
+                ? UI_STRINGS.componentsVendorNegotiationWorkspace.vendorRevisedValue
+                : UI_STRINGS.componentsVendorNegotiationWorkspace.proposedCommercialValueThisRevision}
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'monospace', color: (isVendorRevisionSubmitted || proposedTotal > 0) ? '#166534' : '#64748b' }}>
               {isVendorRevisionSubmitted ? (
-                `₹ ${latestRound?.revisedQuoteAmount?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": latestRound?.revisedQuoteAmount?.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 }) })
               ) : isBuyerRole ? (
-                <span className="text-amber-800 text-sm font-semibold">Awaiting Vendor Response</span>
+                <span className="text-amber-800 text-sm font-semibold">{UI_STRINGS.componentsVendorNegotiationWorkspace.awaitingVendorResponse}</span>
               ) : hasAllEnteredRates && proposedTotal > 0 ? (
-                `₹ ${proposedTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": proposedTotal.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 }) })
               ) : (
-                <span className="text-slate-400 text-sm font-medium">Pending Rate Entry</span>
+                <span className="text-slate-400 text-sm font-medium">{UI_STRINGS.componentsVendorNegotiationWorkspace.pendingRateEntry}</span>
               )}
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
-              Commercial Variance
-            </div>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.commercialVariance}</div>
             <div
               style={{
                 fontSize: 14,
@@ -813,14 +789,12 @@ export default function VendorNegotiationWorkspace({
             >
               {isVendorRevisionSubmitted || (hasAllEnteredRates && proposedTotal > 0) ? (
                 <>
-                  <span>{variancePercent > 0 ? `+${variancePercent}%` : `${variancePercent}%`}</span>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>
-                    (₹{Math.abs(proposedTotal - previousTotal).toLocaleString('en-IN', { maximumFractionDigits: 0 })}{' '}
-                    {proposedTotal <= previousTotal ? 'reduction' : 'increase'})
-                  </span>
+                  <span>{variancePercent > 0 ? interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.variancePercent, { "variancePercent": variancePercent }) : interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.variancePercent2, { "variancePercent": variancePercent })}</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.copy16gs63u}{Math.abs(proposedTotal - previousTotal).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}{' '}
+                    {proposedTotal <= previousTotal ? UI_STRINGS.componentsVendorNegotiationWorkspace.reduction : UI_STRINGS.componentsVendorNegotiationWorkspace.increase}{UI_STRINGS.common.copyc7zu6c}</span>
                 </>
               ) : (
-                <span className="text-slate-400 text-xs">—</span>
+                <span className="text-slate-400 text-xs">{UI_STRINGS.common.copy4s9bsz}</span>
               )}
             </div>
           </div>
@@ -829,10 +803,10 @@ export default function VendorNegotiationWorkspace({
         <div style={{ textAlign: 'right' }}>
           <span className={`badge ${isVendorRevisionSubmitted ? 'badge-approved' : 'badge-draft'}`} style={{ fontSize: 11 }}>
             {isVendorRevisionSubmitted
-              ? `Round ${latestRound?.roundNumber || 1} Revision Submitted`
+              ? interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.roundValue1RevisionSubmitted, { "value1": latestRound?.roundNumber || 1 })
               : isBuyerRole
-              ? 'Awaiting Vendor Revision'
-              : `${lines.length} Line Items Under Negotiation`}
+              ? UI_STRINGS.componentsVendorNegotiationWorkspace.awaitingVendorRevision
+              : interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.lengthLineItemsUnderNegotiation, { "length": lines.length })}
           </span>
         </div>
       </div>
@@ -855,8 +829,8 @@ export default function VendorNegotiationWorkspace({
                 <Sparkles size={16} color="#2563eb" />
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#1e40af' }}>
                   {isBuyerRole
-                    ? `Buyer Counteroffer Dispatched — Round ${latestRound.roundNumber}`
-                    : `Buyer Counteroffer Received — Round ${latestRound.roundNumber}`}
+                    ? interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.buyerCounterofferDispatchedRoundRoundNumber, { "roundNumber": latestRound.roundNumber })
+                    : interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.buyerCounterofferReceivedRoundRoundNumber, { "roundNumber": latestRound.roundNumber })}
                 </span>
                 <span
                   style={{
@@ -870,23 +844,20 @@ export default function VendorNegotiationWorkspace({
                   }}
                 >
                   {isVendorRevisionSubmitted
-                    ? 'Vendor Revision Submitted'
+                    ? UI_STRINGS.componentsVendorNegotiationWorkspace.vendorRevisionSubmitted
                     : isBuyerRole
-                    ? 'Awaiting Vendor Response'
-                    : 'Action Required: Submit Revised Offer'}
+                    ? UI_STRINGS.componentsVendorNegotiationWorkspace.awaitingVendorResponse
+                    : UI_STRINGS.componentsVendorNegotiationWorkspace.actionRequiredSubmitRevisedOffer}
                 </span>
               </div>
               <p style={{ margin: '6px 0 0', fontSize: 13, color: '#1e3a8a' }}>
-                {isBuyerRole ? 'Procurement team dispatched a commercial counteroffer of ' : 'The Category Manager has submitted a commercial counteroffer of '}
-                <strong style={{ color: '#1e40af', fontSize: 15 }}>
-                  ₹ {Number(latestRound.counterOfferAmount || 0).toLocaleString('en-IN')}
+                {isBuyerRole ? UI_STRINGS.componentsVendorNegotiationWorkspace.procurementTeamDispatchedACommercialCounterofferOf : UI_STRINGS.componentsVendorNegotiationWorkspace.theCategoryManagerHasSubmittedACommercialCounterofferOf}
+                <strong style={{ color: '#1e40af', fontSize: 15 }}>{UI_STRINGS.common.copy1g8b5tg}{Number(latestRound.counterOfferAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                 </strong>
                 {latestRound.previousQuoteAmount ? (
                   <>
-                    {' '}(targeting ₹ {(latestRound.previousQuoteAmount - (latestRound.counterOfferAmount || 0)).toLocaleString('en-IN')} savings on previous quote of ₹ {latestRound.previousQuoteAmount.toLocaleString('en-IN')})
-                  </>
-                ) : null}.
-              </p>
+                    {' '}{UI_STRINGS.componentsVendorNegotiationWorkspace.targeting}{(latestRound.previousQuoteAmount - (latestRound.counterOfferAmount || 0)).toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.componentsVendorNegotiationWorkspace.savingsOnPreviousQuoteOf}{latestRound.previousQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.common.copyc7zu6c}</>
+                ) : null}{UI_STRINGS.common.copyby08hd}</p>
               {latestRound.notes && (
                 <div
                   style={{
@@ -899,20 +870,18 @@ export default function VendorNegotiationWorkspace({
                     borderLeft: '3px solid #3b82f6',
                   }}
                 >
-                  <strong>Buyer Remarks:</strong> &ldquo;{latestRound.notes}&rdquo;
-                </div>
+                  <strong>{UI_STRINGS.common.buyerRemarks}</strong>{UI_STRINGS.componentsVendorNegotiationWorkspace.ldquo}{latestRound.notes}{UI_STRINGS.common.rdquo}</div>
               )}
             </div>
 
             <div style={{ textAlign: 'right', minWidth: 180 }}>
-              <div style={{ fontSize: 11, color: '#64748b' }}>Dispatched On</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.dispatchedOn}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
                 {formatDate(latestRound.createdAt, true)}
               </div>
               {latestRound.deadline && (
                 <div style={{ marginTop: 4, fontSize: 11, color: '#b45309' }}>
-                  <Clock size={11} className="inline mr-1" />
-                  Response Deadline: <strong>{formatDate(latestRound.deadline)}</strong>
+                  <Clock size={11} className="inline mr-1" />{UI_STRINGS.componentsVendorNegotiationWorkspace.responseDeadline}<strong>{formatDate(latestRound.deadline)}</strong>
                 </div>
               )}
             </div>
@@ -963,28 +932,26 @@ export default function VendorNegotiationWorkspace({
             <thead>
               <tr>
                 {/* 1. S. No. */}
-                <th style={{ width: 45, textAlign: 'center' }}>S.No.</th>
+                <th style={{ width: 45, textAlign: 'center' }}>{UI_STRINGS.common.sNo2}</th>
 
                 {/* 2. Item Description */}
-                <th style={{ minWidth: 220 }}>Item Description</th>
+                <th style={{ minWidth: 220 }}>{UI_STRINGS.common.itemDescription}</th>
 
                 {/* 3. Specification / Scope */}
-                <th style={{ minWidth: 170 }}>Specification / Scope</th>
+                <th style={{ minWidth: 170 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.specificationScope}</th>
 
                 {/* 4. UOM */}
-                <th style={{ width: 70, textAlign: 'center' }}>UOM</th>
+                <th style={{ width: 70, textAlign: 'center' }}>{UI_STRINGS.common.uOM}</th>
 
                 {isRfq && (
                   /* 5. Quantity */
-                  <th style={{ width: 90, textAlign: 'right' }}>Quantity</th>
+                  <th style={{ width: 90, textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
                 )}
 
                 {isRfq ? (
                   <>
                     {/* 6. Vendor Quote 1 */}
-                    <th style={{ width: 140, textAlign: 'right', background: '#f1f5f9' }}>
-                      Vendor Initial Quote (₹)
-                    </th>
+                    <th style={{ width: 140, textAlign: 'right', background: '#f1f5f9' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.vendorInitialQuote}</th>
 
                     {/* 7. Buyer Counteroffer Rate (Highlighted) */}
                     <th
@@ -997,9 +964,7 @@ export default function VendorNegotiationWorkspace({
                         borderRight: '1px solid #0284c7',
                         fontWeight: 700,
                       }}
-                    >
-                      Buyer Counteroffer Rate {latestRound ? `(R${latestRound.roundNumber})` : ''} (₹)
-                    </th>
+                    >{UI_STRINGS.componentsVendorNegotiationWorkspace.buyerCounterofferRate}{latestRound ? interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.rRoundNumber, { "roundNumber": latestRound.roundNumber }) : ''}{UI_STRINGS.componentsVendorNegotiationWorkspace.copy1ysfv93}</th>
 
                     {/* 8. Vendor Revised Rate (Editable) */}
                     <th
@@ -1012,30 +977,20 @@ export default function VendorNegotiationWorkspace({
                         borderRight: '1px solid #10b981',
                         fontWeight: 700,
                       }}
-                    >
-                      Vendor's Revised Quote (₹)
-                    </th>
+                    >{UI_STRINGS.componentsVendorNegotiationWorkspace.vendorSRevisedQuote}</th>
 
                     {/* 9. Proposed Line Total */}
-                    <th style={{ minWidth: 150, textAlign: 'right', background: '#f8fafc' }}>
-                      Proposed Line Total (₹)
-                    </th>
+                    <th style={{ minWidth: 150, textAlign: 'right', background: '#f8fafc' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.proposedLineTotal}</th>
 
                     {/* 10. Variance vs Buyer Offer */}
-                    <th style={{ minWidth: 130, textAlign: 'center', background: '#f8fafc' }}>
-                      Variance vs Buyer Offer
-                    </th>
+                    <th style={{ minWidth: 130, textAlign: 'center', background: '#f8fafc' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.varianceVsBuyerOffer}</th>
                   </>
                 ) : (
                   <>
                     {/* Rate Card Columns */}
-                    <th style={{ width: 140, textAlign: 'right', background: '#f1f5f9' }}>
-                      Contracted Rate (₹)
-                    </th>
-                    <th style={{ width: 140, textAlign: 'right', background: '#f8fafc' }}>
-                      Benchmark Rate (₹)
-                    </th>
-                    <th style={{ minWidth: 160 }}>Scope / Location</th>
+                    <th style={{ width: 140, textAlign: 'right', background: '#f1f5f9' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.contractedRate}</th>
+                    <th style={{ width: 140, textAlign: 'right', background: '#f8fafc' }}>{UI_STRINGS.common.benchmarkRate}</th>
+                    <th style={{ minWidth: 160 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.scopeLocation}</th>
                     <th
                       style={{
                         minWidth: 180,
@@ -1044,9 +999,7 @@ export default function VendorNegotiationWorkspace({
                         color: '#065f46',
                         borderLeft: '2px solid #10b981',
                       }}
-                    >
-                      Vendor's Proposed Next Rate (₹)
-                    </th>
+                    >{UI_STRINGS.componentsVendorNegotiationWorkspace.vendorSProposedNextRate}</th>
                   </>
                 )}
               </tr>
@@ -1098,8 +1051,7 @@ export default function VendorNegotiationWorkspace({
                       >
                         {line.description}
                       </div>
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
-                        Line #{line.lineNumber || idx + 1} • {line.category || 'General'}
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.line}{line.lineNumber || idx + 1}{UI_STRINGS.common.copyko5tj9}{line.category || UI_STRINGS.common.general}
                       </div>
                     </td>
 
@@ -1114,9 +1066,9 @@ export default function VendorNegotiationWorkspace({
                           textOverflow: 'ellipsis',
                           maxWidth: 200,
                         }}
-                        title={line.specification || 'Standard specifications as per BOQ'}
+                        title={interpolateUiString(UI_STRINGS.common.value1, { "value1": line.specification || 'Standard specifications as per BOQ' })}
                       >
-                        {line.specification || 'Standard specification'}
+                        {line.specification || UI_STRINGS.componentsVendorNegotiationWorkspace.standardSpecification}
                       </div>
                     </td>
 
@@ -1128,7 +1080,7 @@ export default function VendorNegotiationWorkspace({
                     {isRfq && (
                       /* Quantity */
                       <td style={{ textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
-                        {qty.toLocaleString('en-IN')}
+                        {qty.toLocaleString(I18N_CONFIG.defaultLocale)}
                       </td>
                     )}
 
@@ -1145,13 +1097,12 @@ export default function VendorNegotiationWorkspace({
                         >
                           {q1Rate !== undefined && q1Rate > 0 ? (
                             <div>
-                              <div>₹{q1Rate.toLocaleString('en-IN')}</div>
-                              <div style={{ fontSize: 10, color: '#94a3b8' }}>
-                                Total: ₹{(q1Rate * qty).toLocaleString('en-IN')}
+                              <div>{UI_STRINGS.common.copy1g8b5tg}{q1Rate.toLocaleString(I18N_CONFIG.defaultLocale)}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.total}{(q1Rate * qty).toLocaleString(I18N_CONFIG.defaultLocale)}
                               </div>
                             </div>
                           ) : (
-                            <span className="text-slate-400 italic text-xs">Awaiting Quote</span>
+                            <span className="text-slate-400 italic text-xs">{UI_STRINGS.common.awaitingQuote}</span>
                           )}
                         </td>
 
@@ -1169,15 +1120,13 @@ export default function VendorNegotiationWorkspace({
                         >
                           {buyerRate !== null && buyerRate > 0 ? (
                             <div>
-                              <div style={{ fontSize: 13, color: '#0369a1' }}>
-                                ₹{buyerRate.toLocaleString('en-IN')}
+                              <div style={{ fontSize: 13, color: '#0369a1' }}>{UI_STRINGS.common.copy1g8b5tg}{buyerRate.toLocaleString(I18N_CONFIG.defaultLocale)}
                               </div>
-                              <div style={{ fontSize: 10, color: '#0284c7' }}>
-                                Total: ₹{(buyerRate * qty).toLocaleString('en-IN')}
+                              <div style={{ fontSize: 10, color: '#0284c7' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.total}{(buyerRate * qty).toLocaleString(I18N_CONFIG.defaultLocale)}
                               </div>
                             </div>
                           ) : (
-                            <span className="text-muted text-xs">—</span>
+                            <span className="text-muted text-xs">{UI_STRINGS.common.copy4s9bsz}</span>
                           )}
                         </td>
 
@@ -1194,21 +1143,17 @@ export default function VendorNegotiationWorkspace({
                           {isBuyerRole || isVendorRevisionSubmitted ? (
                             isVendorRevisionSubmitted && submittedRevisedRate !== null ? (
                               <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: '#047857' }}>
-                                  ₹{submittedRevisedRate.toLocaleString('en-IN')}
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{submittedRevisedRate.toLocaleString(I18N_CONFIG.defaultLocale)}
                                 </div>
-                                <div style={{ fontSize: 10, color: '#059669' }}>
-                                  Total: ₹{(submittedRevisedRate * qty).toLocaleString('en-IN')}
+                                <div style={{ fontSize: 10, color: '#059669' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.total}{(submittedRevisedRate * qty).toLocaleString(I18N_CONFIG.defaultLocale)}
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-xs font-semibold border border-amber-200">
-                                Awaiting Vendor Response
-                              </span>
+                              <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-xs font-semibold border border-amber-200">{UI_STRINGS.componentsVendorNegotiationWorkspace.awaitingVendorResponse}</span>
                             )
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                              <span style={{ fontSize: 12, color: '#047857', fontWeight: 600 }}>₹</span>
+                              <span style={{ fontSize: 12, color: '#047857', fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}</span>
                               <input
                                 type="number"
                                 min="0"
@@ -1236,7 +1181,7 @@ export default function VendorNegotiationWorkspace({
                                   borderColor: '#86efac',
                                   background: '#ffffff',
                                 }}
-                                placeholder="0.00"
+                                placeholder={UI_STRINGS.common.copywwhtor}
                               />
                             </div>
                           )}
@@ -1254,34 +1199,30 @@ export default function VendorNegotiationWorkspace({
                           }}
                         >
                           {activeLineTotal !== null ? (
-                            `₹ ${activeLineTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+                            interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": activeLineTotal.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 }) })
                           ) : (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-slate-400">{UI_STRINGS.common.copy4s9bsz}</span>
                           )}
                         </td>
 
                         {/* Variance vs Buyer Offer */}
                         <td style={{ textAlign: 'center', background: '#f8fafc' }}>
                           {(() => {
-                            if (activeRevisedRate === null || buyerRate === null) return <span className="text-muted text-xs">—</span>;
+                            if (activeRevisedRate === null || buyerRate === null) return <span className="text-muted text-xs">{UI_STRINGS.common.copy4s9bsz}</span>;
                             const diff = activeRevisedRate - buyerRate;
                             if (diff === 0) {
                               return (
-                                <span className="badge badge-approved text-xs" style={{ padding: '2px 6px' }}>
-                                  ✓ Matched
-                                </span>
+                                <span className="badge badge-approved text-xs" style={{ padding: '2px 6px' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.matched}</span>
                               );
                             }
                             if (diff < 0) {
                               return (
-                                <span className="badge badge-approved text-xs" style={{ padding: '2px 6px' }}>
-                                  -₹{Math.abs(diff).toLocaleString('en-IN')}
+                                <span className="badge badge-approved text-xs" style={{ padding: '2px 6px' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.copy134eyoj}{Math.abs(diff).toLocaleString(I18N_CONFIG.defaultLocale)}
                                 </span>
                               );
                             }
                             return (
-                              <span className="badge badge-submitted text-xs" style={{ padding: '2px 6px' }}>
-                                +₹{diff.toLocaleString('en-IN')}
+                              <span className="badge badge-submitted text-xs" style={{ padding: '2px 6px' }}>{UI_STRINGS.common.copy148wag9}{diff.toLocaleString(I18N_CONFIG.defaultLocale)}
                               </span>
                             );
                           })()}
@@ -1297,18 +1238,16 @@ export default function VendorNegotiationWorkspace({
                             color: '#334155',
                             fontWeight: 600,
                           }}
-                        >
-                          ₹{Number(line.rate || 0).toLocaleString('en-IN')}
+                        >{UI_STRINGS.common.copy1g8b5tg}{Number(line.rate || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                         </td>
 
                         {/* Benchmark Rate */}
-                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>
-                          ₹{Number(line.benchmarkRate || line.historicalRate || line.rate || 0).toLocaleString('en-IN')}
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>{UI_STRINGS.common.copy1g8b5tg}{Number(line.benchmarkRate || line.historicalRate || line.rate || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                         </td>
 
                         {/* Scope / Location */}
                         <td style={{ fontSize: 11, color: '#64748b' }}>
-                          {line.location || data.location || 'All locations'}
+                          {line.location || data.location || UI_STRINGS.componentsVendorNegotiationWorkspace.allLocations}
                         </td>
 
                         {/* Editable Rate Card Next Proposed Rate */}
@@ -1321,7 +1260,7 @@ export default function VendorNegotiationWorkspace({
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                            <span style={{ fontSize: 12, color: '#047857', fontWeight: 600 }}>₹</span>
+                            <span style={{ fontSize: 12, color: '#047857', fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}</span>
                             <input
                               type="number"
                               min="0"
@@ -1352,26 +1291,23 @@ export default function VendorNegotiationWorkspace({
             <tfoot>
               <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
                 <td colSpan={isRfq ? 5 : 4} style={{ padding: '14px 16px', fontSize: 13 }}>
-                  <span>Total Scope: {lines.length} Line Items</span>
+                  <span>{UI_STRINGS.componentsVendorNegotiationWorkspace.totalScope}{lines.length}{UI_STRINGS.componentsVendorNegotiationWorkspace.lineItems}</span>
                 </td>
 
                 {isRfq && (
                   <>
-                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: '#475569' }}>
-                      ₹{previousTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: '#475569' }}>{UI_STRINGS.common.copy1g8b5tg}{previousTotal.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}
                     </td>
-                    <td style={{ textAlign: 'right', color: '#64748b' }}>—</td>
+                    <td style={{ textAlign: 'right', color: '#64748b' }}>{UI_STRINGS.common.copy4s9bsz}</td>
                     {parsedRoundRates.length >= 2 && (
                       <>
-                        <td style={{ textAlign: 'right', color: '#64748b' }}>—</td>
-                        <td style={{ textAlign: 'right', color: '#64748b' }}>—</td>
+                        <td style={{ textAlign: 'right', color: '#64748b' }}>{UI_STRINGS.common.copy4s9bsz}</td>
+                        <td style={{ textAlign: 'right', color: '#64748b' }}>{UI_STRINGS.common.copy4s9bsz}</td>
                       </>
                     )}
                     {parsedRoundRates.length >= 3 &&
                       parsedRoundRates.slice(2).map((_, i) => (
-                        <td key={i} style={{ textAlign: 'right', color: '#64748b' }}>
-                          —
-                        </td>
+                        <td key={i} style={{ textAlign: 'right', color: '#64748b' }}>{UI_STRINGS.common.copy4s9bsz}</td>
                       ))}
                     <td
                       style={{
@@ -1382,9 +1318,7 @@ export default function VendorNegotiationWorkspace({
                         borderRight: '1px solid #10b981',
                         background: '#ecfdf5',
                       }}
-                    >
-                      Proposed RFQ Total:
-                    </td>
+                    >{UI_STRINGS.componentsVendorNegotiationWorkspace.proposedRFQTotal}</td>
                     <td
                       style={{
                         textAlign: 'right',
@@ -1393,17 +1327,14 @@ export default function VendorNegotiationWorkspace({
                         fontWeight: 800,
                         color: '#166534',
                       }}
-                    >
-                      ₹{proposedTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{proposedTotal.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}
                     </td>
                   </>
                 )}
 
                 {!isRfq && (
                   <>
-                    <td colSpan={2} style={{ textAlign: 'right', fontSize: 12, color: '#065f46' }}>
-                      Proposed Average:
-                    </td>
+                    <td colSpan={2} style={{ textAlign: 'right', fontSize: 12, color: '#065f46' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.proposedAverage}</td>
                     <td
                       style={{
                         textAlign: 'right',
@@ -1414,9 +1345,7 @@ export default function VendorNegotiationWorkspace({
                         borderLeft: '2px solid #10b981',
                         background: '#ecfdf5',
                       }}
-                    >
-                      ₹{Math.round(proposedTotal / (lines.length || 1)).toLocaleString('en-IN')} / unit
-                    </td>
+                    >{UI_STRINGS.common.copy1g8b5tg}{Math.round(proposedTotal / (lines.length || 1)).toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.componentsVendorNegotiationWorkspace.unit}</td>
                   </>
                 )}
               </tr>
@@ -1440,9 +1369,7 @@ export default function VendorNegotiationWorkspace({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
           {/* Notes / Justification Textarea or Read-Only display */}
           <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-              Commercial Justification & Technical Remarks:
-            </label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.commercialJustificationTechnicalRemarks}</label>
             {isBuyerRole || isVendorRevisionSubmitted ? (
               <div
                 style={{
@@ -1455,14 +1382,14 @@ export default function VendorNegotiationWorkspace({
                   minHeight: 60,
                 }}
               >
-                {notes || latestRound?.notes || (isBuyerRole ? 'No remarks provided by vendor for this round.' : 'No remarks submitted.')}
+                {notes || latestRound?.notes || (isBuyerRole ? UI_STRINGS.componentsVendorNegotiationWorkspace.noRemarksProvidedByVendorForThisRound : UI_STRINGS.componentsVendorNegotiationWorkspace.noRemarksSubmitted)}
               </div>
             ) : (
               <textarea
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="State any payment milestone assumptions, lead times, or commercial justification for your proposed rates..."
+                placeholder={UI_STRINGS.componentsVendorNegotiationWorkspace.stateAnyPaymentMilestoneAssumptionsLeadTimesOrCommercialJustificationForYourProposedRates}
                 className="form-control"
                 style={{ fontSize: 13, width: '100%', resize: 'vertical' }}
               />
@@ -1490,12 +1417,8 @@ export default function VendorNegotiationWorkspace({
                 style={{ width: 18, height: 18, accentColor: '#1e40af', cursor: 'pointer' }}
               />
               <label htmlFor="finalOfferCheck" style={{ fontSize: 13, cursor: 'pointer', margin: 0 }}>
-                <span style={{ fontWeight: 700, color: '#1e40af' }}>
-                  Declare as Binding Best & Final Offer (BAFO)
-                </span>
-                <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 2 }}>
-                  Locks these commercial rates for final buyer procurement committee evaluation and PPO award decision.
-                </span>
+                <span style={{ fontWeight: 700, color: '#1e40af' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.declareAsBindingBestFinalOfferBAFO}</span>
+                <span style={{ display: 'block', fontSize: 12, color: '#475569', marginTop: 2 }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.locksTheseCommercialRatesForFinalBuyerProcurementCommitteeEvaluationAndPPOAwardDecision}</span>
               </label>
             </div>
           )}
@@ -1515,7 +1438,7 @@ export default function VendorNegotiationWorkspace({
               }}
             >
               <ShieldCheck size={18} />
-              <span>This round was declared as a Binding Best & Final Offer (BAFO).</span>
+              <span>{UI_STRINGS.componentsVendorNegotiationWorkspace.thisRoundWasDeclaredAsABindingBestFinalOfferBAFO}</span>
             </div>
           )}
         </div>
@@ -1547,7 +1470,7 @@ export default function VendorNegotiationWorkspace({
             style={{ fontSize: 13 }}
             disabled={submitting}
           >
-            {isBuyerRole ? 'Back to RFQ' : 'Cancel & Return'}
+            {isBuyerRole ? UI_STRINGS.componentsVendorNegotiationWorkspace.backToRFQ : UI_STRINGS.componentsVendorNegotiationWorkspace.cancelReturn}
           </button>
           {!isBuyerRole && !isVendorRevisionSubmitted && (
             <button
@@ -1558,7 +1481,7 @@ export default function VendorNegotiationWorkspace({
               disabled={submitting}
             >
               <Save size={14} />
-              <span>Save Draft</span>
+              <span>{UI_STRINGS.common.saveDraft}</span>
             </button>
           )}
         </div>
@@ -1567,13 +1490,9 @@ export default function VendorNegotiationWorkspace({
           {isBuyerRole ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isVendorRevisionSubmitted ? (
-                <span className="badge badge-approved" style={{ fontSize: 12, padding: '6px 12px' }}>
-                  ✓ Vendor Revision Submitted (Round {latestRound?.roundNumber || 1})
-                </span>
+                <span className="badge badge-approved" style={{ fontSize: 12, padding: '6px 12px' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.vendorRevisionSubmittedRound}{latestRound?.roundNumber || 1}{UI_STRINGS.common.copyc7zu6c}</span>
               ) : (
-                <span className="badge badge-warning" style={{ fontSize: 12, padding: '6px 12px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                  ⏳ Awaiting Vendor Response (Round {latestRound?.roundNumber || 1})
-                </span>
+                <span className="badge badge-warning" style={{ fontSize: 12, padding: '6px 12px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>{UI_STRINGS.componentsVendorNegotiationWorkspace.awaitingVendorResponseRound}{latestRound?.roundNumber || 1}{UI_STRINGS.common.copyc7zu6c}</span>
               )}
             </div>
           ) : isVendorRevisionSubmitted ? (
@@ -1592,7 +1511,7 @@ export default function VendorNegotiationWorkspace({
               }}
             >
               <CheckCircle2 size={16} />
-              <span>Revision Submitted for Round {latestRound?.roundNumber || 1} — Read-Only</span>
+              <span>{UI_STRINGS.componentsVendorNegotiationWorkspace.revisionSubmittedForRound}{latestRound?.roundNumber || 1}{UI_STRINGS.componentsVendorNegotiationWorkspace.readOnly}</span>
             </div>
           ) : (
             <>
@@ -1616,12 +1535,12 @@ export default function VendorNegotiationWorkspace({
                   {submitting && submitType === 'FINAL' ? (
                     <>
                       <div className="animate-spin" style={{ width: 14, height: 14, border: '2px solid #1e40af', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                      <span>Submitting Final...</span>
+                      <span>{UI_STRINGS.componentsVendorNegotiationWorkspace.submittingFinal}</span>
                     </>
                   ) : (
                     <>
                       <ShieldCheck size={14} />
-                      <span>Submit Binding Final Offer</span>
+                      <span>{UI_STRINGS.componentsVendorNegotiationWorkspace.submitBindingFinalOffer}</span>
                     </>
                   )}
                 </button>
@@ -1644,7 +1563,7 @@ export default function VendorNegotiationWorkspace({
                 {submitting && submitType === 'STANDARD' ? (
                   <>
                     <div className="animate-spin" style={{ width: 14, height: 14, border: '2px solid #ffffff', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                    <span>Submitting Offer...</span>
+                    <span>{UI_STRINGS.componentsVendorNegotiationWorkspace.submittingOffer}</span>
                   </>
                 ) : (
                   <>
@@ -1652,9 +1571,9 @@ export default function VendorNegotiationWorkspace({
                     <span>
                       {isRfq
                         ? isFinalOffer
-                          ? 'Submit Binding Final Offer'
-                          : 'Submit Revised Negotiation Offer'
-                        : 'Submit Proposed Rate Card Revisions'}
+                          ? UI_STRINGS.componentsVendorNegotiationWorkspace.submitBindingFinalOffer
+                          : UI_STRINGS.componentsVendorNegotiationWorkspace.submitRevisedNegotiationOffer
+                        : UI_STRINGS.componentsVendorNegotiationWorkspace.submitProposedRateCardRevisions}
                     </span>
                   </>
                 )}

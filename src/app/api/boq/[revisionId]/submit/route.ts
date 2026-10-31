@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_SUBMIT');
@@ -13,10 +16,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     where: { id: revisionId, tenantId: ctx.tenantId },
     include: { boq: true },
   });
-  if (!revision) return apiError('Revision not found', 404);
-  if (revision.status !== 'DRAFT') return apiError(`Cannot submit a BOQ in ${revision.status} status.`);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (revision.status !== 'DRAFT') return apiError(interpolateUiString(UI_STRINGS.appApiBoqRevisionIdSubmitRoute.cannotSubmitABOQInStatusStatus, { "status": revision.status }));
   if (revision.errorLines > 0) {
-    return apiError(`BOQ cannot be submitted because ${revision.errorLines} lines contain errors.`);
+    return apiError(interpolateUiString(UI_STRINGS.appApiBoqRevisionIdSubmitRoute.bOQCannotBeSubmittedBecauseErrorLinesLinesContainErrors, { "errorLines": revision.errorLines }));
   }
 
   await prisma.boqRevision.update({
@@ -42,8 +45,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     entityType: 'BOQ_REVISION',
     entityId: revisionId,
     action: 'SUBMIT',
-    description: `BOQ Revision ${revision.revisionCode} submitted for approval`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdSubmitRoute.bOQRevisionRevisionCodeSubmittedForApproval, { "revisionCode": revision.revisionCode }),
   });
 
-  return apiSuccess({ message: 'BOQ submitted for approval.', revisionCode: revision.revisionCode });
+  return apiSuccess({ message: UI_STRINGS.appApiBoqRevisionIdSubmitRoute.bOQSubmittedForApproval, revisionCode: revision.revisionCode });
 }

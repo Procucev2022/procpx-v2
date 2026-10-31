@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('AWARD_VIEW');
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ awards, total: awards.length });
   } catch (error: any) {
     console.error('Error fetching award recommendations:', error);
-    return apiError(error.message || 'Failed to fetch awards', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAwards }), 500);
   }
 }
 
@@ -62,7 +65,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId || !recommendedVendorId || !justification) {
-      return apiError('RFQ ID, Recommended Vendor, and Justification are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.rFQIDRecommendedVendorAndJustificationAreRequired, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -70,7 +73,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     const vendor = await prisma.vendor.findFirst({
@@ -78,7 +81,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError('Recommended Vendor not found', 404);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.recommendedVendorNotFound, 404);
     }
 
     const bench = Number(benchmarkAmount) || rfq.estimatedBenchmarkValue || 0;
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
       entityType: 'AWARD',
       entityId: award.id,
       action: 'AWARD_RECOMMENDED',
-      description: `Award recommended for ${vendor.name} on RFQ ${rfq.rfqNumber} at ₹ ${finalVal.toLocaleString()} (Savings: ₹ ${savings.toLocaleString()} / ${Math.round(savingsPct)}%)`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementAwardsRoute.awardRecommendedForNameOnRFQRfqNumberAtToLocaleStringSavingsToLocaleString2Round, { "name": vendor.name, "rfqNumber": rfq.rfqNumber, "toLocaleString": finalVal.toLocaleString(), "toLocaleString2": savings.toLocaleString(), "round": Math.round(savingsPct) }),
       newValue: {
         vendorId: vendor.id,
         vendorName: vendor.name,
@@ -143,10 +146,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return apiSuccess({ award, message: 'Award recommendation submitted for approval' }, 201);
+    return apiSuccess({ award, message: UI_STRINGS.appApiProcurementAwardsRoute.awardRecommendationSubmittedForApproval }, 201);
   } catch (error: any) {
     console.error('Error submitting award recommendation:', error);
-    return apiError(error.message || 'Failed to submit award recommendation', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitAwardRecommendation }), 500);
   }
 }
 
@@ -159,7 +162,7 @@ export async function PUT(req: NextRequest) {
     const { awardId, action, remarks } = body;
 
     if (!awardId || !action) {
-      return apiError('Award ID and Action (APPROVE / REJECT) are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.awardIDAndActionAPPROVEREJECTAreRequired, 400);
     }
 
     const award = await prisma.awardRecommendation.findFirst({
@@ -168,7 +171,7 @@ export async function PUT(req: NextRequest) {
     });
 
     if (!award) {
-      return apiError('Award recommendation not found', 404);
+      return apiError(UI_STRINGS.common.awardRecommendationNotFound, 404);
     }
 
     const isApproved = action === 'APPROVE';
@@ -198,7 +201,7 @@ export async function PUT(req: NextRequest) {
       entityType: 'AWARD',
       entityId: award.id,
       action: auditAction,
-      description: `Award recommendation for ${award.recommendedVendor.name} on RFQ ${award.rfq.rfqNumber} was ${updatedStatus.toLowerCase()} by ${ctx.role}. Remarks: ${remarks || 'None'}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementAwardsRoute.awardRecommendationForNameOnRFQRfqNumberWasToLowerCaseByRoleRemarksValue5, { "name": award.recommendedVendor.name, "rfqNumber": award.rfq.rfqNumber, "toLowerCase": updatedStatus.toLowerCase(), "role": ctx.role, "value5": remarks || UI_STRINGS.common.none }),
       newValue: { status: updatedStatus, remarks },
     });
 
@@ -216,10 +219,10 @@ export async function PUT(req: NextRequest) {
 
     return apiSuccess({
       award: updated,
-      message: `Award recommendation successfully ${updatedStatus.toLowerCase()}`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementAwardsRoute.awardRecommendationSuccessfullyToLowerCase, { "toLowerCase": updatedStatus.toLowerCase() }),
     });
   } catch (error: any) {
     console.error('Error reviewing award recommendation:', error);
-    return apiError(error.message || 'Failed to review award recommendation', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation }), 500);
   }
 }

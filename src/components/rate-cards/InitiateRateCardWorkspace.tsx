@@ -4,6 +4,7 @@
 // Step 1: Basic Details → Step 2: Rate Lines → Step 3: Review & Initiate
 // Enhanced Spacing, Visible Table Cell Borders, Compact 4-Card Summary, and Proper Button Toolbar
 
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
@@ -28,16 +29,19 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import PageHeader from '@/components/ui/PageHeader';
 import WizardStepper from '@/components/ui/WizardStepper';
 import FormSection from '@/components/ui/FormSection';
-import type { RateLineItem, InitiateRateCardProps } from "@app-types/components/rate-cards/InitiateRateCardWorkspace.types";
+import type { RateLineItem, InitiateRateCardProps, InitiateRateCardForm } from "@app-types/components/rate-cards/InitiateRateCardWorkspace.types";
 export type { RateLineItem };
 import { INITIAL_RATE_LINES } from "./InitiateRateCardWorkspace.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function InitiateRateCardWorkspace({ onBack, onSubmit }: InitiateRateCardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Form State
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<InitiateRateCardForm>({
     vendor: 'Ramakrishna Interiors (VND-0006)',
     vendorId: '37b13f45-ed6f-4c27-af8c-b3ede1fd3063',
     effectiveFrom: '2026-10-01',
@@ -45,7 +49,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
     category: 'Interior Works',
     subcategory: 'Retail Turnkey Fitouts',
     location: 'All India',
-    title: 'Retail Store Interior Works - FY 2026-27',
+    title: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.retailStoreInteriorWorksFY202627,
     commercialTerms: 'Rates are exclusive of taxes. Valid for all retail outlets. Includes material and labour unless specified.',
     scope: 'Interior execution including civil, false ceiling, flooring, carpentry, painting and allied works for retail outlets.',
   });
@@ -183,7 +187,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
       itemCode: `INT-00${nextIdx}`,
       category: form.category,
       subcategory: form.subcategory || 'General',
-      description: 'Standard BOQ Line Item',
+      description: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.standardBOQLineItem,
       specification: 'Commercial standard specification and execution detail',
       uom: 'SQFT',
       qty: 100,
@@ -195,12 +199,12 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
       targetAmount: 10000,
     };
     setItems([...items, newItem]);
-    setNotification({ type: 'success', message: `Added new line INT-00${nextIdx}` });
+    setNotification({ type: 'success', message: interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.addedNewLineINT00NextIdx, { "nextIdx": nextIdx }) });
   };
 
   const handleRemoveItem = (id: string) => {
     if (items.length <= 1) {
-      setNotification({ type: 'error', message: 'At least one rate line is required.' });
+      setNotification({ type: 'error', message: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.atLeastOneRateLineIsRequired });
       return;
     }
     setItems(items.filter((it) => it.id !== id));
@@ -273,10 +277,10 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
       setNotification({
         type: 'success',
-        message: `Template downloaded: ${filename}`,
+        message: interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.templateDownloadedFilename, { "filename": filename }),
       });
     } catch {
-      setNotification({ type: 'error', message: 'Failed to generate Excel download.' });
+      setNotification({ type: 'error', message: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToGenerateExcelDownload });
     }
   };
 
@@ -300,7 +304,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
         const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (!rawRows || rawRows.length === 0) {
-          setUploadGeneralErrors(['Workbook contains no data rows.']);
+          setUploadGeneralErrors([UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.workbookContainsNoDataRows]);
           setShowUploadPreview(true);
           return;
         }
@@ -354,7 +358,10 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
           const parsedTargetRate = parseFloat(String(rawTargetRate).replace(/[^0-9.]/g, ''));
           if (rawTargetRate === '' || isNaN(parsedTargetRate)) {
-            errors.push(`Row ${rowNum}: Target Rate must be a valid number`);
+            errors.push(interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.rowRowNumMessage, {
+              rowNum,
+              message: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetRateMustBeAValidNumber,
+            }));
           } else if (parsedTargetRate <= 0) {
             errors.push(`Row ${rowNum}: Target Rate must be greater than zero`);
           }
@@ -403,7 +410,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
         setUploadGeneralErrors(generalErrs);
         setShowUploadPreview(true);
       } catch (err: any) {
-        setUploadGeneralErrors([`Failed to parse file: ${err.message || 'Invalid format'}`]);
+        setUploadGeneralErrors([interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToParseFileMessage, {
+          message: err.message || UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.invalidFormat,
+        })]);
         setShowUploadPreview(true);
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -418,7 +427,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
     if (validUpdates.length === 0 && uploadProposedItems.some((p) => !p.isValid)) {
       setNotification({
         type: 'error',
-        message: 'Resolve validation errors before confirming import.',
+        message: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.resolveValidationErrorsBeforeConfirmingImport,
       });
       return;
     }
@@ -449,7 +458,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
     setShowUploadPreview(false);
     setNotification({
       type: 'success',
-      message: `Updated ${validUpdates.length} rate line(s) from Excel`,
+      message: interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.updatedLengthRateLineSFromExcel, { "length": validUpdates.length }),
     });
   };
 
@@ -484,8 +493,8 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
     <div className="w-full space-y-6">
       {/* ── STANDARDIZED PAGE HEADER ───────────────────────────────────── */}
       <PageHeader
-        title="Initiate Rate Card"
-        subtitle="Define contracting vendor, commercial categories, line-item reference rates, and target benchmarks."
+        title={UI_STRINGS.common.initiateRateCard}
+        subtitle={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.defineContractingVendorCommercialCategoriesLineItemReferenceRatesAndTargetBenchmarks}
         onBack={onBack}
         backLabel="Back to Rate Cards"
         stepNumber={2}
@@ -501,9 +510,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
       {/* ── STANDARDIZED 3-STEP WIZARD STEPPER (48px height, 14-15px typography) ── */}
       <WizardStepper
         steps={[
-          { stepNumber: 1, label: '1. Basic Details', subtitle: 'Scope & governance' },
-          { stepNumber: 2, label: '2. Rate Lines', subtitle: '13-column rate schedule' },
-          { stepNumber: 3, label: '3. Review & Initiate', subtitle: 'Commercial verification' },
+          { stepNumber: 1, label: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.copy1dqkxxq, subtitle: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.scopeGovernance },
+          { stepNumber: 2, label: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.copymit1wm, subtitle: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.copywiumw9 },
+          { stepNumber: 3, label: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.copyg2egrx, subtitle: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.commercialVerification },
         ]}
         currentStep={step}
         onStepClick={(s) => setStep(s as 1 | 2 | 3)}
@@ -544,28 +553,26 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
         <div className="space-y-6">
           <FormSection
             sectionNumber={1}
-            title="Rate Card Scope & Governance"
-            subtitle="Define the primary contracting vendor, commercial category, and rate card title."
+            title={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.rateCardScopeGovernance}
+            subtitle={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.defineThePrimaryContractingVendorCommercialCategoryAndRateCardTitle}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
               {/* Title */}
               <div className="md:col-span-2">
-                <label className="pro-form-label">
-                  Rate Card Title <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.rateCardTitle}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   type="text"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   className="pro-input"
-                  placeholder="e.g. Retail Store Interior Works - FY 2026-27"
+                  placeholder={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627}
                 />
               </div>
 
               {/* Vendor */}
               <div>
-                <label className="pro-form-label">
-                  Contracting Vendor <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.common.contractingVendor}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <select
                   value={form.vendor}
@@ -585,56 +592,52 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   }}
                   className="pro-select"
                 >
-                  <option value="Ramakrishna Interiors (VND-0006)">Ramakrishna Interiors (VND-0006)</option>
-                  <option value="BuildRight Solutions (VND-0007)">BuildRight Solutions (VND-0007)</option>
-                  <option value="ElectroMax (VND-0008)">ElectroMax (VND-0008)</option>
-                  <option value="CoolTech HVAC (VND-0009)">CoolTech HVAC (VND-0009)</option>
-                  <option value="Apex Infrastructure & Contracting Pvt Ltd (VND-0001)">Apex Infrastructure & Contracting Pvt Ltd (VND-0001)</option>
+                  <option value="Ramakrishna Interiors (VND-0006)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.ramakrishnaInteriorsVND0006}</option>
+                  <option value="BuildRight Solutions (VND-0007)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.buildRightSolutionsVND0007}</option>
+                  <option value="ElectroMax (VND-0008)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electroMaxVND0008}</option>
+                  <option value="CoolTech HVAC (VND-0009)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.coolTechHVACVND0009}</option>
+                  <option value="Apex Infrastructure & Contracting Pvt Ltd (VND-0001)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.apexInfrastructureContractingPvtLtdVND0001}</option>
                 </select>
               </div>
 
               {/* Category */}
               <div>
-                <label className="pro-form-label">
-                  Category <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.common.category2}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
                   className="pro-select"
                 >
-                  <option value="Interior Works">Interior Works</option>
-                  <option value="Civil & Interior">Civil & Interior</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="HVAC">HVAC</option>
-                  <option value="Furniture">Furniture</option>
+                  <option value="Interior Works">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.interiorWorks}</option>
+                  <option value="Civil & Interior">{UI_STRINGS.common.civilInterior}</option>
+                  <option value="Electrical">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical}</option>
+                  <option value="HVAC">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.hVAC}</option>
+                  <option value="Furniture">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.furniture}</option>
                 </select>
               </div>
 
               {/* Subcategory */}
               <div>
-                <label className="pro-form-label">
-                  Sub-category
-                </label>
+                <label className="pro-form-label">{UI_STRINGS.common.subCategory}</label>
                 <input
                   type="text"
                   value={form.subcategory}
                   onChange={(e) => setForm({ ...form, subcategory: e.target.value })}
                   className="pro-input"
-                  placeholder="e.g. Retail Turnkey Fitouts"
+                  placeholder={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailTurnkeyFitouts}
                 />
               </div>
 
               {/* Applicable Locations */}
               <div>
-                <label className="pro-form-label">
-                  Applicable Locations <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.common.applicableLocations}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   type="text"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  placeholder="e.g. All India or Regional Hubs"
+                  placeholder={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGAllIndiaOrRegionalHubs}
                   className="pro-input"
                 />
               </div>
@@ -643,14 +646,13 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
           <FormSection
             sectionNumber={2}
-            title="Validity & Commercial Terms"
-            subtitle="Set contract duration, detailed execution scope, and governing terms."
+            title={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.validityCommercialTerms}
+            subtitle={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.setContractDurationDetailedExecutionScopeAndGoverningTerms}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
               {/* Effective From */}
               <div>
-                <label className="pro-form-label">
-                  Effective From <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.effectiveFrom}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   type="date"
@@ -662,8 +664,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
               {/* Valid Until */}
               <div>
-                <label className="pro-form-label">
-                  Valid Until <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.common.validUntil}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   type="date"
@@ -675,29 +676,26 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
               {/* Scope of Work */}
               <div className="md:col-span-2">
-                <label className="pro-form-label">
-                  Scope of Work <span className="text-red-500">*</span>
+                <label className="pro-form-label">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.scopeOfWork}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <textarea
                   rows={3}
                   value={form.scope}
                   onChange={(e) => setForm({ ...form, scope: e.target.value })}
                   className="pro-textarea"
-                  placeholder="Detailed scope of supply and execution..."
+                  placeholder={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.detailedScopeOfSupplyAndExecution}
                 />
               </div>
 
               {/* Commercial Terms */}
               <div className="md:col-span-2">
-                <label className="pro-form-label">
-                  Commercial Terms & Conditions
-                </label>
+                <label className="pro-form-label">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.commercialTermsConditions}</label>
                 <textarea
                   rows={3}
                   value={form.commercialTerms}
                   onChange={(e) => setForm({ ...form, commercialTerms: e.target.value })}
                   className="pro-textarea"
-                  placeholder="Pricing terms, taxes, payment conditions, escalation clauses..."
+                  placeholder={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.pricingTermsTaxesPaymentConditionsEscalationClauses}
                 />
               </div>
             </div>
@@ -709,15 +707,13 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
               type="button"
               onClick={onBack}
               className="h-11 px-6 border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 rounded-lg font-semibold text-sm transition-colors shadow-2xs cursor-pointer"
-            >
-              Cancel
-            </button>
+            >{UI_STRINGS.common.cancel}</button>
             <button
               type="button"
               onClick={() => setStep(2)}
               className="h-11 px-6 bg-[#0f52ba] hover:bg-blue-800 text-white rounded-lg font-semibold text-sm flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
             >
-              <span>Continue to Rate Lines</span>
+              <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToRateLines}</span>
               <ArrowRight size={16} />
             </button>
           </div>
@@ -733,10 +729,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
-                  <span>Step 2: Rate Lines</span>
+                  <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step2RateLines}</span>
                   <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#0f52ba] text-xs font-bold border border-blue-200">
-                    {items.length} items
-                  </span>
+                    {items.length}{UI_STRINGS.common.items3}</span>
                 </h2>
               </div>
 
@@ -748,7 +743,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   className="pro-btn pro-btn-secondary"
                 >
                   <Plus size={16} />
-                  <span>Add Item Line</span>
+                  <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.addItemLine}</span>
                 </button>
 
                 <button
@@ -757,7 +752,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   className="pro-btn pro-btn-secondary"
                 >
                   <Download size={16} />
-                  <span>Download Excel Template</span>
+                  <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.downloadExcelTemplate}</span>
                 </button>
 
                 <button
@@ -766,7 +761,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   className="pro-btn pro-btn-primary"
                 >
                   <Upload size={16} />
-                  <span>Upload Completed Excel</span>
+                  <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.uploadCompletedExcel}</span>
                 </button>
                 <input
                   type="file"
@@ -804,81 +799,55 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                     <th
                       style={{ width: '55px' }}
                       className="py-3 px-2 text-center border-b border-slate-300 border-r border-slate-200"
-                    >
-                      S.No.
-                    </th>
+                    >{UI_STRINGS.common.sNo2}</th>
                     <th
                       style={{ width: '110px' }}
                       className="py-3 px-2.5 border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Item Code
-                    </th>
+                    >{UI_STRINGS.common.itemCode}</th>
                     <th
                       style={{ width: '195px' }}
                       className="py-3 px-2.5 border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Item Description
-                    </th>
+                    >{UI_STRINGS.common.itemDescription}</th>
                     <th
                       style={{ width: '210px' }}
                       className="py-3 px-2.5 border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      BOQ Description
-                    </th>
+                    >{UI_STRINGS.common.bOQDescription}</th>
                     <th
                       style={{ width: '70px' }}
                       className="py-3 px-2 text-center border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      UOM
-                    </th>
+                    >{UI_STRINGS.common.uOM}</th>
                     <th
                       style={{ width: '85px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Quantity
-                    </th>
+                    >{UI_STRINGS.common.quantity}</th>
                     <th
                       style={{ width: '110px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      AI Rate/Unit
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.aIRateUnit}</th>
                     <th
                       style={{ width: '110px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      AI Cost
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.aICost}</th>
                     <th
                       style={{ width: '125px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Previous PPO Rate
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousPPORate}</th>
                     <th
                       style={{ width: '135px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Previous PPO Amount
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousPPOAmount}</th>
                     <th
                       style={{ width: '130px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 font-bold text-[#0f52ba] bg-blue-50/50 whitespace-normal break-words leading-tight"
-                    >
-                      Target Rate
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetRate}</th>
                     <th
                       style={{ width: '140px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 font-bold text-[#0f52ba] bg-blue-50/50 whitespace-normal break-words leading-tight"
-                    >
-                      Target Amount
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetAmount}</th>
                     <th
                       style={{ width: '65px' }}
                       className="py-3 px-2 text-center border-b border-slate-300 whitespace-normal break-words leading-tight"
-                    >
-                      Actions
-                    </th>
+                    >{UI_STRINGS.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -910,16 +879,16 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                       >
                         <LongTextCell
                           text={it.description}
-                          title={`Item Description — ${it.itemCode}`}
-                          subtitle={`Line #${idx + 1} | ${it.category} > ${it.subcategory}`}
+                          title={interpolateUiString(UI_STRINGS.common.itemDescriptionItemCode, { "itemCode": it.itemCode })}
+                          subtitle={interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.lineValue1CategorySubcategory, { "value1": idx + 1, "category": it.category, "subcategory": it.subcategory })}
                           maxWidth="100%"
                         />
                         <div className="mt-1 flex items-center gap-1 overflow-hidden">
                           <span
                             className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-full block"
-                            title={`${it.category} > ${it.subcategory}`}
+                            title={interpolateUiString(UI_STRINGS.common.categorySubcategory, { "category": it.category, "subcategory": it.subcategory })}
                           >
-                            {it.category} &gt; {it.subcategory}
+                            {it.category}{UI_STRINGS.common.gt}{it.subcategory}
                           </span>
                         </div>
                       </td>
@@ -955,7 +924,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                           type="number"
                           min="0"
                           step="any"
-                          placeholder="—"
+                          placeholder={UI_STRINGS.common.copy4s9bsz}
                           value={it.qty !== null && it.qty !== undefined ? it.qty : ''}
                           onChange={(e) => handleItemChange(it.id, 'qty', e.target.value)}
                           className="w-full py-1 px-1.5 text-xs text-right border border-slate-300 rounded bg-white hover:border-slate-400 focus:outline-none focus:border-[#0f52ba]"
@@ -968,9 +937,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right text-slate-700 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.aiRate !== null ? (
-                          `₹ ${it.aiRate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.aiRate.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Generated</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notGenerated}</span>
                         )}
                       </td>
 
@@ -980,9 +949,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right font-semibold text-slate-800 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.aiCost !== null ? (
-                          `₹ ${it.aiCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.aiCost.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Generated</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notGenerated}</span>
                         )}
                       </td>
 
@@ -992,9 +961,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right text-slate-700 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.previousPpoRate !== null ? (
-                          `₹ ${it.previousPpoRate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.previousPpoRate.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Available</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notAvailable}</span>
                         )}
                       </td>
 
@@ -1004,9 +973,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right font-semibold text-slate-800 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.previousPpoAmount !== null ? (
-                          `₹ ${it.previousPpoAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.previousPpoAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Available</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notAvailable}</span>
                         )}
                       </td>
 
@@ -1030,7 +999,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         style={{ width: '140px' }}
                         className="py-2.5 px-2.5 text-right font-bold text-slate-900 border-r border-slate-200 bg-blue-50/20 font-mono whitespace-nowrap"
                       >
-                        {it.qty !== null ? `₹ ${it.targetAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '—'}
+                        {it.qty !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.targetAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) }) : UI_STRINGS.common.copy4s9bsz}
                       </td>
 
                       {/* 13. Action Delete */}
@@ -1042,7 +1011,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                           type="button"
                           onClick={() => handleRemoveItem(it.id)}
                           className="text-slate-400 hover:text-red-600 transition-colors cursor-pointer p-1"
-                          title="Delete item line"
+                          title={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.deleteItemLine}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1057,44 +1026,33 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                     <td
                       colSpan={6}
                       className="py-3.5 px-3 text-right uppercase tracking-wider text-xs font-bold text-slate-700 border-r border-slate-200"
-                    >
-                      Total Valuation:
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.totalValuation}</td>
                     <td
                       style={{ width: '110px' }}
                       className="py-3.5 px-2.5 text-right text-slate-500 text-xs border-r border-slate-200"
-                    >
-                      AI Cost Total
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.aICostTotal}</td>
                     <td
                       style={{ width: '110px' }}
                       className="py-3.5 px-2.5 text-right text-slate-900 font-bold border-r border-slate-200 font-mono whitespace-nowrap"
-                    >
-                      ₹ {metrics.totalAiCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{metrics.totalAiCost.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                     </td>
                     <td
                       style={{ width: '125px' }}
                       className="py-3.5 px-2.5 text-right text-slate-500 text-xs border-r border-slate-200"
-                    >
-                      PPO Total
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.pPOTotal}</td>
                     <td
                       style={{ width: '135px' }}
                       className="py-3.5 px-2.5 text-right text-slate-900 font-bold border-r border-slate-200 font-mono whitespace-nowrap"
-                    >
-                      ₹ {metrics.totalPreviousPpoAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{metrics.totalPreviousPpoAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                     </td>
                     <td
                       style={{ width: '130px' }}
                       className="py-3.5 px-2.5 text-right text-[#0f52ba] text-xs font-bold border-r border-slate-200 bg-blue-50/40"
-                    >
-                      Target Total
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetTotal}</td>
                     <td
                       style={{ width: '140px' }}
                       className="py-3.5 px-2.5 text-right text-[#0f52ba] font-extrabold text-sm border-r border-slate-200 bg-blue-50/40 font-mono whitespace-nowrap"
-                    >
-                      ₹ {metrics.totalTargetAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{metrics.totalTargetAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ width: '65px' }}></td>
                   </tr>
@@ -1110,14 +1068,14 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 className="pro-btn pro-btn-secondary"
               >
                 <ArrowLeft size={16} />
-                <span>Previous: Basic Details</span>
+                <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousBasicDetails}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setStep(3)}
                 className="pro-btn pro-btn-primary"
               >
-                <span>Continue to Review & Initiate</span>
+                <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate}</span>
                 <ArrowRight size={16} />
               </button>
             </div>
@@ -1132,10 +1090,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
             {/* Step Heading with Compact Validation Badge */}
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-lg font-bold text-slate-900">Step 3: Review & Initiate</h2>
+                <h2 className="text-lg font-bold text-slate-900">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step3ReviewInitiate}</h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-[#0f52ba] text-xs font-bold border border-blue-200">
-                  {items.length} items
-                </span>
+                  {items.length}{UI_STRINGS.common.items3}</span>
               </div>
 
               {/* Single Compact Validation Status Location */}
@@ -1143,12 +1100,12 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 {validationSummary.isValid ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                     <CheckCircle2 size={15} className="text-emerald-600" />
-                    <span>Validation Passed (Ready to Initiate)</span>
+                    <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.validationPassedReadyToInitiate}</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-red-50 text-red-800 border border-red-200 shadow-2xs">
                     <AlertTriangle size={15} className="text-red-600" />
-                    <span>{validationSummary.errors.length} Validation Issue(s)</span>
+                    <span>{validationSummary.errors.length}{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.validationIssueS}</span>
                   </span>
                 )}
               </div>
@@ -1158,7 +1115,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
             <SummaryCardGrid columns={4}>
               {/* Card 1: Rate Card Scope */}
               <SummaryCard
-                label="Rate Card Scope"
+                label={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.rateCardScope}
                 value={<span className="text-base font-bold text-slate-900 truncate block">{form.title}</span>}
                 secondary={
                   <span className="text-xs text-slate-600 truncate block font-medium">
@@ -1169,33 +1126,30 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
               {/* Card 2: Total AI Cost */}
               <SummaryCard
-                label="Total AI Cost"
-                value={`₹ ${metrics.totalAiCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
-                secondary={`Coverage: ${metrics.aiCostCount} of ${items.length} items (${metrics.aiCostCoverage.toFixed(0)}%)`}
+                label={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.totalAICost}
+                value={`₹ ${metrics.totalAiCost.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}`}
+                secondary={interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.coverageAiCostCountOfLengthItemsToFixed, { "aiCostCount": metrics.aiCostCount, "length": items.length, "toFixed": metrics.aiCostCoverage.toFixed(0) })}
               />
 
               {/* Card 3: Total Previous PPO Amount */}
               <SummaryCard
-                label="Total Previous PPO Amount"
-                value={`₹ ${metrics.totalPreviousPpoAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
-                secondary={`Coverage: ${metrics.previousPpoCount} of ${items.length} items (${metrics.ppoCoverage.toFixed(0)}%)`}
+                label={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.totalPreviousPPOAmount}
+                value={`₹ ${metrics.totalPreviousPpoAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}`}
+                secondary={interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.coveragePreviousPpoCountOfLengthItemsToFixed, { "previousPpoCount": metrics.previousPpoCount, "length": items.length, "toFixed": metrics.ppoCoverage.toFixed(0) })}
               />
 
               {/* Card 4: Total Target Amount with Concise Variance Comparison */}
               <SummaryCard
-                label="Total Target Amount"
+                label={UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.totalTargetAmount}
                 value={
-                  <span className="text-[#0f52ba]">
-                    ₹ {metrics.totalTargetAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  <span className="text-[#0f52ba]">{UI_STRINGS.common.copy1g8b5tg}{metrics.totalTargetAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                   </span>
                 }
                 secondary={
                   metrics.totalPreviousPpoAmount > 0 ? (
-                    <span className="text-emerald-700 font-bold">
-                      Savings: ₹ {(metrics.totalPreviousPpoAmount - metrics.totalTargetAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })} ({(((metrics.totalPreviousPpoAmount - metrics.totalTargetAmount) / metrics.totalPreviousPpoAmount) * 100).toFixed(1)}%)
-                    </span>
+                    <span className="text-emerald-700 font-bold">{UI_STRINGS.common.savings}{(metrics.totalPreviousPpoAmount - metrics.totalTargetAmount).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}{UI_STRINGS.common.copy1b3t0c5}{(((metrics.totalPreviousPpoAmount - metrics.totalTargetAmount) / metrics.totalPreviousPpoAmount) * 100).toFixed(1)}{UI_STRINGS.common.copy1y4e1t7}</span>
                   ) : (
-                    'Initial target baseline'
+                    UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initialTargetBaseline
                   )
                 }
                 accent="blue"
@@ -1207,7 +1161,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
               <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900 space-y-1">
                 <div className="font-bold flex items-center gap-1.5 text-red-800 text-sm">
                   <AlertTriangle size={15} />
-                  <span>Validation Issues:</span>
+                  <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.validationIssues}</span>
                 </div>
                 <ul className="list-disc pl-5 space-y-0.5 text-red-700 text-xs">
                   {validationSummary.errors.map((err, idx) => (
@@ -1242,75 +1196,51 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                     <th
                       style={{ width: '55px' }}
                       className="py-3 px-2 text-center border-b border-slate-300 border-r border-slate-200"
-                    >
-                      S.No.
-                    </th>
+                    >{UI_STRINGS.common.sNo2}</th>
                     <th
                       style={{ width: '110px' }}
                       className="py-3 px-2.5 border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Item Code
-                    </th>
+                    >{UI_STRINGS.common.itemCode}</th>
                     <th
                       style={{ width: '195px' }}
                       className="py-3 px-2.5 border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Item Description
-                    </th>
+                    >{UI_STRINGS.common.itemDescription}</th>
                     <th
                       style={{ width: '210px' }}
                       className="py-3 px-2.5 border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      BOQ Description
-                    </th>
+                    >{UI_STRINGS.common.bOQDescription}</th>
                     <th
                       style={{ width: '70px' }}
                       className="py-3 px-2 text-center border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      UOM
-                    </th>
+                    >{UI_STRINGS.common.uOM}</th>
                     <th
                       style={{ width: '85px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Quantity
-                    </th>
+                    >{UI_STRINGS.common.quantity}</th>
                     <th
                       style={{ width: '110px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      AI Rate/Unit
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.aIRateUnit}</th>
                     <th
                       style={{ width: '110px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      AI Cost
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.aICost}</th>
                     <th
                       style={{ width: '125px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Previous PPO Rate
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousPPORate}</th>
                     <th
                       style={{ width: '135px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 whitespace-normal break-words leading-tight"
-                    >
-                      Previous PPO Amount
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousPPOAmount}</th>
                     <th
                       style={{ width: '130px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 border-r border-slate-200 font-bold text-slate-900 bg-slate-50 whitespace-normal break-words leading-tight"
-                    >
-                      Target Rate
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetRate}</th>
                     <th
                       style={{ width: '140px' }}
                       className="py-3 px-2.5 text-right border-b border-slate-300 font-bold text-[#0f52ba] bg-slate-50 whitespace-normal break-words leading-tight"
-                    >
-                      Target Amount
-                    </th>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetAmount}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1337,16 +1267,16 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                       >
                         <LongTextCell
                           text={it.description}
-                          title={`Item Description — ${it.itemCode}`}
-                          subtitle={`Line #${idx + 1} | ${it.category} > ${it.subcategory}`}
+                          title={interpolateUiString(UI_STRINGS.common.itemDescriptionItemCode, { "itemCode": it.itemCode })}
+                          subtitle={interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.lineValue1CategorySubcategory, { "value1": idx + 1, "category": it.category, "subcategory": it.subcategory })}
                           maxWidth="100%"
                         />
                         <div className="mt-1 flex items-center gap-1 overflow-hidden">
                           <span
                             className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-full block"
-                            title={`${it.category} > ${it.subcategory}`}
+                            title={interpolateUiString(UI_STRINGS.common.categorySubcategory, { "category": it.category, "subcategory": it.subcategory })}
                           >
-                            {it.category} &gt; {it.subcategory}
+                            {it.category}{UI_STRINGS.common.gt}{it.subcategory}
                           </span>
                         </div>
                       </td>
@@ -1372,16 +1302,16 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         style={{ width: '85px' }}
                         className="py-2.5 px-2.5 text-right font-medium text-slate-900 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
-                        {it.qty !== null && it.qty !== undefined ? it.qty.toLocaleString('en-IN') : '—'}
+                        {it.qty !== null && it.qty !== undefined ? it.qty.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.copy4s9bsz}
                       </td>
                       <td
                         style={{ width: '110px' }}
                         className="py-2.5 px-2.5 text-right text-slate-700 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.aiRate !== null ? (
-                          `₹ ${it.aiRate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.aiRate.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Generated</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notGenerated}</span>
                         )}
                       </td>
                       <td
@@ -1389,9 +1319,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right font-semibold text-slate-800 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.aiCost !== null ? (
-                          `₹ ${it.aiCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.aiCost.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Generated</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notGenerated}</span>
                         )}
                       </td>
                       <td
@@ -1399,9 +1329,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right text-slate-700 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.previousPpoRate !== null ? (
-                          `₹ ${it.previousPpoRate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.previousPpoRate.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Available</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notAvailable}</span>
                         )}
                       </td>
                       <td
@@ -1409,22 +1339,21 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                         className="py-2.5 px-2.5 text-right font-semibold text-slate-800 border-r border-slate-200 font-mono whitespace-nowrap"
                       >
                         {it.previousPpoAmount !== null ? (
-                          `₹ ${it.previousPpoAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                          interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.previousPpoAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) })
                         ) : (
-                          <span className="text-slate-400 italic">Not Available</span>
+                          <span className="text-slate-400 italic">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.notAvailable}</span>
                         )}
                       </td>
                       <td
                         style={{ width: '130px' }}
                         className="py-2.5 px-2.5 text-right font-bold text-slate-900 border-r border-slate-200 bg-slate-50/50 font-mono whitespace-nowrap"
-                      >
-                        ₹ {it.targetRate.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      >{UI_STRINGS.common.copy1g8b5tg}{it.targetRate.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                       </td>
                       <td
                         style={{ width: '140px' }}
                         className="py-2.5 px-2.5 text-right font-extrabold text-[#0f52ba] bg-slate-50/50 font-mono whitespace-nowrap"
                       >
-                        {it.qty !== null ? `₹ ${it.targetAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '—'}
+                        {it.qty !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.targetAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 }) }) : UI_STRINGS.common.copy4s9bsz}
                       </td>
                     </tr>
                   ))}
@@ -1436,44 +1365,33 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                     <td
                       colSpan={6}
                       className="py-3.5 px-3 text-right uppercase tracking-wider text-xs font-bold text-slate-700 border-r border-slate-200"
-                    >
-                      Total Reviewed Valuation:
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.totalReviewedValuation}</td>
                     <td
                       style={{ width: '110px' }}
                       className="py-3.5 px-2.5 text-right text-slate-500 text-xs border-r border-slate-200"
-                    >
-                      AI Cost Total
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.aICostTotal}</td>
                     <td
                       style={{ width: '110px' }}
                       className="py-3.5 px-2.5 text-right text-slate-900 font-bold border-r border-slate-200 font-mono whitespace-nowrap"
-                    >
-                      ₹ {metrics.totalAiCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{metrics.totalAiCost.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                     </td>
                     <td
                       style={{ width: '125px' }}
                       className="py-3.5 px-2.5 text-right text-slate-500 text-xs border-r border-slate-200"
-                    >
-                      PPO Total
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.pPOTotal}</td>
                     <td
                       style={{ width: '135px' }}
                       className="py-3.5 px-2.5 text-right text-slate-900 font-bold border-r border-slate-200 font-mono whitespace-nowrap"
-                    >
-                      ₹ {metrics.totalPreviousPpoAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{metrics.totalPreviousPpoAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                     </td>
                     <td
                       style={{ width: '130px' }}
                       className="py-3.5 px-2.5 text-right text-[#0f52ba] text-xs font-bold border-r border-slate-200 bg-slate-50"
-                    >
-                      Target Total
-                    </td>
+                    >{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.targetTotal}</td>
                     <td
                       style={{ width: '140px' }}
                       className="py-3.5 px-2.5 text-right text-[#0f52ba] font-extrabold text-sm bg-slate-50 font-mono whitespace-nowrap"
-                    >
-                      ₹ {metrics.totalTargetAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    >{UI_STRINGS.common.copy1g8b5tg}{metrics.totalTargetAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 </tfoot>
@@ -1488,7 +1406,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 className="pro-btn pro-btn-secondary"
               >
                 <ArrowLeft size={16} />
-                <span>Previous: Rate Lines</span>
+                <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousRateLines}</span>
               </button>
 
               <div className="flex items-center gap-3">
@@ -1501,7 +1419,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   className="pro-btn pro-btn-secondary"
                 >
                   <Save size={15} />
-                  <span>Save as Draft</span>
+                  <span>{UI_STRINGS.common.saveAsDraft}</span>
                 </button>
 
                 <button
@@ -1518,7 +1436,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   }`}
                 >
                   <Check size={16} />
-                  <span>Initiate Rate Card & Send to Vendor</span>
+                  <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor}</span>
                 </button>
               </div>
             </div>
@@ -1533,8 +1451,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
             <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={16} className="text-emerald-700" />
-                <h3 className="text-xs font-bold text-slate-900">
-                  Excel Rate Card Import Preview — {uploadFileName}
+                <h3 className="text-xs font-bold text-slate-900">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview}{uploadFileName}
                 </h3>
               </div>
               <button
@@ -1552,7 +1469,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-800 text-[11px] space-y-0.5">
                   <div className="font-semibold flex items-center gap-1">
                     <AlertTriangle size={13} className="text-amber-600" />
-                    <span>Import Notices:</span>
+                    <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.importNotices}</span>
                   </div>
                   <ul className="list-disc pl-4 space-y-0.5">
                     {uploadGeneralErrors.map((err, idx) => (
@@ -1565,23 +1482,23 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
               {/* Upload Metrics Summary */}
               <div className="grid grid-cols-4 gap-2">
                 <div className="bg-slate-50 p-2 rounded border border-slate-200 text-center">
-                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">Total Rows</span>
+                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">{UI_STRINGS.common.totalRows}</span>
                   <span className="text-xs font-bold text-slate-800">{uploadProposedItems.length}</span>
                 </div>
                 <div className="bg-emerald-50 p-2 rounded border border-emerald-200 text-center">
-                  <span className="text-[10px] text-emerald-700 uppercase font-semibold block">Modified</span>
+                  <span className="text-[10px] text-emerald-700 uppercase font-semibold block">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.modified}</span>
                   <span className="text-xs font-bold text-emerald-800">
                     {uploadProposedItems.filter((p) => p.isValid && p.isModified).length}
                   </span>
                 </div>
                 <div className="bg-slate-50 p-2 rounded border border-slate-200 text-center">
-                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">Unchanged</span>
+                  <span className="text-[10px] text-slate-500 uppercase font-semibold block">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.unchanged}</span>
                   <span className="text-xs font-bold text-slate-700">
                     {uploadProposedItems.filter((p) => p.isValid && !p.isModified).length}
                   </span>
                 </div>
                 <div className="bg-red-50 p-2 rounded border border-red-200 text-center">
-                  <span className="text-[10px] text-red-700 uppercase font-semibold block">Invalid</span>
+                  <span className="text-[10px] text-red-700 uppercase font-semibold block">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.invalid}</span>
                   <span className="text-xs font-bold text-red-800">
                     {uploadProposedItems.filter((p) => !p.isValid).length}
                   </span>
@@ -1605,15 +1522,13 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                   </colgroup>
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 border-b border-slate-300 font-semibold text-[11px]">
-                      <th style={{ width: '100px' }} className="py-2 px-3 border-r border-slate-200">Item Code</th>
-                      <th style={{ width: '200px' }} className="py-2 px-3 border-r border-slate-200">Description</th>
-                      <th style={{ width: '110px' }} className="py-2 px-3 text-right border-r border-slate-200">Current Target</th>
-                      <th style={{ width: '110px' }} className="py-2 px-3 text-right font-bold text-slate-900 border-r border-slate-200">
-                        Uploaded Target
-                      </th>
-                      <th style={{ width: '110px' }} className="py-2 px-3 text-right border-r border-slate-200">Diff</th>
-                      <th style={{ width: '120px' }} className="py-2 px-3 text-right font-bold border-r border-slate-200">New Amount</th>
-                      <th style={{ width: '100px' }} className="py-2 px-3 text-center">Status</th>
+                      <th style={{ width: '100px' }} className="py-2 px-3 border-r border-slate-200">{UI_STRINGS.common.itemCode}</th>
+                      <th style={{ width: '200px' }} className="py-2 px-3 border-r border-slate-200">{UI_STRINGS.common.description}</th>
+                      <th style={{ width: '110px' }} className="py-2 px-3 text-right border-r border-slate-200">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.currentTarget}</th>
+                      <th style={{ width: '110px' }} className="py-2 px-3 text-right font-bold text-slate-900 border-r border-slate-200">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.uploadedTarget}</th>
+                      <th style={{ width: '110px' }} className="py-2 px-3 text-right border-r border-slate-200">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.diff}</th>
+                      <th style={{ width: '120px' }} className="py-2 px-3 text-right font-bold border-r border-slate-200">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.newAmount}</th>
+                      <th style={{ width: '100px' }} className="py-2 px-3 text-center">{UI_STRINGS.common.status}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-[11px]">
@@ -1637,11 +1552,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                           <td style={{ width: '200px' }} className="py-1.5 px-3 text-slate-700 truncate border-r border-slate-200">
                             {p.originalItem.description}
                           </td>
-                          <td style={{ width: '110px' }} className="py-1.5 px-3 text-right text-slate-600 border-r border-slate-200 whitespace-nowrap font-mono">
-                            ₹ {p.oldTargetRate.toLocaleString()}
+                          <td style={{ width: '110px' }} className="py-1.5 px-3 text-right text-slate-600 border-r border-slate-200 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{p.oldTargetRate.toLocaleString()}
                           </td>
-                          <td style={{ width: '110px' }} className="py-1.5 px-3 text-right font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap font-mono">
-                            ₹ {p.newTargetRate.toLocaleString()}
+                          <td style={{ width: '110px' }} className="py-1.5 px-3 text-right font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{p.newTargetRate.toLocaleString()}
                           </td>
                           <td style={{ width: '110px' }} className="py-1.5 px-3 text-right border-r border-slate-200 whitespace-nowrap font-mono">
                             {p.isModified ? (
@@ -1650,35 +1563,27 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                                   diff > 0 ? 'text-blue-700' : 'text-emerald-700'
                                 }`}
                               >
-                                {diff > 0 ? '+' : ''}
-                                {diff.toFixed(2)} ({pct > 0 ? '+' : ''}
-                                {pct.toFixed(1)}%)
-                              </span>
+                                {diff > 0 ? UI_STRINGS.common.copycrz1ka : ''}
+                                {diff.toFixed(2)}{UI_STRINGS.common.copy1b3t0c5}{pct > 0 ? UI_STRINGS.common.copycrz1ka : ''}
+                                {pct.toFixed(1)}{UI_STRINGS.common.copy1y4e1t7}</span>
                             ) : (
-                              <span className="text-slate-400 text-[10px]">No Change</span>
+                              <span className="text-slate-400 text-[10px]">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.noChange}</span>
                             )}
                           </td>
-                          <td style={{ width: '120px' }} className="py-1.5 px-3 text-right font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap font-mono">
-                            ₹ {p.newTargetAmount.toLocaleString()}
+                          <td style={{ width: '120px' }} className="py-1.5 px-3 text-right font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap font-mono">{UI_STRINGS.common.copy1g8b5tg}{p.newTargetAmount.toLocaleString()}
                           </td>
                           <td style={{ width: '100px' }} className="py-1.5 px-3 text-center">
                             {p.isValid ? (
                               p.isModified ? (
-                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                                  Modified
-                                </span>
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.modified}</span>
                               ) : (
-                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
-                                  Unchanged
-                                </span>
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.unchanged}</span>
                               )
                             ) : (
                               <span
                                 className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-800"
                                 title={p.errors.join('; ')}
-                              >
-                                Error
-                              </span>
+                              >{UI_STRINGS.common.error}</span>
                             )}
                           </td>
                         </tr>
@@ -1695,9 +1600,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 type="button"
                 onClick={() => setShowUploadPreview(false)}
                 className="px-3.5 py-1.5 border border-slate-300 rounded text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 disabled={uploadProposedItems.filter((p) => !p.isValid).length > 0}
@@ -1709,7 +1612,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 }`}
               >
                 <Check size={14} />
-                <span>Confirm & Apply Changes</span>
+                <span>{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges}</span>
               </button>
             </div>
           </div>

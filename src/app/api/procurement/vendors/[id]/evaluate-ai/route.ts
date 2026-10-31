@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { evaluateVendorProfile } from '@/lib/vendor-ai-evaluator';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -27,7 +30,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError('Vendor not found or access denied.', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
     }
 
     // Run Structured & Evidence-Based AI Evaluation Engine
@@ -106,7 +109,7 @@ export async function POST(
       entityType: 'VENDOR',
       entityId: vendor.id,
       action: 'VENDOR_AI_EVALUATED',
-      description: `AI-assisted evaluation completed for vendor ${vendor.name} (Score: ${report.overallWeightedScore}%, Recommendation: ${report.qualificationOutcome})`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdEvaluateAiRoute.aIAssistedEvaluationCompletedForVendorNameScoreOverallWeightedScoreRecommendationQualificationOutcome, { "name": vendor.name, "overallWeightedScore": report.overallWeightedScore, "qualificationOutcome": report.qualificationOutcome }),
       newValue: {
         score: report.overallWeightedScore,
         recommendation: report.qualificationOutcome,
@@ -117,10 +120,10 @@ export async function POST(
     return apiSuccess({
       evaluation,
       report,
-      message: `AI Evaluation completed. Suggested score: ${report.overallWeightedScore}% (${report.qualificationOutcome}).`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdEvaluateAiRoute.aIEvaluationCompletedSuggestedScoreOverallWeightedScoreQualificationOutcome, { "overallWeightedScore": report.overallWeightedScore, "qualificationOutcome": report.qualificationOutcome }),
     });
   } catch (error: any) {
     console.error('Error running AI vendor evaluation:', error);
-    return apiError(error.message || 'Failed to run AI evaluation', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRunAiEvaluation }), 500);
   }
 }

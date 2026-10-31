@@ -6,6 +6,8 @@ import { notifyNextResponsibleParty } from '../src/lib/notifications';
 import { GET as getStandardItems, POST as createStandardItems } from '../src/app/api/boq/standard-library/route';
 import { GET as getCategories, POST as createCategory, generateUniqueCategoryCode } from '../src/app/api/masters/categories/route';
 import { GET as getAwards, POST as createAward, PUT as reviewAward } from '../src/app/api/procurement/awards/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -53,7 +55,7 @@ describe('standard BOQ library API', () => {
     db.standardBoqItem.findMany.mockResolvedValueOnce(items);
     await expect(getStandardItems(request('http://localhost/api/boq/standard-library?sector=RETAIL&projectType=STORE&category=Electrical&subcategory=Wiring&search=Cable'))).resolves.toEqual({ ok: true, data: items, status: 200 });
     expect(db.standardBoqItem.findMany).toHaveBeenCalledWith({
-      where: { tenantId: 'tenant-1', isActive: true, sector: 'RETAIL', projectType: 'STORE', category: 'Electrical', subcategory: 'Wiring', OR: [
+      where: { tenantId: 'tenant-1', isActive: true, sector: 'RETAIL', projectType: 'STORE', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'Wiring', OR: [
         { itemCode: { contains: 'Cable' } }, { standardDescription: { contains: 'Cable' } }, { detailedSpecification: { contains: 'Cable' } }, { brandMake: { contains: 'Cable' } },
       ] },
       orderBy: [{ category: 'asc' }, { itemCode: 'asc' }],
@@ -68,7 +70,7 @@ describe('standard BOQ library API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [{}]))).resolves.toBe(denied);
-    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', { items: [] }))).resolves.toEqual({ ok: false, error: 'At least one standard BOQ item is required.', status: 400 });
+    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', { items: [] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqStandardLibraryRoute.atLeastOneStandardBOQItemIsRequired, status: 400 });
     db.category.findMany.mockResolvedValue([{ name: 'Electrical' }]);
     await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [{ standardDescription: 'Cable', category: 'Electrical', uom: 'M' }]))).resolves.toMatchObject({ ok: false, error: 'Line #1: Item code is required.', status: 400 });
     await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [{ itemCode: 'C1', category: 'Electrical', uom: 'M' }]))).resolves.toMatchObject({ ok: false, error: 'Line #1 (C1): Standard item description is required.', status: 400 });
@@ -95,10 +97,10 @@ describe('standard BOQ library API', () => {
       ],
     }))).resolves.toMatchObject({ ok: true, status: 201, data: { count: 2, items: expect.any(Array) } });
     expect(db.standardBoqItem.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      tenantId: 'tenant-1', itemCode: 'C-1', sector: 'OFFICE', projectType: 'Retail', category: 'Electrical', subcategory: 'General',
+      tenantId: 'tenant-1', itemCode: 'C-1', sector: 'OFFICE', projectType: UI_STRINGS.appAppBoqStudioPage.retail, category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: UI_STRINGS.common.general,
       standardDescription: 'Cable', detailedSpecification: 'Cable', uom: 'MTR', brandMake: null, benchmarkRate: 12.5, costDrivers: '{"load":1}', isActive: true,
     }) });
-    expect(db.standardBoqItem.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ itemCode: 'C-2', category: 'Electrical', subcategory: 'General', uom: 'NOS', brandMake: null, benchmarkRate: null, costDrivers: 'meterage' }) });
+    expect(db.standardBoqItem.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ itemCode: 'C-2', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: UI_STRINGS.common.general, uom: UI_STRINGS.common.nOS, brandMake: null, benchmarkRate: null, costDrivers: 'meterage' }) });
   });
 
   it('accepts a direct item array and reports storage errors', async () => {
@@ -159,9 +161,9 @@ describe('category master API and category code generator', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(createCategory(request('http://localhost/api/masters/categories', { name: 'Electrical' }))).resolves.toBe(denied);
-    await expect(createCategory(request('http://localhost/api/masters/categories', { name: '  ' }))).resolves.toEqual({ ok: false, error: 'Category name is required.', status: 400 });
+    await expect(createCategory(request('http://localhost/api/masters/categories', { name: '  ' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.categoryNameIsRequired, status: 400 });
     db.category.findFirst.mockResolvedValueOnce(null);
-    await expect(createCategory(request('http://localhost/api/masters/categories', { name: 'Flooring', parentId: 'missing' }))).resolves.toEqual({ ok: false, error: 'Selected parent category does not exist.', status: 404 });
+    await expect(createCategory(request('http://localhost/api/masters/categories', { name: 'Flooring', parentId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiMastersCategoriesRoute.selectedParentCategoryDoesNotExist, status: 404 });
     db.category.findFirst.mockResolvedValueOnce({ id: 'parent' }).mockResolvedValueOnce({ id: 'existing' });
     await expect(createCategory(request('http://localhost/api/masters/categories', { name: 'Flooring', parentId: 'parent' }))).resolves.toEqual({ ok: false, error: 'Subcategory "Flooring" already exists under the selected parent category.', status: 409 });
     db.category.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'existing', name: 'Existing' });
@@ -218,7 +220,7 @@ describe('commercial award workflow', () => {
     await expect(getAwards(request('http://localhost/api/procurement/awards'))).resolves.toBe(denied);
     db.awardRecommendation.findMany.mockResolvedValueOnce([{ id: 'award-1' }]);
     await expect(getAwards(request('http://localhost/api/procurement/awards?rfqId=rfq-1&status=APPROVED'))).resolves.toEqual({ ok: true, data: { awards: [{ id: 'award-1' }], total: 1 }, status: 200 });
-    expect(db.awardRecommendation.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', rfqId: 'rfq-1', status: 'APPROVED' }, orderBy: { createdAt: 'desc' } }));
+    expect(db.awardRecommendation.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', rfqId: 'rfq-1', status: UI_STRINGS.common.aPPROVED }, orderBy: { createdAt: 'desc' } }));
     db.awardRecommendation.findMany.mockRejectedValueOnce(new Error('award listing failed'));
     await expect(getAwards(request('http://localhost/api/procurement/awards'))).resolves.toEqual({ ok: false, error: 'award listing failed', status: 500 });
   });
@@ -228,12 +230,12 @@ describe('commercial award workflow', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(createAward(request('http://localhost/api/procurement/awards', {}))).resolves.toBe(denied);
-    await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'RFQ ID, Recommended Vendor, and Justification are required', status: 400 });
+    await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAwardsRoute.rFQIDRecommendedVendorAndJustificationAreRequired, status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1', recommendedVendorId: 'vendor-1', justification: 'Best' }))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1', recommendedVendorId: 'vendor-1', justification: 'Best' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', estimatedBenchmarkValue: 1000 });
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1', recommendedVendorId: 'vendor-1', justification: 'Best' }))).resolves.toEqual({ ok: false, error: 'Recommended Vendor not found', status: 404 });
+    await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1', recommendedVendorId: 'vendor-1', justification: 'Best' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAwardsRoute.recommendedVendorNotFound, status: 404 });
 
     const rfq = { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1', estimatedBenchmarkValue: 1000 };
     const vendor = { id: 'vendor-1', name: 'Acme' };
@@ -243,10 +245,10 @@ describe('commercial award workflow', () => {
     db.awardRecommendation.create.mockResolvedValueOnce(award);
     await expect(createAward(request('http://localhost/api/procurement/awards', {
       rfqId: 'rfq-1', recommendedVendorId: 'vendor-1', originalQuoteAmount: 0, finalNegotiatedAmount: '900', justification: 'Best value',
-    }))).resolves.toEqual({ ok: true, data: { award, message: 'Award recommendation submitted for approval' }, status: 201 });
+    }))).resolves.toEqual({ ok: true, data: { award, message: UI_STRINGS.appApiProcurementAwardsRoute.awardRecommendationSubmittedForApproval }, status: 201 });
     expect(db.awardRecommendation.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', originalQuoteAmount: 900, finalNegotiatedAmount: 900, benchmarkAmount: 1000, totalSavingsAmount: 100,
-      savingsPercent: 10, technicalStatus: 'COMPLIANT', commercialStatus: 'BEST_VALUE', status: 'PENDING_APPROVAL',
+      savingsPercent: 10, technicalStatus: UI_STRINGS.common.cOMPLIANT, commercialStatus: 'BEST_VALUE', status: 'PENDING_APPROVAL',
     }), include: { recommendedVendor: true } });
     expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'AWARD_RECOMMENDED' } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'AWARD_RECOMMENDED', entityId: 'award-1' }));
@@ -258,7 +260,7 @@ describe('commercial award workflow', () => {
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-2', name: 'Vendor' });
     db.awardRecommendation.create.mockResolvedValueOnce({ id: 'award-2' });
     await createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-2', recommendedVendorId: 'vendor-2', originalQuoteAmount: '110', finalNegotiatedAmount: '100', benchmarkAmount: '90', justification: 'Override' }));
-    expect(db.awardRecommendation.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ originalQuoteAmount: 110, benchmarkAmount: 90, totalSavingsAmount: -10, savingsPercent: -11.11, technicalStatus: 'COMPLIANT', commercialStatus: 'BEST_VALUE' }), include: { recommendedVendor: true } });
+    expect(db.awardRecommendation.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ originalQuoteAmount: 110, benchmarkAmount: 90, totalSavingsAmount: -10, savingsPercent: -11.11, technicalStatus: UI_STRINGS.common.cOMPLIANT, commercialStatus: 'BEST_VALUE' }), include: { recommendedVendor: true } });
     db.rfq.findFirst.mockRejectedValueOnce(new Error('award submit failed'));
     await expect(createAward(request('http://localhost/api/procurement/awards', { rfqId: 'rfq-1', recommendedVendorId: 'v', justification: 'x' }))).resolves.toEqual({ ok: false, error: 'award submit failed', status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
@@ -270,9 +272,9 @@ describe('commercial award workflow', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(reviewAward(request('http://localhost/api/procurement/awards', {}))).resolves.toBe(denied);
-    await expect(reviewAward(request('http://localhost/api/procurement/awards', {}))).resolves.toEqual({ ok: false, error: 'Award ID and Action (APPROVE / REJECT) are required', status: 400 });
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', {}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAwardsRoute.awardIDAndActionAPPROVEREJECTAreRequired, status: 400 });
     db.awardRecommendation.findFirst.mockResolvedValueOnce(null);
-    await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: 'missing', action: 'APPROVE' }))).resolves.toEqual({ ok: false, error: 'Award recommendation not found', status: 404 });
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: 'missing', action: 'APPROVE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.awardRecommendationNotFound, status: 404 });
     const award = { id: 'award-1', rfqId: 'rfq-1', finalNegotiatedAmount: 900, rfq: { projectId: 'project-1', rfqNumber: 'RFQ-1' }, recommendedVendor: { name: 'Acme' } };
     for (const [action, status, rfqStatus] of [['APPROVE', 'APPROVED', 'APPROVED'], ['REJECT', 'REJECTED', 'COMPARISON']]) {
       db.awardRecommendation.findFirst.mockResolvedValueOnce(award);

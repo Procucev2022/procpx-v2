@@ -1,6 +1,7 @@
 'use client';
 // src/app/(app)/vendor-portal/ppos/page.tsx
 // Dedicated Vendor Orders & PPO Acceptance Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import {
   FileCheck,
@@ -23,6 +24,9 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function VendorPposPage() {
   const [ppos, setPpos] = useState<any[]>([]);
@@ -52,7 +56,7 @@ export default function VendorPposPage() {
       const res = await fetch('/api/vendor-portal/ppos');
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load purchase orders');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders }));
       }
       const data = await res.json();
       setPpos(data.ppos || []);
@@ -86,7 +90,7 @@ export default function VendorPposPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to accept purchase order');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder }));
       }
       setShowAcceptModal(false);
       setSelectedPpo(null);
@@ -112,7 +116,7 @@ export default function VendorPposPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to report fulfillment issue');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToReportFulfillmentIssue }));
       }
       setShowIssueModal(false);
       setSelectedPpo(null);
@@ -139,9 +143,9 @@ export default function VendorPposPage() {
     <div style={{ padding: '24px 32px', maxWidth: 1300, margin: '0 auto' }}>
       {/* ── HEADER ──────────────────────────────────────────────────────── */}
       <PageHeader
-        title="Purchase Orders (PPOs) & Awards"
-        subtitle="Review official purchase orders issued by clients, accept commercial terms, or raise fulfillment queries"
-        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>Vendor Portal</span>}
+        title={UI_STRINGS.appAppVendorPortalPposPage.purchaseOrdersPPOsAwards}
+        subtitle={UI_STRINGS.appAppVendorPortalPposPage.reviewOfficialPurchaseOrdersIssuedByClientsAcceptCommercialTermsOrRaiseFulfillmentQueries}
+        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>{UI_STRINGS.common.vendorPortal}</span>}
         actions={
           <button
             type="button"
@@ -150,7 +154,7 @@ export default function VendorPposPage() {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40 }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh</span>
+            <span>{UI_STRINGS.common.refresh2}</span>
           </button>
         }
       />
@@ -158,23 +162,23 @@ export default function VendorPposPage() {
       {/* ── KPI METRICS ──────────────────────────────────────────────────── */}
       <SummaryCardGrid columns={3} className="mb-6">
         <SummaryCard
-          label="Total Purchase Orders"
+          label={UI_STRINGS.appAppVendorPortalPposPage.totalPurchaseOrders}
           value={loading ? '—' : `${ppos.length} Orders`}
-          secondary="Commercial commitments issued"
+          secondary={UI_STRINGS.appAppVendorPortalPposPage.commercialCommitmentsIssued}
           icon={<Receipt size={16} />}
           accent="blue"
         />
         <SummaryCard
-          label="Cumulative Order Value"
-          value={loading ? '—' : `₹ ${totalAmount.toLocaleString('en-IN')}`}
-          secondary="Gross executed order value"
+          label={UI_STRINGS.appAppVendorPortalPposPage.cumulativeOrderValue}
+          value={loading ? '—' : `₹ ${totalAmount.toLocaleString(I18N_CONFIG.defaultLocale)}`}
+          secondary={UI_STRINGS.appAppVendorPortalPposPage.grossExecutedOrderValue}
           icon={<FileText size={16} />}
           accent="emerald"
         />
         <SummaryCard
-          label="Action Pending"
+          label={UI_STRINGS.appAppVendorPortalPposPage.actionPending}
           value={loading ? '—' : `${pendingCount} PPOs`}
-          secondary="Awaiting vendor acknowledgement"
+          secondary={UI_STRINGS.appAppVendorPortalPposPage.awaitingVendorAcknowledgement}
           icon={<Clock size={16} />}
           accent={pendingCount > 0 ? 'amber' : 'slate'}
         />
@@ -187,7 +191,7 @@ export default function VendorPposPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search PPO #, Project..."
+            placeholder={UI_STRINGS.appAppVendorPortalPposPage.searchPPOProject}
             className="form-control"
             style={{ paddingLeft: 34, fontSize: 13 }}
           />
@@ -206,14 +210,14 @@ export default function VendorPposPage() {
       {loading ? (
         <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
           <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
-          <div>Loading purchase orders...</div>
+          <div>{UI_STRINGS.appAppVendorPortalPposPage.loadingPurchaseOrders}</div>
         </div>
       ) : filteredPpos.length === 0 ? (
         <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
           <FileCheck size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-          <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>No Purchase Orders Found</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>{UI_STRINGS.appAppVendorPortalPposPage.noPurchaseOrdersFound}</h3>
           <p style={{ fontSize: 13, margin: 0 }}>
-            {searchTerm ? 'No orders match your search query.' : 'No purchase orders have been issued to your company yet.'}
+            {searchTerm ? UI_STRINGS.appAppVendorPortalPposPage.noOrdersMatchYourSearchQuery : UI_STRINGS.appAppVendorPortalPposPage.noPurchaseOrdersHaveBeenIssuedToYourCompanyYet}
           </p>
         </div>
       ) : (
@@ -231,13 +235,13 @@ export default function VendorPposPage() {
               <thead>
                 <tr>
                   <th style={{ width: 40 }}></th>
-                  <th>PPO Reference</th>
-                  <th>Project & RFQ</th>
-                  <th>PO Date</th>
-                  <th>Target Delivery</th>
-                  <th style={{ textAlign: 'right' }}>Gross Total (₹)</th>
-                  <th>Vendor Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <th>{UI_STRINGS.common.pPOReference}</th>
+                  <th>{UI_STRINGS.appAppVendorPortalPposPage.projectRFQ}</th>
+                  <th>{UI_STRINGS.appAppVendorPortalPposPage.pODate}</th>
+                  <th>{UI_STRINGS.appAppVendorPortalPposPage.targetDelivery}</th>
+                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppVendorPortalPposPage.grossTotal}</th>
+                  <th>{UI_STRINGS.appAppVendorPortalPposPage.vendorStatus}</th>
+                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -254,7 +258,7 @@ export default function VendorPposPage() {
                             type="button"
                             onClick={() => toggleExpand(ppo.id)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)' }}
-                            title="Toggle Line Items"
+                            title={UI_STRINGS.appAppVendorPortalPposPage.toggleLineItems}
                           >
                             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                           </button>
@@ -262,42 +266,40 @@ export default function VendorPposPage() {
                         <td>
                           <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{ppo.ppoNumber}</div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {ppo.lines?.length || 0} line items
-                          </div>
+                            {ppo.lines?.length || 0}{UI_STRINGS.common.lineItems}</div>
                         </td>
                         <td>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{ppo.project?.name || 'Project'}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{ppo.project?.name || UI_STRINGS.common.project}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {ppo.rfq?.rfqNumber ? `RFQ: ${ppo.rfq.rfqNumber}` : 'Direct Contract'}
+                            {ppo.rfq?.rfqNumber ? interpolateUiString(UI_STRINGS.appAppVendorPortalPposPage.rFQRfqNumber, { "rfqNumber": ppo.rfq.rfqNumber }) : UI_STRINGS.appAppVendorPortalPposPage.directContract}
                           </div>
                         </td>
                         <td>
                           <span style={{ fontSize: 12 }}>
-                            {ppo.poDate ? new Date(ppo.poDate).toLocaleDateString('en-IN') : '—'}
+                            {ppo.poDate ? new Date(ppo.poDate).toLocaleDateString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.copy4s9bsz}
                           </span>
                         </td>
                         <td>
                           <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
                             <Clock size={12} color="#f59e0b" />
-                            <span>{ppo.deliveryDate ? new Date(ppo.deliveryDate).toLocaleDateString('en-IN') : 'As agreed'}</span>
+                            <span>{ppo.deliveryDate ? new Date(ppo.deliveryDate).toLocaleDateString(I18N_CONFIG.defaultLocale) : UI_STRINGS.appAppVendorPortalPposPage.asAgreed}</span>
                           </div>
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#166534', fontSize: 14 }}>
-                          ₹{Number(ppo.totalValue || ppo.grossTotal || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#166534', fontSize: 14 }}>{UI_STRINGS.common.copy1g8b5tg}{Number(ppo.totalValue || ppo.grossTotal || 0).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                         </td>
                         <td>
                           {isAccepted ? (
                             <span className="badge badge-approved" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               <CheckCircle2 size={11} />
-                              <span>Accepted ({new Date(ppo.vendorAcceptedAt).toLocaleDateString('en-IN')})</span>
+                              <span>{interpolateUiString(UI_STRINGS.appAppVendorPortalPposPage.accepted, { date: new Date(ppo.vendorAcceptedAt).toLocaleDateString(I18N_CONFIG.defaultLocale) })}</span>
                             </span>
                           ) : isIssue ? (
                             <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               <AlertTriangle size={11} />
-                              <span>Query Raised</span>
+                              <span>{UI_STRINGS.appAppVendorPortalPposPage.queryRaised}</span>
                             </span>
                           ) : (
-                            <span className="badge badge-submitted">Awaiting Acceptance</span>
+                            <span className="badge badge-submitted">{UI_STRINGS.appAppVendorPortalPposPage.awaitingAcceptance}</span>
                           )}
                         </td>
                         <td style={{ textAlign: 'right' }}>
@@ -316,7 +318,7 @@ export default function VendorPposPage() {
                                   style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                 >
                                   <Check size={12} />
-                                  <span>Accept PPO</span>
+                                  <span>{UI_STRINGS.appAppVendorPortalPposPage.acceptPPO}</span>
                                 </button>
                                 <button
                                   type="button"
@@ -327,15 +329,11 @@ export default function VendorPposPage() {
                                   }}
                                   className="btn btn-secondary"
                                   style={{ padding: '4px 10px', fontSize: 12, color: '#b45309' }}
-                                >
-                                  Raise Issue
-                                </button>
+                                >{UI_STRINGS.appAppVendorPortalPposPage.raiseIssue}</button>
                               </>
                             )}
                             {isAccepted && (
-                              <span style={{ fontSize: 12, color: '#166534', fontWeight: 600 }}>
-                                ✓ Binding Order Confirmed
-                              </span>
+                              <span style={{ fontSize: 12, color: '#166534', fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalPposPage.bindingOrderConfirmed}</span>
                             )}
                           </div>
                         </td>
@@ -345,18 +343,16 @@ export default function VendorPposPage() {
                       {isExpanded && (
                         <tr key={`${ppo.id}-lines`} style={{ background: '#f8fafc' }}>
                           <td colSpan={8} style={{ padding: '12px 24px' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#334155' }}>
-                              Order Line Items Detail:
-                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#334155' }}>{UI_STRINGS.appAppVendorPortalPposPage.orderLineItemsDetail}</div>
                             <table className="table" style={{ margin: 0, background: '#ffffff', borderRadius: 4 }}>
                               <thead>
                                 <tr>
-                                  <th>Item Description</th>
-                                  <th style={{ textAlign: 'right' }}>Quantity</th>
-                                  <th>UOM</th>
-                                  <th style={{ textAlign: 'right' }}>Unit Rate (₹)</th>
-                                  <th style={{ textAlign: 'right' }}>GST %</th>
-                                  <th style={{ textAlign: 'right' }}>Line Total (₹)</th>
+                                  <th>{UI_STRINGS.common.itemDescription}</th>
+                                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                                  <th>{UI_STRINGS.common.uOM}</th>
+                                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.unitRate}</th>
+                                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.gST}</th>
+                                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.lineTotal}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -365,12 +361,10 @@ export default function VendorPposPage() {
                                     <td style={{ fontSize: 12, fontWeight: 500 }}>{line.itemDescription}</td>
                                     <td style={{ textAlign: 'right', fontSize: 12 }}>{line.quantity}</td>
                                     <td style={{ fontSize: 12 }}>{line.uom}</td>
-                                    <td style={{ textAlign: 'right', fontSize: 12 }}>
-                                      ₹{Number(line.unitRate).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                    <td style={{ textAlign: 'right', fontSize: 12 }}>{UI_STRINGS.common.copy1g8b5tg}{Number(line.unitRate).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                                     </td>
-                                    <td style={{ textAlign: 'right', fontSize: 12 }}>{line.gstPercent || 18}%</td>
-                                    <td style={{ textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                                      ₹{Number(line.totalAmount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                    <td style={{ textAlign: 'right', fontSize: 12 }}>{line.gstPercent || 18}{UI_STRINGS.common.copy8w4luo}</td>
+                                    <td style={{ textAlign: 'right', fontSize: 12, fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}{Number(line.totalAmount).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}
                                     </td>
                                   </tr>
                                 ))}
@@ -378,7 +372,7 @@ export default function VendorPposPage() {
                             </table>
                             {ppo.vendorIssueRemarks && (
                               <div style={{ marginTop: 8, padding: 8, background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 4, fontSize: 12, color: '#92400e' }}>
-                                <strong>Reported Issue:</strong> {ppo.vendorIssueRemarks}
+                                <strong>{UI_STRINGS.appAppVendorPortalPposPage.reportedIssue}</strong> {ppo.vendorIssueRemarks}
                               </div>
                             )}
                           </td>
@@ -398,34 +392,31 @@ export default function VendorPposPage() {
         <div className="modal-backdrop">
           <div className="modal" style={{ maxWidth: 500 }}>
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-                Formal Acceptance of PPO {selectedPpo.ppoNumber}
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{UI_STRINGS.appAppVendorPortalPposPage.formalAcceptanceOfPPO}{selectedPpo.ppoNumber}
               </h3>
             </div>
             <form onSubmit={handleAcceptSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-                  By accepting this Purchase Order, you confirm acceptance of the agreed scope, quantities, rates, and delivery timeline for a total value of{' '}
-                  <strong>₹{Number(selectedPpo.grossTotal).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>.
-                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{UI_STRINGS.appAppVendorPortalPposPage.byAcceptingThisPurchaseOrderYouConfirmAcceptanceOfTheAgreedScopeQuantitiesRatesAndDeliveryTimelineForATotalValueOf}{' '}
+                  <strong>{UI_STRINGS.common.copy1g8b5tg}{Number(selectedPpo.grossTotal).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 2 })}</strong>{UI_STRINGS.common.copyby08hd}</p>
                 <div>
-                  <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Authorized Signatory Name</label>
+                  <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.common.authorizedSignatoryName}</label>
                   <input
                     type="text"
                     required
                     value={acceptedBy}
                     onChange={(e) => setAcceptedBy(e.target.value)}
-                    placeholder="Full name of signing representative"
+                    placeholder={UI_STRINGS.appAppVendorPortalPposPage.fullNameOfSigningRepresentative}
                     className="form-control"
                   />
                 </div>
                 <div>
-                  <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Acceptance Remarks / Notes (Optional)</label>
+                  <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalPposPage.acceptanceRemarksNotesOptional}</label>
                   <textarea
                     rows={2}
                     value={acceptRemarks}
                     onChange={(e) => setAcceptRemarks(e.target.value)}
-                    placeholder="Production kickoff date, acknowledgement note..."
+                    placeholder={UI_STRINGS.appAppVendorPortalPposPage.productionKickoffDateAcknowledgementNote}
                     className="form-control"
                   />
                 </div>
@@ -436,9 +427,7 @@ export default function VendorPposPage() {
                   onClick={() => setShowAcceptModal(false)}
                   className="btn btn-secondary"
                   disabled={accepting}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   disabled={accepting || !acceptedBy.trim()}
@@ -446,7 +435,7 @@ export default function VendorPposPage() {
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   {accepting ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                  <span>Confirm Order Acceptance</span>
+                  <span>{UI_STRINGS.appAppVendorPortalPposPage.confirmOrderAcceptance}</span>
                 </button>
               </div>
             </form>
@@ -459,23 +448,20 @@ export default function VendorPposPage() {
         <div className="modal-backdrop">
           <div className="modal" style={{ maxWidth: 500 }}>
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#b45309' }}>
-                Raise Fulfillment Query on {selectedPpo.ppoNumber}
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#b45309' }}>{UI_STRINGS.appAppVendorPortalPposPage.raiseFulfillmentQueryOn}{selectedPpo.ppoNumber}
               </h3>
             </div>
             <form onSubmit={handleIssueSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-                  Report any commercial discrepancy, delivery schedule conflict, or specification mismatch to the procurement team before accepting.
-                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{UI_STRINGS.appAppVendorPortalPposPage.reportAnyCommercialDiscrepancyDeliveryScheduleConflictOrSpecificationMismatchToTheProcurementTeamBeforeAccepting}</p>
                 <div>
-                  <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Issue / Query Description</label>
+                  <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalPposPage.issueQueryDescription}</label>
                   <textarea
                     rows={4}
                     required
                     value={issueRemarks}
                     onChange={(e) => setIssueRemarks(e.target.value)}
-                    placeholder="Specify the issue (e.g. Lead time requires 3 weeks instead of 10 days, drawing discrepancy in line 2...)"
+                    placeholder={UI_STRINGS.appAppVendorPortalPposPage.specifyTheIssueEGLeadTimeRequires3WeeksInsteadOf10DaysDrawingDiscrepancyInLine2}
                     className="form-control"
                   />
                 </div>
@@ -486,16 +472,14 @@ export default function VendorPposPage() {
                   onClick={() => setShowIssueModal(false)}
                   className="btn btn-secondary"
                   disabled={raisingIssue}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   disabled={raisingIssue || !issueRemarks.trim()}
                   className="btn btn-primary"
                   style={{ background: '#b45309', borderColor: '#b45309' }}
                 >
-                  {raisingIssue ? 'Submitting...' : 'Submit Issue to Buyer'}
+                  {raisingIssue ? UI_STRINGS.common.submitting : UI_STRINGS.common.submitIssueToBuyer}
                 </button>
               </div>
             </form>

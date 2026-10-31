@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import VendorRateCardsPage from '../src/app/(app)/vendor-portal/rate-cards/page';
@@ -82,23 +86,23 @@ describe('vendor portal rate cards page', () => {
     const { container } = render(<VendorRateCardsPage />);
     await flush();
 
-    expect(screen.queryByText('Loading rate cards...')).not.toBeInTheDocument();
-    expect(screen.getByText('Vendor Rate Cards & Commercial Negotiation')).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadingRateCards))).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.vendorRateCardsCommercialNegotiation))).toBeInTheDocument();
     expect(screen.getByTestId('section-seven')).toBeInTheDocument();
-    expect(screen.getByText('Round 1 Response Required:')).toBeInTheDocument();
-    expect(screen.getAllByPlaceholderText('Quote-1')[0]).toHaveValue(390);
-    expect(screen.getByPlaceholderText('Provide commercial or delivery remarks...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.round1ResponseRequired))).toBeInTheDocument();
+    expect(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[0]).toHaveValue(390);
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.provideCommercialOrDeliveryRemarks))).toBeInTheDocument();
 
-    const roundOneInputs = screen.getAllByPlaceholderText('Quote-1');
+    const roundOneInputs = screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1));
     fireEvent.change(roundOneInputs[0], { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Vendor RC Quote-1' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"Vendor RC Quote-1"})) }));
     expect(screen.getByText(/valid rate greater than zero/)).toBeInTheDocument();
 
     fireEvent.change(roundOneInputs[0], { target: { value: '395' } });
     fireEvent.change(roundOneInputs[1], { target: { value: '825' } });
-    fireEvent.change(screen.getByPlaceholderText('Provide commercial or delivery remarks...'), { target: { value: 'Delivery within 30 days' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.provideCommercialOrDeliveryRemarks)), { target: { value: 'Delivery within 30 days' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Submit Vendor RC Quote-1' }));
+      fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"Vendor RC Quote-1"})) }));
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     });
     expect(screen.getByText(/Vendor RC Quote-1 submitted successfully/)).toBeInTheDocument();
@@ -109,19 +113,19 @@ describe('vendor portal rate cards page', () => {
 
     const card = (id: string) => screen.getByText(id).closest('.card') as HTMLElement;
     fireEvent.click(card('RC-ROUND-2').firstElementChild as HTMLElement);
-    expect(screen.getByText('Round 2 Response Required:')).toBeInTheDocument();
-    const roundTwoInput = screen.getByPlaceholderText('Quote-2');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.round2ResponseRequired))).toBeInTheDocument();
+    const roundTwoInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote2));
     expect(roundTwoInput).toHaveValue(22);
     fireEvent.change(roundTwoInput, { target: { value: '17' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Submit Vendor RC Quote-2' }));
+      fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"Vendor RC Quote-2"})) }));
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     });
     expect(screen.getByText(/Vendor RC Quote-2 submitted successfully/)).toBeInTheDocument();
     expect(JSON.parse(fetchMock.mock.calls[3][1].body).action).toBe('SUBMIT_VENDOR_QUOTE_2');
 
     fireEvent.click(card('RC-CM').firstElementChild as HTMLElement);
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Final Rate Card Agreement' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.acceptFinalRateCardAgreement) }));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
     expect(screen.getByText(/formally accepted/)).toBeInTheDocument();
     expect(JSON.parse(fetchMock.mock.calls[5][1].body).action).toBe('VENDOR_ACCEPT');
@@ -131,15 +135,15 @@ describe('vendor portal rate cards page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mock direct acceptance' }));
     expect(screen.getByText(/accepted by Vendor/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Mock rejection' }));
-    expect(screen.getByText('Rate Card rejected with remarks: Not agreed')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.rateCardRejectedWithRemarks, {"remarks":"Not agreed"})))).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Search Category, Rate Card No...'), { target: { value: 'electrical' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: 'electrical' } });
     expect(screen.getByText('RC-ROUND-2')).toBeInTheDocument();
     expect(screen.queryByText('RC-ROUND-1')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Search Category, Rate Card No...'), { target: { value: 'no match' } });
-    expect(screen.getByText('No rate cards match your search.')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Search Category, Rate Card No...'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: 'no match' } });
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.noRateCardsMatchYourSearch))).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
     expect(screen.getAllByTestId('status-badge')[0]).toHaveTextContent('ROUND_1_BUYER_OFFER');
     expect(container.querySelectorAll('.card')).toHaveLength(6);
@@ -149,61 +153,61 @@ describe('vendor portal rate cards page', () => {
     global.fetch = jest.fn().mockResolvedValue(response({ rateCards: [] }));
     const { rerender } = render(<VendorRateCardsPage />);
     await flush();
-    expect(screen.getByText('You do not have any rate cards established at this time.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.youDoNotHaveAnyRateCardsEstablishedAtThisTime))).toBeInTheDocument();
 
     global.fetch = jest.fn().mockResolvedValue(response({ rateCards: [{
       id: 'no-lines', rateCardNumber: 'RC-NO-LINES', status: 'DRAFT', category: 'General', items: [],
     }] }));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
-    expect(screen.getByText('RC-NO-LINES').closest('.card')).toHaveTextContent('0');
+    expect(screen.getByText('RC-NO-LINES').closest('.card')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
 
     global.fetch = jest.fn().mockResolvedValue(response({}));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
-    expect(screen.getByText('You do not have any rate cards established at this time.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.youDoNotHaveAnyRateCardsEstablishedAtThisTime))).toBeInTheDocument();
 
     global.fetch = jest.fn().mockResolvedValue({ ok: false, json: async () => { throw new Error('bad json'); } });
     rerender(<VendorRateCardsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
-    expect(screen.getByText('Failed to load rate cards')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadRateCards))).toBeInTheDocument();
 
     const submitFailure = jest.fn().mockImplementation((_url, init) => init?.method === 'POST'
       ? Promise.resolve(response({}, false))
       : Promise.resolve(response({ rateCards: [rateCards[0], rateCards[3], rateCards[4], rateCards[5]] })));
     global.fetch = submitFailure;
     rerender(<VendorRateCardsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
     expect(screen.getByText('RC-APPROVED')).toBeInTheDocument();
     const approvedCard = screen.getByText('RC-APPROVED').closest('.card') as HTMLElement;
     fireEvent.click(approvedCard.firstElementChild as HTMLElement);
-    expect(within(approvedCard).getByText(/Standard BOQ Scope/)).toBeInTheDocument();
-    expect(within(approvedCard).getByText(/All India/)).toBeInTheDocument();
-    expect(screen.queryByText(/Loading/)).not.toBeInTheDocument();
+    expect(within(approvedCard).getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.standardBOQScope, "", false))).toBeInTheDocument();
+    expect(within(approvedCard).getByText(uiStringPattern(UI_STRINGS.common.allIndia, "", false))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.loading, "", false))).not.toBeInTheDocument();
     const lockedCard = screen.getByText('RC-LOCKED').closest('.card') as HTMLElement;
     fireEvent.click(lockedCard.firstElementChild as HTMLElement);
     expect(screen.getByText('Locked line')).toBeInTheDocument();
     expect(screen.queryByText(/No rate cards/)).not.toBeInTheDocument();
 
-    const search = screen.getByPlaceholderText('Search Category, Rate Card No...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo));
     fireEvent.change(search, { target: { value: 'RC-ROUND-1' } });
-    fireEvent.change(screen.getAllByPlaceholderText('Quote-1')[0], { target: { value: '395' } });
-    fireEvent.change(screen.getAllByPlaceholderText('Quote-1')[1], { target: { value: '825' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Vendor RC Quote-1' }));
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[0], { target: { value: '395' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[1], { target: { value: '825' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"Vendor RC Quote-1"})) }));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
-    expect(screen.getByText('Failed to submit Quote-1')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.failedToSubmitQuoteRoundNumber, {"roundNumber":"1"})))).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Search Category, Rate Card No...'), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: '' } });
     global.fetch = jest.fn().mockImplementation((_url, init) => init?.method === 'POST'
       ? Promise.resolve(response({}, false))
       : Promise.resolve(response({ rateCards: [rateCards[2]] })));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Final Rate Card Agreement' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.acceptFinalRateCardAgreement) }));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
-    expect(screen.getByText('Failed to accept rate card')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToAcceptRateCard))).toBeInTheDocument();
   });
 
   it('enters the full-window negotiation view from a URL id or case-insensitive rate card number', async () => {

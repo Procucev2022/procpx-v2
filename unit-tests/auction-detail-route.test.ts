@@ -3,6 +3,8 @@ import { DELETE, GET, PUT } from '../src/app/api/procurement/auctions/[id]/route
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -92,7 +94,7 @@ describe('auction detail and control API', () => {
     await expect(GET(getRequest(), params())).resolves.toBe(denied);
 
     db.auction.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'Auction event not found or access denied', status: 404 });
+    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionEventNotFoundOrAccessDenied, status: 404 });
 
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'SCHEDULED', startTime: new Date(Date.now() - 60_000) }));
     const live = await GET(getRequest(), params());
@@ -164,11 +166,11 @@ describe('auction detail and control API', () => {
   it('rejects uninvited vendors, defaults optional fields, tolerates malformed documents, and reports load errors', async () => {
     db.vendor.findFirst.mockResolvedValueOnce(null);
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR' });
-    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'You are not invited to participate in this auction.', status: 403 });
+    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, status: 403 });
 
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-3', name: 'Not invited' });
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR' });
-    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'You are not invited to participate in this auction.', status: 403 });
+    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, status: 403 });
 
     db.auction.findFirst.mockResolvedValueOnce(auction({
       currency: null, refreshIntervalSeconds: 0, hasLeadingPrice: false, documents: '{bad json',
@@ -194,13 +196,13 @@ describe('auction detail and control API', () => {
 
   it('pauses, resumes, extends, concludes, and cancels auctions with audit records', async () => {
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'DRAFT' }));
-    await expect(PUT(putRequest({ action: 'PAUSE' }), params())).resolves.toEqual({ ok: false, error: 'Only live auctions can be paused.', status: 400 });
+    await expect(PUT(putRequest({ action: 'PAUSE' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyLiveAuctionsCanBePaused, status: 400 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'EXTENDED' }));
     await expect(PUT(putRequest({ action: 'PAUSE' }), params())).resolves.toMatchObject({ ok: true, data: { message: 'Auction paused successfully.' } });
     expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'AUCTION_PAUSED', projectId: 'project-1' }));
 
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'LIVE' }));
-    await expect(PUT(putRequest({ action: 'RESUME' }), params())).resolves.toEqual({ ok: false, error: 'Only paused auctions can be resumed.', status: 400 });
+    await expect(PUT(putRequest({ action: 'RESUME' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyPausedAuctionsCanBeResumed, status: 400 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'PAUSED' }));
     await expect(PUT(putRequest({ action: 'RESUME' }), params())).resolves.toMatchObject({ ok: true, data: { message: 'Auction resumed successfully.' } });
     expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'AUCTION_RESUMED' }));
@@ -224,9 +226,9 @@ describe('auction detail and control API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(PUT(putRequest({}), params())).resolves.toBe(denied);
     db.auction.findFirst.mockResolvedValueOnce(null);
-    await expect(PUT(putRequest({}), params())).resolves.toEqual({ ok: false, error: 'Auction not found or access denied', status: 404 });
+    await expect(PUT(putRequest({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionNotFoundOrAccessDenied, status: 404 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'LIVE' }));
-    await expect(PUT(putRequest({ title: 'Change' }), params())).resolves.toEqual({ ok: false, error: 'Only draft auctions can be re-configured.', status: 400 });
+    await expect(PUT(putRequest({ title: 'Change' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyDraftAuctionsCanBeReConfigured, status: 400 });
 
     db.auction.update.mockResolvedValueOnce({ id: 'auction-1', status: 'SCHEDULED' });
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'DRAFT' }));
@@ -263,9 +265,9 @@ describe('auction detail and control API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(DELETE(deleteRequest(), params())).resolves.toBe(denied);
     db.auction.findFirst.mockResolvedValueOnce(null);
-    await expect(DELETE(deleteRequest(), params())).resolves.toEqual({ ok: false, error: 'Auction not found', status: 404 });
+    await expect(DELETE(deleteRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.auctionNotFound, status: 404 });
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'LIVE' }));
-    await expect(DELETE(deleteRequest(), params())).resolves.toEqual({ ok: false, error: 'Cannot delete an auction that has already been scheduled or received bids.', status: 400 });
+    await expect(DELETE(deleteRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdRoute.cannotDeleteAnAuctionThatHasAlreadyBeenScheduledOrReceivedBids, status: 400 });
 
     db.auction.findFirst.mockResolvedValueOnce(auction({ status: 'DRAFT', bids: [] }));
     await expect(DELETE(deleteRequest(), params())).resolves.toMatchObject({ ok: true, data: { message: 'Auction deleted successfully.' } });

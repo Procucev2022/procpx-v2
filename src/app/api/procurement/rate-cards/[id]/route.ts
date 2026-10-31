@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -40,7 +43,7 @@ export async function GET(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError('Rate Card not found', 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
     const enrichedItems = rateCard.items.map((it) => {
@@ -78,7 +81,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching rate card details:', error);
-    return apiError(error.message || 'Failed to fetch rate card', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCard }), 500);
   }
 }
 
@@ -98,7 +101,7 @@ export async function PUT(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError('Rate Card not found', 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
     const body = await req.json();
@@ -164,8 +167,8 @@ export async function PUT(
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'Buyer RC Offer-2 Submitted',
-          message: `Buyer submitted Buyer RC Offer-2 for Rate Card ${rateCard.rateCardNumber}. Please submit your response in Vendor Portal.`,
+          title: UI_STRINGS.appApiProcurementRateCardsIdRoute.buyerRCOffer2Submitted,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.buyerSubmittedBuyerRCOffer2ForRateCardRateCardNumberPleaseSubmitYourResponseInVendorPortal, { "rateCardNumber": rateCard.rateCardNumber }),
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: id,
@@ -181,11 +184,11 @@ export async function PUT(
         entityType: 'VENDOR',
         entityId: rateCard.vendorId,
         action: 'RATE_CARD_BUYER_OFFER_2_SUBMITTED',
-        description: `Buyer RC Offer-2 submitted for Rate Card ${rateCard.rateCardNumber} by ${actorName}`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.buyerRCOffer2SubmittedForRateCardRateCardNumberByActorName, { "rateCardNumber": rateCard.rateCardNumber, "actorName": actorName }),
         newValue: { status: 'ROUND_2_BUYER_OFFER', remarks },
       });
 
-      return apiSuccess({ rateCard: updated, message: 'Buyer RC Offer-2 successfully submitted to vendor!' });
+      return apiSuccess({ rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdRoute.buyerRCOffer2SuccessfullySubmittedToVendor });
     }
 
     // ── ACTION 2: ACCEPT_FINAL_VENDOR_OFFER ────────────────────
@@ -238,8 +241,8 @@ export async function PUT(
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'Final Vendor Offer Accepted — Category Manager Review Required',
-          message: `Buyer accepted the final vendor offer for Rate Card ${rateCard.rateCardNumber}. Category Manager Acceptance is now pending.`,
+          title: UI_STRINGS.appApiProcurementRateCardsIdRoute.finalVendorOfferAcceptedCategoryManagerReviewRequired,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.buyerAcceptedTheFinalVendorOfferForRateCardRateCardNumberCategoryManagerAcceptanceIsNowPending, { "rateCardNumber": rateCard.rateCardNumber }),
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: id,
@@ -255,13 +258,13 @@ export async function PUT(
         entityType: 'VENDOR',
         entityId: rateCard.vendorId,
         action: 'RATE_CARD_FINAL_VENDOR_OFFER_ACCEPTED',
-        description: `Final vendor offer accepted for Rate Card ${rateCard.rateCardNumber} by ${actorName}. Commercial snapshot frozen.`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.finalVendorOfferAcceptedForRateCardRateCardNumberByActorNameCommercialSnapshotFrozen, { "rateCardNumber": rateCard.rateCardNumber, "actorName": actorName }),
         newValue: { status: 'FINAL_VENDOR_OFFER_ACCEPTED', totalAgreedValue },
       });
 
       return apiSuccess({
         rateCard: updated,
-        message: 'Final Vendor Offer accepted successfully! Category Manager Acceptance is now pending.',
+        message: UI_STRINGS.appApiProcurementRateCardsIdRoute.finalVendorOfferAcceptedSuccessfullyCategoryManagerAcceptanceIsNowPending,
       });
     }
 
@@ -275,7 +278,7 @@ export async function PUT(
         'ROUND_2_BUYER_OFFER',
       ];
       if (!allowedSourceStatuses.includes(rateCard.status)) {
-        return apiError(`Cannot perform Category Manager Acceptance from status: ${rateCard.status}`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.cannotPerformCategoryManagerAcceptanceFromStatusStatus, { "status": rateCard.status }), 400);
       }
 
       // Handle optional formal agreement attached by Category Manager
@@ -303,8 +306,8 @@ export async function PUT(
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'Rate Card Accepted by Category Manager — Vendor Final Acceptance Required',
-          message: `Category Manager accepted Rate Card ${rateCard.rateCardNumber}. Please accept the final contract terms in Vendor Portal.`,
+          title: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardAcceptedByCategoryManagerVendorFinalAcceptanceRequired,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerAcceptedRateCardRateCardNumberPleaseAcceptTheFinalContractTermsInVendorPortal, { "rateCardNumber": rateCard.rateCardNumber }),
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: id,
@@ -320,20 +323,20 @@ export async function PUT(
         entityType: 'VENDOR',
         entityId: rateCard.vendorId,
         action: 'RATE_CARD_CATEGORY_MANAGER_ACCEPTED',
-        description: `Category Manager accepted Rate Card ${rateCard.rateCardNumber}`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerAcceptedRateCardRateCardNumber, { "rateCardNumber": rateCard.rateCardNumber }),
         newValue: { status: 'CATEGORY_MANAGER_ACCEPTED' },
       });
 
       return apiSuccess({
         rateCard: updated,
-        message: 'Rate Card accepted by Category Manager. Vendor final acceptance is now required.',
+        message: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardAcceptedByCategoryManagerVendorFinalAcceptanceIsNowRequired,
       });
     }
 
     // ── ACTION 4: CATEGORY_MANAGER_SIGNOFF ─────────────────────
     if (body.action === 'CATEGORY_MANAGER_SIGNOFF') {
       if (rateCard.status !== 'VENDOR_ACCEPTED') {
-        return apiError(`Category Manager Sign Off requires prior Vendor Acceptance (Current status: ${rateCard.status})`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignOffRequiresPriorVendorAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
       }
 
       notesData.categoryManagerSignedOff = {
@@ -357,8 +360,8 @@ export async function PUT(
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'Rate Card Signed Off — Level 1 Project Approval Pending',
-          message: `Rate Card ${rateCard.rateCardNumber} signed off by Category Manager. Level 1 Project Approval required.`,
+          title: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardSignedOffLevel1ProjectApprovalPending,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardRateCardNumberSignedOffByCategoryManagerLevel1ProjectApprovalRequired, { "rateCardNumber": rateCard.rateCardNumber }),
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: id,
@@ -374,13 +377,13 @@ export async function PUT(
         entityType: 'VENDOR',
         entityId: rateCard.vendorId,
         action: 'RATE_CARD_CM_SIGNED_OFF',
-        description: `Category Manager signed off Rate Card ${rateCard.rateCardNumber}. Forwarded to Level 1 Project Approver.`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignedOffRateCardRateCardNumberForwardedToLevel1ProjectApprover, { "rateCardNumber": rateCard.rateCardNumber }),
         newValue: { status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT' },
       });
 
       return apiSuccess({
         rateCard: updated,
-        message: 'Category Manager Sign Off complete. Rate Card forwarded to Project Approver queue (Level 1).',
+        message: UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignOffCompleteRateCardForwardedToProjectApproverQueueLevel1,
       });
     }
 
@@ -388,7 +391,7 @@ export async function PUT(
     // Editable if DRAFT, RETURNED_FOR_CORRECTION, or NEGOTIATION
     const editableStatuses = ['DRAFT', 'RETURNED_FOR_CORRECTION', 'NEGOTIATION', 'UNDER_REVIEW', 'ROUND_1_BUYER_OFFER'];
     if (!editableStatuses.includes(rateCard.status)) {
-      return apiError(`Rate Card cannot be edited in status: ${rateCard.status}`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardCannotBeEditedInStatusStatus, { "status": rateCard.status }), 400);
     }
 
     const {
@@ -418,7 +421,7 @@ export async function PUT(
     const updated = await prisma.vendorRateCard.update({
       where: { id },
       data: {
-        title: title || rateCard.title,
+        title: interpolateUiString(UI_STRINGS.common.value1, { "value1": title || rateCard.title }),
         category: category || rateCard.category,
         subcategory: subcategory !== undefined ? subcategory : rateCard.subcategory,
         scope: scope !== undefined ? scope : rateCard.scope,
@@ -468,14 +471,14 @@ export async function PUT(
       entityType: 'VENDOR',
       entityId: rateCard.vendorId,
       action: 'RATE_CARD_UPDATED',
-      description: `Rate card ${rateCard.rateCardNumber} updated`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardRateCardNumberUpdated, { "rateCardNumber": rateCard.rateCardNumber }),
       newValue: { title: updated.title, status: updated.status, version: updated.version },
     });
 
     return apiSuccess({ rateCard: updated });
   } catch (error: any) {
     console.error('Error updating rate card:', error);
-    return apiError(error.message || 'Failed to update rate card', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRateCard }), 500);
   }
 }
 
@@ -494,11 +497,11 @@ export async function DELETE(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError('Rate Card not found', 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
     if (rateCard.status !== 'DRAFT') {
-      return apiError('Only Draft Rate Cards can be deleted', 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, 400);
     }
 
     await prisma.vendorRateCardItem.deleteMany({
@@ -511,9 +514,9 @@ export async function DELETE(
       where: { id },
     });
 
-    return apiSuccess({ message: 'Rate Card deleted successfully' });
+    return apiSuccess({ message: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardDeletedSuccessfully });
   } catch (error: any) {
     console.error('Error deleting rate card:', error);
-    return apiError(error.message || 'Failed to delete rate card', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToDeleteRateCard }), 500);
   }
 }

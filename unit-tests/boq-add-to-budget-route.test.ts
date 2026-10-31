@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/add-to-budget/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -71,14 +73,14 @@ describe('BOQ add-to-budget API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toBe(denied);
-    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: 'BOQ Revision ID or BOQ ID is required.', status: 400 });
+    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, status: 400 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ boqRevisionId: 'missing' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(POST(request({ boqRevisionId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({ ...revision().boq, revisions: [] });
-    await expect(POST(request({ boqRevisionId: 'stale', boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(POST(request({ boqRevisionId: 'stale', boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(revision());
     await POST(request({ revisionId: 'revision-1' }));
@@ -93,12 +95,12 @@ describe('BOQ add-to-budget API', () => {
   it('requires a cost centre and valid positive quantities before allocating a BOQ', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(revision({ costCentreId: null, boq: { ...revision().boq, costCentreId: null } }));
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
-      ok: false, error: 'A valid Cost Centre is required to allocate budget.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqAddToBudgetRoute.aValidCostCentreIsRequiredToAllocateBudget, status: 400,
     });
 
     db.costCentre.findFirst.mockResolvedValueOnce(null);
     await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'bad-cc', projectId: 'project-9' }))).resolves.toEqual({
-      ok: false, error: 'Cost centre not found for this project.', status: 404,
+      ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404,
     });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [{ id: 'line-null', quantity: null }, { id: 'line-zero', quantity: 0 }, { id: 'line-undefined' }] }));
@@ -148,14 +150,14 @@ describe('BOQ add-to-budget API', () => {
       submittedBy: 'user-1', createdBy: 'user-1', submittedAt: expect.any(Date),
     }) });
     expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      transactionCode: 'BTX-000002', category: 'Electrical', amount: 20, quantity: 2, rate: 10,
+      transactionCode: 'BTX-000002', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, amount: 20, quantity: 2, rate: 10,
       boqLineId: 'line-1', reference: 'BOQ BOQ-001 BOQ-001-R1 - Electrical', status: 'UNDER_APPROVAL',
     }) });
     expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      transactionCode: 'BTX-000003', category: 'General', amount: 80, quantity: 4, rate: 20, boqLineId: 'line-2',
+      transactionCode: 'BTX-000003', category: UI_STRINGS.common.general, amount: 80, quantity: 4, rate: 20, boqLineId: 'line-2',
     }) });
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { budgetStatus: 'BUDGET_UNDER_APPROVAL' } });
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-1' }, data: { costCentreId: 'cc-target', purpose: 'BUDGET' } });
+    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-1' }, data: { costCentreId: 'cc-target', purpose: UI_STRINGS.componentsSidebar.bUDGET } });
     expect(db.budget.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-target', costCentreId: 'cc-target', totalAmount: 100,
       approvedAmount: 0, pendingAmount: 100, status: 'UNDER_APPROVAL', createdBy: 'user-1',

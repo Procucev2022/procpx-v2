@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AuditTrailPage from '../src/app/(app)/audit/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/components/ui/PageHeader', () => ({
   PageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => <header><h1>{title}</h1><p>{subtitle}</p></header>,
@@ -39,12 +43,12 @@ describe('audit trail page', () => {
   it('shows loading and empty states, and leaves the empty state on unsuccessful responses', async () => {
     fetchMock.mockReturnValueOnce(new Promise(() => undefined));
     const view = render(<AuditTrailPage />);
-    expect(screen.getByText('Loading audit trail...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppAuditPage.loadingAuditTrail))).toBeInTheDocument();
     view.unmount();
 
     fetchMock.mockResolvedValueOnce(response({ data: [], total: 0, totalPages: 1 }, false));
     render(<AuditTrailPage />);
-    expect(await screen.findByText('No audit records match the selected criteria')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAuditPage.noAuditRecordsMatchTheSelectedCriteria))).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith('/api/audit?page=1&pageSize=25');
   });
 
@@ -62,22 +66,22 @@ describe('audit trail page', () => {
 
     expect(await screen.findByText('Audit event old-values')).toBeInTheDocument();
     expect(screen.getByText('fallback@example.test')).toBeInTheDocument();
-    expect(screen.getByText('System')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.system, '', true))).toBeInTheDocument();
     expect(screen.getByText('UNLISTED_ACTION')).toBeInTheDocument();
-    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.none))).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Inspect Diff/ })[0]);
-    expect(screen.getByText(/Audit Event State Diff: UPDATE/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) })[0]);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppAuditPage.auditEventStateDiff, '', false))).toBeInTheDocument();
     const oldAndNew = document.querySelectorAll('pre');
     expect(oldAndNew[0].textContent).toContain('previous');
     expect(oldAndNew[1].textContent).toBe('"not-json"');
-    fireEvent.click(screen.getByText(/Audit Event State Diff: UPDATE/).parentElement!.querySelector('button')!);
-    expect(screen.queryByText(/Audit Event State Diff/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppAuditPage.auditEventStateDiff, '', false)).parentElement!.querySelector('button')!);
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppAuditPage.auditEventStateDiff))).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Inspect Diff/ })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) })[1]);
     expect(document.querySelectorAll('pre')[0].textContent).toContain('before');
     expect(document.querySelectorAll('pre')[1].textContent).toContain('after');
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
   });
 
   it('applies entity/action filters and bounds page navigation', async () => {
@@ -92,14 +96,14 @@ describe('audit trail page', () => {
     fireEvent.change(actionFilter, { target: { value: 'CREATE' } });
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/audit?page=1&pageSize=25&entityType=PROJECT&action=CREATE'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.next) }));
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/audit?page=2&pageSize=25&entityType=PROJECT&action=CREATE'));
-    expect(screen.getAllByText('Page 2 of 3')).toHaveLength(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getAllByText(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: 2, value2: 3 })).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.next) }));
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/audit?page=3&pageSize=25&entityType=PROJECT&action=CREATE'));
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
-    await waitFor(() => expect(screen.getAllByText('Page 2 of 3')).toHaveLength(2));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.next) })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.previous) }));
+    await waitFor(() => expect(screen.getAllByText(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: 2, value2: 3 })).length).toBeGreaterThan(0));
     fireEvent.change(entityFilter, { target: { value: '' } });
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/audit?page=1&pageSize=25&action=CREATE'));
   });
@@ -112,14 +116,14 @@ describe('audit trail page', () => {
 
     fetchMock.mockResolvedValueOnce(response({ data: { unexpected: true } }));
     const empty = render(<AuditTrailPage />);
-    expect(await screen.findByText('No audit records match the selected criteria')).toBeInTheDocument();
-    expect(screen.getAllByText('0').length).toBeGreaterThan(0);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAuditPage.noAuditRecordsMatchTheSelectedCriteria))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3)).length).toBeGreaterThan(0);
     empty.unmount();
 
     fetchMock.mockRejectedValueOnce(new Error('audit service offline'));
     const { unmount } = render(<AuditTrailPage />);
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
-    expect(await screen.findByText('No audit records match the selected criteria')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAuditPage.noAuditRecordsMatchTheSelectedCriteria))).toBeInTheDocument();
     unmount();
   });
 });

@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React, { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import HomeWorkspace, { RateCardRow } from '../src/components/rate-cards/HomeWorkspace';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const card = (id: string, overrides: Partial<RateCardRow> = {}): RateCardRow => ({
   id,
@@ -74,26 +78,26 @@ describe('rate card home workspace', () => {
     ];
     const view = render(<HomeWorkspaceHarness cards={cards} callbacks={on} />);
 
-    expect(screen.getByRole('heading', { name: 'Rate Card Management - Home' })).toBeInTheDocument();
-    expect(screen.getByText('Finalised Summary')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.rateCardManagementHome) })).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.finalisedSummary))).toBeInTheDocument();
     expect(document.body).toHaveTextContent('Showing 1 to 5 of 7 records');
-    expect(screen.getByText('Active Contract')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Initiate Rate Card' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Initiate Rate Card' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.activeContract))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.initiateRateCard) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.initiateRateCard) }));
     expect(on.onInitiateClick).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next Page' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.nextPage) }));
     expect(document.body).toHaveTextContent('Showing 6 to 7 of 7 records');
     expect(screen.getByText('RC-A6')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous Page' }));
-    fireEvent.click(screen.getByRole('button', { name: /^2$/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.previousPage) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.copyf9vgt1) }).at(-1)!);
     expect(document.body).toHaveTextContent('Showing 6 to 7 of 7 records');
-    fireEvent.click(screen.getByRole('button', { name: 'Previous Page' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.previousPage) }));
     fireEvent.click(screen.getAllByRole('button', { name: 'RC-A1' })[0]);
-    fireEvent.click(screen.getAllByRole('button', { name: 'View Details' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewDetails) })[0]);
     expect(on.onDetailsClick).toHaveBeenCalledWith('RC-A1');
 
-    const search = screen.getByPlaceholderText('Search by Rate Card ID, Title, Vendor or Category...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.searchByRateCardIDTitleVendorOrCategory));
     fireEvent.change(search, { target: { value: '  rc-a3  ' } });
     expect(document.body).toHaveTextContent('Showing 1 to 1 of 1 records');
     expect(screen.getByText('RC-A3')).toBeInTheDocument();
@@ -109,27 +113,27 @@ describe('rate card home workspace', () => {
     fireEvent.change(selects[2], { target: { value: 'Active' } });
     expect(on.onCategoryFilterChange).toHaveBeenCalledWith('Civil');
     expect(on.onVendorFilterChange).toHaveBeenCalledWith('Vendor 1');
-    expect(on.onStatusFilterChange).toHaveBeenCalledWith('Active');
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(on.onStatusFilterChange).toHaveBeenCalledWith(UI_STRINGS.common.active);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.clear) }));
     expect(on.onClearFilters).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Rate Cards in Progress/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.rateCardsInProgress) }));
     expect(screen.getByText('RC-P1')).toBeInTheDocument();
     expect(screen.getByText('Custom Stage')).toBeInTheDocument();
     expect(screen.getByText('Fallback quote')).toBeInTheDocument();
     expect(screen.getByText('Fallback date')).toBeInTheDocument();
-    expect(screen.getAllByText('Category Manager')).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.categoryManager))).toHaveLength(2);
     fireEvent.click(screen.getAllByRole('button', { name: 'RC-P1' })[0]);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Negotiate' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.negotiate) })[0]);
     expect(on.onNegotiateClick).toHaveBeenCalledWith('RC-P1');
 
     fireEvent.change(selects[2], { target: { value: 'Active' } });
-    expect(screen.getByText('No rate cards in progress found matching the criteria.')).toBeInTheDocument();
-    expect(document.body).toHaveTextContent('Showing 0 records');
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    fireEvent.click(screen.getByRole('button', { name: /Rate Cards in Progress/ }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.noRateCardsInProgressFoundMatchingTheCriteria))).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.showing0Records));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.clear) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.rateCardsInProgress) }));
     fireEvent.click(screen.getByRole('button', { name: 'RC-P1' }));
-    fireEvent.click(screen.getByRole('button', { name: /Finalised Summary/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.finalisedSummary) }));
     view.rerender(<HomeWorkspaceHarness cards={cards.slice(0, 3)} callbacks={on} />);
     expect(document.body).toHaveTextContent('Showing 1 to 3 of 3 records');
   });
@@ -138,15 +142,15 @@ describe('rate card home workspace', () => {
     const on = callbacks();
     const cards = Array.from({ length: 7 }, (_, index) => card(`RC-${index + 1}`));
     const view = render(<HomeWorkspaceHarness cards={cards} callbacks={on} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Next Page' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.nextPage) }));
     view.rerender(<HomeWorkspaceHarness cards={cards.slice(0, 2)} callbacks={on} />);
     expect(document.body).toHaveTextContent('Showing 1 to 2 of 2 records');
 
     view.rerender(<HomeWorkspaceHarness cards={[]} callbacks={on} />);
-    expect(screen.getByText('No finalised rate cards found matching the criteria.')).toBeInTheDocument();
-    expect(document.body).toHaveTextContent('Showing 0 records');
-    fireEvent.click(screen.getByRole('button', { name: /Rate Cards in Progress/ }));
-    expect(screen.getByText('No rate cards in progress found matching the criteria.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.noFinalisedRateCardsFoundMatchingTheCriteria))).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.showing0Records));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.rateCardsInProgress) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsHomeWorkspace.noRateCardsInProgressFoundMatchingTheCriteria))).toBeInTheDocument();
     expect(on.onTabChange).toHaveBeenCalledWith('in_progress');
   });
 });

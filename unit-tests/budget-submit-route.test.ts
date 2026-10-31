@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { POST } from '../src/app/api/budgets/submit/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -43,11 +45,11 @@ describe('budget submission route', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(makeRequest({ contributionId: 'budget-1' }))).resolves.toBe(denied);
-    await expect(POST(makeRequest({}))).resolves.toEqual({ ok: false, error: 'Contribution ID is required.', status: 400 });
+    await expect(POST(makeRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.contributionIDIsRequired, status: 400 });
 
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
     await expect(POST(makeRequest({ contributionId: 'missing' }))).resolves.toEqual({
-      ok: false, error: 'Budget contribution not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404,
     });
     db.budgetContribution.findFirst.mockResolvedValueOnce({ status: 'APPROVED' });
     await expect(POST(makeRequest({ contributionId: 'approved' }))).resolves.toEqual({

@@ -8,6 +8,8 @@ import {
   parseOcrTextToDrawingItems,
   processDrawingFile,
 } from '../src/lib/drawing-parser';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('tesseract.js', () => ({ createWorker: jest.fn() }));
 
@@ -117,7 +119,7 @@ describe('parseArchitecturalScheduleText', () => {
       'Pipe work | bathroom | quantity not recorded',
     ]);
 
-    expect(result.items.map(({ uom }) => uom)).toEqual(['SQFT', 'MTR', 'RFT', 'NOS']);
+    expect(result.items.map(({ uom }) => uom)).toEqual(['SQFT', 'MTR', 'RFT', UI_STRINGS.common.nOS]);
     expect(result.items[3]).toMatchObject({ quantity: null, quantityType: 'UNCERTAIN' });
     expect(result.warnings).toHaveLength(1);
   });
@@ -161,7 +163,7 @@ describe('parseOcrTextToDrawingItems', () => {
     expect(result.items[0]).toMatchObject({ quantity: 2, drawingReference: 'DMB-42', category: 'ELV / IT' });
     expect(result.items[0].specification).toContain('55"');
     expect(result.items[4].quantity).toBeGreaterThan(0);
-    expect(result.items[5].quantityType).toBe('UNCERTAIN');
+    expect(result.items[5].quantityType).toBe(UI_STRINGS.appAppBoqStudioPage.uNCERTAIN);
     expect(result.warnings).toHaveLength(1);
   });
 

@@ -4,18 +4,21 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError('Forbidden: Vendor Portal is accessible only to mapped vendor accounts', 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError('Vendor record not associated with this user account', 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
   try {
@@ -74,7 +77,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ rateCards: formatted, total: formatted.length });
   } catch (error: any) {
     console.error('Error fetching vendor rate cards:', error);
-    return apiError(error.message || 'Failed to fetch rate cards', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500);
   }
 }
 
@@ -83,12 +86,12 @@ export async function POST(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError('Forbidden: Vendor Portal is accessible only to mapped vendor accounts', 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError('Vendor record not associated with this user account', 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
   try {
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
     const { rateCardId, items = [], remarks = '', action } = body;
 
     if (!rateCardId) {
-      return apiError('Rate Card ID is required', 400);
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400);
     }
 
     const rateCard = await prisma.vendorRateCard.findFirst({
@@ -112,7 +115,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rateCard) {
-      return apiError('Rate card not found or access denied', 404);
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, 404);
     }
 
     const now = new Date();
@@ -127,7 +130,7 @@ export async function POST(req: NextRequest) {
     // ── CASE 1: VENDOR_ACCEPT (Accept Final Rate Card Version & Terms) ──
     if (action === 'VENDOR_ACCEPT') {
       if (rateCard.status !== 'CATEGORY_MANAGER_ACCEPTED') {
-        return apiError(`Vendor Acceptance requires prior Category Manager Acceptance (Current status: ${rateCard.status})`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorAcceptanceRequiresPriorCategoryManagerAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
       }
 
       const { signature } = body;
@@ -186,8 +189,8 @@ export async function POST(req: NextRequest) {
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'Rate Card Accepted by Vendor — Level 1 Project Approval Required',
-          message: `Vendor ${vendorUserName} accepted Rate Card ${rateCard.rateCardNumber}. Level 1 Project Approval is now required.`,
+          title: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardAcceptedByVendorLevel1ProjectApprovalRequired,
+          message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameAcceptedRateCardRateCardNumberLevel1ProjectApprovalIsNowRequired, { "vendorUserName": vendorUserName, "rateCardNumber": rateCard.rateCardNumber }),
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: rateCardId,
@@ -203,12 +206,12 @@ export async function POST(req: NextRequest) {
         entityType: 'VENDOR',
         entityId: vendorId,
         action: 'RATE_CARD_VENDOR_ACCEPTED',
-        description: `Vendor ${vendorUserName} accepted final Rate Card ${rateCard.rateCardNumber} terms. Routed to Level 1 Project Approver.`,
+        description: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameAcceptedFinalRateCardRateCardNumberTermsRoutedToLevel1ProjectApprover, { "vendorUserName": vendorUserName, "rateCardNumber": rateCard.rateCardNumber }),
         newValue: { status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', isSigned },
       });
 
       return apiSuccess({
-        message: 'Rate Card final terms accepted! Request forwarded to Level 1 Project Approver queue.',
+        message: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardFinalTermsAcceptedRequestForwardedToLevel1ProjectApproverQueue,
         rateCard: updated,
       });
     }
@@ -292,8 +295,8 @@ export async function POST(req: NextRequest) {
     await prisma.notification.create({
       data: {
         tenantId: ctx.tenantId,
-        title: `Vendor RC Quote-${roundTarget} Submitted`,
-        message: `Vendor ${vendorUserName} submitted Vendor RC Quote-${roundTarget} for Rate Card ${rateCard.rateCardNumber}.`,
+        title: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSubmitted, { "roundTarget": roundTarget }),
+        message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameSubmittedVendorRCQuoteRoundTargetForRateCardRateCardNumber, { "vendorUserName": vendorUserName, "roundTarget": roundTarget, "rateCardNumber": rateCard.rateCardNumber }),
         type: 'ACTION_REQUIRED',
         entityType: 'RATE_CARD',
         entityId: rateCardId,
@@ -309,17 +312,17 @@ export async function POST(req: NextRequest) {
       entityType: 'VENDOR',
       entityId: vendorId,
       action: `RATE_CARD_VENDOR_QUOTE_${roundTarget}_SUBMITTED`,
-      description: `Vendor RC Quote-${roundTarget} submitted for Rate Card ${rateCard.rateCardNumber}`,
+      description: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSubmittedForRateCardRateCardNumber, { "roundTarget": roundTarget, "rateCardNumber": rateCard.rateCardNumber }),
       newValue: { status: newStatus, round: roundTarget },
     });
 
     return apiSuccess({
-      message: `Vendor RC Quote-${roundTarget} successfully submitted for commercial review!`,
+      message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSuccessfullySubmittedForCommercialReview, { "roundTarget": roundTarget }),
       rateCardId,
       rateCard: updatedCard,
     });
   } catch (error: any) {
     console.error('Error submitting vendor rate card negotiation offer:', error);
-    return apiError(error.message || 'Failed to submit rate card proposals', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals }), 500);
   }
 }

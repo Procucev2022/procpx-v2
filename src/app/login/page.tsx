@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import type { Persona } from "@app-types/app/login/page.types";
 import { BUYER_PERSONAS, VENDOR_PERSONAS, TENANT_B_PERSONAS } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 
 export default function LoginPage() {
@@ -41,7 +43,7 @@ export default function LoginPage() {
         redirect: false,
       });
       if (result?.error) {
-        setError('Invalid work email or password. Please verify your credentials.');
+        setError(UI_STRINGS.appLoginPage.invalidWorkEmailOrPasswordPleaseVerifyYourCredentials);
       } else {
         try {
           const sessionRes = await fetch('/api/auth/session');
@@ -57,7 +59,7 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch {
-      setError('An unexpected error occurred. Please try again.');
+      setError(UI_STRINGS.appLoginPage.anUnexpectedErrorOccurredPleaseTryAgain);
     } finally {
       setLoading(false);
     }
@@ -94,16 +96,10 @@ export default function LoginPage() {
                 fontSize: 18,
                 boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
               }}
-            >
-              P
-            </div>
+            >{UI_STRINGS.appLoginPage.p}</div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.1 }}>
-                proCPX
-              </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                Enterprise Capex Procurement
-              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.1 }}>{UI_STRINGS.appLoginPage.proCPX}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', letterSpacing: 0.5, textTransform: 'uppercase' }}>{UI_STRINGS.appLoginPage.enterpriseCapexProcurement}</div>
             </div>
           </div>
 
@@ -116,9 +112,7 @@ export default function LoginPage() {
               maxWidth: 420,
               fontWeight: 400,
             }}
-          >
-            From approved BOQ to sourcing, negotiation and award — one controlled procurement workflow.
-          </p>
+          >{UI_STRINGS.appLoginPage.fromApprovedBOQToSourcingNegotiationAndAwardOneControlledProcurementWorkflow}</p>
 
           {/* Pillars List */}
           <div style={{ marginTop: 44, display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 440 }}>
@@ -140,12 +134,8 @@ export default function LoginPage() {
                 <ShieldCheck size={18} strokeWidth={2} />
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>
-                  Immutable Baseline Governance
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>
-                  Quantities and specifications locked upon client approval. Zero line-item drift.
-                </div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>{UI_STRINGS.appLoginPage.immutableBaselineGovernance}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>{UI_STRINGS.appLoginPage.quantitiesAndSpecificationsLockedUponClientApprovalZeroLineItemDrift}</div>
               </div>
             </div>
 
@@ -167,12 +157,8 @@ export default function LoginPage() {
                 <TrendingUp size={18} strokeWidth={2} />
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>
-                  Procurement Intelligence & Variance
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>
-                  Automated L1/L2 matrix comparison, benchmark variance telemetry, and real-time savings.
-                </div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>{UI_STRINGS.appLoginPage.procurementIntelligenceVariance}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>{UI_STRINGS.appLoginPage.automatedL1L2MatrixComparisonBenchmarkVarianceTelemetryAndRealTimeSavings}</div>
               </div>
             </div>
 
@@ -194,12 +180,8 @@ export default function LoginPage() {
                 <Gavel size={18} strokeWidth={2} />
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>
-                  Dynamic E-Auctions & Negotiations
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>
-                  Multi-round counter-offers, decremental reverse auctions, and binding rate locks.
-                </div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>{UI_STRINGS.appLoginPage.dynamicEAuctionsNegotiations}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>{UI_STRINGS.appLoginPage.multiRoundCounterOffersDecrementalReverseAuctionsAndBindingRateLocks}</div>
               </div>
             </div>
 
@@ -221,12 +203,8 @@ export default function LoginPage() {
                 <Lock size={18} strokeWidth={2} />
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>
-                  Enterprise Multi-Tenant Security
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>
-                  Strict row-level tenant isolation, RBAC separation of duties, and audit trail ledger.
-                </div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#ffffff' }}>{UI_STRINGS.appLoginPage.enterpriseMultiTenantSecurity}</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3, lineHeight: 1.5 }}>{UI_STRINGS.appLoginPage.strictRowLevelTenantIsolationRBACSeparationOfDutiesAndAuditTrailLedger}</div>
               </div>
             </div>
           </div>
@@ -234,8 +212,8 @@ export default function LoginPage() {
 
         {/* Left Bottom Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#64748b', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: 20 }}>
-          <span>proCPX Control Tower v2.4</span>
-          <span>SOC-2 Type II Certified</span>
+          <span>{UI_STRINGS.appLoginPage.proCPXControlTowerV24}</span>
+          <span>{UI_STRINGS.appLoginPage.sOC2TypeIICertified}</span>
         </div>
       </div>
 
@@ -244,8 +222,8 @@ export default function LoginPage() {
         <div style={{ width: '100%', maxWidth: 420 }}>
           {/* Mobile brand header (shown on small screens) */}
           <div style={{ textAlign: 'center', marginBottom: 24, display: 'none' }} className="mobile-only-header">
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>proCPX</div>
-            <div style={{ fontSize: 13, color: '#64748b' }}>Enterprise Capex Procurement</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>{UI_STRINGS.appLoginPage.proCPX}</div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appLoginPage.enterpriseCapexProcurement}</div>
           </div>
 
           <div
@@ -257,12 +235,8 @@ export default function LoginPage() {
               padding: '36px 36px 30px',
             }}
           >
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: -0.3, margin: '0 0 4px 0' }}>
-              Welcome back
-            </h1>
-            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px 0' }}>
-              Sign in to your enterprise workspace
-            </p>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: -0.3, margin: '0 0 4px 0' }}>{UI_STRINGS.appLoginPage.welcomeBack}</h1>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 24px 0' }}>{UI_STRINGS.appLoginPage.signInToYourEnterpriseWorkspace}</p>
 
             {error && (
               <div
@@ -300,7 +274,7 @@ export default function LoginPage() {
                 }}
               >
                 <CheckCircle2 size={16} style={{ flexShrink: 0, color: '#16a34a' }} />
-                <span>Selected: <strong>{loadedPersonaName}</strong>. Click "Sign In" to proceed.</span>
+                <span>{UI_STRINGS.appLoginPage.selected}<strong>{loadedPersonaName}</strong>{UI_STRINGS.appLoginPage.clickSignInToProceed}</span>
               </div>
             )}
 
@@ -310,9 +284,7 @@ export default function LoginPage() {
                 <label
                   htmlFor="work-email"
                   style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}
-                >
-                  Work Email or Test Vendor Username
-                </label>
+                >{UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername}</label>
                 <input
                   id="work-email"
                   type="text"
@@ -321,7 +293,7 @@ export default function LoginPage() {
                     setEmail(e.target.value);
                     setLoadedPersonaName(null);
                   }}
-                  placeholder="name@company.com or Vendor Name"
+                  placeholder={UI_STRINGS.appLoginPage.nameCompanyComOrVendorName}
                   autoComplete="username"
                   required
                   autoFocus
@@ -347,15 +319,13 @@ export default function LoginPage() {
                 <label
                   htmlFor="password"
                   style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}
-                >
-                  Password
-                </label>
+                >{UI_STRINGS.common.password}</label>
                 <input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="•••••••••••"
+                  placeholder={UI_STRINGS.appLoginPage.copyzfwyjp}
                   autoComplete="current-password"
                   required
                   style={{
@@ -409,13 +379,9 @@ export default function LoginPage() {
                     <div
                       className="spinner"
                       style={{ width: 16, height: 16, borderTopColor: '#ffffff', borderColor: 'rgba(255,255,255,0.3)' }}
-                    />
-                    Signing in...
-                  </>
+                    />{UI_STRINGS.appLoginPage.signingIn}</>
                 ) : (
-                  <>
-                    Sign In
-                    <ArrowRight size={16} strokeWidth={2} />
+                  <>{UI_STRINGS.appLoginPage.signIn}<ArrowRight size={16} strokeWidth={2} />
                   </>
                 )}
               </button>
@@ -423,9 +389,7 @@ export default function LoginPage() {
               {/* Quick Persona Fill Chips */}
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Quick Test Personas
-                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appLoginPage.quickTestPersonas}</span>
                   <button
                     type="button"
                     onClick={() => setShowDemoModal(true)}
@@ -438,9 +402,7 @@ export default function LoginPage() {
                       cursor: 'pointer',
                       padding: 0,
                     }}
-                  >
-                    All Accounts ({BUYER_PERSONAS.length + VENDOR_PERSONAS.length + TENANT_B_PERSONAS.length}) →
-                  </button>
+                  >{UI_STRINGS.appLoginPage.allAccounts}{BUYER_PERSONAS.length + VENDOR_PERSONAS.length + TENANT_B_PERSONAS.length}{UI_STRINGS.common.copydv17a2}</button>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   <button
@@ -456,9 +418,7 @@ export default function LoginPage() {
                       color: '#1e40af',
                       cursor: 'pointer',
                     }}
-                  >
-                    Category Manager
-                  </button>
+                  >{UI_STRINGS.common.categoryManager}</button>
                   <button
                     type="button"
                     onClick={() => selectPersona('procurement.user@procucev-demo.local', 'Demo@1234', 'Procurement User')}
@@ -472,9 +432,7 @@ export default function LoginPage() {
                       color: '#334155',
                       cursor: 'pointer',
                     }}
-                  >
-                    Procurement User
-                  </button>
+                  >{UI_STRINGS.common.procurementUser}</button>
                   <button
                     type="button"
                     onClick={() => selectPersona('vendor.apex@apex-infra.com', 'Demo@1234', 'Vendor: Apex Infra')}
@@ -488,9 +446,7 @@ export default function LoginPage() {
                       color: '#059669',
                       cursor: 'pointer',
                     }}
-                  >
-                    Vendor: Apex Infra
-                  </button>
+                  >{UI_STRINGS.appLoginPage.vendorApexInfra}</button>
                   <button
                     type="button"
                     onClick={() => selectPersona('bluepeak.engineering@vendor.procpx.local', 'welcome', 'Vendor: BluePeak')}
@@ -504,9 +460,7 @@ export default function LoginPage() {
                       color: '#059669',
                       cursor: 'pointer',
                     }}
-                  >
-                    Vendor: BluePeak
-                  </button>
+                  >{UI_STRINGS.appLoginPage.vendorBluePeak}</button>
                 </div>
               </div>
 
@@ -526,9 +480,7 @@ export default function LoginPage() {
                   }}
                   onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                   onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
-                >
-                  Forgot password?
-                </button>
+                >{UI_STRINGS.appLoginPage.forgotPassword}</button>
               </div>
             </form>
           </div>
@@ -547,7 +499,7 @@ export default function LoginPage() {
             }}
           >
             <Shield size={14} color="#059669" strokeWidth={2} />
-            <span>Secure Enterprise Procurement Platform</span>
+            <span>{UI_STRINGS.appLoginPage.secureEnterpriseProcurementPlatform}</span>
           </div>
 
           {/* Developer / Demo Access (Discreet secondary trigger) */}
@@ -569,7 +521,7 @@ export default function LoginPage() {
               onMouseOut={(e) => (e.currentTarget.style.color = '#64748b')}
             >
               <KeyRound size={13} strokeWidth={1.8} />
-              <span>Explore All {BUYER_PERSONAS.length + VENDOR_PERSONAS.length + TENANT_B_PERSONAS.length} Demo Accounts</span>
+              <span>{UI_STRINGS.appLoginPage.exploreAll}{BUYER_PERSONAS.length + VENDOR_PERSONAS.length + TENANT_B_PERSONAS.length}{UI_STRINGS.appLoginPage.demoAccounts}</span>
             </button>
           </div>
         </div>
@@ -585,21 +537,19 @@ export default function LoginPage() {
         >
           <div className="modal-box" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Password Assistance</h3>
+              <h3 className="modal-title">{UI_STRINGS.appLoginPage.passwordAssistance}</h3>
               <button
                 type="button"
                 className="btn-icon"
                 onClick={() => setShowForgotModal(false)}
-                aria-label="Close dialog"
+                aria-label={UI_STRINGS.common.closeDialog}
                 style={{ fontSize: 18, color: '#94a3b8' }}
               >
                 <X size={18} />
               </button>
             </div>
             <div className="modal-body" style={{ fontSize: 13, color: '#334155', lineHeight: 1.6 }}>
-              <p>
-                In compliance with enterprise procurement security protocols, self-service password resets are restricted.
-              </p>
+              <p>{UI_STRINGS.appLoginPage.inComplianceWithEnterpriseProcurementSecurityProtocolsSelfServicePasswordResetsAreRestricted}</p>
               <div
                 style={{
                   marginTop: 12,
@@ -610,18 +560,14 @@ export default function LoginPage() {
                   fontSize: 12,
                   color: '#475569',
                 }}
-              >
-                Please contact your <strong>Organization Client Administrator</strong> or internal <strong>IT Procurement Desk</strong> to initiate an authenticated credential reset.
-              </div>
+              >{UI_STRINGS.appLoginPage.pleaseContactYour}<strong>{UI_STRINGS.appLoginPage.organizationClientAdministrator}</strong>{UI_STRINGS.appLoginPage.orInternal}<strong>{UI_STRINGS.appLoginPage.iTProcurementDesk}</strong>{UI_STRINGS.appLoginPage.toInitiateAnAuthenticatedCredentialReset}</div>
             </div>
             <div className="modal-footer">
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={() => setShowForgotModal(false)}
-              >
-                Close
-              </button>
+              >{UI_STRINGS.common.close}</button>
             </div>
           </div>
         </div>
@@ -638,14 +584,14 @@ export default function LoginPage() {
           <div className="modal-box" style={{ maxWidth: 640, maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">Select Demo Account</h3>
-                <p className="modal-subtitle">Click any persona to auto-populate credentials</p>
+                <h3 className="modal-title">{UI_STRINGS.appLoginPage.selectDemoAccount}</h3>
+                <p className="modal-subtitle">{UI_STRINGS.appLoginPage.clickAnyPersonaToAutoPopulateCredentials}</p>
               </div>
               <button
                 type="button"
                 className="btn-icon"
                 onClick={() => setShowDemoModal(false)}
-                aria-label="Close dialog"
+                aria-label={UI_STRINGS.common.closeDialog}
               >
                 <X size={18} />
               </button>
@@ -653,10 +599,8 @@ export default function LoginPage() {
             <div className="modal-body">
               {/* Section 1: Tenant A Buyers */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Tenant A: Enterprise Buyer Personas
-                </span>
-                <span style={{ fontSize: 11, color: '#64748b' }}>Password: <strong>Demo@1234</strong></span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appLoginPage.tenantAEnterpriseBuyerPersonas}</span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.password}<strong>{UI_STRINGS.appLoginPage.demo1234}</strong></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
                 {BUYER_PERSONAS.map((p) => (
@@ -691,10 +635,8 @@ export default function LoginPage() {
               {/* Section 2: Registered Vendor Partners */}
               <div style={{ paddingTop: 14, borderTop: '1px solid #e2e8f0', marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Registered Vendor Partners (Vendor Portal)
-                  </span>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>Redirects to <code>/vendor-portal</code></span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appLoginPage.registeredVendorPartnersVendorPortal}</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.redirectsTo}<code>{UI_STRINGS.appLoginPage.vendorPortal}</code></span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
                   {VENDOR_PERSONAS.map((p) => (
@@ -719,7 +661,7 @@ export default function LoginPage() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                         <span style={{ fontWeight: 600, color: '#065f46', fontSize: 12 }}>{p.role}</span>
-                        <span className="badge badge-approved" style={{ fontSize: 10, padding: '1px 6px' }}>PW: {p.password}</span>
+                        <span className="badge badge-approved" style={{ fontSize: 10, padding: '1px 6px' }}>{UI_STRINGS.appLoginPage.pW}{p.password}</span>
                       </div>
                       <span style={{ color: '#047857', fontSize: 11, marginTop: 2 }}>{p.desc}</span>
                     </button>
@@ -730,10 +672,8 @@ export default function LoginPage() {
               {/* Section 3: Tenant B Multi-Tenant Isolation */}
               <div style={{ paddingTop: 14, borderTop: '1px dashed #cbd5e1' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Tenant B: Hospitality Project (Multi-Tenant Isolation)
-                  </span>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>Password: <strong>Demo@1234</strong></span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appLoginPage.tenantBHospitalityProjectMultiTenantIsolation}</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.password}<strong>{UI_STRINGS.appLoginPage.demo1234}</strong></span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {TENANT_B_PERSONAS.map((p) => (
@@ -758,7 +698,7 @@ export default function LoginPage() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                         <span style={{ fontWeight: 600, color: '#5b21b6', fontSize: 12 }}>{p.role}</span>
-                        <span className="badge" style={{ fontSize: 10, padding: '1px 6px', background: '#e9d5ff', color: '#6b21a8' }}>Tenant B</span>
+                        <span className="badge" style={{ fontSize: 10, padding: '1px 6px', background: '#e9d5ff', color: '#6b21a8' }}>{UI_STRINGS.common.tenantB}</span>
                       </div>
                       <span style={{ color: '#6d28d9', fontSize: 11, marginTop: 2 }}>{p.desc}</span>
                     </button>

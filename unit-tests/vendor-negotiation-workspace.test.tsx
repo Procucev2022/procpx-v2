@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorNegotiationWorkspace from '../src/components/VendorNegotiationWorkspace';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/components/ui/Toast', () => ({
   useToast: () => ({ success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() }),
@@ -69,41 +73,41 @@ describe('vendor commercial negotiation workspace', () => {
     window.confirm = jest.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     render(<VendorNegotiationWorkspace mode="RFQ" data={rfq} vendorId="vendor-1" vendorName="Vendor One" isBuyer={false} onBack={onBack} onSuccess={onSuccess} />);
 
-    expect(await screen.findByText('Commercial Negotiation Workspace')).toBeInTheDocument();
-    expect(screen.getByText('Awaiting Quote')).toBeInTheDocument();
-    expect(screen.getByText(/Pending Rate Entry/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Revised Negotiation Offer' }));
-    expect(await screen.findByText('Please enter a valid proposed rate greater than zero for all 2 line items.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.awaitingQuote))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.pendingRateEntry))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitRevisedNegotiationOffer) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.pleaseEnterAValidProposedRateGreaterThanZeroForAllLengthLineItems))).toBeInTheDocument();
 
     const rateInputs = document.querySelectorAll('input[type="number"]');
     fireEvent.change(rateInputs[0], { target: { value: '450' } });
     fireEvent.change(rateInputs[1], { target: { value: '500' } });
     fireEvent.change(screen.getByPlaceholderText(/State any payment milestone assumptions/), { target: { value: 'Net 30 days' } });
     fireEvent.click(screen.getByLabelText(/Declare as Binding Best & Final Offer/));
-    expect(screen.getByText(/\+40%/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.copy3l4h8e, '', false))).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save Draft' })[0]);
-    expect(await screen.findByText(/Draft saved locally at/)).toBeInTheDocument();
-    expect(localStorage.getItem('procpx_neg_draft_rfq_rfq-1')).toContain('Net 30 days');
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
-    expect(window.confirm).toHaveBeenLastCalledWith('Are you sure you want to clear your entered draft rates?');
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) })[0]);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.draftSavedLocallyAt, '', false))).toBeInTheDocument();
+    expect(localStorage.getItem('procpx_neg_draft_rfq_rfq-1')).toContain(UI_STRINGS.componentsVendorSourcingDashboard.net30Days);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
+    expect(window.confirm).toHaveBeenLastCalledWith(UI_STRINGS.componentsVendorNegotiationWorkspace.areYouSureYouWantToClearYourEnteredDraftRates);
     expect(rateInputs[0]).toHaveValue(450);
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
     expect(localStorage.getItem('procpx_neg_draft_rfq_rfq-1')).toBeNull();
-    expect(await screen.findByText('Entered rates cleared.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.enteredRatesCleared))).toBeInTheDocument();
 
     const updatedInputs = document.querySelectorAll('input[type="number"]');
     fireEvent.change(updatedInputs[0], { target: { value: '450' } });
     fireEvent.change(updatedInputs[1], { target: { value: '500' } });
     fireEvent.change(screen.getByPlaceholderText(/State any payment milestone assumptions/), { target: { value: 'Final commercial offer' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Binding Final Offer' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitBindingFinalOffer) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/negotiations/submit-offer', expect.objectContaining({ method: 'POST' })));
     const post = mockFetch.mock.calls.find(([url]) => url === '/api/procurement/negotiations/submit-offer')?.[1];
     expect(JSON.parse(post.body)).toEqual(expect.objectContaining({
       rfqId: 'rfq-1', vendorId: 'vendor-1', revisedQuoteAmount: 1400, isFinalOffer: true,
       notes: 'Final commercial offer', submittedByVendor: 'Vendor One',
     }));
-    expect(await screen.findByText('Offer submitted successfully.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully))).toBeInTheDocument();
     expect(onSuccess).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1), { timeout: 2500 });
   });
@@ -121,12 +125,12 @@ describe('vendor commercial negotiation workspace', () => {
     configureFetch({ rfq: dataWithCounter });
     render(<VendorNegotiationWorkspace mode="RFQ" data={dataWithCounter} vendorName="Vendor One" isBuyer={false} onBack={jest.fn()} />);
     expect(await screen.findByText(/Buyer Counteroffer Received/)).toBeInTheDocument();
-    expect(screen.getByText(/Action Required: Submit Revised Offer/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.actionRequiredSubmitRevisedOffer))).toBeInTheDocument();
     expect(screen.getByText(/Latest round context/)).toBeInTheDocument();
-    expect(screen.getByText('Draft saved at 09:15')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.draftSavedAt, '', false))).toBeInTheDocument();
     expect((document.querySelectorAll('input[type="number"]')[0] as HTMLInputElement).value).toBe('440');
     expect((document.querySelectorAll('input[type="number"]')[1] as HTMLInputElement).value).toBe('470');
-    expect(screen.getByText(/Buyer Counteroffer Rate \(R3\)/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.buyerCounterofferRate, '', false))).toBeInTheDocument();
     fireEvent.click(screen.getByTitle(/Refresh latest negotiation rounds/));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/rfqs/rfq-1'));
   });
@@ -134,17 +138,17 @@ describe('vendor commercial negotiation workspace', () => {
   it('shows buyer and submitted revision read-only states, including binding offer details', async () => {
     configureFetch({ rfq: submittedRfq });
     const vendorView = render(<VendorNegotiationWorkspace mode="RFQ" data={submittedRfq} isBuyer={false} onBack={jest.fn()} />);
-    expect(await screen.findByText(/Vendor Revision Submitted/)).toBeInTheDocument();
-    expect(screen.getByText(/Read-Only/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.vendorRevisionSubmitted))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.readOnly, '', false))).toBeInTheDocument();
     expect(screen.getByText(/Binding Best & Final Offer/)).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('0.00')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor))).not.toBeInTheDocument();
     vendorView.unmount();
 
     configureFetch({ rfq: submittedRfq }, { user: { role: 'PROCUREMENT_USER' } });
     render(<VendorNegotiationWorkspace mode="RFQ" data={submittedRfq} isBuyer onBack={jest.fn()} />);
-    expect(await screen.findByText(/Vendor Revision Submitted \(Round 1\)/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.vendorRevisionSubmittedRound, '', false))).toBeInTheDocument();
     expect(await screen.findByText(/Buyer Counteroffer Dispatched/)).toBeInTheDocument();
-    expect(screen.getByText('Buyer Remarks:')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.buyerRemarks))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Submit Revised/ })).not.toBeInTheDocument();
   });
 
@@ -163,19 +167,19 @@ describe('vendor commercial negotiation workspace', () => {
       return Promise.resolve(response({}));
     });
     render(<VendorNegotiationWorkspace mode="RATE_CARD" data={rateCard} isBuyer={false} onBack={jest.fn()} />);
-    expect(await screen.findByText('Master Rate Card Negotiation')).toBeInTheDocument();
-    expect(screen.getAllByText(/All locations/).length).toBeGreaterThan(0);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.masterRateCardNegotiation))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.allLocations)).length).toBeGreaterThan(0);
     const inputs = document.querySelectorAll('input[type="number"]');
     expect((inputs[0] as HTMLInputElement).value).toBe('110');
     fireEvent.change(inputs[0], { target: { value: '115' } });
     fireEvent.change(inputs[1], { target: { value: '' } });
-    expect(screen.getByText(/Proposed Average:/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.proposedAverage))).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/State any payment milestone assumptions/), { target: { value: 'Annual review' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Proposed Rate Card Revisions' }));
-    expect(await screen.findByText('Please enter a valid proposed rate greater than zero for all 3 line items.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitProposedRateCardRevisions) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.pleaseEnterAValidProposedRateGreaterThanZeroForAllLengthLineItems))).toBeInTheDocument();
     fireEvent.change(inputs[1], { target: { value: '60' } });
     fireEvent.change(inputs[2], { target: { value: '70' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Proposed Rate Card Revisions' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitProposedRateCardRevisions) }));
     expect(await screen.findByText('Rate card is closed.')).toBeInTheDocument();
     const post = mockFetch.mock.calls.find(([url]) => url === '/api/vendor-portal/rate-cards')?.[1];
     expect(JSON.parse(post.body)).toEqual({ rateCardId: 'rate-card-1', items: [{ id: 'rc-line-1', proposedRate: 115 }, { id: 'rc-line-2', proposedRate: 60 }, { id: 'rc-line-3', proposedRate: 70 }], remarks: 'Annual review' });
@@ -195,20 +199,20 @@ describe('vendor commercial negotiation workspace', () => {
     });
     global.fetch = mockFetch as typeof fetch;
     render(<VendorNegotiationWorkspace mode="RFQ" data={rfq} vendorId="vendor-1" isBuyer={false} onBack={jest.fn()} />);
-    expect(await screen.findByText('Commercial Negotiation Workspace')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace))).toBeInTheDocument();
     fireEvent.click(screen.getByTitle(/Refresh latest negotiation rounds/));
     await waitFor(() => expect(detailCalls).toBe(2));
     const inputs = document.querySelectorAll('input[type="number"]');
     fireEvent.change(inputs[0], { target: { value: '10' } });
     fireEvent.change(inputs[1], { target: { value: '10' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Revised Negotiation Offer' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitRevisedNegotiationOffer) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/negotiations/submit-offer', expect.anything()));
     expect(await screen.findByText('connection lost')).toBeInTheDocument();
 
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = jest.fn(() => { throw new Error('blocked'); });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save Draft' })[0]);
-    expect(await screen.findByText('Failed to save draft locally in browser storage.')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) })[0]);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.failedToSaveDraftLocallyInBrowserStorage))).toBeInTheDocument();
     Storage.prototype.setItem = originalSetItem;
   });
 
@@ -222,25 +226,25 @@ describe('vendor commercial negotiation workspace', () => {
     };
     configureFetch({}, { user: { role: 'PROJECT_APPROVER' } });
     const buyerView = render(<VendorNegotiationWorkspace mode="RFQ" data={emptyRfq} isBuyer onBack={jest.fn()} />);
-    expect(await screen.findByText('Commercial Negotiation Workspace')).toBeInTheDocument();
-    expect(screen.getByText('General Project')).toBeInTheDocument();
-    expect(screen.getByText('Main Package')).toBeInTheDocument();
-    expect(screen.getByText('Enterprise Client')).toBeInTheDocument();
-    expect(screen.getByText('Action Due: VENDOR')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.generalProject, '', true))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.mainPackage))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.enterpriseClient))).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.actionDueForParty, { party: 'VENDOR' }))).toBeInTheDocument();
     expect(screen.getByText(/Buyer Counteroffer Dispatched/)).toBeInTheDocument();
-    expect(screen.getAllByText('Awaiting Vendor Response').length).toBeGreaterThan(0);
-    expect(screen.getByText('No remarks provided by vendor for this round.')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.awaitingVendorResponse)).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.noRemarksProvidedByVendorForThisRound))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Submit Revised Negotiation/ })).not.toBeInTheDocument();
     expect(screen.getByText('Total Scope: 0 Line Items')).toBeInTheDocument();
     buyerView.unmount();
 
     configureFetch({}, {});
     render(<VendorNegotiationWorkspace mode="RFQ" data={{ ...emptyRfq, rounds: [] }} onBack={jest.fn()} />);
-    expect(await screen.findByText('Commercial Negotiation Workspace')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Cancel & Return' })).toBeInTheDocument();
-    expect(screen.getByText('Action Due: VENDOR')).toBeInTheDocument();
-    expect(screen.getByText('0 Line Items Under Negotiation')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Revised Negotiation Offer' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace))).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.cancelReturn) })).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.actionDueForParty, { party: 'VENDOR' }))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.lengthLineItemsUnderNegotiation))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitRevisedNegotiationOffer) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/negotiations/submit-offer', expect.anything()));
     const emptyPost = mockFetch.mock.calls.find(([url]) => url === '/api/procurement/negotiations/submit-offer')?.[1];
     expect(JSON.parse(emptyPost.body)).toEqual(expect.objectContaining({ revisedQuoteAmount: 0, lineItems: [] }));
@@ -250,10 +254,10 @@ describe('vendor commercial negotiation workspace', () => {
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = jest.fn(() => { throw new Error('storage blocked'); });
     render(<VendorNegotiationWorkspace mode="RFQ" data={{ ...rfq, project: null, projectPackage: '', packageName: '', clientTenant: '', tenant: null, rfqReceivedDate: Symbol('invalid-date'), submissionDeadline: null, nextResponsibleParty: 'OTHER', lines: [], quotes: [], negotiations: [] }} isBuyer={false} onBack={jest.fn()} />);
-    expect(await screen.findByText('General Project')).toBeInTheDocument();
-    expect(screen.getByText('Main Package')).toBeInTheDocument();
-    expect(screen.getByText('Enterprise Client')).toBeInTheDocument();
-    expect(screen.getByText('Action Due: OTHER')).toHaveClass('badge-draft');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.generalProject, '', true))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.mainPackage))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.enterpriseClient))).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.actionDueForParty, { party: 'OTHER' }))).toHaveClass('badge-draft');
     Storage.prototype.getItem = originalGetItem;
 
     fireEvent.click(screen.getByTitle(/Refresh latest negotiation rounds/));
@@ -275,14 +279,14 @@ describe('vendor commercial negotiation workspace', () => {
     render(<VendorNegotiationWorkspace mode="RFQ" data={counterRfq} isBuyer={false} onBack={jest.fn()} />);
     expect(await screen.findByText(/Buyer Counteroffer Received/)).toBeInTheDocument();
     expect(screen.getByText(/Counter with no baseline/)).toBeInTheDocument();
-    expect(screen.getByText('2 Line Items Under Negotiation')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.lengthLineItemsUnderNegotiation))).toBeInTheDocument();
     const rates = document.querySelectorAll('input[type="number"]');
     fireEvent.change(rates[0], { target: { value: '0' } });
     fireEvent.change(rates[0], { target: { value: '' } });
     expect((rates[0] as HTMLInputElement).value).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
     const removeItem = jest.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => { throw new Error('storage blocked'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
     expect(removeItem).toHaveBeenCalledWith('procpx_neg_draft_rfq_rfq-1');
     removeItem.mockRestore();
   });
@@ -291,8 +295,8 @@ describe('vendor commercial negotiation workspace', () => {
     const noLineRfq = { ...rfq, lines: null, quotes: [{ vendorId: 'quote-fallback' }], invitedVendors: [] };
     configureFetch({ rfq: noLineRfq });
     const rfqView = render(<VendorNegotiationWorkspace mode="RFQ" data={noLineRfq} onBack={jest.fn()} />);
-    expect(await screen.findByText('Commercial Negotiation Workspace')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Revised Negotiation Offer' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitRevisedNegotiationOffer) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/negotiations/submit-offer', expect.anything()));
     const rfqPost = mockFetch.mock.calls.find(([url]) => url === '/api/procurement/negotiations/submit-offer')?.[1];
     expect(JSON.parse(rfqPost.body).vendorId).toBe('quote-fallback');
@@ -302,11 +306,11 @@ describe('vendor commercial negotiation workspace', () => {
       id: 'empty-rate-card', rateCardNumber: 'RC-EMPTY', category: 'Civil', validFrom: 'invalid', validTo: null,
       items: undefined, subcategory: '', scope: '', location: '', status: '', approvalLevel: '',
     }} isBuyer={false} onBack={jest.fn()} />);
-    expect(await screen.findByText('Master Rate Card Negotiation')).toBeInTheDocument();
-    expect(screen.getByText('Standard Scope')).toBeInTheDocument();
-    expect(screen.getByText('Pan-India')).toBeInTheDocument();
-    expect(screen.getByText('APPROVED')).toBeInTheDocument();
-    expect(screen.getByText('LEVEL_1_PROJECT')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.masterRateCardNegotiation))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.standardScope))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.panIndia))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.aPPROVED))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT))).toBeInTheDocument();
     expect(screen.getByText('Total Scope: 0 Line Items')).toBeInTheDocument();
     expect(document.body.textContent).toMatch(/0\s*\/ unit/);
 
@@ -320,15 +324,15 @@ describe('vendor commercial negotiation workspace', () => {
       return Promise.resolve(response({}));
     });
     const removeItem = jest.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => { throw new Error('storage blocked'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Proposed Rate Card Revisions' }));
-    expect(await screen.findByText('Failed to submit rate card proposals')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Proposed Rate Card Revisions' }));
-    expect(await screen.findByText('Offer submitted successfully.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitProposedRateCardRevisions) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitProposedRateCardRevisions) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully))).toBeInTheDocument();
     expect(removeItem).toHaveBeenCalledWith('procpx_neg_draft_rc_empty-rate-card');
     removeItem.mockRestore();
     mockFetch.mockImplementationOnce(() => Promise.reject({}));
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Proposed Rate Card Revisions' }));
-    expect(await screen.findByText('An error occurred during submission. Please try again.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitProposedRateCardRevisions) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.anErrorOccurredDuringSubmissionPleaseTryAgain))).toBeInTheDocument();
     view.unmount();
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/vendor-portal/auctions/[id]/page.tsx
 // Vendor Live Auction Room: Terms Acceptance, Synchronized Countdown, Decrement Bidding & Confidentiality
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -22,6 +23,9 @@ import {
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function VendorAuctionBiddingRoomPage({
   params,
@@ -83,7 +87,7 @@ export default function VendorAuctionBiddingRoomPage({
     try {
       const res = await fetch(`/api/procurement/auctions/${id}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load auction');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToLoadAuction }));
       if (data.auction) {
         setAuction(data.auction);
         setVendorParticipation(data.currentVendorParticipation);
@@ -94,7 +98,7 @@ export default function VendorAuctionBiddingRoomPage({
         }
       }
     } catch (err: any) {
-      if (!silent) toast.error({ title: 'Error', message: err.message });
+      if (!silent) toast.error({ title: UI_STRINGS.common.error, message: err.message });
     } finally {
       if (!silent) setLoading(false);
     }
@@ -108,12 +112,12 @@ export default function VendorAuctionBiddingRoomPage({
         headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to accept terms');
-      toast.success({ title: 'Terms Accepted', message: data.message });
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToAcceptTerms }));
+      toast.success({ title: UI_STRINGS.common.termsAccepted, message: data.message });
       setShowTermsModal(false);
       fetchAuction();
     } catch (err: any) {
-      toast.error({ title: 'Error', message: err.message });
+      toast.error({ title: UI_STRINGS.common.error, message: err.message });
     } finally {
       setAcceptingTerms(false);
     }
@@ -137,7 +141,7 @@ export default function VendorAuctionBiddingRoomPage({
 
   const handlePlaceBid = async () => {
     if (!bidAmount) {
-      toast.error({ title: 'Validation', message: 'Please enter a valid bid amount.' });
+      toast.error({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppVendorPortalAuctionsIdPage.pleaseEnterAValidBidAmount });
       return;
     }
 
@@ -158,10 +162,10 @@ export default function VendorAuctionBiddingRoomPage({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Bid submission rejected');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.bidSubmissionRejected }));
 
       toast.success({
-        title: data.extended ? 'Bid Placed & Extension Triggered!' : 'Bid Accepted',
+        title: data.extended ? UI_STRINGS.common.userMessages.bidPlacedExtensionTriggered : UI_STRINGS.common.userMessages.bidAccepted,
         message: data.message,
       });
 
@@ -169,7 +173,7 @@ export default function VendorAuctionBiddingRoomPage({
       setBidAmount('');
       fetchAuction();
     } catch (err: any) {
-      toast.error({ title: 'Bid Rejected', message: err.message });
+      toast.error({ title: UI_STRINGS.common.bidRejected, message: err.message });
     } finally {
       setSubmittingBid(false);
     }
@@ -178,7 +182,7 @@ export default function VendorAuctionBiddingRoomPage({
   const formatIST = (dateStr: string) => {
     if (!dateStr) return '—';
     try {
-      return new Date(dateStr).toLocaleString('en-IN', {
+      return new Date(dateStr).toLocaleString(I18N_CONFIG.defaultLocale, {
         timeZone: 'Asia/Kolkata',
         day: '2-digit',
         month: 'short',
@@ -204,19 +208,15 @@ export default function VendorAuctionBiddingRoomPage({
   if (loading) {
     return (
       <div className="container" style={{ padding: '80px 32px', textAlign: 'center', color: '#64748b' }}>
-        <div className="spinner" style={{ margin: '0 auto 16px' }} />
-        Synchronising with auction server...
-      </div>
+        <div className="spinner" style={{ margin: '0 auto 16px' }} />{UI_STRINGS.appAppVendorPortalAuctionsIdPage.synchronisingWithAuctionServer}</div>
     );
   }
 
   if (!auction) {
     return (
       <div className="container" style={{ padding: 40, textAlign: 'center' }}>
-        <h3>Auction not accessible</h3>
-        <Link href="/vendor-portal/auctions" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>
-          Return to My Auctions
-        </Link>
+        <h3>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.auctionNotAccessible}</h3>
+        <Link href="/vendor-portal/auctions" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.returnToMyAuctions}</Link>
       </div>
     );
   }
@@ -244,9 +244,7 @@ export default function VendorAuctionBiddingRoomPage({
             fontSize: 12,
           }}
         >
-          <span style={{ background: '#0284c7', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
-            NOTICE
-          </span>
+          <span style={{ background: '#0284c7', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>{UI_STRINGS.common.nOTICE}</span>
           <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {auction.scrollingText}
           </div>
@@ -256,10 +254,10 @@ export default function VendorAuctionBiddingRoomPage({
       {/* Header */}
       <PageHeader
         title={auction.title}
-        subtitle={`${auction.auctionNumber} • ${auction.auctionType} (${auction.auctionCategory === 'ITEM_WISE' ? 'Item Wise' : 'RFQ Total Wise'})`}
+        subtitle={interpolateUiString(UI_STRINGS.common.auctionNumberAuctionTypeValue3, { "auctionNumber": auction.auctionNumber, "auctionType": auction.auctionType, "value3": auction.auctionCategory === 'ITEM_WISE' ? 'Item Wise' : 'RFQ Total Wise' })}
         breadcrumbs={[
-          { label: 'Vendor Portal', href: '/vendor-portal/dashboard' },
-          { label: 'Auctions', href: '/vendor-portal/auctions' },
+          { label: UI_STRINGS.common.vendorPortal, href: '/vendor-portal/dashboard' },
+          { label: UI_STRINGS.common.auctions, href: '/vendor-portal/auctions' },
           { label: auction.auctionNumber },
         ]}
         actions={
@@ -270,11 +268,9 @@ export default function VendorAuctionBiddingRoomPage({
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <RefreshCw size={12} /> Refresh Telemetry
-            </button>
+              <RefreshCw size={12} />{UI_STRINGS.common.refreshTelemetry}</button>
             <Link href="/vendor-portal/auctions" className="btn btn-secondary btn-sm">
-              <ArrowLeft size={13} /> Exit Room
-            </Link>
+              <ArrowLeft size={13} />{UI_STRINGS.common.exitRoom}</Link>
           </div>
         }
       />
@@ -308,72 +304,61 @@ export default function VendorAuctionBiddingRoomPage({
               }}
             />
             <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.05em', color: '#93c5fd' }}>
-              {auction.status} {auction.extensionCount > 0 ? `(EXTENDED ${auction.extensionCount}X)` : ''}
+              {auction.status} {auction.extensionCount > 0 ? interpolateUiString(UI_STRINGS.common.eXTENDEDExtensionCountX, { "extensionCount": auction.extensionCount }) : ''}
             </span>
           </div>
 
           <div style={{ fontSize: 36, fontWeight: 900, fontFamily: 'monospace', color: timeRemainingSeconds < 300 && isLive ? '#fca5a5' : '#ffffff' }}>
-            {isClosed ? 'CONCLUDED' : formatCountdown(timeRemainingSeconds)}
+            {isClosed ? UI_STRINGS.common.cONCLUDED : formatCountdown(timeRemainingSeconds)}
           </div>
 
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-            Scheduled End: <strong>{formatIST(auction.scheduledEndTime || auction.endTime)}</strong>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{UI_STRINGS.common.scheduledEnd}<strong>{formatIST(auction.scheduledEndTime || auction.endTime)}</strong>
           </div>
         </div>
 
         {/* Current Leading Bid */}
         <div style={{ borderLeft: '1px solid #334155', borderRight: '1px solid #334155', padding: '0 24px' }}>
           <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>
-            {isSealed ? 'SEALED BID STATUS' : 'CURRENT LEADING PRICE'}
+            {isSealed ? UI_STRINGS.appAppVendorPortalAuctionsIdPage.sEALEDBIDSTATUS : UI_STRINGS.appAppVendorPortalAuctionsIdPage.cURRENTLEADINGPRICE}
           </div>
 
           {isSealed ? (
             <div>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#c084fc', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Lock size={18} /> Confidential Sealed Bid
-              </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                Competitor bids and prices are strictly confidential.
-              </div>
+                <Lock size={18} />{UI_STRINGS.appAppVendorPortalAuctionsIdPage.confidentialSealedBid}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.competitorBidsAndPricesAreStrictlyConfidential}</div>
             </div>
           ) : auction.currentLeadingBid ? (
             <div>
               <div style={{ fontSize: 32, fontWeight: 900, color: '#34d399', fontFamily: 'monospace' }}>
-                {auction.currency} {Number(auction.currentLeadingBid).toLocaleString('en-IN')}
+                {auction.currency} {Number(auction.currentLeadingBid).toLocaleString(I18N_CONFIG.defaultLocale)}
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                Min required decrement: {auction.currency} {Number(auction.minDecrement || 0).toLocaleString('en-IN')}
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.minRequiredDecrement}{auction.currency} {Number(auction.minDecrement || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
               </div>
             </div>
           ) : (
             <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#cbd5e1' }}>
-                Starting at {auction.currency} {Number(auction.startingPrice || 0).toLocaleString('en-IN')}
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#cbd5e1' }}>{UI_STRINGS.common.startingAt}{auction.currency} {Number(auction.startingPrice || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                Opening bid must not exceed ceiling price.
-              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.openingBidMustNotExceedCeilingPrice}</div>
             </div>
           )}
         </div>
 
         {/* My Performance */}
         <div>
-          <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>MY BID STATUS</div>
-          <div style={{ fontSize: 13, marginBottom: 4 }}>
-            Bids Submitted: <strong>{vendorParticipation?.bidCount || 0}</strong>
+          <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 6 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.mYBIDSTATUS}</div>
+          <div style={{ fontSize: 13, marginBottom: 4 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.bidsSubmitted}<strong>{vendorParticipation?.bidCount || 0}</strong>
             {auction.hasBidLimit && (
-              <span style={{ color: '#94a3b8' }}> / Max {auction.maxBidsPerParticipant}</span>
+              <span style={{ color: '#94a3b8' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.max}{auction.maxBidsPerParticipant}</span>
             )}
           </div>
           {vendorParticipation?.lastBidAmount && (
-            <div style={{ fontSize: 13, color: '#38bdf8' }}>
-              My Last Bid: <strong>{auction.currency} {Number(vendorParticipation.lastBidAmount).toLocaleString('en-IN')}</strong>
+            <div style={{ fontSize: 13, color: '#38bdf8' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.myLastBid}<strong>{auction.currency} {Number(vendorParticipation.lastBidAmount).toLocaleString(I18N_CONFIG.defaultLocale)}</strong>
             </div>
           )}
           {vendorParticipation?.bestRank && (
-            <div style={{ fontSize: 13, color: vendorParticipation.bestRank === 1 ? '#34d399' : '#fbbf24', fontWeight: 700, marginTop: 4 }}>
-              Current Rank: L{vendorParticipation.bestRank}
+            <div style={{ fontSize: 13, color: vendorParticipation.bestRank === 1 ? '#34d399' : '#fbbf24', fontWeight: 700, marginTop: 4 }}>{interpolateUiString(UI_STRINGS.appAppVendorPortalAuctionsIdPage.currentRankL, { bestRank: vendorParticipation.bestRank })}
             </div>
           )}
         </div>
@@ -384,50 +369,38 @@ export default function VendorAuctionBiddingRoomPage({
         {/* BIDDING CONSOLE CARD */}
         <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: 24 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Gavel size={18} color="#0284c7" /> Place Your Bid
-          </h3>
+            <Gavel size={18} color="#0284c7" />{UI_STRINGS.appAppVendorPortalAuctionsIdPage.placeYourBid}</h3>
 
           {!isLive ? (
             <div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
               <Clock size={36} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>
-                Bidding is currently {auction.status}
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{interpolateUiString(UI_STRINGS.appAppVendorPortalAuctionsIdPage.biddingIsCurrently, { status: auction.status })}
               </div>
-              <p style={{ fontSize: 12, marginTop: 4 }}>
-                Bids can only be submitted when the auction status is LIVE or EXTENDED.
-              </p>
+              <p style={{ fontSize: 12, marginTop: 4 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.bidsCanOnlyBeSubmittedWhenTheAuctionStatusIsLIVEOrEXTENDED}</p>
             </div>
           ) : hasPlacedSealedBid ? (
             <div style={{ padding: 32, textAlign: 'center', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
               <CheckCircle2 size={40} color="#16a34a" style={{ margin: '0 auto 12px' }} />
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#15803d' }}>
-                Sealed Bid Submitted & Secured
-              </div>
-              <p style={{ fontSize: 12, color: '#166534', marginTop: 6 }}>
-                Your single confidential sealed bid of{' '}
-                <strong>{auction.currency} {Number(vendorParticipation.lastBidAmount).toLocaleString('en-IN')}</strong>{' '}
-                has been recorded. Sealed bids cannot be altered or re-submitted.
-              </p>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#15803d' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.sealedBidSubmittedSecured}</div>
+              <p style={{ fontSize: 12, color: '#166534', marginTop: 6 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.yourSingleConfidentialSealedBidOf}{' '}
+                <strong>{auction.currency} {Number(vendorParticipation.lastBidAmount).toLocaleString(I18N_CONFIG.defaultLocale)}</strong>{' '}{UI_STRINGS.appAppVendorPortalAuctionsIdPage.hasBeenRecordedSealedBidsCannotBeAlteredOrReSubmitted}</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* If Item Wise, select item */}
               {auction.auctionCategory === 'ITEM_WISE' && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
-                    Select Auction Scope Item *
-                  </label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.selectAuctionScopeItem}</label>
                   <select
                     value={selectedItemId}
                     onChange={(e) => setSelectedItemId(e.target.value)}
                     className="form-control"
                     style={{ height: 38, fontSize: 13 }}
                   >
-                    <option value="">-- Choose Item Line --</option>
+                    <option value="">{UI_STRINGS.appAppVendorPortalAuctionsIdPage.chooseItemLine}</option>
                     {auction.items.map((it: any) => (
                       <option key={it.id} value={it.id}>
-                        {it.itemCode} — {it.description} (Qty: {it.quantity} {it.uom})
-                      </option>
+                        {it.itemCode}{UI_STRINGS.common.copyq9aflv}{it.description}{UI_STRINGS.appAppVendorPortalAuctionsIdPage.qty}{it.quantity} {it.uom}{UI_STRINGS.common.copyc7zu6c}</option>
                     ))}
                   </select>
                 </div>
@@ -435,25 +408,22 @@ export default function VendorAuctionBiddingRoomPage({
 
               {/* Next Allowed Bid Info */}
               {nextAllowedBid && !isSealed && (
-                <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 6, border: '1px solid #bae6fd', fontSize: 12, color: '#0369a1' }}>
-                  Next qualifying bid must be{' '}
-                  <strong>{auction.auctionType === 'REVERSE_AUCTION' ? 'less than or equal to' : 'greater than or equal to'}{' '}
-                  {auction.currency} {nextAllowedBid.toLocaleString('en-IN')}</strong>
+                <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 6, border: '1px solid #bae6fd', fontSize: 12, color: '#0369a1' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.nextQualifyingBidMustBe}{' '}
+                  <strong>{auction.auctionType === 'REVERSE_AUCTION' ? UI_STRINGS.appAppVendorPortalAuctionsIdPage.lessThanOrEqualTo : UI_STRINGS.appAppVendorPortalAuctionsIdPage.greaterThanOrEqualTo}{' '}
+                  {auction.currency} {nextAllowedBid.toLocaleString(I18N_CONFIG.defaultLocale)}</strong>
                 </div>
               )}
 
               {/* Quick Decrement Chips (Reverse Auction) */}
               {nextAllowedBid && auction.auctionType === 'REVERSE_AUCTION' && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
-                    Quick Decrement Presets:
-                  </label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.quickDecrementPresets}</label>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {[
-                      { label: `- ₹5,000`, delta: 5000 },
-                      { label: `- ₹10,000`, delta: 10000 },
-                      { label: `- ₹25,000`, delta: 25000 },
-                      { label: `- ₹50,000`, delta: 50000 },
+                      { label: UI_STRINGS.appAppVendorPortalAuctionsIdPage.copyx1gihq, delta: 5000 },
+                      { label: UI_STRINGS.appAppVendorPortalAuctionsIdPage.copy1r929v2, delta: 10000 },
+                      { label: UI_STRINGS.appAppVendorPortalAuctionsIdPage.copy1mn456m, delta: 25000 },
+                      { label: UI_STRINGS.appAppVendorPortalAuctionsIdPage.copyyd4izu, delta: 50000 },
                     ].map((chip, idx) => (
                       <button
                         key={idx}
@@ -476,15 +446,13 @@ export default function VendorAuctionBiddingRoomPage({
 
               {/* Bid Input Field */}
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                  Enter Bid Amount ({auction.currency}) *
-                </label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterBidAmount}{auction.currency}{UI_STRINGS.common.copyxw2xde}</label>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <input
                     type="number"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(e.target.value ? Number(e.target.value) : '')}
-                    placeholder="Enter amount..."
+                    placeholder={UI_STRINGS.appAppVendorPortalAuctionsIdPage.enterAmount}
                     className="form-control"
                     style={{ height: 42, fontSize: 16, fontWeight: 700, flex: 1 }}
                   />
@@ -495,7 +463,7 @@ export default function VendorAuctionBiddingRoomPage({
                     className="btn btn-primary"
                     style={{ height: 42, padding: '0 24px', fontWeight: 700, fontSize: 14 }}
                   >
-                    {submittingBid ? 'Validating...' : isSealed ? 'Lock Sealed Bid' : 'Submit Bid →'}
+                    {submittingBid ? UI_STRINGS.common.validating : isSealed ? UI_STRINGS.appAppVendorPortalAuctionsIdPage.lockSealedBid : UI_STRINGS.appAppVendorPortalAuctionsIdPage.submitBid}
                   </button>
                 </div>
               </div>
@@ -503,7 +471,7 @@ export default function VendorAuctionBiddingRoomPage({
               {isSealed && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: '#7c3aed' }}>
                   <Lock size={14} />
-                  <span>Important: Sealed Bid allows strictly 1 submission per vendor. Cannot be revised.</span>
+                  <span>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.importantSealedBidAllowsStrictly1SubmissionPerVendorCannotBeRevised}</span>
                 </div>
               )}
             </div>
@@ -512,14 +480,10 @@ export default function VendorAuctionBiddingRoomPage({
 
         {/* MY SUBMITTED BIDS CARD */}
         <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: 20 }}>
-          <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-            My Bid Submission History ({auction.bids.length})
-          </h4>
+          <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.myBidSubmissionHistory}{auction.bids.length}{UI_STRINGS.common.copyc7zu6c}</h4>
 
           {auction.bids.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
-              You have not submitted any bids yet.
-            </div>
+            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.youHaveNotSubmittedAnyBidsYet}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {auction.bids.map((b: any, idx: number) => (
@@ -537,10 +501,9 @@ export default function VendorAuctionBiddingRoomPage({
                 >
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
-                      {auction.currency} {Number(b.bidAmount).toLocaleString('en-IN')}
+                      {auction.currency} {Number(b.bidAmount).toLocaleString(I18N_CONFIG.defaultLocale)}
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                      Bid #{b.bidNumber} • {formatIST(b.timestamp)}
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{UI_STRINGS.common.bid}{b.bidNumber}{UI_STRINGS.common.copyko5tj9}{formatIST(b.timestamp)}
                     </div>
                   </div>
                   {b.rank && (
@@ -553,8 +516,7 @@ export default function VendorAuctionBiddingRoomPage({
                         background: b.rank === 1 ? '#dcfce7' : '#e0f2fe',
                         color: b.rank === 1 ? '#15803d' : '#0369a1',
                       }}
-                    >
-                      Rank {b.rank}
+                    >{UI_STRINGS.common.rank}{b.rank}
                     </span>
                   )}
                 </div>
@@ -591,14 +553,10 @@ export default function VendorAuctionBiddingRoomPage({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <Shield size={24} color="#0284c7" />
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-                Auction Terms & Conditions Acknowledgement
-              </h3>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.auctionTermsConditionsAcknowledgement}</h3>
             </div>
 
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
-              In accordance with ProCPX enterprise procurement policy, participating vendors must review and explicitly accept the governing rules of this bidding event before placing bids.
-            </p>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.inAccordanceWithProCPXEnterpriseProcurementPolicyParticipatingVendorsMustReviewAndExplicitlyAcceptTheGoverningRulesOfThisBiddingEventBeforePlacingBids}</p>
 
             <div
               style={{
@@ -623,9 +581,7 @@ export default function VendorAuctionBiddingRoomPage({
                 type="button"
                 onClick={() => router.push('/vendor-portal/auctions')}
                 className="btn btn-secondary btn-sm"
-              >
-                Decline & Exit
-              </button>
+              >{UI_STRINGS.appAppVendorPortalAuctionsIdPage.declineExit}</button>
               <button
                 type="button"
                 disabled={acceptingTerms}
@@ -633,7 +589,7 @@ export default function VendorAuctionBiddingRoomPage({
                 className="btn btn-primary btn-sm"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                <Check size={14} /> {acceptingTerms ? 'Recording...' : 'I Accept the Terms & Conditions'}
+                <Check size={14} /> {acceptingTerms ? UI_STRINGS.appAppVendorPortalAuctionsIdPage.recording : UI_STRINGS.appAppVendorPortalAuctionsIdPage.iAcceptTheTermsConditions}
               </button>
             </div>
           </div>
@@ -664,30 +620,23 @@ export default function VendorAuctionBiddingRoomPage({
               padding: 24,
             }}
           >
-            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              Confirm Final Sealed Bid
-            </h3>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
-              You are about to submit your single confidential sealed bid of{' '}
-              <strong style={{ color: '#0f172a' }}>{auction.currency} {Number(bidAmount).toLocaleString('en-IN')}</strong>.
-              Once submitted, it is irrevocable and cannot be revised.
-            </p>
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.confirmFinalSealedBid}</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.youAreAboutToSubmitYourSingleConfidentialSealedBidOf}{' '}
+              <strong style={{ color: '#0f172a' }}>{auction.currency} {Number(bidAmount).toLocaleString(I18N_CONFIG.defaultLocale)}</strong>{UI_STRINGS.appAppVendorPortalAuctionsIdPage.onceSubmittedItIsIrrevocableAndCannotBeRevised}</p>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button
                 type="button"
                 onClick={() => setShowSealedConfirm(false)}
                 className="btn btn-secondary btn-sm"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 disabled={submittingBid}
                 onClick={handlePlaceBid}
                 className="btn btn-primary btn-sm"
               >
-                {submittingBid ? 'Securing...' : 'Yes, Submit Sealed Bid'}
+                {submittingBid ? UI_STRINGS.appAppVendorPortalAuctionsIdPage.securing : UI_STRINGS.appAppVendorPortalAuctionsIdPage.yesSubmitSealedBid}
               </button>
             </div>
           </div>

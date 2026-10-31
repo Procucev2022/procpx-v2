@@ -7,6 +7,8 @@ import { POST as acceptAuctionTerms } from '../src/app/api/procurement/auctions/
 import { POST as raisePpoIssue } from '../src/app/api/procurement/ppos/[id]/vendor-issue/route';
 import { POST as acceptPpo } from '../src/app/api/procurement/ppos/[id]/vendor-accept/route';
 import { POST as approveRateCard } from '../src/app/api/procurement/rate-cards/[id]/approve/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -71,21 +73,21 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toBe(denied);
 
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toEqual({ ok: false, error: 'Vendor record not found for this user', status: 404 });
+    await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorRecordNotFoundForThisUser, status: 404 });
     auth.mockResolvedValueOnce({ ...context, userEmail: '', vendorId: undefined });
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toEqual({ ok: false, error: 'Vendor record not found for this user', status: 404 });
+    await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorRecordNotFoundForThisUser, status: 404 });
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER', vendorId: undefined });
-    await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toEqual({ ok: false, error: 'Vendor ID is required to accept terms', status: 400 });
+    await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIDIsRequiredToAcceptTerms, status: 400 });
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER', vendorId: undefined });
     db.auction.findFirst.mockResolvedValueOnce(null);
-    await expect(acceptAuctionTerms(request({ vendorId: 'vendor-1' }), params('auction-1'))).resolves.toEqual({ ok: false, error: 'Auction not found', status: 404 });
+    await expect(acceptAuctionTerms(request({ vendorId: 'vendor-1' }), params('auction-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.auctionNotFound, status: 404 });
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER', vendorId: undefined });
     db.auction.findFirst.mockResolvedValueOnce({ id: 'auction-1', rfq: { projectId: 'project-1' } });
     db.auctionVendor.findFirst.mockResolvedValueOnce(null);
-    await expect(acceptAuctionTerms(request({ vendorId: 'vendor-1' }), params('auction-1'))).resolves.toEqual({ ok: false, error: 'Vendor is not invited to this auction event', status: 403 });
+    await expect(acceptAuctionTerms(request({ vendorId: 'vendor-1' }), params('auction-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIsNotInvitedToThisAuctionEvent, status: 403 });
 
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR' });
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1', name: 'Acme' });
@@ -114,14 +116,14 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(raisePpoIssue(request({ issueRemarks: 'Need clarification' }), params('ppo-1'))).resolves.toBe(denied);
-    await expect(raisePpoIssue(request({ issueRemarks: ' ' }), params('ppo-1'))).resolves.toEqual({ ok: false, error: 'Issue / clarification description is required', status: 400 });
+    await expect(raisePpoIssue(request({ issueRemarks: ' ' }), params('ppo-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.issueClarificationDescriptionIsRequired, status: 400 });
     db.ppo.findFirst.mockResolvedValueOnce(null);
-    await expect(raisePpoIssue(request({ issueRemarks: 'Clarify scope' }), params('ppo-1'))).resolves.toEqual({ ok: false, error: 'Purchase Order not found or access denied', status: 404 });
+    await expect(raisePpoIssue(request({ issueRemarks: 'Clarify scope' }), params('ppo-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, status: 404 });
 
     auth.mockResolvedValueOnce({ ...context, vendorId: undefined });
     db.ppo.findFirst.mockResolvedValueOnce(ppoRecord());
     await expect(raisePpoIssue(request({ issueRemarks: 'Clarify scope' }), params('ppo-1'))).resolves.toEqual({
-      ok: false, error: 'Forbidden: you can only raise issues on purchase orders issued to your company', status: 403,
+      ok: false, error: UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.forbiddenYouCanOnlyRaiseIssuesOnPurchaseOrdersIssuedToYourCompany, status: 403,
     });
     auth.mockResolvedValueOnce({ ...context, vendorId: 'vendor-2' });
     db.ppo.findFirst.mockResolvedValueOnce(ppoRecord());
@@ -133,7 +135,7 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
       ok: true, data: { ppo: { vendorStatus: 'ISSUE_RAISED' }, message: expect.stringContaining('successfully logged') },
     });
     expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
-      senderName: 'Site Buyer', senderRole: 'VENDOR', isVendorSent: true, vendorId: 'vendor-1',
+      senderName: 'Site Buyer', senderRole: UI_STRINGS.common.vENDOR, isVendorSent: true, vendorId: 'vendor-1',
       message: expect.stringContaining('PPO acceptance is held pending resolution'),
     }) });
     expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ event: 'PPO_ISSUE_RAISED', actorName: 'Site Buyer' }));
@@ -156,7 +158,7 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     isContext.mockReturnValueOnce(false);
     await expect(acceptPpo(request(), params('ppo-1'))).resolves.toBe(denied);
     db.ppo.findFirst.mockResolvedValueOnce(null);
-    await expect(acceptPpo(request(), params('ppo-1'))).resolves.toEqual({ ok: false, error: 'Purchase Order not found or access denied', status: 404 });
+    await expect(acceptPpo(request(), params('ppo-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, status: 404 });
 
     auth.mockResolvedValueOnce({ ...context, vendorId: undefined });
     db.ppo.findFirst.mockResolvedValueOnce(ppoRecord());
@@ -165,7 +167,7 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     db.ppo.findFirst.mockResolvedValueOnce(ppoRecord());
     await expect(acceptPpo(request(), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 403 });
     db.ppo.findFirst.mockResolvedValueOnce(ppoRecord({ vendorStatus: 'ACCEPTED_BY_VENDOR' }));
-    await expect(acceptPpo(request(), params('ppo-1'))).resolves.toEqual({ ok: false, error: 'This Purchase Order has already been accepted', status: 400 });
+    await expect(acceptPpo(request(), params('ppo-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.thisPurchaseOrderHasAlreadyBeenAccepted, status: 400 });
 
     const updated = { id: 'ppo-1', status: 'CONFIRMED', vendorStatus: 'ACCEPTED_BY_VENDOR' };
     db.ppo.findFirst.mockResolvedValueOnce(ppoRecord());
@@ -204,14 +206,14 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     isContext.mockReturnValueOnce(false);
     await expect(approveRateCard(request(), params('card-1'))).resolves.toBe(denied);
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(rateCard({ tenantId: 'other-tenant' }));
-    await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_USER' });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(rateCard());
     await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({
-      ok: false, error: 'Forbidden: Only Project Approvers or Admins can perform Level 1 approval', status: 403,
+      ok: false, error: UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyProjectApproversOrAdminsCanPerformLevel1Approval, status: 403,
     });
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_APPROVER' });
@@ -252,7 +254,7 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
       ok: true, data: { message: expect.stringContaining('now Active and Approved') },
     });
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: 'APPROVED', approvalLevel: 'COMPLETED', financeApprovedBy: 'FINANCE_USER', approvedBy: 'FINANCE_USER' }),
+      data: expect.objectContaining({ status: UI_STRINGS.common.aPPROVED, approvalLevel: 'COMPLETED', financeApprovedBy: 'FINANCE_USER', approvedBy: 'FINANCE_USER' }),
     }));
 
     auth.mockResolvedValueOnce({ ...context, role: 'FINANCE_APPROVER' });

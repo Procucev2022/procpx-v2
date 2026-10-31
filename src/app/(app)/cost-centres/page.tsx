@@ -1,5 +1,6 @@
 'use client';
 // src/app/(app)/cost-centres/page.tsx - Enterprise Cost Centres Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -20,6 +21,9 @@ import {
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function CostCentresPage() {
   const [costCentres, setCostCentres] = useState<any[]>([]);
@@ -84,11 +88,11 @@ export default function CostCentresPage() {
     e.preventDefault();
     setError('');
     if (!canCreate) {
-      setError('Insufficient permissions: Only Project Users and Administrators can create cost centres.');
+      setError(UI_STRINGS.appAppCostCentresPage.insufficientPermissionsOnlyProjectUsersAndAdministratorsCanCreateCostCentres);
       return;
     }
     if (!formProject || !formCode || !formName) {
-      setError('Project, Code, and Name are mandatory.');
+      setError(UI_STRINGS.appAppCostCentresPage.projectCodeAndNameAreMandatory);
       return;
     }
     setCreating(true);
@@ -108,7 +112,7 @@ export default function CostCentresPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to create cost centre');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToCreateCostCentre }));
       }
       setModalOpen(false);
       setFormCode('');
@@ -147,8 +151,8 @@ export default function CostCentresPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Cost Centres"
-        subtitle="First-class project commercial containers tracking floor area, square-foot benchmarks, and budget allocations."
+        title={UI_STRINGS.appAppCostCentresPage.costCentres}
+        subtitle={UI_STRINGS.appAppCostCentresPage.firstClassProjectCommercialContainersTrackingFloorAreaSquareFootBenchmarksAndBudgetAllocations}
         actions={
           canCreate ? (
             <button
@@ -156,8 +160,7 @@ export default function CostCentresPage() {
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => setModalOpen(true)}
             >
-              <Plus size={16} /> Create Cost Centre
-            </button>
+              <Plus size={16} />{UI_STRINGS.appAppCostCentresPage.createCostCentre}</button>
           ) : undefined
         }
       />
@@ -165,27 +168,27 @@ export default function CostCentresPage() {
       {/* KPI Cards */}
       <SummaryCardGrid columns={4}>
         <SummaryCard
-          label="Cost Centres"
+          label={UI_STRINGS.appAppCostCentresPage.costCentres}
           value={costCentres.length}
-          secondary="Active and operational"
+          secondary={UI_STRINGS.appAppCostCentresPage.activeAndOperational}
           accent="default"
         />
         <SummaryCard
-          label="Total Fitout Area"
-          value={`${totalArea.toLocaleString('en-IN')} Sqft`}
-          secondary={`Across ${filtered.length} functional zones`}
+          label={UI_STRINGS.appAppCostCentresPage.totalFitoutArea}
+          value={`${totalArea.toLocaleString(I18N_CONFIG.defaultLocale)} Sqft`}
+          secondary={interpolateUiString(UI_STRINGS.appAppCostCentresPage.acrossLengthFunctionalZones, { "length": filtered.length })}
           accent="neutral"
         />
         <SummaryCard
-          label="Approved Budget"
+          label={UI_STRINGS.common.approvedBudget}
           value={`₹ ${(totalApproved / 100000).toFixed(2)} Lakhs`}
-          secondary={`Total Allocated: ₹ ${(totalBudget / 100000).toFixed(2)} L`}
+          secondary={interpolateUiString(UI_STRINGS.appAppCostCentresPage.totalAllocatedToFixedL, { "toFixed": (totalBudget / 100000).toFixed(2) })}
           accent="blue"
         />
         <SummaryCard
-          label="Average Benchmark"
-          value={`₹ ${Math.round(avgRatePerSqft).toLocaleString('en-IN')} / Sqft`}
-          secondary="Commercial rate per unit area"
+          label={UI_STRINGS.appAppCostCentresPage.averageBenchmark}
+          value={`₹ ${Math.round(avgRatePerSqft).toLocaleString(I18N_CONFIG.defaultLocale)} / Sqft`}
+          secondary={UI_STRINGS.appAppCostCentresPage.commercialRatePerUnitArea}
           accent="emerald"
         />
       </SummaryCardGrid>
@@ -197,7 +200,7 @@ export default function CostCentresPage() {
           <input
             type="text"
             className="input pl-9 h-[40px] w-full text-sm bg-white"
-            placeholder="Search Cost Centre code, name, zone or location..."
+            placeholder={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -208,10 +211,10 @@ export default function CostCentresPage() {
           value={selectedProjectId}
           onChange={e => setSelectedProjectId(e.target.value)}
         >
-          <option value="">All Projects</option>
+          <option value="">{UI_STRINGS.common.allProjects}</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>
-              {p.projectCode} — {p.name}
+              {p.projectCode}{UI_STRINGS.common.copyq9aflv}{p.name}
             </option>
           ))}
         </select>
@@ -223,29 +226,25 @@ export default function CostCentresPage() {
           <table className="enterprise-table">
             <thead>
               <tr>
-                <th style={{ width: 110 }}>Code</th>
-                <th style={{ minWidth: 200 }}>Cost Centre Name</th>
-                <th style={{ minWidth: 180 }}>Project</th>
-                <th style={{ width: 120, textAlign: 'right' }}>Area (Sqft)</th>
-                <th style={{ width: 160 }}>Location / Zone</th>
-                <th style={{ width: 140, textAlign: 'right' }}>Approved Budget</th>
-                <th style={{ width: 120, textAlign: 'right' }}>₹ / Sqft</th>
-                <th style={{ width: 110 }}>Status</th>
-                <th style={{ width: 140, textAlign: 'center' }}>Quick Actions</th>
+                <th style={{ width: 110 }}>{UI_STRINGS.common.code}</th>
+                <th style={{ minWidth: 200 }}>{UI_STRINGS.appAppCostCentresPage.costCentreName}</th>
+                <th style={{ minWidth: 180 }}>{UI_STRINGS.common.project}</th>
+                <th style={{ width: 120, textAlign: 'right' }}>{UI_STRINGS.appAppCostCentresPage.areaSqft}</th>
+                <th style={{ width: 160 }}>{UI_STRINGS.appAppCostCentresPage.locationZone}</th>
+                <th style={{ width: 140, textAlign: 'right' }}>{UI_STRINGS.common.approvedBudget}</th>
+                <th style={{ width: 120, textAlign: 'right' }}>{UI_STRINGS.common.sqft}</th>
+                <th style={{ width: 110 }}>{UI_STRINGS.common.status}</th>
+                <th style={{ width: 140, textAlign: 'center' }}>{UI_STRINGS.appAppCostCentresPage.quickActions}</th>
               </tr>
             </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-                  Loading cost centres...
-                </td>
+                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppCostCentresPage.loadingCostCentres}</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-                  No cost centres found matching criteria.
-                </td>
+                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppCostCentresPage.noCostCentresFoundMatchingCriteria}</td>
               </tr>
             ) : (
               filtered.map(cc => (
@@ -258,21 +257,20 @@ export default function CostCentresPage() {
                     {cc.description && <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{cc.description}</div>}
                   </td>
                   <td style={{ padding: '0 16px', color: '#334155' }}>
-                    <div style={{ fontWeight: 500 }}>{cc.project?.name || '—'}</div>
+                    <div style={{ fontWeight: 500 }}>{cc.project?.name || UI_STRINGS.common.copy4s9bsz}</div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>{cc.project?.projectCode}</div>
                   </td>
                   <td style={{ padding: '0 16px', color: '#0f172a', fontWeight: 600 }}>
-                    {cc.areaSqFt ? `${cc.areaSqFt.toLocaleString('en-IN')} sqft` : '—'}
+                    {cc.areaSqFt ? interpolateUiString(UI_STRINGS.appAppCostCentresPage.toLocaleStringSqft, { "toLocaleString": cc.areaSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                   </td>
                   <td style={{ padding: '0 16px', color: '#64748b' }}>
-                    <div>{cc.location || '—'}</div>
+                    <div>{cc.location || UI_STRINGS.common.copy4s9bsz}</div>
                     {cc.floorZone && <div style={{ fontSize: 11, color: '#94a3b8' }}>{cc.floorZone}</div>}
                   </td>
-                  <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>
-                    ₹ {(cc.approvedBudget || 0).toLocaleString('en-IN')}
+                  <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#1e40af' }}>{UI_STRINGS.common.copy1g8b5tg}{(cc.approvedBudget || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                   </td>
                   <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: '#047857' }}>
-                    {cc.ratePerSqFt ? `₹ ${cc.ratePerSqFt} / sqft` : '—'}
+                    {cc.ratePerSqFt ? interpolateUiString(UI_STRINGS.appAppCostCentresPage.ratePerSqFtSqft, { "ratePerSqFt": cc.ratePerSqFt }) : UI_STRINGS.common.copy4s9bsz}
                   </td>
                   <td style={{ padding: '0 16px' }}>
                     <StatusBadge status={cc.status} />
@@ -282,17 +280,15 @@ export default function CostCentresPage() {
                       <Link
                         href={`/boq/studio?costCentreId=${cc.id}&projectId=${cc.projectId}`}
                         className="btn btn-secondary btn-sm h-7 px-2.5 text-xs font-semibold"
-                        title="Open in BOQ Studio"
+                        title={UI_STRINGS.appAppCostCentresPage.openInBOQStudio}
                       >
-                        <Sparkles size={12} /> BOQ Studio
-                      </Link>
+                        <Sparkles size={12} />{UI_STRINGS.common.bOQStudio}</Link>
                       <Link
                         href={`/budget?costCentreId=${cc.id}&projectId=${cc.projectId}`}
                         className="btn btn-secondary btn-sm h-7 px-2.5 text-xs font-semibold"
-                        title="View Budget Ledger"
+                        title={UI_STRINGS.appAppCostCentresPage.viewBudgetLedger}
                       >
-                        <Landmark size={12} /> Budget
-                      </Link>
+                        <Landmark size={12} />{UI_STRINGS.appAppCostCentresPage.budget}</Link>
                     </div>
                   </td>
                 </tr>
@@ -331,7 +327,7 @@ export default function CostCentresPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Layers size={18} color="#1e40af" />
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Create New Cost Centre</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppCostCentresPage.createNewCostCentre}</h3>
               </div>
               <button
                 type="button"
@@ -351,9 +347,7 @@ export default function CostCentresPage() {
             <form onSubmit={handleCreate}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                    Select Project *
-                  </label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppCostCentresPage.selectProject}</label>
                   <select
                     className="select-field"
                     value={formProject}
@@ -363,7 +357,7 @@ export default function CostCentresPage() {
                   >
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.projectCode} — {p.name}
+                        {p.projectCode}{UI_STRINGS.common.copyq9aflv}{p.name}
                       </option>
                     ))}
                   </select>
@@ -371,13 +365,11 @@ export default function CostCentresPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                      Code * (e.g. CC-006)
-                    </label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppCostCentresPage.codeEGCC006}</label>
                     <input
                       type="text"
                       className="input-field"
-                      placeholder="CC-006"
+                      placeholder={UI_STRINGS.appAppCostCentresPage.cC006}
                       value={formCode}
                       onChange={e => setFormCode(e.target.value)}
                       style={{ width: '100%', height: 38 }}
@@ -385,13 +377,11 @@ export default function CostCentresPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                      Cost Centre Name *
-                    </label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppCostCentresPage.costCentreName2}</label>
                     <input
                       type="text"
                       className="input-field"
-                      placeholder="e.g. Signage & Façade"
+                      placeholder={UI_STRINGS.appAppCostCentresPage.eGSignageFacAde}
                       value={formName}
                       onChange={e => setFormName(e.target.value)}
                       style={{ width: '100%', height: 38 }}
@@ -402,27 +392,23 @@ export default function CostCentresPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                      Area Sqft (for ₹ / Sqft metric)
-                    </label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppCostCentresPage.areaSqftForSqftMetric}</label>
                     <input
                       type="number"
                       step="any"
                       className="input-field"
-                      placeholder="e.g. 8500"
+                      placeholder={UI_STRINGS.appAppCostCentresPage.eG8500}
                       value={formArea}
                       onChange={e => setFormArea(e.target.value)}
                       style={{ width: '100%', height: 38 }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                      Location
-                    </label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.common.location}</label>
                     <input
                       type="text"
                       className="input-field"
-                      placeholder="e.g. Ground Floor"
+                      placeholder={UI_STRINGS.appAppCostCentresPage.eGGroundFloor}
                       value={formLocation}
                       onChange={e => setFormLocation(e.target.value)}
                       style={{ width: '100%', height: 38 }}
@@ -431,13 +417,11 @@ export default function CostCentresPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                    Floor / Zone
-                  </label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppCostCentresPage.floorZone}</label>
                   <input
                     type="text"
                     className="input-field"
-                    placeholder="e.g. Zone A - Customer Retail Hall"
+                    placeholder={UI_STRINGS.appAppCostCentresPage.eGZoneACustomerRetailHall}
                     value={formZone}
                     onChange={e => setFormZone(e.target.value)}
                     style={{ width: '100%', height: 38 }}
@@ -445,12 +429,10 @@ export default function CostCentresPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                    Description
-                  </label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.common.description}</label>
                   <textarea
                     className="input-field"
-                    placeholder="Scope description for this cost centre..."
+                    placeholder={UI_STRINGS.appAppCostCentresPage.scopeDescriptionForThisCostCentre}
                     rows={2}
                     value={formDesc}
                     onChange={e => setFormDesc(e.target.value)}
@@ -464,15 +446,13 @@ export default function CostCentresPage() {
                     className="btn btn-secondary"
                     onClick={() => setModalOpen(false)}
                     disabled={creating}
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
                   <button
                     type="submit"
                     className="btn btn-primary"
                     disabled={creating}
                   >
-                    {creating ? 'Saving...' : 'Save Cost Centre'}
+                    {creating ? UI_STRINGS.common.saving : UI_STRINGS.appAppCostCentresPage.saveCostCentre}
                   </button>
                 </div>
               </div>

@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { auth } from './auth';
 import { hasPermission, UserRole, Permission } from './permissions';
 import type { ApiContext } from "@app-types/lib/api-utils.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 export type { ApiContext };
 
 
@@ -22,7 +24,7 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
     });
     if (user) {
       if (permission && !hasPermission(user.role as UserRole, permission)) {
-        return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 });
+        return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
       }
       return {
         userId: user.id,
@@ -59,7 +61,7 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
           });
           if (user) {
             if (permission && !hasPermission(user.role as UserRole, permission)) {
-              return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 });
+              return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
             }
             return {
               userId: user.id,
@@ -76,11 +78,11 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
         // ignore when called outside next headers context
       }
     }
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+    return NextResponse.json({ error: UI_STRINGS.libApiUtils.unauthenticated }, { status: 401 });
   }
   const user = session.user as any;
   if (permission && !hasPermission(user.role as UserRole, permission)) {
-    return NextResponse.json({ error: 'Forbidden: insufficient permissions' }, { status: 403 });
+    return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
   }
 
   let vendorId = user.vendorId;

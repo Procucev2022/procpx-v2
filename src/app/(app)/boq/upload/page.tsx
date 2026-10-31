@@ -7,6 +7,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import type { WizardStep } from "@app-types/app/(app)/boq/upload/page.types";
 import { BOQ_FIELDS } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function BoqUploadPage() {
@@ -26,7 +29,7 @@ export default function BoqUploadPage() {
 
   const handleFile = async (file: File) => {
     setError('');
-    if (!projectId) { setError('Project ID is missing. Please navigate from a project.'); return; }
+    if (!projectId) { setError(UI_STRINGS.appAppBoqUploadPage.projectIDIsMissingPleaseNavigateFromAProject); return; }
     setUploading(true);
     const fd = new FormData();
     fd.append('file', file);
@@ -37,7 +40,7 @@ export default function BoqUploadPage() {
     const data = await res.json();
     setUploading(false);
 
-    if (!res.ok) { setError(data.error || 'BOQ upload failed. Please verify the file format.'); return; }
+    if (!res.ok) { setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.boqUploadFailedPleaseVerifyTheFileFormat })); return; }
     setUploadResult(data);
     setSelectedSheet(data.sheets?.[0] || '');
 
@@ -74,9 +77,9 @@ export default function BoqUploadPage() {
 
   const handleImport = async () => {
     setError('');
-    if (!columnMapping.description) { setError('Column mapping is incomplete. Please map Description, UOM and Quantity.'); return; }
-    if (!columnMapping.uom) { setError('Column mapping is incomplete. Please map UOM.'); return; }
-    if (!columnMapping.quantity) { setError('Column mapping is incomplete. Please map Quantity.'); return; }
+    if (!columnMapping.description) { setError(UI_STRINGS.common.columnMappingIsIncompletePleaseMapDescriptionUOMAndQuantity); return; }
+    if (!columnMapping.uom) { setError(UI_STRINGS.common.columnMappingIsIncompletePleaseMapUOM); return; }
+    if (!columnMapping.quantity) { setError(UI_STRINGS.common.columnMappingIsIncompletePleaseMapQuantity); return; }
 
     setStep('importing');
     const res = await fetch('/api/boq/import', {
@@ -95,8 +98,8 @@ export default function BoqUploadPage() {
   return (
     <div className="page-content">
       <PageHeader
-        title="BOQ Upload Wizard"
-        subtitle="Upload and map Excel / CSV line items to standard ProCPX BOQ format"
+        title={UI_STRINGS.appAppBoqUploadPage.bOQUploadWizard}
+        subtitle={UI_STRINGS.appAppBoqUploadPage.uploadAndMapExcelCSVLineItemsToStandardProCPXBOQFormat}
         backHref={projectId ? `/projects/${projectId}` : '/boq'}
         backLabel="← Back to BOQ Register"
       />
@@ -124,7 +127,7 @@ export default function BoqUploadPage() {
       {/* STEP 1: Upload */}
       {step === 'upload' && (
         <div className="card">
-          <div className="card-header"><span className="card-title">Step 1: Upload BOQ File</span></div>
+          <div className="card-header"><span className="card-title">{UI_STRINGS.appAppBoqUploadPage.step1UploadBOQFile}</span></div>
           <div className="card-body">
             <div
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
@@ -139,14 +142,14 @@ export default function BoqUploadPage() {
               }}
             >
               {uploading ? (
-                <><div className="spinner" style={{ margin: '0 auto 12px' }} /><p>Uploading and analysing file...</p></>
+                <><div className="spinner" style={{ margin: '0 auto 12px' }} /><p>{UI_STRINGS.appAppBoqUploadPage.uploadingAndAnalysingFile}</p></>
               ) : (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                     <FileSpreadsheet size={40} color="#6366f1" strokeWidth={1.5} />
                   </div>
-                  <p style={{ fontWeight: 600, marginBottom: 6 }}>Drop your BOQ file here, or click to browse</p>
-                  <p className="text-muted text-sm">Supported: .xlsx, .xls, .csv</p>
+                  <p style={{ fontWeight: 600, marginBottom: 6 }}>{UI_STRINGS.appAppBoqUploadPage.dropYourBOQFileHereOrClickToBrowse}</p>
+                  <p className="text-muted text-sm">{UI_STRINGS.appAppBoqUploadPage.supportedXlsxXlsCsv}</p>
                 </>
               )}
               <input id="file-input" type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
@@ -161,33 +164,31 @@ export default function BoqUploadPage() {
       {step === 'map' && uploadResult && (
         <div className="card">
           <div className="card-header">
-            <span className="card-title">Step 2: Map Columns</span>
-            <span className="text-muted text-sm">File: {uploadResult.fileName}</span>
+            <span className="card-title">{UI_STRINGS.appAppBoqUploadPage.step2MapColumns}</span>
+            <span className="text-muted text-sm">{UI_STRINGS.appAppBoqUploadPage.file}{uploadResult.fileName}</span>
           </div>
           <div className="card-body">
             {uploadResult.sheets?.length > 1 && (
               <div className="form-group">
-                <label className="form-label">Sheet to Import</label>
+                <label className="form-label">{UI_STRINGS.appAppBoqUploadPage.sheetToImport}</label>
                 <select className="form-control" value={selectedSheet} onChange={e => setSelectedSheet(e.target.value)} style={{ maxWidth: 300 }}>
                   {uploadResult.sheets.map((s: string) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             )}
-            <p className="text-muted mb-4" style={{ fontSize: 13 }}>
-              Map your Excel columns to the standard BOQ fields. Required fields are marked *.
-            </p>
+            <p className="text-muted mb-4" style={{ fontSize: 13 }}>{UI_STRINGS.appAppBoqUploadPage.mapYourExcelColumnsToTheStandardBOQFieldsRequiredFieldsAreMarked}</p>
             <div className="form-grid">
               {BOQ_FIELDS.map(field => (
                 <div key={field.key} className="form-group">
                   <label className="form-label">
-                    {field.label} {field.required && <span className="required">*</span>}
+                    {field.label} {field.required && <span className="required">{UI_STRINGS.common.copyd1yn99}</span>}
                   </label>
                   <select
                     className="form-control"
                     value={columnMapping[field.key] || ''}
                     onChange={e => setColumnMapping(m => ({ ...m, [field.key]: e.target.value }))}
                   >
-                    <option value="">— Ignore / Not in file —</option>
+                    <option value="">{UI_STRINGS.appAppBoqUploadPage.ignoreNotInFile}</option>
                     {(uploadResult.columns || []).map((col: string) => (
                       <option key={col} value={col}>{col}</option>
                     ))}
@@ -198,7 +199,7 @@ export default function BoqUploadPage() {
 
             {uploadResult.previewRows?.length > 0 && (
               <div style={{ marginTop: 20 }}>
-                <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>Preview (first 5 rows)</p>
+                <p style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>{UI_STRINGS.appAppBoqUploadPage.previewFirst5Rows}</p>
                 <div className="table-wrapper" style={{ maxHeight: 200, overflowY: 'auto' }}>
                   <table className="data-table">
                     <thead>
@@ -219,8 +220,8 @@ export default function BoqUploadPage() {
             )}
           </div>
           <div className="card-footer flex gap-3" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn btn-secondary" onClick={() => setStep('upload')}>← Back</button>
-            <button className="btn btn-primary" onClick={handleImport}>Import BOQ →</button>
+            <button className="btn btn-secondary" onClick={() => setStep('upload')}>{UI_STRINGS.appAppBoqUploadPage.back}</button>
+            <button className="btn btn-primary" onClick={handleImport}>{UI_STRINGS.appAppBoqUploadPage.importBOQ}</button>
           </div>
         </div>
       )}
@@ -230,8 +231,8 @@ export default function BoqUploadPage() {
         <div className="card">
           <div className="card-body" style={{ textAlign: 'center', padding: 60 }}>
             <div className="spinner" style={{ width: 40, height: 40, margin: '0 auto 16px', borderWidth: 3 }} />
-            <p style={{ fontWeight: 600, fontSize: 15 }}>Importing BOQ Lines...</p>
-            <p className="text-muted">This may take a moment for large files.</p>
+            <p style={{ fontWeight: 600, fontSize: 15 }}>{UI_STRINGS.appAppBoqUploadPage.importingBOQLines}</p>
+            <p className="text-muted">{UI_STRINGS.appAppBoqUploadPage.thisMayTakeAMomentForLargeFiles}</p>
           </div>
         </div>
       )}
@@ -243,53 +244,51 @@ export default function BoqUploadPage() {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               <CheckCircle2 size={48} color="#059669" strokeWidth={1.5} />
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>BOQ Imported Successfully</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{UI_STRINGS.appAppBoqUploadPage.bOQImportedSuccessfully}</h2>
             <div style={{ maxWidth: 800, margin: '20px auto' }}>
               <SummaryCardGrid columns={4}>
                 <SummaryCard
-                  label="Total Lines"
+                  label={UI_STRINGS.common.totalLines}
                   value={importResult.imported}
-                  secondary="Imported lines"
+                  secondary={UI_STRINGS.appAppBoqUploadPage.importedLines}
                   icon={<FileSpreadsheet size={16} />}
                   accent="default"
                 />
                 <SummaryCard
-                  label="Valid"
+                  label={UI_STRINGS.common.valid}
                   value={importResult.valid}
-                  secondary="Passed validation"
+                  secondary={UI_STRINGS.appAppBoqUploadPage.passedValidation}
                   icon={<CheckCircle size={16} />}
                   accent="emerald"
                 />
                 <SummaryCard
-                  label="Warnings"
+                  label={UI_STRINGS.common.warnings}
                   value={importResult.warnings}
-                  secondary="Minor notices"
+                  secondary={UI_STRINGS.appAppBoqUploadPage.minorNotices}
                   icon={<AlertTriangle size={16} />}
                   accent="amber"
                 />
                 <SummaryCard
-                  label="Errors"
+                  label={UI_STRINGS.common.errors}
                   value={importResult.errors}
-                  secondary="Validation errors"
+                  secondary={UI_STRINGS.appAppBoqUploadPage.validationErrors}
                   icon={<AlertOctagon size={16} />}
                   accent="rose"
                 />
               </SummaryCardGrid>
             </div>
             <div style={{ marginBottom: 20 }}>
-              <p className="text-muted">Quality Score:</p>
+              <p className="text-muted">{UI_STRINGS.appAppBoqUploadPage.qualityScore}</p>
               <div style={{ maxWidth: 300, margin: '8px auto' }}>
                 <div className="quality-score">
                   <div className="quality-bar">
                     <div className="quality-fill" style={{ width: `${importResult.qualityScore}%`, background: importResult.qualityScore >= 80 ? '#059669' : importResult.qualityScore >= 50 ? '#d97706' : '#dc2626' }} />
                   </div>
-                  <span className="quality-label">{importResult.qualityScore}%</span>
+                  <span className="quality-label">{importResult.qualityScore}{UI_STRINGS.common.copy8w4luo}</span>
                 </div>
               </div>
             </div>
-            <button className="btn btn-primary btn-lg" onClick={() => router.push(`/boq/${uploadResult.revisionId}`)}>
-              Open BOQ Workspace →
-            </button>
+            <button className="btn btn-primary btn-lg" onClick={() => router.push(`/boq/${uploadResult.revisionId}`)}>{UI_STRINGS.common.openBOQWorkspace}</button>
           </div>
         </div>
       )}

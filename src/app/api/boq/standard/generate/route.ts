@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');
@@ -27,16 +30,16 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!projectId) {
-      return apiError('Project ID is required.', 400);
+      return apiError(UI_STRINGS.common.projectIDIsRequired, 400);
     }
     if (!validLines || !Array.isArray(validLines) || validLines.length === 0) {
-      return apiError('No valid line items to generate BOQ from.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardGenerateRoute.noValidLineItemsToGenerateBOQFrom, 400);
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError('Project not found.', 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
     // Verify Cost Centre if provided
     let costCentre = null;
@@ -62,8 +65,8 @@ export async function POST(req: NextRequest) {
         boq = await prisma.boq.update({
           where: { id: boq.id },
           data: {
-            title: title?.trim() || boq.title || derivedTitle,
-            description: derivedDescription || boq.description,
+            title: interpolateUiString(UI_STRINGS.common.value1, { "value1": title?.trim() || boq.title || derivedTitle }),
+            description: interpolateUiString(UI_STRINGS.common.value1, { "value1": derivedDescription || boq.description }),
             purpose: purpose || boq.purpose || derivedPurpose,
             category: derivedCategory || boq.category,
             costCentreId: costCentreId || boq.costCentreId,
@@ -192,7 +195,7 @@ export async function POST(req: NextRequest) {
           drawingReference: l.drawingReference || null,
           remarks: l.remarks || null,
           validationStatus,
-          validationMessages: JSON.stringify(qty === null ? [{ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: 'Quantity is required before budgeting or PR.' }] : []),
+          validationMessages: JSON.stringify(qty === null ? [{ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: UI_STRINGS.common.quantityIsRequiredBeforeBudgetingOrPR }] : []),
           benchmarkEligible: true,
         },
       });
@@ -207,7 +210,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BOQ',
         entityId: boq.id,
         action: 'BOQ_GENERATED_FROM_STANDARD_DOWNLOAD_UPLOAD',
-        description: `Draft BOQ ${boq.boqCode} generated from completed Standard BOQ upload (${validLines.length} lines, Cost Centre: ${costCentre?.code || 'None'})`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqStandardGenerateRoute.draftBOQBoqCodeGeneratedFromCompletedStandardBOQUploadLengthLinesCostCentreValue3, { "boqCode": boq.boqCode, "length": validLines.length, "value3": costCentre?.code || UI_STRINGS.common.none }),
       },
     });
 
@@ -228,6 +231,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (err: any) {
     console.error('Error generating BOQ from standard upload:', err);
-    return apiError(err.message || 'Failed to generate Draft BOQ.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateDraftBoq2 }), 500);
   }
 }

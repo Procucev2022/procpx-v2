@@ -7,6 +7,9 @@ import { standardiseUom } from '@/lib/uom-standardise';
 import { validateBoqLine, computeQualityScore } from '@/lib/boq-validate';
 import { readFile } from 'fs/promises';
 import type { ColumnMapping } from "@app-types/app/api/boq/import/route.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export async function POST(req: NextRequest) {
@@ -16,17 +19,17 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { revisionId, sheetName, columnMapping }: { revisionId: string; sheetName?: string; columnMapping: ColumnMapping } = body;
 
-  if (!revisionId) return apiError('Revision ID is required.');
-  if (!columnMapping?.description) return apiError('Column mapping is incomplete. Please map Description, UOM and Quantity.');
-  if (!columnMapping?.uom) return apiError('Column mapping is incomplete. Please map UOM.');
-  if (!columnMapping?.quantity) return apiError('Column mapping is incomplete. Please map Quantity.');
+  if (!revisionId) return apiError(UI_STRINGS.appApiBoqImportRoute.revisionIDIsRequired);
+  if (!columnMapping?.description) return apiError(UI_STRINGS.common.columnMappingIsIncompletePleaseMapDescriptionUOMAndQuantity);
+  if (!columnMapping?.uom) return apiError(UI_STRINGS.common.columnMappingIsIncompletePleaseMapUOM);
+  if (!columnMapping?.quantity) return apiError(UI_STRINGS.common.columnMappingIsIncompletePleaseMapQuantity);
 
   const revision = await prisma.boqRevision.findFirst({
     where: { id: revisionId, tenantId: ctx.tenantId },
   });
-  if (!revision) return apiError('BOQ Revision not found.', 404);
-  if (revision.status !== 'DRAFT') return apiError('Only DRAFT revisions can be imported.');
-  if (!revision.originalFilePath) return apiError('No uploaded file found for this revision.');
+  if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+  if (revision.status !== 'DRAFT') return apiError(UI_STRINGS.appApiBoqImportRoute.onlyDRAFTRevisionsCanBeImported);
+  if (!revision.originalFilePath) return apiError(UI_STRINGS.appApiBoqImportRoute.noUploadedFileFoundForThisRevision);
 
   // Read file
   const buffer = await readFile(revision.originalFilePath);
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
     ? workbook.Sheets[sheetName]
     : workbook.Sheets[workbook.SheetNames[0]];
 
-  if (!sheet) return apiError('Sheet not found in uploaded file.');
+  if (!sheet) return apiError(UI_STRINGS.appApiBoqImportRoute.sheetNotFoundInUploadedFile);
 
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, string>[];
 
@@ -136,7 +139,7 @@ export async function POST(req: NextRequest) {
     entityType: 'BOQ_REVISION',
     entityId: revisionId,
     action: 'IMPORT',
-    description: `BOQ imported: ${lines.length} lines (${validCount} valid, ${warnCount} warnings, ${errorCount} errors)`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqImportRoute.bOQImportedLengthLinesValidCountValidWarnCountWarningsErrorCountErrors, { "length": lines.length, "validCount": validCount, "warnCount": warnCount, "errorCount": errorCount }),
     newValue: { totalLines: lines.length, validCount, errorCount, warnCount, qualityScore },
   });
 

@@ -3,6 +3,8 @@ import { GET, POST } from '../src/app/api/vendor-portal/rate-cards/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -61,18 +63,18 @@ describe('vendor portal rate cards API', () => {
     await expect(GET(getRequest())).resolves.toBe(denied);
     auth.mockResolvedValueOnce({ ...baseContext, role: 'PROJECT_USER', vendorId: undefined });
     await expect(POST(postRequest({ rateCardId: 'rate-card-1' }))).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
 
     auth.mockResolvedValueOnce({ ...baseContext, role: 'VENDOR', vendorId: undefined });
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Vendor record not associated with this user account', status: 404 });
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404 });
     auth.mockResolvedValueOnce({ ...baseContext, role: 'PROJECT_USER', vendorId: undefined });
     await expect(POST(postRequest({ rateCardId: 'rate-card-1' }))).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
     auth.mockResolvedValueOnce({ ...baseContext, role: 'VENDOR', vendorId: undefined });
     await expect(POST(postRequest({ rateCardId: 'rate-card-1' }))).resolves.toEqual({
-      ok: false, error: 'Vendor record not associated with this user account', status: 404,
+      ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404,
     });
   });
 
@@ -112,9 +114,9 @@ describe('vendor portal rate cards API', () => {
   });
 
   it('validates rate-card submission and vendor acceptance status', async () => {
-    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: 'Rate Card ID is required', status: 400 });
+    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, status: 400 });
     db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ rateCardId: 'missing' }))).resolves.toEqual({ ok: false, error: 'Rate card not found or access denied', status: 404 });
+    await expect(POST(postRequest({ rateCardId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, status: 404 });
     db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_BUYER_OFFER' }));
     await expect(POST(postRequest({ rateCardId: 'rate-card-1', action: 'VENDOR_ACCEPT' }))).resolves.toEqual({
       ok: false, error: 'Vendor Acceptance requires prior Category Manager Acceptance (Current status: ROUND_1_BUYER_OFFER)', status: 400,
@@ -132,10 +134,10 @@ describe('vendor portal rate cards API', () => {
     expect(updateData).toMatchObject({ agreement: { required: true, status: 'VENDOR_ACCEPTED', signature: null },
       vendorAccepted: { actor: 'Vendor Reviewer', remarks: 'Vendor accepted final negotiated rate card agreement and commercial terms', hasSignature: false } });
     expect(db.vendorRateCard.update).toHaveBeenCalledWith({ where: { id: 'rate-card-1' }, data: {
-      status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', notes: expect.any(String),
+      status: 'PENDING_PROJECT_APPROVAL', approvalLevel: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, notes: expect.any(String),
     } });
     expect(db.rateCardApproval.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      action: 'VENDOR_ACCEPTED', level: 'LEVEL_1_PROJECT', approverName: 'Vendor Reviewer',
+      action: 'VENDOR_ACCEPTED', level: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, approverName: 'Vendor Reviewer',
       approverEmail: 'user@example.test', remarks: 'Vendor accepted final negotiated rate card agreement', timestamp: expect.any(Date),
     }) });
     expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({
@@ -184,7 +186,7 @@ describe('vendor portal rate cards API', () => {
       status: 'ROUND_1_VENDOR_QUOTE', notes: expect.any(String),
     } });
     expect(db.rateCardApproval.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      action: 'VENDOR_QUOTE_1_SUBMITTED', level: 'LEVEL_1_PROJECT', remarks: 'Vendor submitted Vendor RC Quote-1 for commercial review',
+      action: 'VENDOR_QUOTE_1_SUBMITTED', level: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, remarks: 'Vendor submitted Vendor RC Quote-1 for commercial review',
     }) });
     expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ targetRole: 'CATEGORY_MANAGER', link: '/procurement/rate-cards' }) });
     expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'RATE_CARD_VENDOR_QUOTE_1_SUBMITTED' }));

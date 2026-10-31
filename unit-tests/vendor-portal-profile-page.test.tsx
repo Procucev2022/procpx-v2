@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VendorProfileSelfServicePage from '../src/app/(app)/vendor-portal/profile/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockSuccess = jest.fn();
 jest.mock('../src/components/ui/Toast', () => ({ useToast: () => ({ success: mockSuccess }) }));
@@ -62,14 +66,14 @@ describe('vendor portal profile page', () => {
     let resolveRequest!: (value: ReturnType<typeof response>) => void;
     mockFetch.mockReturnValueOnce(new Promise((resolve) => { resolveRequest = resolve; }));
     render(<VendorProfileSelfServicePage />);
-    expect(screen.getByText('Loading company profile...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalProfilePage.loadingCompanyProfile))).toBeInTheDocument();
 
     await act(async () => resolveRequest(response({ vendor: vendor() })));
     expect(await screen.findByRole('heading', { name: 'Acme Build Co' })).toBeInTheDocument();
     expect(screen.getByText('ACME')).toBeInTheDocument();
     expect(screen.getByText('VERIFIED')).toBeInTheDocument();
     expect(screen.getByText('Northwind')).toBeInTheDocument();
-    expect((document.querySelector('[name="legalStructure"]') as HTMLSelectElement).value).toBe('Private Limited Company');
+    expect((document.querySelector('[name="legalStructure"]') as HTMLSelectElement).value).toBe(UI_STRINGS.appAppVendorPortalProfilePage.privateLimitedCompany);
     expect((document.querySelector('[name="experienceYears"]') as HTMLInputElement).value).toBe('12');
     expect((document.querySelector('[name="turnoverCrores"]') as HTMLInputElement).value).toBe('45.5');
 
@@ -97,9 +101,9 @@ describe('vendor portal profile page', () => {
     }) }));
     const { unmount } = render(<VendorProfileSelfServicePage />);
     expect(await screen.findByRole('heading', { name: 'Acme Build Co' })).toBeInTheDocument();
-    expect(screen.getByText('ACTIVE')).toBeInTheDocument();
-    expect(screen.getByText(/Enterprise Client/)).toBeInTheDocument();
-    expect(screen.getByText(/General Contracting & Sourcing/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.aCTIVE))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.enterpriseClient))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalProfilePage.generalContractingSourcing))).toBeInTheDocument();
     expect((document.querySelector('[name="experienceYears"]') as HTMLInputElement).value).toBe('');
     expect((document.querySelector('[name="turnoverCrores"]') as HTMLInputElement).value).toBe('');
     unmount();
@@ -112,7 +116,7 @@ describe('vendor portal profile page', () => {
   it('reports fallback load errors and tolerates a failed current profile request', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, json: async () => { throw new Error('not json'); } });
     const { unmount } = render(<VendorProfileSelfServicePage />);
-    expect(await screen.findByText('Failed to load company profile')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadCompanyProfile))).toBeInTheDocument();
     unmount();
 
     mockFetch.mockRejectedValueOnce(new Error('profile service offline'));
@@ -128,8 +132,8 @@ describe('vendor portal profile page', () => {
       ? Promise.resolve(response({ vendor: vendor({ code: 'ACME-UPDATED' }) }))
       : Promise.resolve(response({ vendor: vendor() })));
     fireEvent.submit(form());
-    expect(await screen.findByText('Vendor details submitted successfully.')).toBeInTheDocument();
-    expect(mockSuccess).toHaveBeenCalledWith('Vendor details submitted successfully.', 'ACME-UPDATED');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully))).toBeInTheDocument();
+    expect(mockSuccess).toHaveBeenCalledWith(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, 'ACME-UPDATED');
     const patch = mockFetch.mock.calls.find(([, init]) => init?.method === 'PATCH');
     expect(JSON.parse(patch![1].body)).toMatchObject({ city: 'Chennai', contactPerson: 'Ada Vendor' });
     unmount();
@@ -139,8 +143,8 @@ describe('vendor portal profile page', () => {
       : Promise.resolve(response({ vendor: vendor() })));
     render(<VendorProfileSelfServicePage />);
     await screen.findByRole('heading', { name: 'Acme Build Co' });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save Profile Changes' })[0]);
-    await waitFor(() => expect(mockSuccess).toHaveBeenLastCalledWith('Vendor details submitted successfully.', undefined));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalProfilePage.saveProfileChanges) })[0]);
+    await waitFor(() => expect(mockSuccess).toHaveBeenLastCalledWith(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, undefined));
   });
 
   it('shows API and network errors when saving', async () => {
@@ -156,7 +160,7 @@ describe('vendor portal profile page', () => {
       ? Promise.resolve({ ok: false, json: async () => { throw new Error('invalid json'); } })
       : Promise.resolve(response({ vendor: vendor() })));
     fireEvent.submit(form());
-    expect(await screen.findByText('Failed to save changes')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToSaveChanges))).toBeInTheDocument();
 
     mockFetch.mockImplementation((url: string, init?: RequestInit) => init?.method === 'PATCH'
       ? Promise.reject(new Error('save service offline'))

@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_CREATE');
@@ -9,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { boqId } = await req.json();
-    if (!boqId) return apiError('boqId is required', 400);
+    if (!boqId) return apiError(UI_STRINGS.appApiBoqDuplicateRoute.boqIdIsRequired, 400);
 
     const sourceBoq = await prisma.boq.findFirst({
       where: { id: boqId, tenantId: ctx.tenantId },
@@ -24,7 +27,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!sourceBoq) return apiError('Source BOQ not found', 404);
+    if (!sourceBoq) return apiError(UI_STRINGS.appApiBoqDuplicateRoute.sourceBOQNotFound, 404);
 
     const count = await prisma.boq.count({
       where: { tenantId: ctx.tenantId, projectId: sourceBoq.projectId },
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
         projectId: sourceBoq.projectId,
         costCentreId: sourceBoq.costCentreId,
         boqCode: newBoqCode,
-        title: `${sourceBoq.title || sourceBoq.boqCode} (Copy)`,
+        title: interpolateUiString(UI_STRINGS.appApiBoqDuplicateRoute.value1Copy, { "value1": sourceBoq.title || sourceBoq.boqCode }),
         category: sourceBoq.category,
         scope: sourceBoq.scope,
         purpose: sourceBoq.purpose,
@@ -122,7 +125,7 @@ export async function POST(req: NextRequest) {
           entityType: 'BOQ',
           entityId: newBoq.id,
           action: 'BOQ_DUPLICATED',
-          description: `Duplicated BOQ ${sourceBoq.boqCode} into ${newBoq.boqCode} (${newBoq.title})`,
+          description: interpolateUiString(UI_STRINGS.appApiBoqDuplicateRoute.duplicatedBOQBoqCodeIntoBoqCode2Title, { "boqCode": sourceBoq.boqCode, "boqCode2": newBoq.boqCode, "title": newBoq.title }),
           newValue: JSON.stringify({
             sourceBoqCode: sourceBoq.boqCode,
             newBoqCode: newBoq.boqCode,
@@ -139,10 +142,10 @@ export async function POST(req: NextRequest) {
       boq: newBoq,
       boqId: newBoq.id,
       boqCode: newBoq.boqCode,
-      message: `BOQ successfully duplicated as ${newBoq.boqCode}`,
+      message: interpolateUiString(UI_STRINGS.appApiBoqDuplicateRoute.bOQSuccessfullyDuplicatedAsBoqCode, { "boqCode": newBoq.boqCode }),
     }, 201);
   } catch (err: any) {
     console.error('Duplicate BOQ error:', err);
-    return apiError(err.message || 'Failed to duplicate BOQ', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToDuplicateBoq }), 500);
   }
 }

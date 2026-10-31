@@ -9,6 +9,9 @@ import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function AwardsDeskPage() {
   const toast = useToast();
@@ -45,19 +48,19 @@ export default function AwardsDeskPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to review award recommendation');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation }));
       }
 
       toast.success(
-        isApproved ? 'PPO approved successfully by Finance.' : 'Award recommendation rejected.',
+        isApproved ? UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfullyByFinance : UI_STRINGS.common.userMessages.awardRecommendationRejected,
         award?.rfq?.rfqNumber,
-        isApproved ? 'Ready for PPO Issuance' : 'Commercial Review'
+        isApproved ? UI_STRINGS.common.userMessages.readyForPpoIssuance : UI_STRINGS.common.userMessages.commercialReview
       );
       fetchAwards();
     } catch (err: any) {
       toast.error({
-        title: 'Award Review Failed',
-        message: err.message || 'An error occurred while reviewing the award recommendation.',
+        title: UI_STRINGS.appAppProcurementAwardsPage.awardReviewFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredWhileReviewingTheAwardRecommendation }),
         recordNumber: award?.rfq?.rfqNumber,
       });
     } finally {
@@ -69,35 +72,34 @@ export default function AwardsDeskPage() {
     <div>
       <PageHeader
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'Awards & PPOs' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.common.awardsPPOs },
         ]}
-        title="Commercial Award Recommendations"
-        description="Final sourcing determinations, comparative savings justification, Finance approval workflows & PPO issuance."
+        title={UI_STRINGS.appAppProcurementAwardsPage.commercialAwardRecommendations}
+        description={UI_STRINGS.appAppProcurementAwardsPage.finalSourcingDeterminationsComparativeSavingsJustificationFinanceApprovalWorkflowsPPOIssuance}
         actions={
           <Link href="/procurement/ppos" className="btn btn-secondary">
-            <FileCheck size={16} /> View Issued PPOs
-          </Link>
+            <FileCheck size={16} />{UI_STRINGS.appAppProcurementAwardsPage.viewIssuedPPOs}</Link>
         }
       />
 
       <Card
-        title={`Commercial Award Proposals (${awards.length})`}
-        subtitle="Submissions awaiting Finance sign-off and contract generation"
+        title={interpolateUiString(UI_STRINGS.appAppProcurementAwardsPage.commercialAwardProposalsLength, { "length": awards.length })}
+        subtitle={UI_STRINGS.appAppProcurementAwardsPage.submissionsAwaitingFinanceSignOffAndContractGeneration}
         noPadding
       >
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13, color: '#64748b' }}>Loading award recommendations...</div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAwardsPage.loadingAwardRecommendations}</div>
           </div>
         ) : awards.length === 0 ? (
           <div style={{ padding: 32 }}>
             <EmptyState
               icon={<Award size={36} strokeWidth={1.5} color="#94a3b8" />}
-              title="No Award Recommendations Yet"
-              description="Lock final rates in an RFQ to generate an award recommendation for Finance approval."
-              actionText="View Sourcing RFQs"
+              title={UI_STRINGS.appAppProcurementAwardsPage.noAwardRecommendationsYet}
+              description={UI_STRINGS.appAppProcurementAwardsPage.lockFinalRatesInAnRFQToGenerateAnAwardRecommendationForFinanceApproval}
+              actionText={UI_STRINGS.common.viewSourcingRFQs}
               actionHref="/procurement/rfqs"
             />
           </div>
@@ -106,15 +108,15 @@ export default function AwardsDeskPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ width: 140 }}>RFQ Number</th>
-                  <th>Project</th>
-                  <th>Recommended Vendor</th>
-                  <th style={{ textAlign: 'right' }}>Final Value</th>
-                  <th style={{ textAlign: 'right' }}>Benchmark</th>
-                  <th style={{ textAlign: 'right' }}>Savings Realised</th>
-                  <th>Approval Status</th>
-                  <th>Submitted At</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.rFQNumber}</th>
+                  <th>{UI_STRINGS.common.project}</th>
+                  <th>{UI_STRINGS.common.recommendedVendor}</th>
+                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppProcurementAwardsPage.finalValue}</th>
+                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.benchmark}</th>
+                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppProcurementAwardsPage.savingsRealised}</th>
+                  <th>{UI_STRINGS.common.approvalStatus}</th>
+                  <th>{UI_STRINGS.common.submittedAt}</th>
+                  <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,16 +140,13 @@ export default function AwardsDeskPage() {
                     <td>
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>{a.recommendedVendor?.name}</div>
                     </td>
-                    <td style={{ fontWeight: 700, textAlign: 'right', color: '#059669' }}>
-                      ₹ {a.finalNegotiatedAmount?.toLocaleString()}
+                    <td style={{ fontWeight: 700, textAlign: 'right', color: '#059669' }}>{UI_STRINGS.common.copy1g8b5tg}{a.finalNegotiatedAmount?.toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right' }}>
-                      ₹ {a.benchmarkAmount?.toLocaleString()}
+                    <td style={{ textAlign: 'right' }}>{UI_STRINGS.common.copy1g8b5tg}{a.benchmarkAmount?.toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <span className="badge badge-approved" style={{ fontWeight: 700 }}>
-                        {a.savingsPercent}% (₹ {a.totalSavingsAmount?.toLocaleString()})
-                      </span>
+                        {a.savingsPercent}{UI_STRINGS.appAppProcurementAwardsPage.copy16sldvt}{a.totalSavingsAmount?.toLocaleString()}{UI_STRINGS.common.copyc7zu6c}</span>
                     </td>
                     <td>
                       <StatusBadge status={a.status} />
@@ -165,25 +164,19 @@ export default function AwardsDeskPage() {
                               disabled={actionLoading}
                               className="btn btn-primary btn-sm"
                               style={{ background: '#16a34a', borderColor: '#15803d' }}
-                            >
-                              Approve
-                            </button>
+                            >{UI_STRINGS.appAppProcurementAwardsPage.approve}</button>
                             <button
                               type="button"
                               onClick={() => handleReviewAward(a.id, 'REJECT')}
                               disabled={actionLoading}
                               className="btn btn-secondary btn-sm"
-                            >
-                              Reject
-                            </button>
+                            >{UI_STRINGS.common.reject2}</button>
                           </>
                         )}
                         <Link
                           href={`/procurement/rfqs/${a.rfqId}?tab=awarding`}
                           className="btn btn-secondary btn-sm"
-                        >
-                          Workspace →
-                        </Link>
+                        >{UI_STRINGS.appAppProcurementAwardsPage.workspace}</Link>
                       </div>
                     </td>
                   </tr>

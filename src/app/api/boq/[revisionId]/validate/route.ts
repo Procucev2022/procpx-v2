@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { validateBoqLine, summarizeIssues } from '@/lib/boq-validate';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_VALIDATE');
@@ -19,7 +22,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     },
   });
 
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
 
   // Check duplicate line numbers
   const lineNumCounts: Record<string, number> = {};
@@ -101,7 +104,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     entityType: 'BOQ_REVISION',
     entityId: revisionId,
     action: 'VALIDATE',
-    description: `BOQ Revision ${revision.revisionCode} validated: Score ${issueSummary.qualityScore}%, ${errorCount} errors, ${warnCount} warnings`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdValidateRoute.bOQRevisionRevisionCodeValidatedScoreQualityScoreErrorCountErrorsWarnCountWarnings, { "revisionCode": revision.revisionCode, "qualityScore": issueSummary.qualityScore, "errorCount": errorCount, "warnCount": warnCount }),
     newValue: { qualityScore: issueSummary.qualityScore, validCount, errorCount, warnCount, issues: issueSummary },
   });
 
@@ -159,7 +162,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     }
   }
 
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
 
   return apiSuccess({
     revision,

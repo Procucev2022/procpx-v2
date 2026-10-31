@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { ROLES, PERMISSIONS_MATRIX } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function UsersPage() {
@@ -38,7 +41,7 @@ export default function UsersPage() {
     });
     const d = await res.json();
     if (!res.ok) { setError(d.error); return; }
-    setSuccess(`User ${d.email} created successfully.`);
+    setSuccess(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedSuccessfully, { "email": d.email }));
     setShowModal(false);
     setForm({ email: '', name: '', role: 'PROJECT_USER', password: '' });
     load();
@@ -46,14 +49,14 @@ export default function UsersPage() {
 
   async function toggleStatus(u: any) {
     const newStatus = u.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    if (!confirm(`Are you sure you want to change status of ${u.name} to ${newStatus}?`)) return;
+    if (!confirm(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.areYouSureYouWantToChangeStatusOfNameToNewStatus, { "name": u.name, "newStatus": newStatus }))) return;
     const res = await fetch(`/api/admin/users/${u.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
     if (res.ok) {
-      setSuccess(`User ${u.email} is now ${newStatus}.`);
+      setSuccess(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailIsNowNewStatus, { "email": u.email, "newStatus": newStatus }));
       load();
     }
   }
@@ -63,11 +66,11 @@ export default function UsersPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="User Management & Role Governance"
-        subtitle={`${total} authorized users in this organization tenant`}
+        title={UI_STRINGS.appAppAdminUsersPage.userManagementRoleGovernance}
+        subtitle={interpolateUiString(UI_STRINGS.appAppAdminUsersPage.totalAuthorizedUsersInThisOrganizationTenant, { "total": total })}
         breadcrumbs={[
-          { label: 'Administration', href: '/admin/users' },
-          { label: 'Users' },
+          { label: UI_STRINGS.common.administration, href: '/admin/users' },
+          { label: UI_STRINGS.common.users },
         ]}
         actions={
           activeTab === 'users' ? (
@@ -76,8 +79,7 @@ export default function UsersPage() {
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => setShowModal(true)}
             >
-              <Plus size={16} /> Invite User
-            </button>
+              <Plus size={16} />{UI_STRINGS.appAppAdminUsersPage.inviteUser}</button>
           ) : undefined
         }
       />
@@ -103,9 +105,7 @@ export default function UsersPage() {
               : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
           }`}
           onClick={() => setActiveTab('users')}
-        >
-          Tenant Users ({total})
-        </button>
+        >{UI_STRINGS.appAppAdminUsersPage.tenantUsers}{total}{UI_STRINGS.common.copyc7zu6c}</button>
         <button
           type="button"
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -114,9 +114,7 @@ export default function UsersPage() {
               : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
           }`}
           onClick={() => setActiveTab('roles')}
-        >
-          Role & Permission Matrix
-        </button>
+        >{UI_STRINGS.appAppAdminUsersPage.rolePermissionMatrix}</button>
       </div>
 
       {activeTab === 'users' ? (
@@ -126,7 +124,7 @@ export default function UsersPage() {
               <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
               <input
                 className="input pl-9 h-[40px] w-full text-sm bg-white"
-                placeholder="Search by name or email..."
+                placeholder={UI_STRINGS.appAppAdminUsersPage.searchByNameOrEmail}
                 value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1); }}
               />
@@ -134,26 +132,26 @@ export default function UsersPage() {
           </div>
 
           {loading ? (
-            <div className="loading-overlay"><div className="spinner" /> Loading users...</div>
+            <div className="loading-overlay"><div className="spinner" />{UI_STRINGS.appAppAdminUsersPage.loadingUsers}</div>
           ) : users.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">
                 <Users size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No users found</div>
+              <div className="empty-title">{UI_STRINGS.appAppAdminUsersPage.noUsersFound}</div>
             </div>
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Last Login</th>
-                    <th>Created</th>
-                    <th className="col-actions">Actions</th>
+                    <th>{UI_STRINGS.common.name}</th>
+                    <th>{UI_STRINGS.common.email}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.role}</th>
+                    <th>{UI_STRINGS.common.status}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.lastLogin}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.created}</th>
+                    <th className="col-actions">{UI_STRINGS.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -167,7 +165,7 @@ export default function UsersPage() {
                           {u.status}
                         </span>
                       </td>
-                      <td className="text-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}</td>
+                      <td className="text-muted">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : UI_STRINGS.appAppAdminUsersPage.never}</td>
                       <td className="text-muted">{new Date(u.createdAt).toLocaleDateString()}</td>
                       <td className="col-actions">
                         <button
@@ -175,7 +173,7 @@ export default function UsersPage() {
                           style={{ padding: '3px 8px', fontSize: 11 }}
                           onClick={() => toggleStatus(u)}
                         >
-                          {u.status === 'ACTIVE' ? 'Disable' : 'Activate'}
+                          {u.status === 'ACTIVE' ? UI_STRINGS.appAppAdminUsersPage.disable : UI_STRINGS.appAppAdminUsersPage.activate}
                         </button>
                       </td>
                     </tr>
@@ -187,9 +185,9 @@ export default function UsersPage() {
 
           {totalPages > 1 && (
             <div className="pagination">
-              <button className="page-btn" onClick={() => setPage(p => p - 1)} disabled={page === 1}>‹</button>
-              <span className="page-info">Page {page} of {totalPages}</span>
-              <button className="page-btn" onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>›</button>
+              <button className="page-btn" onClick={() => setPage(p => p - 1)} disabled={page === 1}>{UI_STRINGS.common.copygps8ms}</button>
+              <span className="page-info">{UI_STRINGS.common.page2}{page}{UI_STRINGS.common.of}{totalPages}</span>
+              <button className="page-btn" onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>{UI_STRINGS.common.copyhjr1pp}</button>
             </div>
           )}
         </div>
@@ -197,16 +195,15 @@ export default function UsersPage() {
         <div className="card">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Shield size={18} /> RBAC Permission Mapping Matrix
-            </span>
+              <Shield size={18} />{UI_STRINGS.appAppAdminUsersPage.rBACPermissionMappingMatrix}</span>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Permission Token</th>
-                  <th>Functional Capability</th>
-                  <th>Authorized Roles</th>
+                  <th>{UI_STRINGS.appAppAdminUsersPage.permissionToken}</th>
+                  <th>{UI_STRINGS.appAppAdminUsersPage.functionalCapability}</th>
+                  <th>{UI_STRINGS.appAppAdminUsersPage.authorizedRoles}</th>
                 </tr>
               </thead>
               <tbody>
@@ -233,7 +230,7 @@ export default function UsersPage() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
           <div className="modal modal-sm">
             <div className="modal-header">
-              <span className="modal-title">Invite New User</span>
+              <span className="modal-title">{UI_STRINGS.appAppAdminUsersPage.inviteNewUser}</span>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}>
                 <X size={16} />
               </button>
@@ -247,27 +244,27 @@ export default function UsersPage() {
                   </div>
                 )}
                 <div className="form-group">
-                  <label className="form-label">Full Name <span className="required">*</span></label>
+                  <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.fullName}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   <input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Email Address <span className="required">*</span></label>
+                  <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.emailAddress}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   <input type="email" className="form-control" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Role <span className="required">*</span></label>
+                  <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.role2}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   <select className="form-control" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                     {ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Temporary Password <span className="required">*</span></label>
-                  <input type="password" className="form-control" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Min. 8 characters" required />
+                  <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.temporaryPassword}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
+                  <input type="password" className="form-control" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder={UI_STRINGS.appAppAdminUsersPage.min8Characters} required />
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create User</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>{UI_STRINGS.common.cancel}</button>
+                <button type="submit" className="btn btn-primary">{UI_STRINGS.appAppAdminUsersPage.createUser}</button>
               </div>
             </form>
           </div>

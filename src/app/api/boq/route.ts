@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -130,26 +133,26 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // 1. Mandatory Field Validations
-    if (!projectId) return apiError('Project is required', 400);
-    if (!costCentreId) return apiError('Cost Centre is required', 400);
-    if (!title || !title.trim()) return apiError('BOQ Title / Name is required', 400);
+    if (!projectId) return apiError(UI_STRINGS.appApiBoqRoute.projectIsRequired, 400);
+    if (!costCentreId) return apiError(UI_STRINGS.appApiBoqRoute.costCentreIsRequired, 400);
+    if (!title || !title.trim()) return apiError(UI_STRINGS.appApiBoqRoute.bOQTitleNameIsRequired, 400);
     if (!category || (Array.isArray(category) && category.length === 0)) {
-      return apiError('BOQ Category is required', 400);
+      return apiError(UI_STRINGS.appApiBoqRoute.bOQCategoryIsRequired, 400);
     }
     if (!purpose || !['BUDGET', 'PR'].includes(purpose)) {
-      return apiError('BOQ Purpose (BUDGET or PR) is required', 400);
+      return apiError(UI_STRINGS.appApiBoqRoute.bOQPurposeBUDGETOrPRIsRequired, 400);
     }
 
     // 2. Verify Project & Cost Centre
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError('Project not found or accessible', 404);
+    if (!project) return apiError(UI_STRINGS.appApiBoqRoute.projectNotFoundOrAccessible, 404);
 
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: costCentreId, projectId, tenantId: ctx.tenantId },
     });
-    if (!costCentre) return apiError('Cost Centre does not belong to the selected Project', 400);
+    if (!costCentre) return apiError(UI_STRINGS.appApiBoqRoute.costCentreDoesNotBelongToTheSelectedProject, 400);
 
     // 3. Generate sequential BOQ Code
     const count = await prisma.boq.count({
@@ -212,7 +215,7 @@ export async function POST(req: NextRequest) {
           entityType: 'BOQ',
           entityId: boq.id,
           action: 'BOQ_CREATED',
-          description: `Created new BOQ ${boq.boqCode} (${boq.title || 'Untitled'}) for Project ${project.projectCode}, Cost Centre: ${costCentre.code}, Purpose: ${purpose}`,
+          description: interpolateUiString(UI_STRINGS.appApiBoqRoute.createdNewBOQBoqCodeValue2ForProjectProjectCodeCostCentreCodePurposePurpose, { "boqCode": boq.boqCode, "value2": boq.title || 'Untitled', "projectCode": project.projectCode, "code": costCentre.code, "purpose": purpose }),
           newValue: JSON.stringify({
             boqCode: boq.boqCode,
             title: boq.title,
@@ -243,7 +246,7 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (err: any) {
     console.error('Create BOQ error:', err);
-    return apiError(err.message || 'Failed to create BOQ record', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateBoqRecord }), 500);
   }
 }
 

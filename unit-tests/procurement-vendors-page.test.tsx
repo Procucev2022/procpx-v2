@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorManagementPage from '../src/app/(app)/procurement/vendors/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockToast = { success: jest.fn(), error: jest.fn(), warning: jest.fn() };
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, ...props }: any) => <a {...props}>{children}</a> }));
@@ -78,13 +82,13 @@ describe('vendor management workspace', () => {
 
   it('loads the directory and applies server filters for classification, status, category, and search', async () => {
     renderVendors();
-    expect(await screen.findByRole('heading', { name: 'Vendor Management' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) })).toBeInTheDocument();
     expect(await screen.findByText('Alpha Infra')).toBeInTheDocument();
     expect(screen.getByText('Qualified (88%)')).toBeInTheDocument();
     expect(screen.getByText('Conditional (72%)')).toBeInTheDocument();
-    expect(screen.getAllByText('Not Evaluated').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notEvaluated)).length).toBeGreaterThan(0);
     expect(screen.getByText('4.5')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Open' })[0]).toHaveAttribute('href', '/procurement/vendors/v1');
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.common.open) })[0]).toHaveAttribute('href', '/procurement/vendors/v1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Client Vendors (2)' }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?vendorType=CLIENT_VENDOR'));
@@ -92,7 +96,7 @@ describe('vendor management workspace', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?vendorType=CLIENT_VENDOR&qualificationStatus=QUALIFIED'));
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'Electrical' } });
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?vendorType=CLIENT_VENDOR&qualificationStatus=QUALIFIED&category=Electrical'));
-    fireEvent.change(screen.getByPlaceholderText('Search name, code, city, GSTIN...'), { target: { value: '  alpha  ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.searchNameCodeCityGSTIN)), { target: { value: '  alpha  ' } });
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?vendorType=CLIENT_VENDOR&qualificationStatus=QUALIFIED&category=Electrical&search=alpha'));
     fireEvent.click(screen.getByRole('button', { name: 'Procucev Network Vendors (1)' }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('vendorType=PROCUCEV_VENDOR')));
@@ -100,87 +104,90 @@ describe('vendor management workspace', () => {
 
   it('validates both onboarding steps, saves a draft, and completes vendor registration', async () => {
     renderVendors();
-    await screen.findByRole('heading', { name: 'Vendor Management' });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Vendor' }));
-    expect(screen.getByText('Step 1: Basic Vendor & Contact Information')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.addVendor) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.step1BasicVendorContactInformation))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Step 2 (Business Profile)' }));
-    expect(screen.getByText('Vendor Legal / Business Name is required.')).toBeInTheDocument();
-    expect(screen.getByText('At least one contact method (Email or Mobile) is required.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
-    expect(screen.getByText('Vendor Legal / Business Name is required even for draft saving.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.continueToStep2BusinessProfile) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appApiProcurementVendorsRoute.vendorLegalBusinessNameIsRequired))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.contactMethodEmailOrMobileIsRequired))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorLegalNameIsRequiredEvenForDraftSaving))).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Apex Infrastructure & Contracting Pvt Ltd'), { target: { value: 'New Vendor' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Rajesh Sharma'), { target: { value: 'Jordan Contact' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. sales@apexinfra.com'), { target: { value: 'jordan@example.test' } });
-    fireEvent.change(screen.getAllByPlaceholderText('e.g. 98765 43210')[0], { target: { value: '+91 80000 11111' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Hyderabad, Telangana'), { target: { value: 'Hyderabad' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGApexInfrastructureContractingPvtLtd)), { target: { value: 'New Vendor' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGRajeshSharma)), { target: { value: 'Jordan Contact' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGSalesApexinfraCom)), { target: { value: 'jordan@example.test' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eG9876543210))[0], { target: { value: '+91 80000 11111' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGHyderabadTelangana)), { target: { value: 'Hyderabad' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors', expect.objectContaining({ method: 'POST' })));
     const draftPayload = JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'POST')![1].body as string);
     expect(draftPayload).toMatchObject({ name: 'New Vendor', isDraft: true, email: 'jordan@example.test' });
-    expect(await screen.findByText(/Draft saved successfully for New Vendor/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementVendorsPage.draftSavedSuccessfullyForNameCode, {
+      name: 'New Vendor',
+      code: 'VN-NEW',
+    })))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Step 2 (Business Profile)' }));
-    expect(screen.getByText('Step 2: Business Profile & Statutory Details')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Complete Onboarding & Register' }));
-    expect(screen.getByText('Registered Business Address is required.')).toBeInTheDocument();
-    expect(screen.getByText('Product / Scope Capabilities is required.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.continueToStep2BusinessProfile) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.step2BusinessProfileStatutoryDetails))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeOnboardingRegister) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.registeredBusinessAddressIsRequired))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.productScopeCapabilitiesIsRequired))).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Complete registered office address with PIN code'), { target: { value: '12 Market Road, Hyderabad' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Civil works, Interior fit-outs, MEP, Furniture, etc.'), { target: { value: 'HVAC installation and servicing' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Complete Onboarding & Register' }));
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Vendor onboarding completed successfully.', 'VN-NEW', 'Onboarded'));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeRegisteredOfficeAddressWithPINCode)), { target: { value: '12 Market Road, Hyderabad' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGCivilWorksInteriorFitOutsMEPFurnitureEtc)), { target: { value: 'HVAC installation and servicing' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeOnboardingRegister) }));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.vendorOnboardingCompletedSuccessfully, 'VN-NEW', UI_STRINGS.common.userMessages.onboarded));
     const completed = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse((init as RequestInit).body as string));
     expect(completed.at(-1)).toMatchObject({ name: 'New Vendor', isDraft: false, id: 'vendor-new', phone: '+91 80000 11111', address: '12 Market Road, Hyderabad', capabilities: 'HVAC installation and servicing' });
   });
 
   it('captures the complete vendor contact and business profile and returns between onboarding steps', async () => {
     renderVendors();
-    await screen.findByRole('heading', { name: 'Vendor Management' });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Vendor' }));
-    fireEvent.change(screen.getByPlaceholderText('e.g. Apex Infrastructure & Contracting Pvt Ltd'), { target: { value: 'Full Profile Vendor' } });
+    await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.addVendor) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGApexInfrastructureContractingPvtLtd)), { target: { value: 'Full Profile Vendor' } });
     fireEvent.change(document.getElementById('vendor-classification-type')!, { target: { value: 'PROCUCEV_VENDOR' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Rajesh Sharma'), { target: { value: 'Riley Contact' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. sales@apexinfra.com'), { target: { value: 'riley@example.test' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGRajeshSharma)), { target: { value: 'Riley Contact' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGSalesApexinfraCom)), { target: { value: 'riley@example.test' } });
     fireEvent.change(document.getElementById('vendor-phone-cc')!, { target: { value: '+44' } });
-    fireEvent.change(screen.getAllByPlaceholderText('e.g. 98765 43210')[0], { target: { value: '7700900111' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eG9876543210))[0], { target: { value: '7700900111' } });
     fireEvent.change(document.getElementById('vendor-alt-phone-cc')!, { target: { value: '+1' } });
-    fireEvent.change(screen.getAllByPlaceholderText('e.g. 98765 43210')[1], { target: { value: '+1 202 555 0100' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eG9876543210))[1], { target: { value: '+1 202 555 0100' } });
     fireEvent.change(document.getElementById('vendor-category-domain')!, { target: { value: 'Electrical & Automation' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Hyderabad, Telangana'), { target: { value: 'Pune, Maharashtra' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Hyderabad, Telangana'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Step 2 (Business Profile)' }));
-    expect(screen.getByText('Operating Location (City / Region) is required.')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('e.g. Hyderabad, Telangana'), { target: { value: 'Pune, Maharashtra' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Step 2 (Business Profile)' }));
-    expect(screen.getByText('Step 2: Business Profile & Statutory Details')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGHyderabadTelangana)), { target: { value: 'Pune, Maharashtra' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGHyderabadTelangana)), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.continueToStep2BusinessProfile) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.operatingLocationCityRegionIsRequired))).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGHyderabadTelangana)), { target: { value: 'Pune, Maharashtra' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.continueToStep2BusinessProfile) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.step2BusinessProfileStatutoryDetails))).toBeInTheDocument();
 
     fireEvent.change(document.getElementById('vendor-legal-structure')!, { target: { value: 'LLP' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 36AABCA1234F1Z5'), { target: { value: '27abcd1234f1z5' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. AABCA1234F'), { target: { value: 'abcde1234f' } });
-    fireEvent.change(screen.getByPlaceholderText('https://company.com'), { target: { value: 'https://full-profile.example.test' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 5'), { target: { value: '8' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 25.5'), { target: { value: '12.5' } });
-    fireEvent.change(screen.getByPlaceholderText('Complete registered office address with PIN code'), { target: { value: '10 Market Lane, Pune' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Civil works, Interior fit-outs, MEP, Furniture, etc.'), { target: { value: 'Automation and switchgear' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Tata, Reliance, D-Mart and project values'), { target: { value: 'North Plant, 2025' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. ISO 9001, MSME, etc.'), { target: { value: 'ISO 9001' } });
-    fireEvent.change(screen.getByPlaceholderText('Any additional information about this vendor'), { target: { value: 'Verified references' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Step 1' }));
-    expect(screen.getByText('Step 1: Basic Vendor & Contact Information')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Basic Information'));
-    fireEvent.click(screen.getByText('Business Profile'));
-    expect(screen.getByText('Step 2: Business Profile & Statutory Details')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eG36AABCA1234F1Z5)), { target: { value: '27abcd1234f1z5' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGAABCA1234F)), { target: { value: 'abcde1234f' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.httpsCompanyCom)), { target: { value: 'https://full-profile.example.test' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eG5)), { target: { value: '8' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eG255)), { target: { value: '12.5' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeRegisteredOfficeAddressWithPINCode)), { target: { value: '10 Market Lane, Pune' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGCivilWorksInteriorFitOutsMEPFurnitureEtc)), { target: { value: 'Automation and switchgear' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGTataRelianceDMartAndProjectValues)), { target: { value: 'North Plant, 2025' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGISO9001MSMEEtc)), { target: { value: 'ISO 9001' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.anyAdditionalInformationAboutThisVendor)), { target: { value: 'Verified references' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.backToStep1) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.step1BasicVendorContactInformation))).toBeInTheDocument();
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.common.basicInformation)));
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.common.businessProfile, '', true)));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.step2BusinessProfileStatutoryDetails))).toBeInTheDocument();
     fireEvent.change(document.getElementById('vendor-legal-structure')!, { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Complete Onboarding & Register' }));
-    expect(screen.getByText('Legal Structure is required.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeOnboardingRegister) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.userMessages.legalStructureIsRequired))).toBeInTheDocument();
     fireEvent.change(document.getElementById('vendor-legal-structure')!, { target: { value: 'LLP' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save as Draft/ }));
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Vendor profile saved as draft.', 'VN-NEW', 'Draft'));
-    fireEvent.click(screen.getByRole('button', { name: 'Complete Onboarding & Register' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.vendorProfileSavedAsDraft, 'VN-NEW', UI_STRINGS.common.draft));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeOnboardingRegister) }));
 
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Vendor onboarding completed successfully.', 'VN-NEW', 'Onboarded'));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.vendorOnboardingCompletedSuccessfully, 'VN-NEW', UI_STRINGS.common.userMessages.onboarded));
     const submitted = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse((init as RequestInit).body as string)).at(-1);
     expect(submitted).toMatchObject({
       name: 'Full Profile Vendor', vendorType: 'PROCUCEV_VENDOR', contactPerson: 'Riley Contact', email: 'riley@example.test',
@@ -193,11 +200,11 @@ describe('vendor management workspace', () => {
 
   it('filters the evaluation hub, selects vendors, handles mixed AI outcomes, and clears the completed batch', async () => {
     renderVendors();
-    await screen.findByRole('heading', { name: 'Vendor Management' });
-    fireEvent.click(screen.getByRole('button', { name: 'Evaluation Hub & Selection' }));
-    expect(screen.getByText('Evaluation Pipeline & Review Queue')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.evaluationHubSelection) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.evaluationPipelineReviewQueue))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Procucev Network Vendors (1)' }));
-    expect(screen.getByText('Showing 1 of 3 vendors')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.showing, '', false))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'All Vendors (3)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Client Vendors (2)' }));
@@ -206,37 +213,37 @@ describe('vendor management workspace', () => {
     fireEvent.change(selects[0], { target: { value: 'Electrical' } });
     fireEvent.change(selects[1], { target: { value: 'Bangalore' } });
     fireEvent.change(selects[2], { target: { value: 'QUALIFIED' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. VND-0001, Apex...'), { target: { value: 'VND-1' } });
-    fireEvent.keyDown(screen.getByPlaceholderText('e.g. VND-0001, Apex...'), { key: 'Enter' });
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Filters' }));
-    await waitFor(() => expect(screen.getByText('Showing 1 of 3 vendors')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGVND0001Apex)), { target: { value: 'VND-1' } });
+    fireEvent.keyDown(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGVND0001Apex)), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.applyFilters) }));
+    await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.common.showing, '', false))).toBeInTheDocument());
     expect(await screen.findByText('Alpha Infra')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear Filters' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.clearFilters) }));
 
-    fireEvent.click(screen.getByRole('button', { name: /Select Vendors for Evaluation/ }));
-    fireEvent.change(screen.getByPlaceholderText('Search vendors in this list by code or name...'), { target: { value: 'Beta' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.selectVendorsForEvaluation) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.searchVendorsInThisListByCodeOrName)), { target: { value: 'Beta' } });
     expect(screen.getAllByText('Beta Network')).toHaveLength(2);
     fireEvent.click(screen.getAllByText('Beta Network')[1]);
-    fireEvent.change(screen.getByPlaceholderText('Search vendors in this list by code or name...'), { target: { value: '' } });
-    fireEvent.click(screen.getByTitle('Select all visible vendors'));
-    fireEvent.click(screen.getByTitle('Select all visible vendors'));
-    fireEvent.click(screen.getByTitle('Select all visible vendors'));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.searchVendorsInThisListByCodeOrName)), { target: { value: '' } });
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.selectAllVisibleVendors)));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.selectAllVisibleVendors)));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.selectAllVisibleVendors)));
     fireEvent.click(screen.getAllByRole('button', { name: 'Evaluate Selected Vendors (3)' })[0]);
-    expect(screen.getByText('Confirm Bulk AI Vendor Evaluation')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.confirmBulkAIVendorEvaluation))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Start Evaluation (3)' }));
     expect(await screen.findByText(/Score: 88% \(QUALIFIED\)/)).toBeInTheDocument();
     expect(screen.getByText('Evidence is incomplete')).toBeInTheDocument();
     expect(screen.getByText('AI service offline')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Done & View Results' }));
-    expect(screen.queryByText('Bulk Evaluation Completed')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.doneViewResults) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.bulkEvaluationCompleted))).not.toBeInTheDocument();
   });
 
   it('supports dropdown, table, outside-click selection, and return navigation', async () => {
     renderVendors();
-    await screen.findByRole('heading', { name: 'Vendor Management' });
-    fireEvent.click(screen.getByRole('button', { name: 'Evaluation Hub & Selection' }));
+    await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.evaluationHubSelection) }));
 
-    const selectionButton = () => screen.getByRole('button', { name: /Select Vendors for Evaluation/ });
+    const selectionButton = () => screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.selectVendorsForEvaluation) });
     fireEvent.click(selectionButton());
     expect(document.getElementById('select-vendors-dropdown-menu')).toBeInTheDocument();
     fireEvent.mouseDown(document.body);
@@ -247,31 +254,31 @@ describe('vendor management workspace', () => {
     fireEvent.click(within(dropdown).getAllByRole('checkbox')[0]);
     expect(screen.getByText('1 vendor selected')).toBeInTheDocument();
     fireEvent.click(within(dropdown).getByRole('button', { name: 'Select All (3)' }));
-    fireEvent.click(within(dropdown).getByRole('button', { name: 'Clear Selection' }));
-    fireEvent.click(within(dropdown).getByRole('button', { name: 'Done' }));
+    fireEvent.click(within(dropdown).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.clearSelection) }));
+    fireEvent.click(within(dropdown).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.done2) }));
 
     const alphaRow = screen.getByText('VND-1').closest('tr')!;
     fireEvent.click(within(alphaRow).getByRole('checkbox'));
     expect(screen.getByText('1 vendor selected')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear Selection' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Vendor Directory' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.clearSelection) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.vendorDirectory) }));
     fireEvent.click(screen.getByRole('button', { name: 'All Vendors (3)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add Vendor' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Vendor Management' }));
-    expect(screen.getByRole('heading', { name: 'Vendor Management' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.addVendor) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.backToVendorManagement) }));
+    expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) })).toBeInTheDocument();
   });
 
   it('handles empty and failed directory loads, onboarding submission errors, and vendor status badges', async () => {
     omitVendorList = true;
     const empty = renderVendors();
-    expect(await screen.findByText('No Vendors Found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.noVendorsFound))).toBeInTheDocument();
     empty.unmount();
 
     omitVendorList = false;
     vendorListUnavailable = true;
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const failed = renderVendors();
-    expect(await screen.findByText('No Vendors Found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.noVendorsFound))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalledWith('Failed to load vendors', expect.any(Error));
     failed.unmount();
     consoleError.mockRestore();
@@ -280,10 +287,10 @@ describe('vendor management workspace', () => {
     createVendorOk = false;
     configureFetch();
     const rejected = renderVendors();
-    await screen.findByRole('heading', { name: 'Vendor Management' });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Vendor' }));
-    fireEvent.change(screen.getByPlaceholderText('e.g. Apex Infrastructure & Contracting Pvt Ltd'), { target: { value: 'Rejected Intake Vendor' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.vendorManagement) });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.addVendor) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGApexInfrastructureContractingPvtLtd)), { target: { value: 'Rejected Intake Vendor' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     expect(await screen.findByText('Vendor intake unavailable')).toBeInTheDocument();
     rejected.unmount();
 
@@ -295,23 +302,23 @@ describe('vendor management workspace', () => {
     configureFetch();
     const statusView = renderVendors();
     expect(await screen.findByText('Pending Vendor')).toBeInTheDocument();
-    expect(screen.getAllByText('Pending Review').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Not Qualified').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.pendingReview)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.notQualified2)).length).toBeGreaterThan(0);
     expect(screen.getByText('Unreviewed Vendor')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Evaluation Hub & Selection' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.evaluationHubSelection) }));
     const evaluationFilters = screen.getAllByRole('combobox');
     fireEvent.change(evaluationFilters[1], { target: { value: 'Delhi NCR' } });
     fireEvent.change(evaluationFilters[2], { target: { value: 'NOT_EVALUATED' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. VND-0001, Apex...'), { target: { value: 'VND-U' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Filters' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGVND0001Apex)), { target: { value: 'VND-U' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.applyFilters) }));
     expect(await screen.findByText('Unreviewed Vendor')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('e.g. VND-0001, Apex...'), { target: { value: 'no match' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Filters' }));
-    expect(await screen.findByText('No Vendors Match Filter Criteria')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Select Vendors for Evaluation/ }));
-    expect(screen.getByText(/No vendors match/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Immediate Onboarding' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Vendor Management' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGVND0001Apex)), { target: { value: 'no match' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.applyFilters) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.noVendorsMatchFilterCriteria))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.selectVendorsForEvaluation, '', false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.noVendorsMatch, '', false))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.done2) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.immediateOnboarding) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.backToVendorManagement) }));
   });
 });

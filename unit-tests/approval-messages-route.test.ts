@@ -3,6 +3,8 @@ import { GET, POST } from '../src/app/api/approvals/messages/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -57,7 +59,7 @@ describe('approval communication API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(GET(getRequest())).resolves.toBe(denied);
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Either prId or contributionId must be provided.', status: 400 });
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, status: 400 });
     expect(db.user.findMany).not.toHaveBeenCalled();
   });
 
@@ -81,9 +83,9 @@ describe('approval communication API', () => {
 
   it('handles missing PR and budget contribution reads and formats budget messages', async () => {
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(getRequest('?prId=missing'))).resolves.toEqual({ ok: false, error: 'Procurement Request not found.', status: 404 });
+    await expect(GET(getRequest('?prId=missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404 });
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(getRequest('?contributionId=missing'))).resolves.toEqual({ ok: false, error: 'Budget contribution not found.', status: 404 });
+    await expect(GET(getRequest('?contributionId=missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404 });
     db.budgetApproval.findMany.mockResolvedValueOnce([
       { id: 'b1', approverId: 'approver@example.com', approvalLevel: null, status: 'MESSAGE', reason: null, timestamp: new Date() },
       { id: 'b2', approverId: 'unknown', approvalLevel: 'FINANCE', status: 'ENQUIRY', reason: 'Please clarify', timestamp: new Date() },
@@ -115,8 +117,8 @@ describe('approval communication API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({ message: 'hello' }))).resolves.toBe(denied);
-    await expect(POST(postRequest({ message: '   ', prId: 'pr-1' }))).resolves.toEqual({ ok: false, error: 'Message content cannot be empty.', status: 400 });
-    await expect(POST(postRequest({ message: ' hello ' }))).resolves.toEqual({ ok: false, error: 'Either prId or contributionId must be provided.', status: 400 });
+    await expect(POST(postRequest({ message: '   ', prId: 'pr-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiApprovalsMessagesRoute.messageContentCannotBeEmpty, status: 400 });
+    await expect(POST(postRequest({ message: ' hello ' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, status: 400 });
   });
 
   it('sends PR messages and enquiries, auditing, notifying, and using identity fallbacks', async () => {
@@ -140,9 +142,9 @@ describe('approval communication API', () => {
 
   it('sends budget enquiries, handles missing records, and reports POST failures', async () => {
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ prId: 'missing', message: 'Hello' }))).resolves.toEqual({ ok: false, error: 'Procurement Request not found.', status: 404 });
+    await expect(POST(postRequest({ prId: 'missing', message: 'Hello' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404 });
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ contributionId: 'missing', message: 'Hello' }))).resolves.toEqual({ ok: false, error: 'Budget contribution not found.', status: 404 });
+    await expect(POST(postRequest({ contributionId: 'missing', message: 'Hello' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404 });
     auth.mockResolvedValueOnce({ tenantId: 'tenant-1', userId: 'user-1', role: 'PROJECT_APPROVER' });
     await expect(POST(postRequest({ contributionId: 'contribution-1', message: '  Please clarify  ', type: 'ENQUIRY' }))).resolves.toMatchObject({
       ok: true, status: 201, data: { message: { id: 'msg-budget', senderName: 'User', senderRole: 'PROJECT_APPROVER', content: 'Clarify' } },

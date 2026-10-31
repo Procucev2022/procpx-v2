@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { hasPermission } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -17,17 +20,17 @@ export async function GET(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError('Forbidden: unmapped vendor account', 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
     }
     const isInvited = await prisma.rfqVendor.findFirst({
       where: { rfqId: id, vendorId: ctx.vendorId, tenantId: ctx.tenantId },
     });
     if (!isInvited) {
-      return apiError('Forbidden: you are not invited to this RFQ', 403);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403);
     }
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError('Forbidden: insufficient permissions', 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
   }
 
@@ -126,13 +129,13 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     return apiSuccess({ rfq });
   } catch (error: any) {
     console.error('Error fetching RFQ detail:', error);
-    return apiError(error.message || 'Failed to fetch RFQ detail', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500);
   }
 }
 
@@ -160,7 +163,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     const updateData: any = {};
@@ -169,7 +172,7 @@ export async function PUT(
 
     if (action === 'RELEASE' || status === 'RELEASED') {
       if (existing.status !== 'DRAFT' && existing.status !== 'UNDER_REVIEW') {
-        return apiError(`Cannot release RFQ in status ${existing.status}`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdRoute.cannotReleaseRFQInStatusStatus, { "status": existing.status }), 400);
       }
       updateData.status = 'RELEASED';
       updateData.releasedAt = new Date();
@@ -183,7 +186,7 @@ export async function PUT(
       });
     } else if (action === 'CANCEL' || status === 'CANCELLED') {
       if (!reason) {
-        return apiError('Cancellation reason is required', 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400);
       }
       updateData.status = 'CANCELLED';
       auditAction = 'RFQ_CANCELLED';
@@ -224,6 +227,6 @@ export async function PUT(
     return apiSuccess({ rfq: updated, message: auditDesc });
   } catch (error: any) {
     console.error('Error updating RFQ:', error);
-    return apiError(error.message || 'Failed to update RFQ', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRfq }), 500);
   }
 }

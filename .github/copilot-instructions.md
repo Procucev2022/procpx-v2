@@ -3,3 +3,4 @@ Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. After every code c
 Follow the structured logging and debug evidence policy in `AGENTS.md`. Use the shared logger, preserve secret and personal-data redaction, and capture Playwright checkpoints through the managed `logs/` directory.
 
 For application structure, follow `.agents/rules/application-structure.md`: store static reusable constants in feature `*.constants.ts` modules and type-only declarations in mirrored `types/**/*.types.ts` files. Keep Next.js route-segment config literals statically analyzable in route files.
+Follow `.agents/rules/internationalization.md` for the complete `UI_STRINGS`, placeholder, locale formatting, no-hardcoded-copy, and catalog-based test policy.

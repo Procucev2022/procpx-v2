@@ -1,6 +1,10 @@
 // app/api/dashboard/route.ts - Role-aware dashboard stats
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { requireAuth, isApiContext, apiSuccess } from '@/lib/api-utils';
 import { prisma } from '@/lib/prisma';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET() {
   const ctx = await requireAuth('PROJECT_VIEW');
@@ -256,7 +260,7 @@ export async function GET() {
       return {
         id: rfq.id,
         rfqNumber: rfq.rfqNumber,
-        description: rfq.title || rfq.packageName || 'Commercial Sourcing Package',
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.title || rfq.packageName || 'Commercial Sourcing Package' }),
         packageName: rfq.packageName,
         status: rfq.status,
         vendorInvitationProgress,
@@ -379,7 +383,9 @@ export async function GET() {
       const amount = linesAmount > 0 ? linesAmount : (r.prs[0]?.totalEstimatedValue || 0);
       const itemCount = r.lines.length > 0 ? r.lines.length : (r.prs[0]?.lines?.length || r.totalLines || 0);
       const date = r.approvedAt || r.submittedAt || r.createdAt;
-      const description = r.boq.title || r.boq.description || `${r.boq.project?.name} Commercial Baseline`;
+      const description = r.boq.title || r.boq.description || interpolateUiString(UI_STRINGS.common.commercialBaselineForProject, {
+        projectName: r.boq.project?.name || UI_STRINGS.common.project,
+      });
 
       boqRegister.push({
         id: r.id,
@@ -670,7 +676,7 @@ export async function GET() {
 
       const lowestQuote = rfq.quotes?.[0];
       const comparisonStatus = quotesCount > 0
-        ? `L1: ${lowestQuote?.vendor?.name || 'Vendor'} (₹${lowestQuote?.totalQuoteAmount?.toLocaleString('en-IN')})`
+        ? `L1: ${lowestQuote?.vendor?.name || 'Vendor'} (₹${lowestQuote?.totalQuoteAmount?.toLocaleString(I18N_CONFIG.defaultLocale)})`
         : (rfq.status === 'RELEASED' || rfq.status === 'VENDOR_RESPONSE_OPEN' ? 'Awaiting Bids' : 'No Quotes Yet');
 
       const rounds = rfq.negotiations?.[0]?.rounds || [];
@@ -691,8 +697,8 @@ export async function GET() {
       return {
         id: rfq.id,
         rfqNumber: rfq.rfqNumber,
-        title: rfq.title || rfq.packageName || 'Commercial Sourcing Package',
-        description: rfq.title || rfq.packageName || 'Commercial Sourcing Package',
+        title: interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.title || rfq.packageName || 'Commercial Sourcing Package' }),
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.title || rfq.packageName || 'Commercial Sourcing Package' }),
         packageName: rfq.packageName,
         status: rfq.status,
         stage,
@@ -749,8 +755,8 @@ export async function GET() {
         boqCode: pr.boq?.boqCode || pr.prNumber,
         boqNumber: pr.prNumber,
         prNumber: pr.prNumber,
-        title: pr.title || pr.boq?.title || 'Procurement Package',
-        description: pr.title || pr.boq?.title || 'Procurement Package',
+        title: interpolateUiString(UI_STRINGS.common.value1, { "value1": pr.title || pr.boq?.title || UI_STRINGS.appAppProcurementApprovedPrsPage.procurementPackage }),
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": pr.title || pr.boq?.title || UI_STRINGS.appAppProcurementApprovedPrsPage.procurementPackage }),
         projectName: pr.project?.name || 'Project',
         projectCode: pr.project?.projectCode || '',
         costCentre: pr.costCentre ? `${pr.costCentre.code} - ${pr.costCentre.name}` : 'General',
@@ -829,8 +835,8 @@ export async function GET() {
         boqCode,
         boqNumber: boqCode,
         prNumber: boqCode,
-        title: rev.boq.title || `${rev.boq.project.name} — Commercial Baseline`,
-        description: rev.boq.title || `${rev.boq.project.name} — Commercial Baseline`,
+        title: interpolateUiString(UI_STRINGS.common.value1, { "value1": rev.boq.title || `${rev.boq.project.name} — Commercial Baseline` }),
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": rev.boq.title || `${rev.boq.project.name} — Commercial Baseline` }),
         itemCount: rev.lines.length,
         projectName: rev.boq.project.name,
         projectCode: rev.boq.project.projectCode,
@@ -1060,8 +1066,8 @@ export async function GET() {
     pendingActions = actionBoqs.map((b) => ({
       id: b.id,
       boqCode: b.boqCode,
-      title: b.title || 'Untitled BOQ',
-      description: b.description || '',
+      title: interpolateUiString(UI_STRINGS.common.value1, { "value1": b.title || 'Untitled BOQ' }),
+      description: interpolateUiString(UI_STRINGS.common.value1, { "value1": b.description || '' }),
       status: b.status,
       actionText: b.status === 'REJECTED' ? 'Revise and resubmit rejected BOQ' : 'Complete and submit draft BOQ',
       link: `/boq/studio?boqId=${b.id}`,
@@ -1084,10 +1090,10 @@ export async function GET() {
     pendingActions = reviewBoqs.map((b) => ({
       id: b.id,
       boqCode: b.boqCode,
-      title: b.title || 'Untitled BOQ',
-      description: b.description || '',
+      title: interpolateUiString(UI_STRINGS.common.value1, { "value1": b.title || 'Untitled BOQ' }),
+      description: interpolateUiString(UI_STRINGS.common.value1, { "value1": b.description || '' }),
       status: b.status,
-      actionText: 'Review and approve pending BOQ submission',
+      actionText: UI_STRINGS.appApiDashboardRoute.reviewAndApprovePendingBOQSubmission,
       link: `/boq/studio?boqId=${b.id}`,
       severity: 'warning',
       updatedAt: b.updatedAt,

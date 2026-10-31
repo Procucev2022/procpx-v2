@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as XLSX from 'xlsx';
@@ -24,14 +28,14 @@ function makeWorkbook(rows: Record<string, unknown>[]) {
 }
 
 async function openRateLines() {
-  fireEvent.click(screen.getByRole('button', { name: /Continue to Rate Lines/i }));
-  expect(await screen.findByText(/Step 2: Rate Lines/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToRateLines, "i", false) }));
+  expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step2RateLines, "", false))).toBeInTheDocument();
 }
 
 async function uploadFile(file: File) {
   const input = document.querySelector('input[type="file"]') as HTMLInputElement;
   fireEvent.change(input, { target: { files: [file] } });
-  expect(await screen.findByText(/Excel Rate Card Import Preview/)).toBeInTheDocument();
+  expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).toBeInTheDocument();
 }
 
 describe('rate card initiation workspace', () => {
@@ -60,23 +64,23 @@ describe('rate card initiation workspace', () => {
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
 
     expect(screen.getByDisplayValue('Recovered card')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27'), { target: { value: 'Recovered card' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627)), { target: { value: 'Recovered card' } });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'BuildRight Solutions (VND-0007)' } });
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'Electrical' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Turnkey Fitouts'), { target: { value: 'Retail' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. All India or Regional Hubs'), { target: { value: 'West' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailTurnkeyFitouts)), { target: { value: 'Retail' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGAllIndiaOrRegionalHubs)), { target: { value: 'West' } });
     const dates = document.querySelectorAll('input[type="date"]');
     fireEvent.change(dates[0], { target: { value: '2026-01-01' } });
     fireEvent.change(dates[1], { target: { value: '2026-12-31' } });
-    fireEvent.change(screen.getByPlaceholderText('Detailed scope of supply and execution...'), { target: { value: 'Retail interiors' } });
-    fireEvent.change(screen.getByPlaceholderText('Pricing terms, taxes, payment conditions, escalation clauses...'), { target: { value: 'Net 30' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.detailedScopeOfSupplyAndExecution)), { target: { value: 'Retail interiors' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.pricingTermsTaxesPaymentConditionsEscalationClauses)), { target: { value: 'Net 30' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
     expect(onBack).toHaveBeenCalledTimes(1);
 
     await openRateLines();
     expect(await screen.findByText('SAVE-1')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /1\. Basic Details/ }));
-    expect(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27')).toHaveValue('Recovered card');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.copy1dqkxxq, "", false) }));
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627))).toHaveValue('Recovered card');
     await openRateLines();
     expect(screen.getByText('1 items')).toBeInTheDocument();
     const row = screen.getByRole('row', { name: /SAVE-1/ });
@@ -86,35 +90,35 @@ describe('rate card initiation workspace', () => {
     expect(numericInputs[0]).toHaveValue(0);
     expect(numericInputs[1]).toHaveValue(12.5);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Item Line' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.addItemLine) }));
     expect(screen.getByText('2 items')).toBeInTheDocument();
     expect(await screen.findByText(/Added new line/)).toBeInTheDocument();
     const toast = screen.getByText(/Added new line/).parentElement?.parentElement;
     fireEvent.click(toast?.querySelector('button') as HTMLButtonElement);
-    const deleteButtons = screen.getAllByTitle('Delete item line');
+    const deleteButtons = screen.getAllByTitle(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.deleteItemLine));
     fireEvent.click(deleteButtons[1]);
     expect(screen.getByText('1 items')).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Delete item line'));
-    expect(await screen.findByText('At least one rate line is required.')).toBeInTheDocument();
-    const errorToast = screen.getByText('At least one rate line is required.').parentElement?.parentElement;
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.deleteItemLine)));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.atLeastOneRateLineIsRequired))).toBeInTheDocument();
+    const errorToast = screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.atLeastOneRateLineIsRequired)).parentElement?.parentElement;
     fireEvent.click(errorToast?.querySelector('button') as HTMLButtonElement);
-    fireEvent.click(screen.getByRole('button', { name: 'Add Item Line' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Template' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.addItemLine) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.downloadExcelTemplate) }));
     expect(XLSX.writeFile).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/Template downloaded/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.templateDownloadedFilename, "", false))).toBeInTheDocument();
     (XLSX.writeFile as jest.Mock).mockImplementationOnce(() => { throw new Error('disk unavailable'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Template' }));
-    expect(await screen.findByText('Failed to generate Excel download.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.downloadExcelTemplate) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToGenerateExcelDownload))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
-    expect(await screen.findByText('Step 3: Review & Initiate')).toBeInTheDocument();
-    expect(screen.getByText(/Initial target baseline/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step3ReviewInitiate))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initialTargetBaseline, "", false))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recovered card', status: 'DRAFT', items: expect.any(Array) }));
     expect(localStorage.getItem('procpx_rate_card_initiate_draft')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous: Rate Lines' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
-    const initiate = screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousRateLines) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
+    const initiate = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor, "", false) });
     expect(initiate).toBeEnabled();
     fireEvent.click(initiate);
     expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Recovered card', status: 'ROUND_1_BUYER_OFFER' }));
@@ -122,25 +126,25 @@ describe('rate card initiation workspace', () => {
 
   it('validates required details and line rules before enabling initiation', async () => {
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27'), { target: { value: '   ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627)), { target: { value: '   ' } });
     await openRateLines();
     const firstRow = screen.getByRole('row', { name: /INT-001/ });
     fireEvent.change(within(firstRow).getAllByRole('spinbutton')[1], { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
-    expect(await screen.findByText('Step 3: Review & Initiate')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step3ReviewInitiate))).toBeInTheDocument();
     expect(screen.getByText('Title is required.')).toBeInTheDocument();
     expect(screen.getByText(/item\(s\) have invalid target rate/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous: Rate Lines' }));
-    expect(await screen.findByText(/Step 2: Rate Lines/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous: Basic Details' }));
-    fireEvent.change(screen.getByPlaceholderText('e.g. Retail Store Interior Works - FY 2026-27'), { target: { value: 'Valid rate card' } });
-    fireEvent.click(screen.getByRole('button', { name: /Continue to Rate Lines/ }));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor, "", false) })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousRateLines) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step2RateLines, "", false))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousBasicDetails) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627)), { target: { value: 'Valid rate card' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToRateLines, "", false) }));
     const first = screen.getByRole('row', { name: /INT-001/ });
     fireEvent.change(within(first).getAllByRole('spinbutton')[1], { target: { value: '100' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
-    expect(await screen.findByText('Validation Passed (Ready to Initiate)')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.validationPassedReadyToInitiate))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor, "", false) }));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Valid rate card', status: 'ROUND_1_BUYER_OFFER' }));
   });
 
@@ -157,18 +161,18 @@ describe('rate card initiation workspace', () => {
     expect(screen.getByText(/not in workbook/)).toBeInTheDocument();
     expect(document.querySelector('[title*="Duplicate Item Code"]')).toBeInTheDocument();
     expect(document.querySelector('[title*="must be greater than zero"]')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).not.toBeInTheDocument();
 
     await uploadFile(makeWorkbook([
       { 'Item Code': 'INT-001', 'Target Rate': '150' },
       { 'Item Code': 'INT-002', 'Target Rate': '100' },
     ]));
-    expect(screen.getAllByText('2', { selector: 'span' }).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply Changes' }));
-    await waitFor(() => expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument());
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.copyf9vgt1), { selector: 'span' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) }));
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).not.toBeInTheDocument());
     expect(await screen.findByText(/Updated \d+ rate line\(s\) from Excel/)).toBeInTheDocument();
   });
 
@@ -176,16 +180,16 @@ describe('rate card initiation workspace', () => {
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
     await openRateLines();
     await uploadFile(makeWorkbook([]));
-    expect(screen.getByText('Workbook contains no data rows.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.workbookContainsNoDataRows))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
     const read = XLSX.read as jest.Mock;
     read.mockImplementationOnce(() => { throw new Error('bad workbook'); });
     await uploadFile(new File(['broken'], 'broken.xlsx'));
     expect(read).toHaveBeenCalledTimes(2);
-    expect(await screen.findByText('Failed to parse file: bad workbook')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToParseFileMessage, {"message":"bad workbook"})))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
   });
 
   it('uses fallback workbook headers and sheets and previews positive, negative, and unchanged rates', async () => {
@@ -202,23 +206,23 @@ describe('rate card initiation workspace', () => {
 
     expect(screen.getByText(/\+5\.00/)).toBeInTheDocument();
     expect(screen.getByText(/-5\.00/)).toBeInTheDocument();
-    expect(screen.getAllByText('Unchanged').length).toBeGreaterThan(1);
-    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply Changes' }));
-    await waitFor(() => expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument());
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.unchanged)).length).toBeGreaterThan(1);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) }));
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).not.toBeInTheDocument());
     expect(await screen.findByText(/Updated 3 rate line\(s\) from Excel/)).toBeInTheDocument();
   });
 
   it('opens and closes the upload picker and preview, and reports missing or non-numeric rates', async () => {
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
     await openRateLines();
-    const uploadButton = screen.getByRole('button', { name: /Upload Completed Excel/i });
+    const uploadButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.uploadCompletedExcel, "i", false) });
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const clickSpy = jest.spyOn(fileInput, 'click');
     fireEvent.click(uploadButton);
     expect(clickSpy).toHaveBeenCalledTimes(1);
     fireEvent.change(fileInput, { target: { files: [] } });
-    expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).not.toBeInTheDocument();
 
     await uploadFile(makeWorkbook([
       { 'Item Code': 'INT-001' },
@@ -226,12 +230,12 @@ describe('rate card initiation workspace', () => {
       { 'Item Code': 'INT-003', 'Target Rate': '200' },
     ]));
     expect(document.querySelector('[title*="Target Rate must be a valid number"]')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm & Apply Changes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.confirmApplyChanges) })).toBeDisabled();
 
-    const previewTitle = screen.getByText(/Excel Rate Card Import Preview/);
+    const previewTitle = screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false));
     const modalHeader = previewTitle.parentElement?.parentElement;
     fireEvent.click(modalHeader?.querySelector('button') as HTMLButtonElement);
-    expect(screen.queryByText(/Excel Rate Card Import Preview/)).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).not.toBeInTheDocument();
   });
 
   it('recalculates optional benchmarks, exports blank references, and falls back for an unknown vendor option', async () => {
@@ -263,9 +267,9 @@ describe('rate card initiation workspace', () => {
     expect(quantity).toHaveValue(null);
     fireEvent.change(quantity, { target: { value: '4' } });
     expect(quantity).toHaveValue(4);
-    expect(within(row).getByText(/12/)).toBeInTheDocument();
+    expect(within(row).getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.toLocaleString, { toLocaleString: '20' })))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Template' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.downloadExcelTemplate) }));
     const exportedRows = (XLSX.utils.aoa_to_sheet as jest.Mock).mock.calls.at(-1)?.[0];
     expect(exportedRows[2]).toContain('Not Available');
     expect(exportedRows[2]).toContain('Not Generated');
@@ -277,7 +281,7 @@ describe('rate card initiation workspace', () => {
       throw new Error('storage disabled');
     });
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
-    expect(screen.getByDisplayValue('Retail Store Interior Works - FY 2026-27')).toBeInTheDocument();
+    expect(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.retailStoreInteriorWorksFY202627))).toBeInTheDocument();
     await openRateLines();
     expect(screen.getByText('5 items')).toBeInTheDocument();
     setItem.mockRestore();
@@ -294,13 +298,13 @@ describe('rate card initiation workspace', () => {
     }));
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
     await openRateLines();
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to Review & Initiate' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
     expect(await screen.findByText('Title is required.')).toBeInTheDocument();
     expect(screen.getByText('Vendor is required.')).toBeInTheDocument();
     expect(screen.getByText('Category is required.')).toBeInTheDocument();
     expect(screen.getByText('Effective From date is required.')).toBeInTheDocument();
     expect(screen.getByText('Valid Until date is required.')).toBeInTheDocument();
     expect(screen.getByText('Duplicate item codes: dup')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Initiate Rate Card & Send to Vendor/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor, "", false) })).toBeDisabled();
   });
 });

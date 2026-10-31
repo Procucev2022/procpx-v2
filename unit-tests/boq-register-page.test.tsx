@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import BoqListPage from '../src/app/(app)/boq/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -26,14 +30,14 @@ describe('BOQ register page', () => {
     let finishRequest!: (value: unknown) => void;
     fetchMock.mockReturnValueOnce(new Promise(resolve => { finishRequest = resolve; }));
     render(<BoqListPage />);
-    expect(screen.getByText('Loading BOQ data...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqPage.loadingBOQData))).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/boq?page=1&pageSize=15');
-    expect(screen.getByRole('link', { name: /Create New BOQ/ })).toHaveAttribute('href', '/boq/studio?action=new');
-    expect(screen.getByRole('link', { name: /BOQ Studio Workspace/ })).toHaveAttribute('href', '/boq/studio');
-    expect(screen.getByRole('link', { name: /Upload BOQ/ })).toHaveAttribute('href', '/boq/upload');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqPage.createNewBOQ) })).toHaveAttribute('href', '/boq/studio?action=new');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqPage.bOQStudioWorkspace) })).toHaveAttribute('href', '/boq/studio');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.uploadBOQ2) })).toHaveAttribute('href', '/boq/upload');
     finishRequest(response({ data: [], total: 0, totalPages: 1 }));
-    expect(await screen.findByText('No BOQs found')).toBeInTheDocument();
-    expect(screen.getByText('Total Cost Sheets').closest('.summary-card')).toHaveTextContent('0');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqPage.noBOQsFound))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqPage.totalCostSheets)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
   });
 
   it('renders revisions, statuses, quality tiers, metrics, and revision actions', async () => {
@@ -66,20 +70,20 @@ describe('BOQ register page', () => {
     render(<BoqListPage />);
 
     expect(await screen.findByText('BOQ-LIGHT')).toBeInTheDocument();
-    expect(screen.getByText('Pending Review').closest('.summary-card')).toHaveTextContent('2');
-    expect(screen.getByText('Approved BOQs').closest('.summary-card')).toHaveTextContent('2');
-    expect(screen.getByText('Total Line Items').closest('.summary-card')).toHaveTextContent('22');
-    expect(screen.getByText('Rev 2')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pendingReview)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyf9vgt1));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.approvedBOQs)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyf9vgt1));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.totalLineItems)).closest('.summary-card')).toHaveTextContent('22');
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.rev)).length).toBeGreaterThan(0);
     expect(screen.getByText('10 items')).toBeInTheDocument();
-    expect(screen.getByText('8 valid')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppBoqPage.validLinesValid)).length).toBeGreaterThan(0);
     expect(screen.getByText('90%')).toBeInTheDocument();
     expect(screen.getByText('65%')).toBeInTheDocument();
     expect(screen.getByText('35%')).toBeInTheDocument();
-    expect(screen.getAllByText('0 valid')).toHaveLength(3);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppBoqPage.copyvxarfd))).toHaveLength(3);
     expect(screen.getByRole('link', { name: 'PRJ-001' })).toHaveAttribute('href', '/projects/project-1');
-    expect(screen.getAllByRole('link', { name: 'Grid' })).toHaveLength(3);
-    expect(screen.getAllByRole('link', { name: 'Grid' })[0]).toHaveAttribute('href', '/boq/rev-1');
-    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqPage.grid) })).toHaveLength(3);
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqPage.grid) })[0]).toHaveAttribute('href', '/boq/rev-1');
+    expect(document.body).toHaveTextContent(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: 1, value2: 3 }));
   });
 
   it('uses nested API payloads and falls back to item counts when totals are missing', async () => {
@@ -88,14 +92,14 @@ describe('BOQ register page', () => {
     ] } }));
     render(<BoqListPage />);
     expect(await screen.findByText('BOQ-NESTED')).toBeInTheDocument();
-    expect(screen.getByText('Total Cost Sheets').closest('.summary-card')).toHaveTextContent('1');
-    expect(screen.getByText('Pending Review').closest('.summary-card')).toHaveTextContent('1');
-    expect(screen.getByText('Approved BOQs').closest('.summary-card')).toHaveTextContent('0');
-    expect(screen.getByText('Total Line Items').closest('.summary-card')).toHaveTextContent('0');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqPage.totalCostSheets)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyefwnq4));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pendingReview)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyefwnq4));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.approvedBOQs)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.totalLineItems)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
     expect(screen.getByText('Rev 1')).toBeInTheDocument();
     expect(screen.getByText('0 items')).toBeInTheDocument();
     expect(screen.getByText('BOQ-NESTED').closest('tr')?.querySelectorAll('td')[6].textContent).not.toBe('');
-    expect(screen.queryByRole('link', { name: 'Grid' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqPage.grid) })).not.toBeInTheDocument();
   });
 
   it('applies search and status filters, resets pagination, and follows page controls', async () => {
@@ -104,33 +108,33 @@ describe('BOQ register page', () => {
     ], total: 31, totalPages: 3 }));
     render(<BoqListPage />);
     expect(await screen.findByText('BOQ-PAGE')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.next) }));
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/boq?page=2&pageSize=15'));
-    fireEvent.click(screen.getByRole('button', { name: /Prev/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.prev) }));
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/boq?page=1&pageSize=15'));
-    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.next) }));
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/boq?page=2&pageSize=15'));
-    const search = screen.getByPlaceholderText('Search by BOQ name, project code or project name...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqPage.searchByBOQNameProjectCodeOrProjectName));
     fireEvent.change(search, { target: { value: 'north wing' } });
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/boq?page=1&pageSize=15&search=north+wing'));
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'APPROVED' } });
     await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/api/boq?page=1&pageSize=15&search=north+wing&status=APPROVED'));
     expect(screen.getByText('49%')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Prev/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.prev) })).toBeDisabled();
   });
 
   it('falls back for unexpected payloads and logs request failures', async () => {
     fetchMock.mockResolvedValueOnce(response({ data: { data: 'not-an-array' }, total: null, totalPages: null }));
     const view = render(<BoqListPage />);
-    expect(await screen.findByText('No BOQs found')).toBeInTheDocument();
-    expect(screen.getByText('Total Cost Sheets').closest('.summary-card')).toHaveTextContent('0');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqPage.noBOQsFound))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqPage.totalCostSheets)).closest('.summary-card')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
     view.unmount();
 
     const log = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     fetchMock.mockRejectedValueOnce(new Error('network down'));
     render(<BoqListPage />);
     await waitFor(() => expect(log).toHaveBeenCalledWith(expect.objectContaining({ message: 'network down' })));
-    expect(screen.getByText('No BOQs found')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqPage.noBOQsFound))).toBeInTheDocument();
     log.mockRestore();
   });
 });

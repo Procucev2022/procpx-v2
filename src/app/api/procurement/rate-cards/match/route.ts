@@ -3,6 +3,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('RATE_CARD_VIEW');
@@ -13,7 +16,7 @@ export async function GET(req: NextRequest) {
   const rfqId = searchParams.get('rfqId');
 
   if (!prId && !rfqId) {
-    return apiError('Either prId or rfqId is required to match rate cards', 400);
+    return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.eitherPrIdOrRfqIdIsRequiredToMatchRateCards, 400);
   }
 
   try {
@@ -45,7 +48,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!pr) return apiError('Procurement Request not found', 404);
+      if (!pr) return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.procurementRequestNotFound, 404);
       referenceEntity = {
         type: 'PR',
         id: pr.id,
@@ -83,7 +86,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!rfq) return apiError('RFQ not found', 404);
+      if (!rfq) return apiError(UI_STRINGS.common.rFQNotFound, 404);
       referenceEntity = {
         type: 'RFQ',
         id: rfq.id,
@@ -116,7 +119,7 @@ export async function GET(req: NextRequest) {
         reference: referenceEntity,
         matchedRateCards: [],
         lines: [],
-        message: 'No line items available to match against rate cards.',
+        message: UI_STRINGS.appApiProcurementRateCardsMatchRoute.noLineItemsAvailableToMatchAgainstRateCards,
       });
     }
 
@@ -318,6 +321,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error matching rate cards:', error);
-    return apiError(error.message || 'Failed to match rate cards', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToMatchRateCards }), 500);
   }
 }

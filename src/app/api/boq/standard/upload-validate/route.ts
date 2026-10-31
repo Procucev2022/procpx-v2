@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 import type { ValidationIssue } from "@app-types/app/api/boq/standard/upload-validate/route.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { ValidationIssue };
 
 
@@ -18,7 +21,7 @@ export async function POST(req: NextRequest) {
     const costCentreId = (formData.get('costCentreId') as string) || '';
 
     if (!file) {
-      return apiError('Please select or upload a completed Standard BOQ Excel file.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.pleaseSelectOrUploadACompletedStandardBOQExcelFile, 400);
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -32,13 +35,13 @@ export async function POST(req: NextRequest) {
 
     const worksheet = workbook.Sheets[sheetName];
     if (!worksheet) {
-      return apiError('Invalid spreadsheet: Could not find data sheet in workbook.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.invalidSpreadsheetCouldNotFindDataSheetInWorkbook, 400);
     }
 
     // Read as 2D array to intelligently identify header row (handles title rows or subtitles)
     const rawMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
     if (!rawMatrix || rawMatrix.length === 0) {
-      return apiError('The uploaded file does not contain any data rows.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.theUploadedFileDoesNotContainAnyDataRows, 400);
     }
 
     // Find the header row index
@@ -75,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (rows.length === 0) {
-      return apiError('No data rows found below headers in the spreadsheet.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.noDataRowsFoundBelowHeadersInTheSpreadsheet, 400);
     }
 
     // Load reference taxonomy from DB
@@ -303,6 +306,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Validation error on uploaded Standard BOQ:', err);
-    return apiError(err.message || 'Failed to validate uploaded Standard BOQ Excel.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToValidateUploadedStandardBoqExcel }), 500);
   }
 }

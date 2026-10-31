@@ -91,6 +91,7 @@ try {
 
     if (lintFiles.length) npmRun(project, 'lint', lintFiles);
     if (typeScriptFiles.length) npmRun(project, 'typecheck');
+    if (sourceFiles.length || testFiles.length) npmRun(project, 'check:i18n');
     if (testFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--runTestsByPath', ...testFiles]);
     if (sourceFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--findRelatedTests', ...sourceFiles, '--passWithNoTests']);
   }

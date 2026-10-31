@@ -3,6 +3,8 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 import type { StepItem, StepperProps } from "@app-types/components/ui/Stepper.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 export type { StepItem };
 
 
@@ -11,7 +13,7 @@ export default function Stepper({ steps, currentStep, onStepClick }: StepperProp
     <nav
       className="stepper-horizontal-container"
       role="navigation"
-      aria-label="RFQ Creation Steps"
+      aria-label={UI_STRINGS.componentsUiStepper.rFQCreationSteps}
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${steps.length}, 1fr)`,
@@ -103,8 +105,7 @@ export default function Stepper({ steps, currentStep, onStepClick }: StepperProp
                     letterSpacing: '0.04em',
                     color: isActive ? primaryColor : isCompleted ? '#475569' : '#94A3B8',
                   }}
-                >
-                  Step {s.number}
+                >{UI_STRINGS.common.step}{s.number}
                 </span>
 
                 {/* State Tag for Non-Colour Accessibility */}
@@ -127,7 +128,7 @@ export default function Stepper({ steps, currentStep, onStepClick }: StepperProp
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {isActive ? 'Active' : isCompleted ? 'Completed' : 'Pending'}
+                  {isActive ? UI_STRINGS.common.active : isCompleted ? UI_STRINGS.common.completed : UI_STRINGS.common.pending}
                 </span>
               </div>
 

@@ -5,6 +5,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { validateBoqLine } from '../src/lib/boq-validate';
 import { createAuditLog } from '../src/lib/audit';
 import { computeLineCostBreakdown } from '../src/lib/boq-cost-breakdown';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -73,11 +75,11 @@ describe('BOQ revision lines API', () => {
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-1', revisions: [] });
-    await expect(GET(request('/api/boq/boq-1/lines'), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(GET(request('/api/boq/boq-1/lines'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(request('/api/boq/missing/lines'), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(GET(request('/api/boq/missing/lines'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     const boqRecord = { id: 'boq-2', projectId: 'project-2', revisions: [{ ...revision, id: 'latest-revision' }] };
@@ -103,7 +105,7 @@ describe('BOQ revision lines API', () => {
     ]);
     expect(computeCost).toHaveBeenCalledTimes(2);
     expect(db.boqLine.count).toHaveBeenCalledWith({ where: expect.objectContaining({
-      boqRevisionId: 'revision-1', tenantId: context.tenantId, isDeleted: false, validationStatus: 'VALID',
+      boqRevisionId: 'revision-1', tenantId: context.tenantId, isDeleted: false, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
       OR: expect.arrayContaining([{ originalDescription: { contains: 'wire' } }]),
     }) });
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 5, take: 5, orderBy: [{ lineNumber: 'asc' }] }));
@@ -123,9 +125,9 @@ describe('BOQ revision lines API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', {}), params)).resolves.toBe(denied);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(PUT(request('/api/boq/missing/lines', 'PUT', {}), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(PUT(request('/api/boq/missing/lines', 'PUT', {}), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ ...revision, status: 'APPROVED' });
-    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', {}), params)).resolves.toEqual({ ok: false, error: 'Approved BOQs cannot be edited. Create a new revision instead.', status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', {}), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead, status: 400 });
   });
 
   it('batch-updates existing lines, skips missing IDs and records quantity or cost states', async () => {
@@ -148,12 +150,12 @@ describe('BOQ revision lines API', () => {
     expect(result.data.count).toBe(5);
     expect(db.boqLine.update).toHaveBeenCalledTimes(5);
     expect(db.boqLine.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { id: 'line-1' }, data: expect.objectContaining({ quantity: 2, aiUnitCost: 3, aiTotalCost: 6, validationStatus: 'COST GENERATED', standardDescription: 'New standard', location: 'Roof', brand: 'Brand', remarks: 'Note' }),
+      where: { id: 'line-1' }, data: expect.objectContaining({ quantity: 2, aiUnitCost: 3, aiTotalCost: 6, validationStatus: UI_STRINGS.appAppBoqStudioPage.cOSTGENERATED, standardDescription: 'New standard', location: 'Roof', brand: UI_STRINGS.common.brand, remarks: 'Note' }),
     }));
-    expect(db.boqLine.update).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: expect.objectContaining({ aiTotalCost: null, validationStatus: 'VALID', specification: 'Spec', uomRaw: 'M' }) }));
+    expect(db.boqLine.update).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: expect.objectContaining({ aiTotalCost: null, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID, specification: 'Spec', uomRaw: 'M' }) }));
     expect(db.boqLine.update).toHaveBeenNthCalledWith(3, expect.objectContaining({ data: expect.objectContaining({ quantity: null, validationStatus: 'QUANTITY_REQUIRED' }) }));
     expect(db.boqLine.update).toHaveBeenNthCalledWith(4, expect.objectContaining({ data: expect.objectContaining({ quantity: null, aiUnitCost: 4, validationStatus: 'QUANTITY_REQUIRED' }) }));
-    expect(db.boqLine.update).toHaveBeenNthCalledWith(5, expect.objectContaining({ data: expect.objectContaining({ aiUnitCost: 2, aiTotalCost: 12, validationStatus: 'COST GENERATED' }) }));
+    expect(db.boqLine.update).toHaveBeenNthCalledWith(5, expect.objectContaining({ data: expect.objectContaining({ aiUnitCost: 2, aiTotalCost: 12, validationStatus: UI_STRINGS.appAppBoqStudioPage.cOSTGENERATED }) }));
   });
 
   it('returns an empty batch result for an empty lines array', async () => {
@@ -162,11 +164,11 @@ describe('BOQ revision lines API', () => {
   });
 
   it('validates single-line IDs, quantities, and descriptions', async () => {
-    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', {}), params)).resolves.toEqual({ ok: false, error: 'Line ID required', status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', {}), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDRequired, status: 400 });
     db.boqLine.findFirst.mockResolvedValueOnce(null);
-    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'missing', updates: {} }), params)).resolves.toEqual({ ok: false, error: 'BOQ line not found', status: 404 });
-    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { quantity: 0 } }), params)).resolves.toEqual({ ok: false, error: 'Quantity must be greater than zero.', status: 400 });
-    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { standardDescription: '  ' } }), params)).resolves.toEqual({ ok: false, error: 'Description cannot be blank.', status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'missing', updates: {} }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.bOQLineNotFound, status: 404 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { quantity: 0 } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.quantityMustBeGreaterThanZero, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { standardDescription: '  ' } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.descriptionCannotBeBlank, status: 400 });
     expect(validate).not.toHaveBeenCalled();
   });
 
@@ -178,12 +180,12 @@ describe('BOQ revision lines API', () => {
       drawingReference: 'D-2', brand: 'Brand', model: 'Model', material: 'Copper', grade: 'A', remarks: 'Note',
     } }), params) as any;
     expect(result.data).toMatchObject({ validationStatus: 'REVIEW', validationMessages: ['Check the unit'] });
-    expect(validate).toHaveBeenCalledWith({ originalDescription: 'Original', standardDescription: 'Standard', uomRaw: 'EA', uomId: 'uom-new', quantity: 2, categoryId: 'category-new' });
+    expect(validate).toHaveBeenCalledWith({ originalDescription: 'Original', standardDescription: UI_STRINGS.common.standard, uomRaw: 'EA', uomId: 'uom-new', quantity: 2, categoryId: 'category-new' });
     expect(db.boqLine.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
       where: { id: 'line-1' }, data: expect.objectContaining({ categoryId: 'category-new', subcategoryId: 'subcategory-new', uomId: 'uom-new', drawingReference: 'D-2', material: 'Copper', grade: 'A', quantity: 2 }),
     }));
     expect(db.boqLine.update).toHaveBeenNthCalledWith(2, { where: { id: 'line-1' }, data: { validationStatus: 'REVIEW', validationMessages: '["Check the unit"]' } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'BOQ_LINE', action: 'BOQ_LINE_UPDATED', projectId: 'project-1', oldValue: expect.objectContaining({ quantity: 4 }), newValue: expect.objectContaining({ quantity: 2 }) }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ entityType: UI_STRINGS.appAppAuditPage.bOQLINE, action: 'BOQ_LINE_UPDATED', projectId: 'project-1', oldValue: expect.objectContaining({ quantity: 4 }), newValue: expect.objectContaining({ quantity: 2 }) }));
   });
 
   it('preserves nullable quantity and overrides validation when calculated cost is available', async () => {
@@ -200,11 +202,11 @@ describe('BOQ revision lines API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(request('/api/boq/revision-1/lines', 'POST', {}), params)).resolves.toBe(denied);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request('/api/boq/missing/lines', 'POST', {}), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(POST(request('/api/boq/missing/lines', 'POST', {}), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ ...revision, status: 'APPROVED' });
-    await expect(POST(request('/api/boq/revision-1/lines', 'POST', {}), params)).resolves.toEqual({ ok: false, error: 'Approved BOQs cannot be edited. Create a new revision instead.', status: 400 });
-    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: '  ' }), params)).resolves.toEqual({ ok: false, error: 'Description is required.', status: 400 });
-    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Bad line', quantity: -1 }), params)).resolves.toEqual({ ok: false, error: 'Quantity must be greater than zero.', status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', {}), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: '  ' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.descriptionIsRequired, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Bad line', quantity: -1 }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.quantityMustBeGreaterThanZero, status: 400 });
   });
 
   it('creates populated line items and updates revision counters', async () => {
@@ -214,21 +216,21 @@ describe('BOQ revision lines API', () => {
       description: '  New cable tray  ', specification: 'Hot dipped', categoryId: 'cat-1', subcategoryId: 'sub-1', uomId: 'uom-1',
       uomRaw: 'M', quantity: '3', location: 'Roof', brand: 'Acme', model: 'A1', material: 'Steel', remarks: 'Install safely', aiUnitCost: '12.5',
     }), params) as any;
-    expect(result).toEqual({ ok: true, status: 201, data: { line: { id: 'line-new', lineNumber: '4' }, message: 'Line item added successfully.' } });
+    expect(result).toEqual({ ok: true, status: 201, data: { line: { id: 'line-new', lineNumber: UI_STRINGS.common.copydlxun7 }, message: UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineItemAddedSuccessfully } });
     expect(db.boqLine.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      lineNumber: '4', itemCode: 'ITEM-004', originalDescription: 'New cable tray', standardDescription: 'New cable tray',
+      lineNumber: UI_STRINGS.common.copydlxun7, itemCode: 'ITEM-004', originalDescription: 'New cable tray', standardDescription: 'New cable tray',
       specification: 'Hot dipped', categoryId: 'cat-1', subcategoryId: 'sub-1', uomId: 'uom-1', uomRaw: 'M', quantity: 3,
       aiUnitCost: 12.5, aiTotalCost: 37.5, costConfidence: 0.85, benchmarkEligible: true,
     }) }));
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { totalLines: 4, validLines: 5 } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'BOQ_LINE', action: 'BOQ_LINE_ADDED', entityId: 'line-new' }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ entityType: UI_STRINGS.appAppAuditPage.bOQLINE, action: 'BOQ_LINE_ADDED', entityId: 'line-new' }));
   });
 
   it('applies safe defaults for optional create fields and invalid or blank quantities', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce({ ...revision, validLines: null });
     await POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Minimal line', quantity: '', aiUnitCost: 0 }), params);
     expect(db.boqLine.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      itemCode: 'ITEM-003', specification: null, categoryId: null, subcategoryId: null, uomId: null, uomRaw: 'NOS',
+      itemCode: 'ITEM-003', specification: null, categoryId: null, subcategoryId: null, uomId: null, uomRaw: UI_STRINGS.common.nOS,
       quantity: 1, location: null, brand: null, model: null, material: null, remarks: null, aiUnitCost: 150, aiTotalCost: 150,
     }) }));
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { totalLines: 3, validLines: 1 } });
@@ -240,12 +242,12 @@ describe('BOQ revision lines API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(DELETE(request('/api/boq/revision-1/lines', 'DELETE'), params)).resolves.toBe(denied);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(DELETE(request('/api/boq/missing/lines', 'DELETE'), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(DELETE(request('/api/boq/missing/lines', 'DELETE'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ ...revision, status: 'APPROVED' });
-    await expect(DELETE(request('/api/boq/revision-1/lines?lineId=line-1', 'DELETE'), params)).resolves.toEqual({ ok: false, error: 'Approved BOQs cannot be edited. Create a new revision instead.', status: 400 });
-    await expect(DELETE(request('/api/boq/revision-1/lines', 'DELETE'), params)).resolves.toEqual({ ok: false, error: 'Line ID is required.', status: 400 });
+    await expect(DELETE(request('/api/boq/revision-1/lines?lineId=line-1', 'DELETE'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead, status: 400 });
+    await expect(DELETE(request('/api/boq/revision-1/lines', 'DELETE'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDIsRequired, status: 400 });
     db.boqLine.findFirst.mockResolvedValueOnce(null);
-    await expect(DELETE(request('/api/boq/revision-1/lines?lineId=missing', 'DELETE'), params)).resolves.toEqual({ ok: false, error: 'Line not found.', status: 404 });
+    await expect(DELETE(request('/api/boq/revision-1/lines?lineId=missing', 'DELETE'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineNotFound, status: 404 });
 
     db.boqLine.count.mockResolvedValue(1);
     const result = await DELETE(request('/api/boq/revision-1/lines?lineId=line-1', 'DELETE'), params);

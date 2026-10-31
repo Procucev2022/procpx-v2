@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('PPO_CREATE');
@@ -23,7 +26,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rateCardId || (!prId && !rfqId)) {
-      return apiError('Rate Card ID and either prId or rfqId are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.rateCardIDAndEitherPrIdOrRfqIdAreRequired, 400);
     }
 
     // 1. Fetch and validate rate card
@@ -36,23 +39,23 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rateCard) {
-      return apiError('Vendor Rate Card not found or access denied', 404);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.vendorRateCardNotFoundOrAccessDenied, 404);
     }
 
     if (rateCard.status !== 'APPROVED') {
-      return apiError(`Cannot create direct PPO: Rate card is in status '${rateCard.status}' (Must be APPROVED)`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.cannotCreateDirectPPORateCardIsInStatusStatusMustBeAPPROVED, { "status": rateCard.status }), 400);
     }
 
     const now = new Date();
     if (rateCard.validFrom > now || rateCard.validTo < now) {
       return apiError(
-        `Cannot create direct PPO: Rate card is expired or not yet valid (Validity: ${rateCard.validFrom.toISOString().split('T')[0]} to ${rateCard.validTo.toISOString().split('T')[0]}). Route requirement to regular RFQ.`,
+        interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.cannotCreateDirectPPORateCardIsExpiredOrNotYetValidValidityValue1ToValue2RouteRequirementToRegularRFQ, { "value1": rateCard.validFrom.toISOString().split('T')[0], "value2": rateCard.validTo.toISOString().split('T')[0] }),
         400
       );
     }
 
     if (rateCard.vendor.complianceStatus !== 'COMPLIANT') {
-      return apiError(`Cannot create direct PPO: Vendor compliance status is '${rateCard.vendor.complianceStatus}'`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.cannotCreateDirectPPOVendorComplianceStatusIsComplianceStatus, { "complianceStatus": rateCard.vendor.complianceStatus }), 400);
     }
 
     // 2. Load PR or RFQ and its lines
@@ -81,9 +84,9 @@ export async function POST(req: NextRequest) {
         include: { lines: true, project: true, costCentre: true },
       });
 
-      if (!pr) return apiError('Approved Procurement Request not found', 404);
+      if (!pr) return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.approvedProcurementRequestNotFound, 404);
       if (!['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'].includes(pr.status)) {
-        return apiError(`Cannot create direct PPO: PR is in status '${pr.status}' (Must be APPROVED or RELEASED)`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.cannotCreateDirectPPOPRIsInStatusStatusMustBeAPPROVEDOrRELEASED, { "status": pr.status }), 400);
       }
 
       // Check if duplicate PPO already exists for this PR
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingPpo) {
-        return apiError(`Duplicate PPO prevented: Purchase Order ${existingPpo.ppoNumber} already exists for this PR`, 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.duplicatePPOPreventedPurchaseOrderPpoNumberAlreadyExistsForThisPR, { "ppoNumber": existingPpo.ppoNumber }), 409);
       }
 
       projectId = pr.projectId;
@@ -124,7 +127,7 @@ export async function POST(req: NextRequest) {
         include: { lines: true, boqRevision: true },
       });
 
-      if (!rfq) return apiError('RFQ not found', 404);
+      if (!rfq) return apiError(UI_STRINGS.common.rFQNotFound, 404);
 
       projectId = rfq.projectId;
       costCentreId = (rfq.boqRevision as any)?.costCentreId || null;
@@ -148,7 +151,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (lines.length === 0) {
-      return apiError('Requirement has no lines to source', 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.requirementHasNoLinesToSource, 400);
     }
 
     // 3. Match each line against rate card items
@@ -197,7 +200,7 @@ export async function POST(req: NextRequest) {
 
     if (missingLines.length > 0) {
       return apiError(
-        `Cannot create direct PPO: Rate card does not cover all items (${missingLines.length} item(s) missing, e.g., "${missingLines[0]}"). Route requirement to competitive RFQ.`,
+        interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.cannotCreateDirectPPORateCardDoesNotCoverAllItemsLengthItemSMissingEGValue2RouteRequirementToCompetitiveRFQ, { "length": missingLines.length, "value2": missingLines[0] }),
         400
       );
     }
@@ -220,7 +223,7 @@ export async function POST(req: NextRequest) {
         sourcingType: 'DIRECT_RATE_CARD',
         vendorId: rateCard.vendorId,
         ppoNumber,
-        title: `Direct PPO (Rate Card ${rateCard.rateCardNumber}): ${requirementTitle}`,
+        title: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.directPPORateCardRateCardNumberRequirementTitle, { "rateCardNumber": rateCard.rateCardNumber, "requirementTitle": requirementTitle }),
         totalValue: totalOrderValue,
         currency: 'INR',
         status: 'ISSUED',
@@ -249,7 +252,7 @@ export async function POST(req: NextRequest) {
       entityType: 'PPO',
       entityId: ppo.id,
       action: 'PPO_CREATED_FROM_RATE_CARD',
-      description: `Direct PPO ${ppoNumber} issued to ${rateCard.vendor.name} under approved Rate Card ${rateCard.rateCardNumber} (Total: ₹ ${totalOrderValue.toLocaleString()})`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.directPPOPpoNumberIssuedToNameUnderApprovedRateCardRateCardNumberTotalToLocaleString, { "ppoNumber": ppoNumber, "name": rateCard.vendor.name, "rateCardNumber": rateCard.rateCardNumber, "toLocaleString": totalOrderValue.toLocaleString() }),
       newValue: {
         ppoNumber,
         rateCardNumber: rateCard.rateCardNumber,
@@ -273,10 +276,10 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess({
       ppo,
-      message: `Direct PPO ${ppoNumber} created successfully from approved Rate Card ${rateCard.rateCardNumber}`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.directPPOPpoNumberCreatedSuccessfullyFromApprovedRateCardRateCardNumber, { "ppoNumber": ppoNumber, "rateCardNumber": rateCard.rateCardNumber }),
     }, 201);
   } catch (error: any) {
     console.error('Error creating direct PPO from rate card:', error);
-    return apiError(error.message || 'Failed to create direct PPO', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateDirectPpo }), 500);
   }
 }

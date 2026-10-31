@@ -1,4 +1,5 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { auth } from '../src/lib/auth';
@@ -11,6 +12,9 @@ import StandardLibraryRedirectPage from '../src/app/(app)/boq/standard-library/p
 import CostCentreBudgetsRedirect from '../src/app/(app)/budget/cost-centres/page';
 import BudgetProjectRedirect from '../src/app/(app)/budget/project/page';
 import BudgetStatusRedirect from '../src/app/(app)/budget/status/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { I18N_CONFIG } from '@/lib/i18n.constants';
+
 
 jest.mock('../src/lib/auth', () => ({ auth: jest.fn() }));
 jest.mock('next/navigation', () => ({
@@ -40,7 +44,7 @@ describe('simple app and redirect pages', () => {
 
     authMock.mockResolvedValueOnce(null);
     await RootPage();
-    expect(redirectMock).toHaveBeenLastCalledWith('/login');
+    expect(redirectMock).toHaveBeenLastCalledWith(UI_STRINGS.libAuth.login);
 
     ProcurementPage();
     expect(redirectMock).toHaveBeenLastCalledWith('/dashboard');
@@ -50,19 +54,19 @@ describe('simple app and redirect pages', () => {
 
   it('returns the root document structure and metadata', () => {
     expect(metadata).toMatchObject({
-      title: 'proCPX Procurement | Enterprise Capex Procurement Platform',
+      title: UI_STRINGS.appLayoutConstants.proCPXProcurementEnterpriseCapexProcurementPlatform,
       robots: 'noindex, nofollow',
     });
     const layout = RootLayout({ children: <span>App content</span> });
     expect(layout.type).toBe('html');
-    expect(layout.props.lang).toBe('en');
+    expect(layout.props.lang).toBe(I18N_CONFIG.defaultLocale);
     expect(layout.props.children.type).toBe('body');
     expect(layout.props.children.props.children.props.children).toBe('App content');
   });
 
   it('redirects the standard BOQ library to its canonical route', async () => {
     render(<StandardLibraryRedirectPage />);
-    expect(screen.getByText('Redirecting to Standard BOQ Master...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqStandardLibraryPage.redirectingToStandardBOQMaster))).toBeInTheDocument();
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/masters/standard-boq'));
   });
 

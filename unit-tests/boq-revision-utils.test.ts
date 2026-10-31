@@ -1,5 +1,7 @@
 import { prisma } from '../src/lib/prisma';
 import { createNextBoqRevision, getHighestRevisionNumber } from '../src/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -53,7 +55,7 @@ describe('createNextBoqRevision', () => {
         boqId: 'boq-1',
         createdById: 'user-1',
         revisionNumber: 0,
-        revisionCode: 'R0',
+        revisionCode: UI_STRINGS.common.r0,
         status: 'DRAFT',
         preparationStatus: 'DRAFT',
         budgetStatus: 'NOT_ADDED_TO_BUDGET',
@@ -110,7 +112,7 @@ describe('createNextBoqRevision', () => {
         preparationStatus: 'READY',
         budgetStatus: 'ADDED',
         prStatus: 'CREATED',
-        sourceType: 'UPLOAD',
+        sourceType: UI_STRINGS.appAppAuditPage.uPLOAD,
         sourceFile: 'boq.xlsx',
         sourceReference: 'ref-1',
         sourceConfidence: 0.9,

@@ -1,7 +1,11 @@
 // src/app/api/boq/add-to-budget/route.ts - Add BOQ to Project Cost Centre Budget
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_CREATE');
@@ -13,7 +17,7 @@ export async function POST(req: NextRequest) {
     const { boqId, costCentreId, projectId, autoSubmit } = body;
 
     if (!boqRevisionId && !boqId) {
-      return apiError('BOQ Revision ID or BOQ ID is required.', 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
     }
 
     // Resolve revision
@@ -60,28 +64,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (!revision) {
-      return apiError('BOQ Revision not found.', 404);
+      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
     }
 
     const targetProjectId = projectId || revision.boq.projectId;
     const targetCostCentreId = costCentreId || revision.costCentreId || revision.boq.costCentreId;
 
     if (!targetCostCentreId) {
-      return apiError('A valid Cost Centre is required to allocate budget.', 400);
+      return apiError(UI_STRINGS.appApiBoqAddToBudgetRoute.aValidCostCentreIsRequiredToAllocateBudget, 400);
     }
 
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: targetCostCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
     if (!costCentre) {
-      return apiError('Cost centre not found for this project.', 404);
+      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
     }
 
     // Section 8: Commercial Budget Rule - block if any line has pending/blank/invalid quantity
     const missingQtyLines = revision.lines.filter(l => l.quantity === null || l.quantity === undefined || l.quantity <= 0);
     if (missingQtyLines.length > 0) {
       return apiError(
-        `${missingQtyLines.length} BOQ line${missingQtyLines.length > 1 ? 's' : ''} require quantity before this BOQ can be added to Budget.`,
+        interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.lengthBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget, { "length": missingQtyLines.length, "value2": missingQtyLines.length > 1 ? 's' : '' }),
         400
       );
     }
@@ -138,12 +142,12 @@ export async function POST(req: NextRequest) {
             name: costCentre.name,
           },
           transactionsCount: existingTxs.length,
-          message: `BOQ ${revision.boq.boqCode} budget contribution is already recorded with status Under Approval.`,
+          message: interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeBudgetContributionIsAlreadyRecordedWithStatusUnderApproval, { "boqCode": revision.boq.boqCode }),
         }, 200);
       }
 
       if (existingContribution.status === 'APPROVED') {
-        return apiError(`BOQ ${revision.boq.boqCode} has already been approved in budget for Cost Centre ${costCentre.code}.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeHasAlreadyBeenApprovedInBudgetForCostCentreCode, { "boqCode": revision.boq.boqCode, "code": costCentre.code }), 400);
       }
 
       // If previously REJECTED or DRAFT, allow re-submission as Under Approval
@@ -273,7 +277,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BUDGET_CONTRIBUTION',
         entityId: contribution.id,
         action: 'BUDGET_CONTRIBUTION_CREATED',
-        description: `BOQ ${revision.boq.boqCode} (${revision.revisionCode}) allocated to Cost Centre ${costCentre.code} with status Under Approval. Value: ₹ ${totalEstimated.toLocaleString('en-IN')}`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeRevisionCodeAllocatedToCostCentreCodeWithStatusUnderApprovalValueToLocaleString, { "boqCode": revision.boq.boqCode, "revisionCode": revision.revisionCode, "code": costCentre.code, "toLocaleString": totalEstimated.toLocaleString(I18N_CONFIG.defaultLocale) }),
         newValue: JSON.stringify({
           contributionId: contribution.id,
           boqCode: revision.boq.boqCode,
@@ -297,10 +301,10 @@ export async function POST(req: NextRequest) {
         name: costCentre.name,
       },
       transactionsCount: createdTransactions.length,
-      message: `BOQ ${revision.boq.boqCode} successfully allocated to budget for Cost Centre ${costCentre.code} with status Under Approval.`,
+      message: interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeSuccessfullyAllocatedToBudgetForCostCentreCodeWithStatusUnderApproval, { "boqCode": revision.boq.boqCode, "code": costCentre.code }),
     }, 201);
   } catch (err: any) {
     console.error('Error adding BOQ to budget:', err);
-    return apiError(err.message || 'Failed to add BOQ to budget.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500);
   }
 }

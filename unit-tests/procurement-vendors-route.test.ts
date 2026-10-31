@@ -3,6 +3,8 @@ import { GET, POST } from '../src/app/api/procurement/vendors/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: { vendor: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() } },
@@ -88,8 +90,8 @@ describe('procurement vendor directory API', () => {
     } });
     expect(db.vendor.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
       where: {
-        vendorType: 'CLIENT_VENDOR', tenantId: 'tenant-1', qualificationStatus: 'QUALIFIED',
-        onboardingStatus: 'ONBOARDED', categories: { contains: 'Electrical' }, status: 'ACTIVE',
+        vendorType: 'CLIENT_VENDOR', tenantId: 'tenant-1', qualificationStatus: UI_STRINGS.common.qUALIFIED,
+        onboardingStatus: 'ONBOARDED', categories: { contains: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical }, status: UI_STRINGS.common.aCTIVE,
         AND: [
           { OR: [
             { operatingLocation: { contains: 'West' } }, { city: { contains: 'West' } }, { state: { contains: 'West' } },
@@ -172,7 +174,7 @@ describe('procurement vendor directory API', () => {
     }));
     expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: expect.objectContaining({
       name: 'Changed', phone: '123', email: 'old@example.test', city: 'Surat', operatingLocation: 'Old Location',
-      country: 'India', legalStructure: ' Private Ltd ', gstin: 'GST-1', onboardingStatus: 'ONBOARDED',
+      country: UI_STRINGS.common.india, legalStructure: ' Private Ltd ', gstin: 'GST-1', onboardingStatus: 'ONBOARDED',
     }) });
   });
 
@@ -210,12 +212,12 @@ describe('procurement vendor directory API', () => {
     expect(result).toMatchObject({ ok: true, status: 201, data: { message: 'Vendor VND-0015 onboarded successfully.' } });
     expect(db.vendor.create).toHaveBeenCalledWith({ data: {
       tenantId: 'tenant-1', code: 'VND-0015', name: 'FineBuild', vendorType: 'PROCUCEV_VENDOR', contactPerson: 'Sam',
-      email: 'contact@vnd-0015.in', phone: '555', categories: 'Electrical', operatingLocation: 'Mumbai ,  Maharashtra',
-      city: 'Mumbai', state: 'Maharashtra', country: 'India', legalStructure: ' LLP ', gstin: 'ABC123', pan: 'XYZ',
-      website: 'https://vendor.test', address: 'Office', experienceYears: 5, turnoverCrores: 2.5,
+      email: 'contact@vnd-0015.in', phone: '555', categories: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, operatingLocation: 'Mumbai ,  Maharashtra',
+      city: 'Mumbai', state: 'Maharashtra', country: UI_STRINGS.common.india, legalStructure: ' LLP ', gstin: 'ABC123', pan: 'XYZ',
+      website: 'https://vendor.test', address: UI_STRINGS.appAppBoqStudioPage.office, experienceYears: 5, turnoverCrores: 2.5,
       capabilities: '["civil","electrical"]', serviceCoverage: '{"states":["MH"]}', clientReferences: 'Legacy reference',
       certifications: ['ISO'], onboardingStatus: 'ONBOARDED', qualificationStatus: 'NOT_EVALUATED',
-      complianceStatus: 'COMPLIANT', empanelmentStatus: 'PENDING', status: 'ACTIVE',
+      complianceStatus: UI_STRINGS.common.cOMPLIANT, empanelmentStatus: UI_STRINGS.common.pENDING, status: UI_STRINGS.common.aCTIVE,
     } });
     expect(db.vendor.findFirst).toHaveBeenNthCalledWith(1, { where: { tenantId: 'tenant-1', code: 'VND-0013' }, select: { id: true } });
     expect(db.vendor.findFirst).toHaveBeenNthCalledWith(3, { where: { tenantId: 'tenant-1', code: 'VND-0015' }, select: { id: true } });
@@ -229,7 +231,7 @@ describe('procurement vendor directory API', () => {
     }));
     expect(db.vendor.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       code: 'VND-0001', email: 'contact@vnd-0001.in', operatingLocation: 'Delhi,', city: 'Delhi', state: null,
-      country: 'India', legalStructure: null, gstin: null, pan: null, website: null, address: null,
+      country: UI_STRINGS.common.india, legalStructure: null, gstin: null, pan: null, website: null, address: null,
       experienceYears: 3, turnoverCrores: null, capabilities: null, serviceCoverage: null, clientReferences: null,
       certifications: null, onboardingStatus: 'DRAFT',
     }) });

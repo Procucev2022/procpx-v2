@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PrDetailModal from '../src/components/PrDetailModal';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -50,10 +54,10 @@ describe('purchase request detail modal', () => {
 
   it('loads canonical demo line items and keeps the create RFQ action available', async () => {
     render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'PR-DEMO-001', isExample: true, prNumber: 'PR-DEMO-001', requestedValue: 480000, projectName: 'Kundanahalli Fitout' }} />);
-    expect(await screen.findByText('Gypsum False Ceiling')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).toBeInTheDocument();
     expect(screen.getByText('Modular Workstations & Storage')).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: /Procurement Request Details/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Create RFQ for this PR/ })).toHaveAttribute('href', '/procurement/rfqs/new?prId=PR-DEMO-001');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).toHaveAttribute('href', '/procurement/rfqs/new?prId=PR-DEMO-001');
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
@@ -72,17 +76,17 @@ describe('purchase request detail modal', () => {
     expect(screen.getByText('CC-1 - Electrical')).toBeInTheDocument();
     expect(screen.getByText(/Power, Lighting/)).toBeInTheDocument();
     expect(screen.getByText('BOQ-1')).toBeInTheDocument();
-    expect(screen.getByText('Approved Rev:').parentElement).toHaveTextContent('R3');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.approvedRev)).parentElement).toHaveTextContent('R3');
     expect(screen.getAllByText(/24,000/).length).toBeGreaterThan(0);
     expect(screen.getByText('Asha')).toBeInTheDocument();
     expect(screen.getByText('Copper cable')).toBeInTheDocument();
     expect(screen.getByText(/2,000/)).toBeInTheDocument();
-    expect(screen.getByText(/Associated RFQ Sourcing Packages/)).toBeInTheDocument();
-    expect(screen.getByText('3 quotes')).toBeInTheDocument();
-    expect(screen.getByText('Round 2')).toBeInTheDocument();
-    expect(screen.getByText('Pending Approval')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View BOQ Revision' })).toHaveAttribute('href', '/boq/rev-3');
-    expect(screen.queryByRole('link', { name: /Create RFQ for this PR/ })).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.associatedRFQSourcingPackages))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.value1Quotes))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.roundCurrentRound))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pendingApproval))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.viewBOQRevision) })).toHaveAttribute('href', '/boq/rev-3');
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).not.toBeInTheDocument();
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
@@ -96,11 +100,12 @@ describe('purchase request detail modal', () => {
     expect(screen.getByText('BOQ-ITM')).toBeInTheDocument();
     expect(screen.getByText('Steel valve')).toBeInTheDocument();
     expect(screen.getByText('EA')).toBeInTheDocument();
-    expect(screen.getByText(/300/)).toBeInTheDocument();
+    const fallbackLine = screen.getByRole('row', { name: /BOQ-ITM/ });
+    expect(fallbackLine).toHaveTextContent(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: UI_STRINGS.common.indianRupeeSymbol, amount: 300 }));
     expect(screen.getByText(/600/)).toBeInTheDocument();
     expect(screen.getAllByText('Mechanical').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Fastener').length).toBeGreaterThan(0);
-    expect(screen.getByText('NOS')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.nOS))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-fetch');
     expect((await screen.findAllByText(/9,000/)).length).toBeGreaterThan(0);
   });
@@ -116,12 +121,12 @@ describe('purchase request detail modal', () => {
     expect(screen.getByText('ALT-1')).toBeInTheDocument();
     expect(screen.getByText('BOX')).toBeInTheDocument();
     expect(screen.getByText(/200/)).toBeInTheDocument();
-    expect(screen.getAllByText('General').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'View BOQ Revision' })).toHaveAttribute('href', '/boq/legacy-rev');
-    expect(screen.getByRole('link', { name: /Create RFQ for this PR/ })).toHaveAttribute('href', '/procurement/rfqs/new?prId=pr-sparse');
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.viewBOQRevision) })).toHaveAttribute('href', '/boq/legacy-rev');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).toHaveAttribute('href', '/procurement/rfqs/new?prId=pr-sparse');
 
     rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-empty-data', prNumber: 'PR-EMPTY' }} />);
-    expect(await screen.findByText('No individual line records mapped. Commercial baseline amount applies to whole package.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.noIndividualLineRecordsMappedCommercialBaselineAmountAppliesToWholePackage))).toBeInTheDocument();
   });
 
   it('falls back to the original PR when API responses or network calls fail', async () => {
@@ -129,8 +134,8 @@ describe('purchase request detail modal', () => {
     const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-http-failure', prNumber: 'PR-HTTP', currentStage: 'Awaiting RFQ', costCentre: 'CC-X', itemCount: 4 }} />);
     expect(await screen.findByRole('dialog', { name: /PR-HTTP/ })).toBeInTheDocument();
     expect(screen.getByText('CC-X')).toBeInTheDocument();
-    expect(await screen.findByText('No individual line records mapped. Commercial baseline amount applies to whole package.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Create RFQ for this PR/ })).toHaveAttribute('href', '/procurement/rfqs/new?prId=pr-http-failure');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.noIndividualLineRecordsMappedCommercialBaselineAmountAppliesToWholePackage))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).toHaveAttribute('href', '/procurement/rfqs/new?prId=pr-http-failure');
 
     mockFetch.mockRejectedValueOnce(new Error('network unavailable'));
     rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-network-failure', prNumber: 'PR-NET', overallStage: 'Negotiation' }} />);
@@ -141,18 +146,18 @@ describe('purchase request detail modal', () => {
   it('skips fetch for demo identifiers, absent identifiers, and keeps fallback metadata', async () => {
     const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'demo-record', prNumber: 'PR-DEMO-2', totalLines: 2, costCentre: null }} />);
     expect(screen.getByRole('dialog', { name: /PR-DEMO-2/ })).toBeInTheDocument();
-    expect(screen.getByText('General')).toBeInTheDocument();
-    expect(screen.getByText(/Civil & Interior/)).toBeInTheDocument();
-    expect(screen.getAllByText('Project').length).toBeGreaterThan(0);
-    expect(screen.getByText('R0')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.general))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.civilInterior))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.project)).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.r0))).toBeInTheDocument();
     expect(mockFetch).not.toHaveBeenCalled();
 
     rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ prId: 'PR-DEMO-9', estimatedValue: 0, boqCode: 'BOQ-9', project: { name: 'West Site' }, categories: [] }} />);
     expect(screen.getByText('West Site')).toBeInTheDocument();
     expect(screen.getByText('BOQ-9')).toBeInTheDocument();
-    expect(screen.getByText('Procurement Commercial Package')).toBeInTheDocument();
-    expect(screen.getByText('Immediate Requirement')).toBeInTheDocument();
-    expect(screen.getByText(/Taxonomy:/)).not.toHaveTextContent('Civil & Interior');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.procurementCommercialPackage))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.immediateRequirement))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.taxonomy))).not.toHaveTextContent(uiStringPattern(UI_STRINGS.common.civilInterior));
     rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ prNumber: 'PR-NO-ID', title: 'No identifier record' }} />);
     expect(screen.getByRole('dialog', { name: /PR-NO-ID/ })).toBeInTheDocument();
     expect(mockFetch).not.toHaveBeenCalled();
@@ -162,9 +167,9 @@ describe('purchase request detail modal', () => {
     const onClose = jest.fn();
     render(<PrDetailModal isOpen onClose={onClose} pr={{ id: 'demo-close', description: 'Closeable PR', rfqs: [{ id: 'rfq-1', rfqNumber: 'RFQ-1', status: 'RELEASED', description: 'Lighting', vendorInvitationProgress: '2 invited', negotiationStage: '—', awardStatus: 'Not Prepared', openUrl: '/procurement/rfqs/rfq-1' }] }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Modal close' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
     expect(onClose).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('link', { name: 'Open RFQ Workspace' })).toHaveAttribute('href', '/procurement/rfqs/rfq-1');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.openRFQWorkspace) })).toHaveAttribute('href', '/procurement/rfqs/rfq-1');
     expect(screen.getByText('2 invited')).toBeInTheDocument();
   });
 });

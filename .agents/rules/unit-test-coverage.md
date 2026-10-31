@@ -18,3 +18,4 @@ description: "Apply workspace-wide build, test coverage, typecheck, lint, and sa
 - Use `npm run logs:search -- --level error --since 24h` to search local JSONL records. Attach `attachPlaywrightDebugCapture` to browser test pages and capture a named checkpoint after each meaningful workflow state; keep screenshots in the managed `logs/` directory so retention purges them.
 
 - Follow `.agents/rules/application-structure.md` for the required dedicated constants and type/interface modules.
+- Follow the internationalization policy in `.agents/rules/application-structure.md`; tests must use `UI_STRINGS` for user-visible text assertions.

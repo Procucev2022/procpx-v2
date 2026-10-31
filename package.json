@@ -16,6 +16,7 @@
     "test:coverage": "node scripts/run-unit-coverage.cjs",
     "coverage:report": "node scripts/write-unit-coverage-report.cjs",
     "test:watch": "jest --watch --detectOpenHandles",
+    "check:i18n": "node scripts/check-ui-strings.cjs",
     "check:quality": "node scripts/check-quality.cjs",
     "check:changed": "node scripts/check-changed.cjs"
   },

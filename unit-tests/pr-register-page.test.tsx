@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MyPrsPage from '../src/app/(app)/pr/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const toastSuccess = jest.fn();
 const toastError = jest.fn();
@@ -100,42 +104,42 @@ describe('PR register page', () => {
     expect(screen.getByText('Released to Sourcing: 1')).toBeInTheDocument();
     expect(screen.getByText('Pending Approval: 1')).toBeInTheDocument();
     expect(screen.getByText('Draft / Corrections: 2')).toBeInTheDocument();
-    expect(screen.getByText('BOQ: BOQ-01')).toBeInTheDocument();
-    expect(screen.getAllByText('General Capex')).toHaveLength(3);
+    expect(screen.getByRole('row', { name: /BOQ-01/ })).toHaveTextContent(`${UI_STRINGS.common.bOQ2}BOQ-01`);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppPrPage.generalCapex))).toHaveLength(3);
     expect(screen.getByText('Attach a revised quote')).toBeInTheDocument();
     expect(screen.getByText('Budget exceeded')).toBeInTheDocument();
     expect(screen.getByText('North Plant')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /Details/ })[0]).toHaveAttribute('href', '/boq/studio?boqId=boq-1&projectId=project-1&costCentreId=cc-1');
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.details) })[0]).toHaveAttribute('href', '/boq/studio?boqId=boq-1&projectId=project-1&costCentreId=cc-1');
 
-    const search = screen.getByPlaceholderText(/Search PR Number/);
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.pRNumber));
     for (const query of ['pr-draft', 'panel order', 'West Campus', 'Flooring']) {
       fireEvent.change(search, { target: { value: query } });
       await waitFor(() => expect(screen.getByRole('row', { name: new RegExp(query, 'i') })).toBeInTheDocument());
     }
     fireEvent.change(search, { target: { value: 'no matching record' } });
-    expect(await screen.findByText('Try clearing filters to find more records.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrPage.tryClearingFiltersToFindMoreRecords))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
     expect(await screen.findByText('PR-RETURN')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith(
-      'PR submitted successfully.', 'draft', 'Awaiting Project Approver',
+      UI_STRINGS.appAppPrPage.pRSubmittedSuccessfully, 'draft', UI_STRINGS.appAppProcurementPposPage.awaitingProjectApprover,
     ));
-    expect(await screen.findByText('PR submitted successfully.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrPage.pRSubmittedSuccessfully))).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledWith('/api/pr/draft/submit', { method: 'POST' });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Chat/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.chat) })[0]);
     expect(screen.getByText('Chat PR-DRAFT')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Message sent' }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
     fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
     expect(screen.queryByText('Chat PR-DRAFT')).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: /Chat/ })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.chat) })[1]);
     expect(screen.getByText('Chat PR-RETURN')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
 
-    fireEvent.click(screen.getByRole('button', { name: '✕' }));
-    expect(screen.queryByText('PR submitted successfully.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.copy4i33ao) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppPrPage.pRSubmittedSuccessfully))).not.toBeInTheDocument();
   });
 
   it('applies status filters and reports submit and fetch failures', async () => {
@@ -151,34 +155,34 @@ describe('PR register page', () => {
       if (init?.method === 'POST') return { ok: false, json: async () => ({ error: 'Approval service unavailable' }) };
       return { ok: true, json: async () => [prs[0]] };
     });
-    fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Approval service unavailable'));
-    expect(await screen.findByText('Error: Approval service unavailable')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.errorMessage))).toBeInTheDocument();
 
     (global.fetch as jest.Mock).mockImplementation(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') return { ok: false, json: async () => ({}) };
       return { ok: true, json: async () => [prs[0]] };
     });
-    fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
     await waitFor(() => expect(toastError).toHaveBeenLastCalledWith('Failed to submit PR'));
 
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error(''));
-    fireEvent.click(screen.getByRole('button', { name: /Submit/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submit) }));
     await waitFor(() => expect(toastError).toHaveBeenLastCalledWith('Error submitting PR'));
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    fireEvent.change(screen.getByPlaceholderText(/Search PR Number/), { target: { value: 'no match' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.pRNumber)), { target: { value: 'no match' } });
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('offline'));
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'PR_REJECTED' } });
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
-    expect(await screen.findByText('Try clearing filters to find more records.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrPage.tryClearingFiltersToFindMoreRecords))).toBeInTheDocument();
     consoleError.mockRestore();
   });
 
   it('shows the default empty-state guidance when there are no PRs', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => [] });
     render(<MyPrsPage />);
-    expect(await screen.findByText('No PRs found')).toBeInTheDocument();
-    expect(screen.getByText('Create a PR or derive one from a BOQ in BOQ Studio.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrPage.noPRsFound))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppPrPage.createAPROrDeriveOneFromABOQInBOQStudio))).toBeInTheDocument();
   });
 });

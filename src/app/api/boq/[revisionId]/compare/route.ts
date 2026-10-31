@@ -3,6 +3,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -34,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
   });
 
-  if (!currentRevision) return apiError('Current revision not found', 404);
+  if (!currentRevision) return apiError(UI_STRINGS.appApiBoqRevisionIdCompareRoute.currentRevisionNotFound, 404);
 
   // If no targetRevisionId specified, compare against immediate previous revision
   let compareTargetRevId = targetRevisionId;
@@ -57,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
   });
 
-  if (!compareRevision) return apiError('Compare target revision not found', 404);
+  if (!compareRevision) return apiError(UI_STRINGS.appApiBoqRevisionIdCompareRoute.compareTargetRevisionNotFound, 404);
 
   const prevLinesByNum = new Map(compareRevision.lines.map(l => [l.lineNumber, l]));
   const currLinesByNum = new Map(currentRevision.lines.map(l => [l.lineNumber, l]));
@@ -72,7 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     if (!prevLine) {
       added.push({
         lineNumber: lineNum,
-        description: currLine.standardDescription || currLine.originalDescription,
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": currLine.standardDescription || currLine.originalDescription }),
         quantity: currLine.quantity,
         uom: currLine.uom?.code || currLine.uomRaw,
         category: currLine.category?.name,
@@ -95,7 +98,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
       if (diffs.length > 0) {
         modified.push({
           lineNumber: lineNum,
-          description: currLine.standardDescription || currLine.originalDescription,
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": currLine.standardDescription || currLine.originalDescription }),
           diffs,
         });
       } else {
@@ -108,7 +111,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     if (!currLinesByNum.has(lineNum)) {
       removed.push({
         lineNumber: lineNum,
-        description: prevLine.standardDescription || prevLine.originalDescription,
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": prevLine.standardDescription || prevLine.originalDescription }),
         quantity: prevLine.quantity,
         uom: prevLine.uom?.code || prevLine.uomRaw,
       });

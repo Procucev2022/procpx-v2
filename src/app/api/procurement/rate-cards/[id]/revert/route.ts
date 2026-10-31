@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -18,7 +21,7 @@ export async function POST(
     const reason = body.reason || body.remarks;
 
     if (!reason || !reason.trim()) {
-      return apiError('Remarks / reason for returning for correction is mandatory', 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.remarksReasonForReturningForCorrectionIsMandatory, 400);
     }
 
     const rateCard = await prisma.vendorRateCard.findUnique({
@@ -27,12 +30,12 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError('Rate Card not found', 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
     const pendingStatuses = ['PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL'];
     if (!pendingStatuses.includes(rateCard.status)) {
-      return apiError(`Cannot return rate card in status: ${rateCard.status}`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.cannotReturnRateCardInStatusStatus, { "status": rateCard.status }), 400);
     }
 
     const now = new Date();
@@ -72,16 +75,16 @@ export async function POST(
       entityType: 'VENDOR',
       entityId: rateCard.vendorId,
       action: 'RATE_CARD_RETURNED_FOR_CORRECTION',
-      description: `Rate Card ${rateCard.rateCardNumber} returned for correction by ${approverName}: ${reason.trim()}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.rateCardRateCardNumberReturnedForCorrectionByApproverNameTrim, { "rateCardNumber": rateCard.rateCardNumber, "approverName": approverName, "trim": reason.trim() }),
       newValue: { status: 'RETURNED_FOR_CORRECTION', reason: reason.trim() },
     });
 
     return apiSuccess({
       rateCard: updated,
-      message: 'Rate Card returned for correction with remarks recorded',
+      message: UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.rateCardReturnedForCorrectionWithRemarksRecorded,
     });
   } catch (error: any) {
     console.error('Error returning rate card:', error);
-    return apiError(error.message || 'Failed to return rate card for correction', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToReturnRateCardForCorrection }), 500);
   }
 }

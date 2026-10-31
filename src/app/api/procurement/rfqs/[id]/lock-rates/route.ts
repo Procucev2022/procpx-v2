@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -20,7 +23,7 @@ export async function POST(
     const { vendorId, finalCommercialValue, remarks } = body;
 
     if (!vendorId) {
-      return apiError('Winning vendor ID is required to lock rates', 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.winningVendorIDIsRequiredToLockRates, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -35,7 +38,7 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     const vendor = await prisma.vendor.findFirst({
@@ -43,7 +46,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError('Vendor not found', 404);
+      return apiError(UI_STRINGS.common.vendorNotFound, 404);
     }
 
     const benchmark = rfq.estimatedBenchmarkValue || 0;
@@ -67,7 +70,7 @@ export async function POST(
       entityType: 'RFQ',
       entityId: rfq.id,
       action: 'FINAL_RATE_LOCKED',
-      description: `Final rates locked for RFQ ${rfq.rfqNumber} with vendor ${vendor.name} at ₹ ${finalAmount.toLocaleString()} (Benchmark: ₹ ${benchmark.toLocaleString()}, Savings: ${Math.round(savingsPercent)}%)`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.finalRatesLockedForRFQRfqNumberWithVendorNameAtToLocaleStringBenchmarkToLocaleString2SavingsRound, { "rfqNumber": rfq.rfqNumber, "name": vendor.name, "toLocaleString": finalAmount.toLocaleString(), "toLocaleString2": benchmark.toLocaleString(), "round": Math.round(savingsPercent) }),
       newValue: {
         vendorId,
         vendorName: vendor.name,
@@ -97,10 +100,10 @@ export async function POST(
       finalCommercialValue: finalAmount,
       savings,
       savingsPercent: Math.round(savingsPercent * 100) / 100,
-      message: `Final commercial rates locked successfully for ${vendor.name}`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.finalCommercialRatesLockedSuccessfullyForName, { "name": vendor.name }),
     });
   } catch (error: any) {
     console.error('Error locking final rates:', error);
-    return apiError(error.message || 'Failed to lock final rates', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToLockFinalRates }), 500);
   }
 }

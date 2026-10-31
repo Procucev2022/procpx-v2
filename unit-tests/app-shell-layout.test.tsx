@@ -5,6 +5,8 @@ import Sidebar from '../src/components/Sidebar';
 import TopNav from '../src/components/ui/TopNav';
 import { ToastProvider } from '../src/components/ui/Toast';
 import AppLayout from '../src/app/(app)/layout';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/auth', () => ({ auth: jest.fn() }));
 jest.mock('next/navigation', () => ({ redirect: jest.fn() }));
@@ -20,7 +22,7 @@ describe('authenticated app shell layout', () => {
     authMock.mockResolvedValue({ user: null });
     redirectMock.mockImplementation((location: string) => { throw new Error(`redirect:${location}`); });
     await expect(AppLayout({ children: <p>Private page</p> })).rejects.toThrow('redirect:/login');
-    expect(redirectMock).toHaveBeenCalledWith('/login');
+    expect(redirectMock).toHaveBeenCalledWith(UI_STRINGS.libAuth.login);
   });
 
   it('composes navigation and page content using the authenticated user fields', async () => {

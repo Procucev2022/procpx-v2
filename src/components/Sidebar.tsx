@@ -35,6 +35,8 @@ import {
   Tag,
 } from 'lucide-react';
 import type { SidebarProps } from "@app-types/components/Sidebar.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 
 export default function Sidebar({ user }: SidebarProps) {
@@ -92,24 +94,24 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 1: PROCUREMENT USER NAVIGATION */}
         {isProcurementUser && (
           <>
-            {!collapsed && <div className="nav-section-label">WORKSPACE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.wORKSPACE}</div>}
             {navItem('/dashboard', 'Dashboard', LayoutDashboard)}
 
-            {!collapsed && <div className="nav-section-label">SOURCING QUEUE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.sOURCINGQUEUE}</div>}
             {navItem('/procurement/approved-prs', 'Approved PRs', Send, pathname.startsWith('/procurement/approved-prs'))}
 
-            {!collapsed && <div className="nav-section-label">SOURCING EXECUTION</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.sOURCINGEXECUTION}</div>}
             {navItem('/procurement/rfqs', 'RFQs', FileText, pathname.startsWith('/procurement/rfqs'))}
             {navItem('/procurement/rate-cards', 'Rate Cards', Tag, pathname.startsWith('/procurement/rate-cards'))}
             {navItem('/procurement/vendors', 'Vendors', Building2, pathname.startsWith('/procurement/vendors'))}
 
-            {!collapsed && <div className="nav-section-label">NEGOTIATION & AWARDS</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.nEGOTIATIONAWARDS}</div>}
             {navItem('/procurement/negotiations', 'Negotiations', MessageSquare, pathname.startsWith('/procurement/negotiations'))}
             {navItem('/procurement/auctions', 'Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
             {navItem('/procurement/awards', 'Awards', Award, pathname.startsWith('/procurement/awards'))}
             {navItem('/procurement/ppos', 'PPOs & Orders', FileCheck, pathname.startsWith('/procurement/ppos'))}
 
-            {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.gOVERNANCE}</div>}
             {navItem('/audit', 'Audit Trail', ShieldCheck, pathname.startsWith('/audit'))}
           </>
         )}
@@ -117,27 +119,27 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 2: PROJECT USER NAVIGATION */}
         {isProjectUser && (
           <>
-            {!collapsed && <div className="nav-section-label">WORKSPACE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.wORKSPACE}</div>}
             {navItem('/dashboard', 'Dashboard', LayoutDashboard)}
 
-            {!collapsed && <div className="nav-section-label">MASTER CREATION</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.mASTERCREATION}</div>}
             {navItem('/projects', 'Projects', FolderKanban, pathname.startsWith('/projects'))}
             {navItem('/cost-centres', 'Cost Centres', Layers, pathname.startsWith('/cost-centres'))}
             {navItem('/masters/standard-boq', 'Standard BOQ Creation', BookOpen, pathname.startsWith('/masters/standard-boq'))}
             {navItem('/masters/categories', 'Category Creation', Boxes, pathname.startsWith('/masters/categories'))}
 
-            {!collapsed && <div className="nav-section-label">BOQ</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.common.bOQ}</div>}
             {navItem('/boq/studio', 'BOQ Studio', Sparkles, pathname.startsWith('/boq/studio'))}
 
-            {!collapsed && <div className="nav-section-label">BUDGET</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGET}</div>}
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
 
-            {!collapsed && <div className="nav-section-label">VENDOR PERFORMANCE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.vENDORPERFORMANCE}</div>}
             {navItem('/procurement/ppos', 'PPO Performance', Award, pathname.startsWith('/procurement/ppos'))}
 
-            {!collapsed && <div className="nav-section-label">OBSERVER</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.oBSERVER}</div>}
             {navItem('/procurement/auctions', 'Observer Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
           </>
         )}
@@ -145,27 +147,27 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 3: PROJECT APPROVER NAVIGATION */}
         {isProjectApprover && (
           <>
-            {!collapsed && <div className="nav-section-label">WORKSPACE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.wORKSPACE}</div>}
             {navItem('/dashboard', 'Dashboard', LayoutDashboard)}
 
-            {!collapsed && <div className="nav-section-label">PROJECTS</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.pROJECTS}</div>}
             {navItem('/projects', 'Projects', FolderKanban, pathname.startsWith('/projects'))}
 
-            {!collapsed && <div className="nav-section-label">APPROVAL QUEUES</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.aPPROVALQUEUES}</div>}
             {navItem('/approvals/boq-pr', 'BOQ Approvals', CheckSquare, pathname.startsWith('/approvals/boq-pr'))}
             {navItem('/approvals/budget', 'Budget Approvals', Landmark, pathname.startsWith('/approvals/budget'))}
             {navItem('/approvals/rate-cards', 'Rate Card Approvals', Tag, pathname.startsWith('/approvals/rate-cards'))}
             {navItem('/approvals/vendor-ratings', 'Vendor Performance Approvals', Award, pathname.startsWith('/approvals/vendor-ratings'))}
 
-            {!collapsed && <div className="nav-section-label">BUDGET REVIEW</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGETREVIEW}</div>}
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
 
-            {!collapsed && <div className="nav-section-label">OBSERVER</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.oBSERVER}</div>}
             {navItem('/procurement/auctions', 'Observer Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
 
-            {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.gOVERNANCE}</div>}
             {navItem('/audit', 'Activity & Audit', ShieldCheck, pathname.startsWith('/audit'))}
           </>
         )}
@@ -173,17 +175,17 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 4: FINANCE USER NAVIGATION */}
         {isFinanceUser && (
           <>
-            {!collapsed && <div className="nav-section-label">WORKSPACE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.wORKSPACE}</div>}
             {navItem('/dashboard', 'Dashboard', LayoutDashboard)}
 
-            {!collapsed && <div className="nav-section-label">BUDGET GOVERNANCE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGETGOVERNANCE}</div>}
             {navItem('/finance/budget-approvals', 'Budget Approvals', CheckSquare, pathname.startsWith('/finance/budget-approvals'))}
             {navItem('/approvals/rate-cards', 'Rate Card Approvals', Tag, pathname.startsWith('/approvals/rate-cards'))}
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
 
-            {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.gOVERNANCE}</div>}
             {navItem('/audit', 'Audit Trail', ShieldCheck, pathname.startsWith('/audit'))}
           </>
         )}
@@ -191,30 +193,30 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 5: CATEGORY MANAGER NAVIGATION */}
         {isCategoryManager && (
           <>
-            {!collapsed && <div className="nav-section-label">WORKSPACE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.wORKSPACE}</div>}
             {navItem('/dashboard', 'Dashboard', LayoutDashboard)}
 
-            {!collapsed && <div className="nav-section-label">MASTER CREATION</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.mASTERCREATION}</div>}
             {navItem('/projects', 'Projects', FolderKanban, pathname.startsWith('/projects'))}
             {navItem('/cost-centres', 'Cost Centres', Layers, pathname.startsWith('/cost-centres'))}
             {navItem('/masters/standard-boq', 'Standard BOQ Creation', BookOpen, pathname.startsWith('/masters/standard-boq'))}
             {navItem('/masters/categories', 'Category Creation', Boxes, pathname.startsWith('/masters/categories'))}
 
-            {!collapsed && <div className="nav-section-label">SOURCING QUEUE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.sOURCINGQUEUE}</div>}
             {navItem('/procurement/approved-prs', 'Approved PRs', Send, pathname.startsWith('/procurement/approved-prs'))}
 
-            {!collapsed && <div className="nav-section-label">SOURCING EXECUTION</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.sOURCINGEXECUTION}</div>}
             {navItem('/procurement/rfqs', 'RFQs', FileText, pathname.startsWith('/procurement/rfqs'))}
             {navItem('/procurement/rate-cards', 'Rate Cards', Tag, pathname.startsWith('/procurement/rate-cards'))}
             {navItem('/procurement/vendors', 'Vendors', Building2, pathname.startsWith('/procurement/vendors'))}
 
-            {!collapsed && <div className="nav-section-label">NEGOTIATION & AWARDS</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.nEGOTIATIONAWARDS}</div>}
             {navItem('/procurement/negotiations', 'Negotiations', MessageSquare, pathname.startsWith('/procurement/negotiations'))}
             {navItem('/procurement/auctions', 'Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
             {navItem('/procurement/awards', 'Awards', Award, pathname.startsWith('/procurement/awards'))}
             {navItem('/procurement/ppos', 'PPOs & Orders', FileCheck, pathname.startsWith('/procurement/ppos'))}
 
-            {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.gOVERNANCE}</div>}
             {navItem('/audit', 'Audit Trail', ShieldCheck, pathname.startsWith('/audit'))}
           </>
         )}
@@ -222,10 +224,10 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 6: ADMIN / SUPER ADMIN / OTHER ROLES */}
         {!isProcurementUser && !isProjectUser && !isProjectApprover && !isFinanceUser && !isCategoryManager && !isVendor && (
           <>
-            {!collapsed && <div className="nav-section-label">WORKSPACE</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.wORKSPACE}</div>}
             {navItem('/dashboard', 'Dashboard', LayoutDashboard)}
 
-            {!collapsed && <div className="nav-section-label">MASTER CREATION</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.mASTERCREATION}</div>}
             {hasPermission(role, 'PROJECT_VIEW') &&
               navItem('/projects', 'Projects', FolderKanban, pathname.startsWith('/projects'))}
             {hasPermission(role, 'COST_CENTRE_VIEW') &&
@@ -235,13 +237,13 @@ export default function Sidebar({ user }: SidebarProps) {
             {hasPermission(role, 'MASTER_VIEW') &&
               navItem('/masters/categories', 'Category Creation', Boxes, pathname.startsWith('/masters/categories'))}
 
-            {!collapsed && <div className="nav-section-label">BOQ</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.common.bOQ}</div>}
             {hasPermission(role, 'BOQ_VIEW') &&
               navItem('/boq/studio', 'BOQ Studio', Sparkles, pathname.startsWith('/boq/studio'))}
             {hasPermission(role, 'BOQ_VIEW') &&
               navItem('/boq', 'BOQs', FileSpreadsheet, pathname === '/boq')}
 
-            {!collapsed && <div className="nav-section-label">BUDGET & PR</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGETPR}</div>}
             {hasPermission(role, 'BUDGET_VIEW') &&
               navItem('/budget', 'Project Budget', Landmark, pathname.startsWith('/budget'))}
             {hasPermission(role, 'PR_VIEW') &&
@@ -259,7 +261,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
             {hasPermission(role, 'RFQ_VIEW') && (
               <>
-                {!collapsed && <div className="nav-section-label">SOURCING</div>}
+                {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.sOURCING}</div>}
                 {navItem('/procurement/approved-prs', 'Approved PRs', Send, pathname.startsWith('/procurement/approved-prs'))}
                 {navItem('/procurement/approved-boqs', 'Approved BOQs', ClipboardCheck, pathname.startsWith('/procurement/approved-boqs'))}
                 {navItem('/procurement/rfqs', 'RFQs', FileText, pathname.startsWith('/procurement/rfqs'))}
@@ -268,7 +270,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 {hasPermission(role, 'RATE_CARD_VIEW') &&
                   navItem('/procurement/rate-cards', 'Rate Card Management', Tag, pathname.startsWith('/procurement/rate-cards'))}
 
-                {!collapsed && <div className="nav-section-label">COMMERCIAL EVALUATION</div>}
+                {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.cOMMERCIALEVALUATION}</div>}
                 {hasPermission(role, 'QUOTE_VIEW') &&
                   navItem('/procurement/quotes', 'Quotes', Receipt, pathname.startsWith('/procurement/quotes'))}
                 {hasPermission(role, 'NEGOTIATION_VIEW') &&
@@ -276,7 +278,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 {hasPermission(role, 'AUCTION_VIEW') &&
                   navItem('/procurement/auctions', 'Auctions', Gavel, pathname.startsWith('/procurement/auctions'))}
 
-                {!collapsed && <div className="nav-section-label">AWARDS & ORDERS</div>}
+                {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.aWARDSORDERS}</div>}
                 {hasPermission(role, 'AWARD_VIEW') &&
                   navItem('/procurement/awards', 'Awards & PPOs', Award, pathname.startsWith('/procurement/awards'))}
               </>
@@ -284,7 +286,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
             {(hasPermission(role, 'USER_VIEW') || hasPermission(role, 'MASTER_VIEW') || hasPermission(role, 'AUDIT_VIEW')) && (
               <>
-                {!collapsed && <div className="nav-section-label">GOVERNANCE</div>}
+                {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.gOVERNANCE}</div>}
                 {hasPermission(role, 'USER_VIEW') &&
                   navItem('/admin/users', 'Users', Users, pathname.startsWith('/admin/users'))}
                 {hasPermission(role, 'MASTER_VIEW') &&
@@ -299,7 +301,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {/* ROLE 7: VENDOR NAVIGATION */}
         {isVendor && (
           <>
-            {!collapsed && <div className="nav-section-label">VENDOR PORTAL</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.vENDORPORTAL}</div>}
             {navItem('/vendor-portal/dashboard', 'Vendor Dashboard', LayoutDashboard, pathname === '/vendor-portal' || pathname === '/vendor-portal/dashboard')}
             {navItem('/vendor-portal/profile', 'Company Profile', Building2, pathname.startsWith('/vendor-portal/profile'))}
             {navItem('/vendor-portal/rfqs', 'My RFQs & Bids', FileText, pathname.startsWith('/vendor-portal/rfqs'))}
@@ -315,14 +317,14 @@ export default function Sidebar({ user }: SidebarProps) {
         type="button"
         className="sidebar-collapse-btn"
         onClick={toggleCollapse}
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? UI_STRINGS.componentsSidebar.expandSidebar : UI_STRINGS.componentsSidebar.collapseSidebar2}
       >
         {collapsed ? (
           <ChevronRight size={18} strokeWidth={2} />
         ) : (
           <>
             <ChevronLeft size={18} strokeWidth={2} />
-            <span>Collapse Sidebar</span>
+            <span>{UI_STRINGS.componentsSidebar.collapseSidebar}</span>
           </>
         )}
       </button>

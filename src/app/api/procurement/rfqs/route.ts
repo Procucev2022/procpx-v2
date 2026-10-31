@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('RFQ_VIEW');
@@ -198,7 +201,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ rfqs: formatted, total: formatted.length });
   } catch (error: any) {
     console.error('Error fetching RFQs:', error);
-    return apiError(error.message || 'Failed to fetch RFQs', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqs }), 500);
   }
 }
 
@@ -252,11 +255,11 @@ export async function POST(req: NextRequest) {
       });
 
       if (!pr) {
-        return apiError('Procurement Request not found or access denied', 404);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.procurementRequestNotFoundOrAccessDenied, 404);
       }
 
       if (!['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'].includes(pr.status)) {
-        return apiError(`Cannot create RFQ: PR is in '${pr.status}' status. Sourcing is only permitted for APPROVED or RELEASED PRs.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.cannotCreateRFQPRIsInStatusStatusSourcingIsOnlyPermittedForAPPROVEDOrRELEASEDPRs, { "status": pr.status }), 400);
       }
 
       // Check for duplicate active RFQ for this PR
@@ -270,7 +273,7 @@ export async function POST(req: NextRequest) {
 
       if (existingRfq) {
         return apiError(
-          `An active RFQ (${existingRfq.rfqNumber}) already exists for this approved PR. Duplicate sourcing events are blocked.`,
+          interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.anActiveRFQRfqNumberAlreadyExistsForThisApprovedPRDuplicateSourcingEventsAreBlocked, { "rfqNumber": existingRfq.rfqNumber }),
           409
         );
       }
@@ -283,7 +286,7 @@ export async function POST(req: NextRequest) {
       if (Array.isArray(selectedLineIds)) {
         const uniqueSet = new Set(selectedLineIds);
         if (uniqueSet.size !== selectedLineIds.length) {
-          return apiError('Duplicate line item IDs found in RFQ line selection.', 400);
+          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400);
         }
       }
 
@@ -295,7 +298,7 @@ export async function POST(req: NextRequest) {
         const foreignLineIds = selectedLineIds.filter((id: string) => !prLineIdMap.has(id));
         if (foreignLineIds.length > 0) {
           return apiError(
-            `Invalid line item selection: Line ID(s) [${foreignLineIds.join(', ')}] do not belong to the approved PR scope (${pr.prNumber}).`,
+            interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.invalidLineItemSelectionLineIDSJoinDoNotBelongToTheApprovedPRScopePrNumber, { "join": foreignLineIds.join(', '), "prNumber": pr.prNumber }),
             400
           );
         }
@@ -303,7 +306,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (targetPrLines.length === 0) {
-        return apiError(`At least one approved PR line item must be selected for RFQ from ${pr.prNumber}.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneApprovedPRLineItemMustBeSelectedForRFQFromPrNumber, { "prNumber": pr.prNumber }), 400);
       }
 
       rfqLinesData = targetPrLines.map((l) => {
@@ -336,7 +339,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Path B: Creating RFQ directly from an Approved BOQ Revision
       if (!resolvedProjectId || !resolvedBoqRevisionId || !title) {
-        return apiError('Project, Approved BOQ Revision, and Title are required', 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.projectApprovedBOQRevisionAndTitleAreRequired, 400);
       }
 
       const boqRevision = await prisma.boqRevision.findFirst({
@@ -359,7 +362,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (!boqRevision) {
-        return apiError('Approved or Released BOQ Revision not found', 404);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.approvedOrReleasedBOQRevisionNotFound, 404);
       }
 
       boqRevisionCode = boqRevision.revisionCode;
@@ -372,12 +375,12 @@ export async function POST(req: NextRequest) {
         );
       } else if (selectedLineIds && selectedLineIds.length > 0) {
         if (new Set(selectedLineIds).size !== selectedLineIds.length) {
-          return apiError('Duplicate line item IDs found in RFQ line selection.', 400);
+          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400);
         }
         const foreignBoqLineIds = selectedLineIds.filter((id: string) => !boqLineIdMap.has(id));
         if (foreignBoqLineIds.length > 0) {
           return apiError(
-            `Invalid line item selection: Line ID(s) [${foreignBoqLineIds.join(', ')}] do not belong to the selected BOQ revision (${boqRevision.revisionCode}).`,
+            interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.invalidLineItemSelectionLineIDSJoinDoNotBelongToTheSelectedBOQRevisionRevisionCode, { "join": foreignBoqLineIds.join(', '), "revisionCode": boqRevision.revisionCode }),
             400
           );
         }
@@ -385,7 +388,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (targetBoqLines.length === 0) {
-        return apiError('At least one BOQ line must be selected for the RFQ scope', 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneBOQLineMustBeSelectedForTheRFQScope, 400);
       }
 
       rfqLinesData = targetBoqLines.map((l) => {
@@ -398,7 +401,7 @@ export async function POST(req: NextRequest) {
           tenantId: ctx.tenantId,
           boqLineId: l.id,
           lineNumber: l.lineNumber || l.itemCode || 'L-1',
-          description: l.standardDescription || l.originalDescription || 'Line item',
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": l.standardDescription || l.originalDescription || 'Line item' }),
           specification: l.specification || 'Commercial standard specification',
           category: l.category?.name || 'General',
           subcategory: (l as any).subcategoryId || '',
@@ -470,7 +473,7 @@ export async function POST(req: NextRequest) {
       entityType: 'RFQ',
       entityId: rfq.id,
       action: 'RFQ_CREATED',
-      description: `RFQ ${rfqNumber} created with ${rfqLinesData.length} lines from approved BOQ revision ${boqRevisionCode} (Status: ${initialStatus})`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberCreatedWithLengthLinesFromApprovedBOQRevisionBoqRevisionCodeStatusInitialStatus, { "rfqNumber": rfqNumber, "length": rfqLinesData.length, "boqRevisionCode": boqRevisionCode, "initialStatus": initialStatus }),
       newValue: {
         rfqNumber,
         title,
@@ -489,7 +492,7 @@ export async function POST(req: NextRequest) {
         entityType: 'RFQ',
         entityId: rfq.id,
         action: 'RFQ_RELEASED',
-        description: `RFQ ${rfqNumber} released to ${vendorIds.length} invited vendors`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberReleasedToLengthInvitedVendors, { "rfqNumber": rfqNumber, "length": vendorIds.length }),
       });
 
       await notifyNextResponsibleParty({
@@ -501,9 +504,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return apiSuccess({ rfq, message: `RFQ ${rfqNumber} successfully created` }, 201);
+    return apiSuccess({ rfq, message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberSuccessfullyCreated, { "rfqNumber": rfqNumber }) }, 201);
   } catch (error: any) {
     console.error('Error creating RFQ:', error);
-    return apiError(error.message || 'Failed to create RFQ', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRfq }), 500);
   }
 }

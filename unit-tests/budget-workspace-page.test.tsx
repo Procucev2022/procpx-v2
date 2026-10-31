@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ProjectBudgetPage from '../src/app/(app)/budget/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockToastSuccess = jest.fn();
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
@@ -105,50 +109,50 @@ describe('project budget workspace', () => {
     render(<ProjectBudgetPage />);
     expect(await screen.findByText('3 Budget Contributions Under Approval for Civil Works')).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toHaveValue('p1'));
-    expect(screen.getByText('Area:').parentElement).toHaveTextContent('1,000 Sqft');
-    expect(screen.getByText('Total Budget Allocation')).toBeInTheDocument();
-    expect(screen.getByText('Actual Spend')).toBeInTheDocument();
-    expect(screen.getByText('Available Balance')).toBeInTheDocument();
-    expect(screen.getByText('Cost Per Sqft')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.area, '', false)).parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.common.toLocaleStringSqft, '', false));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.totalBudgetAllocation))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.actualSpend))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.availableBalance))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.costPerSqft))).toBeInTheDocument();
     expect(screen.getByText('3 Budget Contributions Under Approval for Civil Works')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Approve Budget/ })).toHaveLength(3);
-    expect(screen.getByText('Under Project Approval')).toBeInTheDocument();
-    expect(screen.getByText('Under Finance Approval')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetPage.approveBudget, '', false) })).toHaveLength(3);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.underProjectApproval))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.underFinanceApproval))).toBeInTheDocument();
     expect(screen.getByText('Partially Approved')).toBeInTheDocument();
     expect(screen.getByText('ON HOLD')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ledger' })).toHaveAttribute('href', '/budget/transactions');
-    expect(screen.getByRole('link', { name: 'Budget vs Actual' })).toHaveAttribute('href', '/budget/vs-actual');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.ledger) })).toHaveAttribute('href', '/budget/transactions');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.budgetVsActual) })).toHaveAttribute('href', '/budget/vs-actual');
 
     fireEvent.click(screen.getByRole('button', { name: /CC-02/ }));
     await waitFor(() => expect(window.location.search).toContain('costCentreId=cc2'));
-    expect(screen.getByText('No Category Budget Allocated')).toBeInTheDocument();
-    expect(screen.getByText('Area not configured')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open BOQ Studio' })).toHaveAttribute('href', '/boq/studio?projectId=p1&costCentreId=cc2');
-    expect(screen.getByText('Not specified')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.noCategoryBudgetAllocated))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.areaNotConfigured))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.openBOQStudio) })).toHaveAttribute('href', '/boq/studio?projectId=p1&costCentreId=cc2');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.notSpecified))).toBeInTheDocument();
   });
 
   it('handles budget approval errors and success and dismisses the result banner', async () => {
     render(<ProjectBudgetPage />);
-    await screen.findByText('CATEGORY-WISE BUDGET');
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.cATEGORYWISEBUDGET));
     await screen.findAllByRole('button', { name: /Approve Budget/ });
     approveResponse = { ok: false, body: {} };
-    fireEvent.click(screen.getAllByRole('button', { name: /Approve Budget/ })[0]);
-    expect(await screen.findByText('Approval failed')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetPage.approveBudget, '', false) })[0]);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.approvalFailed))).toBeInTheDocument();
 
     approveResponse = { ok: false, body: { error: 'Budget API unavailable' } };
-    fireEvent.click(screen.getAllByRole('button', { name: /Approve Budget/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetPage.approveBudget, '', false) })[0]);
     expect(await screen.findByText('Budget API unavailable')).toBeInTheDocument();
     const error = screen.getByText('Budget API unavailable').parentElement?.parentElement as HTMLElement;
     fireEvent.click(within(error).getByRole('button'));
     expect(screen.queryByText('Budget API unavailable')).not.toBeInTheDocument();
 
     approveResponse = { ok: true, body: {} };
-    fireEvent.click(screen.getAllByRole('button', { name: /Approve Budget/ })[0]);
-    expect(await screen.findByText('Budget approved successfully.')).toBeInTheDocument();
-    expect(mockToastSuccess).toHaveBeenCalledWith('Budget approved successfully.', 'North Plant', 'Approved');
-    const status = screen.getByText('Budget approved successfully.').parentElement?.parentElement as HTMLElement;
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetPage.approveBudget) })[0]);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.budgetApprovedSuccessfully))).toBeInTheDocument();
+    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.budgetApprovedSuccessfully, 'North Plant', UI_STRINGS.common.approved);
+    const status = screen.getByText(uiStringPattern(UI_STRINGS.common.budgetApprovedSuccessfully)).parentElement?.parentElement as HTMLElement;
     fireEvent.click(within(status).getByRole('button'));
-    expect(screen.queryByText('Budget approved successfully.')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.budgetApprovedSuccessfully))).not.toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/budgets/approve', expect.objectContaining({ body: JSON.stringify({
       contributionId: 'contrib-1', remarks: 'Approved by Project Approver from Project Budget',
     }) }));
@@ -156,46 +160,46 @@ describe('project budget workspace', () => {
 
   it('validates and rejects contributions, handling failure, success and cancellation', async () => {
     render(<ProjectBudgetPage />);
-    await screen.findByText('CATEGORY-WISE BUDGET');
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.cATEGORYWISEBUDGET));
     await screen.findAllByRole('button', { name: 'Reject' });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Reject' })[0]);
-    expect(screen.getByText('Reject Budget Contribution')).toBeInTheDocument();
-    const reason = screen.getByPlaceholderText('Specify reason for budget rejection...');
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) })[0]);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.rejectBudgetContribution))).toBeInTheDocument();
+    const reason = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBudgetPage.specifyReasonForBudgetRejection));
     fireEvent.change(reason, { target: { value: '  ' } });
-    expect(screen.getByRole('button', { name: 'Confirm Rejection' })).toBeDisabled();
-    fireEvent.submit(screen.getByRole('button', { name: 'Confirm Rejection' }).closest('form')!);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }).closest('form')!);
     expect(mockFetch.mock.calls.some(([url]) => url === '/api/budgets/reject')).toBe(false);
     fireEvent.change(reason, { target: { value: 'Missing backup documents' } });
 
     rejectResponse = { ok: false, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Rejection failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.rejectionFailed))).toBeInTheDocument();
     rejectResponse = { ok: false, body: { error: 'Reject API unavailable' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
     expect(await screen.findByText('Reject API unavailable')).toBeInTheDocument();
 
     rejectResponse = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Budget contribution rejected with audit notes.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/budgets/reject', expect.objectContaining({ body: JSON.stringify({
       contributionId: 'contrib-1', reason: 'Missing backup documents',
     }) }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Reject' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Reject Budget Contribution')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) })[0]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.rejectBudgetContribution))).not.toBeInTheDocument();
   });
 
   it('switches projects, loads empty categories and hides approval controls for non-approvers', async () => {
     roleResponse = { user: { role: 'VIEWER' } };
     render(<ProjectBudgetPage />);
-    await screen.findByText('CATEGORY-WISE BUDGET');
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.cATEGORYWISEBUDGET));
     await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toHaveValue('p1'));
-    await screen.findByText('Electrical');
+    await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical));
     expect(screen.queryAllByRole('button', { name: /Approve Budget/ })).toHaveLength(0);
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'p2' } });
     await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toHaveValue('p2'));
     await waitFor(() => expect(screen.getAllByRole('combobox')[1]).toHaveValue('cc3'));
-    expect(screen.getByText('No Category Budget Allocated')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.noCategoryBudgetAllocated))).toBeInTheDocument();
     expect(window.location.search).toContain('projectId=p2');
     expect(window.location.search).not.toContain('costCentreId');
     expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=p2');
@@ -205,7 +209,7 @@ describe('project budget workspace', () => {
     projectsResponse = { data: [] };
     roleResponse = {};
     const emptyProjects = render(<ProjectBudgetPage />);
-    expect(await screen.findByText('Loading category budget metrics...')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.loadingCategoryBudgetMetrics))).toBeInTheDocument();
     expect(screen.getAllByRole('combobox')[1]).toBeDisabled();
     emptyProjects.unmount();
 
@@ -215,7 +219,7 @@ describe('project budget workspace', () => {
         ? Promise.resolve(response({ user: { role: 'CLIENT_ADMIN' } }))
         : Promise.resolve(response({}, false)));
     render(<ProjectBudgetPage />);
-    expect(await screen.findByText('Failed to load project budget data.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.failedToLoadProjectBudgetData))).toBeInTheDocument();
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     global.fetch = jest.fn().mockImplementation((url: string) => url === '/api/projects'

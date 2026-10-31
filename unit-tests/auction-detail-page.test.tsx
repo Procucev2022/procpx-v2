@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React, { Suspense } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import LiveAuctionRoomPage from '../src/app/(app)/procurement/auctions/[id]/page';
@@ -67,37 +71,37 @@ describe('live auction room', () => {
   it('shows loading and not-found states and reports fetch errors', async () => {
     mockFetch.mockReturnValueOnce(new Promise(() => undefined));
     const pending = renderRoom();
-    expect(screen.getByText('Synchronising live auction telemetry and server clock...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.synchronisingLiveAuctionTelemetryAndServerClock))).toBeInTheDocument();
     pending.unmount();
 
     mockFetch.mockResolvedValueOnce(reply({}));
     const missingView = renderRoom();
-    expect(await screen.findByText('Auction not found')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Return to Auctions Workspace' })).toHaveAttribute('href', '/procurement/auctions');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.auctionNotFound))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.returnToAuctionsWorkspace) })).toHaveAttribute('href', '/procurement/auctions');
     missingView.unmount();
 
     mockFetch.mockResolvedValueOnce(reply({ error: 'Auction access denied' }, false));
     const deniedView = renderRoom();
-    expect(await screen.findByText('Auction not found')).toBeInTheDocument();
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: 'Error', message: 'Auction access denied' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.auctionNotFound))).toBeInTheDocument();
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: 'Auction access denied' }));
     deniedView.unmount();
 
     mockFetch.mockRejectedValueOnce(new Error('Auction service offline'));
     const failedView = renderRoom();
-    expect(await screen.findByText('Auction not found')).toBeInTheDocument();
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: 'Error', message: 'Auction service offline' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.auctionNotFound))).toBeInTheDocument();
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: 'Auction service offline' }));
     failedView.unmount();
   });
 
   it('renders live auction tabs and buyer controls, records actions and submits assisted bids', async () => {
     renderRoom();
     expect(await screen.findByRole('heading', { name: 'Cable Reverse Auction' })).toBeInTheDocument();
-    expect(screen.getByText('CURRENT LOWEST BID (L1)')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.cURRENTLOWESTBIDL1))).toBeInTheDocument();
     expect(screen.getByText(/EXTENDED 2X/)).toBeInTheDocument();
     expect(screen.getByText('Safety first')).toBeInTheDocument();
     expect(screen.getAllByText('Alpha Supply')).toHaveLength(2);
-    expect(screen.getByText('TERMS ACCEPTED')).toBeInTheDocument();
-    expect(screen.getByText('TERMS PENDING')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.tERMSACCEPTED))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.tERMSPENDING))).toBeInTheDocument();
 
     const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
     const runControl = async (label: string, action: string) => {
@@ -109,69 +113,69 @@ describe('live auction room', () => {
     await runControl('Pause Bidding', 'PAUSE');
     await runControl('+3m Rolling Extension', 'EXTEND');
     await runControl('+5m Rolling Extension', 'EXTEND');
-    fireEvent.click(screen.getByRole('button', { name: 'Conclude Auction' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.concludeAuction) }));
     await waitFor(() => expect(mockFetch.mock.calls.some(([, init]) => init?.method === 'PUT' && JSON.parse(init.body as string).action === 'CONCLUDE')).toBe(true));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Conclude Auction' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.concludeAuction) })).toBeEnabled());
     expect(mockToastSuccess).toHaveBeenCalled();
     expect(confirmSpy).toHaveBeenCalled();
     expect(mockFetch.mock.calls.some(([, init]) => init?.method === 'PUT' && JSON.parse(init.body as string).action === 'CONCLUDE')).toBe(true);
     confirmSpy.mockRestore();
 
-    fireEvent.click(screen.getByRole('button', { name: /Auction Scope Items/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.auctionScopeItemsLength, "", false) }));
     expect(screen.getByText('Copper cable')).toBeInTheDocument();
     expect(screen.getByText('4 core PVC')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Documents & Terms' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.documentsTerms) }));
     expect(screen.getByText(/All bids are binding/)).toBeInTheDocument();
     expect(screen.getByText('Terms.pdf')).toBeInTheDocument();
-    expect(screen.getByText('Document_2')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementAuctionsIdPage.documentValue1, {"value1":"2"})))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh Telemetry' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Refresh","toLocaleString":"Telemetry"})) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/auctions/auction-1'));
     expect(await screen.findByRole('heading', { name: 'Cable Reverse Auction' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log Assisted Vendor Bid' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.logAssistedVendorBid2) }));
     expect(screen.getByText(/Record a verified phone/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Validated Bid' }));
-    expect(mockToastError).toHaveBeenCalledWith({ title: 'Validation', message: 'Please select a vendor and enter a valid bid amount.' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.submitValidatedBid) }));
+    expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppProcurementAuctionsIdPage.pleaseSelectAVendorAndEnterAValidBidAmount });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'v1' } });
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'item-1' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 1450000'), { target: { value: '110000' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Validated Bid' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.eG1450000)), { target: { value: '110000' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.submitValidatedBid) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/auctions/auction-1/bid', expect.objectContaining({ method: 'POST' })));
     const payload = JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1].body as string);
     expect(payload).toEqual({ vendorId: 'v1', bidAmount: 110000, auctionItemId: 'item-1' });
-    expect(mockToastSuccess).toHaveBeenCalledWith({ title: 'Bid Accepted & Rolling Extended!', message: 'Bid recorded' });
+    expect(mockToastSuccess).toHaveBeenCalledWith({ title: UI_STRINGS.common.userMessages.bidAcceptedRollingExtended, message: 'Bid recorded' });
 
     expect(await screen.findByRole('heading', { name: 'Cable Reverse Auction' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log Assisted Vendor Bid' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.logAssistedVendorBid2) }));
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 1450000'), { target: { value: '' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 1450000'), { target: { value: '105000' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.eG1450000)), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.eG1450000)), { target: { value: '105000' } });
     bidReply = reply({ extended: false, message: 'Bid accepted without item' });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Validated Bid' }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith({ title: 'Bid Accepted', message: 'Bid accepted without item' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.submitValidatedBid) }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith({ title: UI_STRINGS.common.userMessages.bidAccepted, message: 'Bid accepted without item' }));
     const secondBid = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').at(-1)?.[1];
     expect(JSON.parse(secondBid.body)).toEqual({ vendorId: 'v1', bidAmount: 105000, auctionItemId: null });
 
     expect(await screen.findByRole('heading', { name: 'Cable Reverse Auction' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log Assisted Vendor Bid' }));
-    fireEvent.change(screen.getByPlaceholderText('e.g. 1450000'), { target: { value: '100000' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.logAssistedVendorBid2) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.eG1450000)), { target: { value: '100000' } });
     bidReply = reply({ error: 'Minimum bid reduction not met' }, false);
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Validated Bid' }));
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: 'Bid Rejected', message: 'Minimum bid reduction not met' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.submitValidatedBid) }));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.bidRejected, message: 'Minimum bid reduction not met' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
   });
 
   it('covers observer, sealed, paused and completed views and reports failed controls or bids', async () => {
     currentAuction = { ...liveAuction, auctionType: 'SEALED_BID', auctionCategory: 'RFQ_TOTAL_WISE', status: 'PAUSED', currentLeadingBid: null, bids: [], items: [], documents: [] };
     mockFetch.mockImplementation((url: string, init?: RequestInit) => init?.method ? Promise.resolve(actionReply) : Promise.resolve(reply({ auction: currentAuction, isObserver: true })));
     const observerView = renderRoom();
-    expect(await screen.findByText('Sealed Bid Protocol Active')).toBeInTheDocument();
-    expect(screen.queryByText('BUYER LIVE CONTROLS:')).not.toBeInTheDocument();
-    expect(screen.getByText('Encrypted & Confidential')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Documents & Terms' }));
-    expect(screen.getByText('No external attachments uploaded.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Live Bid Stream (0)' }));
-    expect(screen.getByText('Sealed Bid Protocol Active')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.sealedBidProtocolActive))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.bUYERLIVECONTROLS))).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Encrypted","toLocaleString":"& Confidential"})))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.documentsTerms) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.noExternalAttachmentsUploaded))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementAuctionsIdPage.liveBidStreamLength, {"length":"0"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.sealedBidProtocolActive))).toBeInTheDocument();
     observerView.unmount();
 
     currentAuction = { ...liveAuction, status: 'COMPLETED', auctionType: 'FORWARD_AUCTION', auctionCategory: 'RFQ_TOTAL_WISE', currentLeadingBid: 85000, bids: [], vendors: [], rfq: { ...liveAuction.rfq, boqNumber: '', packageName: 'Package fallback' } };
@@ -180,21 +184,21 @@ describe('live auction room', () => {
       return Promise.resolve(reply({ auction: currentAuction, isObserver: false }));
     });
     const view = renderRoom();
-    expect(await screen.findByText('CONCLUDED')).toBeInTheDocument();
-    expect(screen.getByText('CURRENT HIGHEST BID')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Generate Award Recommendation' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Generate Award Recommendation' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.cONCLUDED))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.cURRENTHIGHESTBID))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Generate","toLocaleString":"Award Recommendation"})) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Generate","toLocaleString":"Award Recommendation"})) }));
     expect(mockRouterPush).toHaveBeenCalledWith('/procurement/rfqs/rfq-1');
-    expect(mockToastSuccess).toHaveBeenCalledWith(expect.objectContaining({ title: 'Award Initiated' }));
+    expect(mockToastSuccess).toHaveBeenCalledWith(expect.objectContaining({ title: UI_STRINGS.appAppProcurementAuctionsIdPage.awardInitiated }));
     view.unmount();
 
     currentAuction = { ...liveAuction, status: 'PAUSED', auctionType: 'FORWARD_AUCTION', auctionCategory: 'RFQ_TOTAL_WISE', currentLeadingBid: null, startingPrice: 0, minDecrement: 0, extensionCount: 0, endTime: '', scheduledEndTime: '', bids: [], vendors: [], rfq: { ...liveAuction.rfq, prNumber: '', boqNumber: '', packageName: '' } };
     renderRoom();
-    expect(await screen.findByRole('button', { name: 'Resume Bidding' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Resume","toLocaleString":"Bidding"})) })).toBeInTheDocument();
     expect(screen.getByText('Starting at INR 0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Resume Bidding' }));
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: 'Control Action Failed', message: 'Control denied' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Live Bid Stream (0)' }));
-    expect(screen.getByText('No Bids Placed Yet')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Resume","toLocaleString":"Bidding"})) }));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.appAppProcurementAuctionsIdPage.controlActionFailed, message: 'Control denied' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementAuctionsIdPage.liveBidStreamLength, {"length":"0"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.noBidsPlacedYet))).toBeInTheDocument();
   });
 });

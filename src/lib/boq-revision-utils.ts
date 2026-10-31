@@ -2,6 +2,9 @@
 // Utility module for resilient, concurrency-safe BOQ revision number generation and lifecycle management.
 import { prisma } from '@/lib/prisma';
 import type { CreateRevisionData } from "@app-types/lib/boq-revision-utils.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { CreateRevisionData };
 
 
@@ -82,5 +85,5 @@ export async function createNextBoqRevision(
     }
   }
 
-  throw new Error(`Failed to allocate a unique revision number for BOQ ${data.boqId} after ${maxRetries} attempts.`);
+  throw new Error(interpolateUiString(UI_STRINGS.libBoqRevisionUtils.failedToAllocateAUniqueRevisionNumberForBOQBoqIdAfterMaxRetriesAttempts, { "boqId": data.boqId, "maxRetries": maxRetries }));
 }

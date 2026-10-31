@@ -1,5 +1,6 @@
 'use client';
 // app/(app)/projects/page.tsx - Standardised Enterprise Projects Register
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Folder, Plus } from 'lucide-react';
@@ -7,6 +8,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { STATUS_OPTIONS, SECTOR_OPTIONS } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function ProjectsPage() {
@@ -45,13 +49,12 @@ export default function ProjectsPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Projects"
-        subtitle={`${total} Capex project${total !== 1 ? 's' : ''} in platform workspace`}
+        title={UI_STRINGS.common.projects}
+        subtitle={interpolateUiString(UI_STRINGS.appAppProjectsPage.totalCapexProjectValue2InPlatformWorkspace, { "total": total, "value2": total !== 1 ? 's' : '' })}
         actions={
           canCreate ? (
             <Link href="/projects/new" className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs">
-              <Plus size={16} /> New Project
-            </Link>
+              <Plus size={16} />{UI_STRINGS.appAppProjectsPage.newProject}</Link>
           ) : undefined
         }
       />
@@ -63,7 +66,7 @@ export default function ProjectsPage() {
             <input
               type="text"
               className="input pl-9 h-[40px] w-full text-sm bg-white"
-              placeholder="Search by name, code, city..."
+              placeholder={UI_STRINGS.appAppProjectsPage.searchByNameCodeCity}
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
@@ -73,29 +76,29 @@ export default function ProjectsPage() {
             value={status}
             onChange={e => { setStatus(e.target.value); setPage(1); }}
           >
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? s.replace(/_/g, ' ') : 'All Statuses'}</option>)}
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? s.replace(/_/g, ' ') : UI_STRINGS.common.allStatuses}</option>)}
           </select>
           <select
             className="input h-[40px] w-[160px] text-sm bg-white cursor-pointer"
             value={sector}
             onChange={e => { setSector(e.target.value); setPage(1); }}
           >
-            {SECTOR_OPTIONS.map(s => <option key={s} value={s}>{s || 'All Sectors'}</option>)}
+            {SECTOR_OPTIONS.map(s => <option key={s} value={s}>{s || UI_STRINGS.common.allSectors}</option>)}
           </select>
         </div>
 
         {loading ? (
           <div className="py-16 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm">Loading projects...</span>
+            <span className="text-sm">{UI_STRINGS.appAppProjectsPage.loadingProjects}</span>
           </div>
         ) : projects.length === 0 ? (
           <div className="p-8">
             <EmptyState
               icon={<Folder size={36} className="text-slate-400" />}
-              title="No projects found"
-              description="No projects match your search or filter criteria."
-              actionText={canCreate ? '+ Create Project' : undefined}
+              title={UI_STRINGS.appAppProjectsPage.noProjectsFound}
+              description={UI_STRINGS.appAppProjectsPage.noProjectsMatchYourSearchOrFilterCriteria}
+              actionText={canCreate ? UI_STRINGS.appAppProjectsPage.createProject : undefined}
               actionHref={canCreate ? '/projects/new' : undefined}
             />
           </div>
@@ -104,17 +107,17 @@ export default function ProjectsPage() {
             <table className="enterprise-table">
               <thead>
                 <tr>
-                  <th style={{ width: 130 }}>Project ID</th>
-                  <th style={{ minWidth: 220 }}>Project Name</th>
-                  <th style={{ width: 120 }}>Sector</th>
-                  <th style={{ width: 140 }}>Type</th>
-                  <th style={{ width: 140 }}>Location</th>
-                  <th style={{ width: 120, textAlign: 'right' }}>Area (Sq Ft)</th>
-                  <th style={{ width: 140 }}>Status</th>
-                  <th style={{ width: 140 }}>BOQ Status</th>
-                  <th style={{ width: 90, textAlign: 'right' }}>Lines</th>
-                  <th style={{ width: 110 }}>Updated</th>
-                  <th style={{ width: 90, textAlign: 'center' }}>Action</th>
+                  <th style={{ width: 130 }}>{UI_STRINGS.appAppProjectsPage.projectID}</th>
+                  <th style={{ minWidth: 220 }}>{UI_STRINGS.common.projectName}</th>
+                  <th style={{ width: 120 }}>{UI_STRINGS.common.sector}</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.type}</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.location}</th>
+                  <th style={{ width: 120, textAlign: 'right' }}>{UI_STRINGS.common.areaSqFt}</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.appAppProjectsPage.bOQStatus}</th>
+                  <th style={{ width: 90, textAlign: 'right' }}>{UI_STRINGS.common.lines3}</th>
+                  <th style={{ width: 110 }}>{UI_STRINGS.appAppProjectsPage.updated}</th>
+                  <th style={{ width: 90, textAlign: 'center' }}>{UI_STRINGS.common.action}</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,30 +144,28 @@ export default function ProjectsPage() {
                           {p.sector}
                         </span>
                       </td>
-                      <td className="text-slate-600 text-xs">{p.projectType?.replace(/_/g, ' ') || '—'}</td>
-                      <td className="text-slate-600 text-xs">{p.city || p.location || '—'}</td>
+                      <td className="text-slate-600 text-xs">{p.projectType?.replace(/_/g, ' ') || UI_STRINGS.common.copy4s9bsz}</td>
+                      <td className="text-slate-600 text-xs">{p.city || p.location || UI_STRINGS.common.copy4s9bsz}</td>
                       <td className="font-mono text-slate-800 text-xs text-right font-medium">
-                        {p.areaSqFt ? p.areaSqFt.toLocaleString('en-IN') : '—'}
+                        {p.areaSqFt ? p.areaSqFt.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.copy4s9bsz}
                       </td>
                       <td>
                         <StatusBadge status={p.status} />
                       </td>
                       <td>
-                        {latestBoq?.status ? <StatusBadge status={latestBoq.status} /> : <span className="text-slate-400 text-xs">—</span>}
+                        {latestBoq?.status ? <StatusBadge status={latestBoq.status} /> : <span className="text-slate-400 text-xs">{UI_STRINGS.common.copy4s9bsz}</span>}
                       </td>
                       <td className="font-mono text-slate-700 text-xs text-right">
-                        {latestRev?.totalLines ?? '—'}
+                        {latestRev?.totalLines ?? UI_STRINGS.common.copy4s9bsz}
                       </td>
                       <td className="text-slate-500 text-xs whitespace-nowrap">
-                        {new Date(p.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {new Date(p.updatedAt).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="text-center">
                         <Link
                           href={`/projects/${p.id}`}
                           className="inline-flex items-center justify-center h-8 px-3 text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-[#0f52ba] transition-colors shadow-2xs"
-                        >
-                          View
-                        </Link>
+                        >{UI_STRINGS.common.view}</Link>
                       </td>
                     </tr>
                   );
@@ -176,42 +177,32 @@ export default function ProjectsPage() {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/50 text-xs text-slate-600">
-            <span>
-              Page <strong className="font-semibold text-slate-900">{page}</strong> of <strong className="font-semibold text-slate-900">{totalPages}</strong> ({total} records)
-            </span>
+            <span>{UI_STRINGS.common.page}<strong className="font-semibold text-slate-900">{page}</strong>{UI_STRINGS.common.of}<strong className="font-semibold text-slate-900">{totalPages}</strong>{UI_STRINGS.common.copy1b3t0c5}{total}{UI_STRINGS.appAppProjectsPage.records}</span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 className="h-8 px-2.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
                 onClick={() => setPage(1)}
                 disabled={page === 1}
-              >
-                «
-              </button>
+              >{UI_STRINGS.common.copy1cahyqy}</button>
               <button
                 type="button"
                 className="h-8 px-2.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
                 onClick={() => setPage(p => p - 1)}
                 disabled={page === 1}
-              >
-                ‹ Prev
-              </button>
+              >{UI_STRINGS.common.prev}</button>
               <button
                 type="button"
                 className="h-8 px-2.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
                 onClick={() => setPage(p => p + 1)}
                 disabled={page === totalPages}
-              >
-                Next ›
-              </button>
+              >{UI_STRINGS.common.next}</button>
               <button
                 type="button"
                 className="h-8 px-2.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
                 onClick={() => setPage(totalPages)}
                 disabled={page === totalPages}
-              >
-                »
-              </button>
+              >{UI_STRINGS.common.copy1gqblui}</button>
             </div>
           </div>
         )}

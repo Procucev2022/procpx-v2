@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -18,7 +21,7 @@ export async function POST(
     const { vendorIds = [] } = await req.json();
 
     if (!vendorIds.length) {
-      return apiError('At least one vendor ID is required', 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -26,7 +29,7 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     // Verify vendors belong to this tenant and are not blacklisted
@@ -39,7 +42,7 @@ export async function POST(
     });
 
     if (eligibleVendors.length === 0) {
-      return apiError('None of the selected vendors are eligible or active', 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400);
     }
 
     // Create RFQ vendor invitations
@@ -73,17 +76,17 @@ export async function POST(
       entityType: 'RFQ',
       entityId: rfq.id,
       action: 'VENDOR_INVITED',
-      description: `Invited ${eligibleVendors.length} vendors to RFQ ${rfq.rfqNumber}: ${eligibleVendors.map((v) => v.name).join(', ')}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.invitedLengthVendorsToRFQRfqNumberJoin, { "length": eligibleVendors.length, "rfqNumber": rfq.rfqNumber, "join": eligibleVendors.map((v) => v.name).join(', ') }),
       newValue: { vendorIds: eligibleVendors.map((v) => v.id) },
     });
 
     return apiSuccess({
       invited: invitationRecords.length,
       vendors: eligibleVendors,
-      message: `Successfully invited ${eligibleVendors.length} vendors`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.successfullyInvitedLengthVendors, { "length": eligibleVendors.length }),
     });
   } catch (error: any) {
     console.error('Error inviting vendors to RFQ:', error);
-    return apiError(error.message || 'Failed to invite vendors', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInviteVendors }), 500);
   }
 }

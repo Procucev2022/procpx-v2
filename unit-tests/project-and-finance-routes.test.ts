@@ -12,6 +12,8 @@ import { POST as rejectProjectBudget } from '../src/app/api/budgets/reject/route
 import { POST as approveProjectBudget } from '../src/app/api/budgets/approve/route';
 import { POST as approveFinanceBudget } from '../src/app/api/budgets/finance-approve/route';
 import { POST as reverseBudgetTransaction } from '../src/app/api/budgets/reverse/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -68,7 +70,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     expect(denied).toEqual({ status: 403 });
 
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(getProjectDocuments(request(), projectParams())).resolves.toEqual({ ok: false, error: 'Project not found', status: 404 });
+    await expect(getProjectDocuments(request(), projectParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound, status: 404 });
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.projectDocument.findMany.mockResolvedValueOnce([{ id: 'doc-1' }]);
     await expect(getProjectDocuments(request(), projectParams())).resolves.toEqual({ ok: true, data: [{ id: 'doc-1' }], status: 200 });
@@ -80,9 +82,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     isContext.mockReturnValueOnce(false);
     expect(await addProjectDocument(request({ name: 'Plans' }), projectParams())).toEqual({ status: 403 });
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(addProjectDocument(request({ name: 'Plans' }), projectParams())).resolves.toEqual({ ok: false, error: 'Project not found', status: 404 });
+    await expect(addProjectDocument(request({ name: 'Plans' }), projectParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound, status: 404 });
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
-    await expect(addProjectDocument(request({ name: '  ' }), projectParams())).resolves.toEqual({ ok: false, error: 'Document name is required', status: 400 });
+    await expect(addProjectDocument(request({ name: '  ' }), projectParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProjectsIdDocumentsRoute.documentNameIsRequired, status: 400 });
 
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.projectDocument.create.mockResolvedValueOnce({ id: 'doc-2', name: 'Plan set', category: 'DRAWING' });
@@ -93,13 +95,13 @@ describe('project document, project detail, BOQ revision, rate-card message and 
       tenantId: 'tenant-1', projectId: 'project-1', name: 'Plan set', fileType: 'application/pdf', fileSize: 1200,
       filePath: '/custom/plan.pdf', uploadedBy: 'user-1', category: 'DRAWING',
     } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'CREATE', entityType: 'PROJECT', entityId: 'project-1' }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.cREATE, entityType: UI_STRINGS.appAppAuditPage.pROJECT, entityId: 'project-1' }));
 
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.projectDocument.create.mockResolvedValueOnce({ id: 'doc-3', name: 'Attachment', category: 'OTHER' });
     await addProjectDocument(request({ name: 'Attachment', fileType: '', fileSize: 0, filePath: '', category: '' }), projectParams());
     expect(db.projectDocument.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
-      fileType: 'application/octet-stream', fileSize: 0, filePath: '/uploads/tenant-1/project-1/Attachment', category: 'OTHER',
+      fileType: 'application/octet-stream', fileSize: 0, filePath: '/uploads/tenant-1/project-1/Attachment', category: UI_STRINGS.appAppProjectsIdPage.oTHER,
     }) });
   });
 
@@ -108,7 +110,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     isContext.mockReturnValueOnce(false);
     await expect(getProject(request(), projectParams())).resolves.toEqual({ status: 403 });
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(getProject(request(), projectParams())).resolves.toEqual({ ok: false, error: 'Project not found', status: 404 });
+    await expect(getProject(request(), projectParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound, status: 404 });
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', projectCode: 'P-1' });
     await expect(getProject(request(), projectParams())).resolves.toMatchObject({ ok: true, data: { projectCode: 'P-1' } });
 
@@ -116,7 +118,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     isContext.mockReturnValueOnce(false);
     await expect(updateProject(request({ name: 'Updated' }), projectParams())).resolves.toEqual({ status: 403 });
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(updateProject(request({ name: 'Updated' }), projectParams())).resolves.toEqual({ ok: false, error: 'Project not found', status: 404 });
+    await expect(updateProject(request({ name: 'Updated' }), projectParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound, status: 404 });
 
     const existing = {
       id: 'project-1', projectCode: 'P-1', name: 'Old', description: 'Old description', sector: 'Retail', projectType: 'New',
@@ -139,9 +141,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     db.project.update.mockResolvedValueOnce(existing);
     await updateProject(request({ areaSqFt: 0, budget: 0 }), projectParams());
     expect(db.project.update).toHaveBeenLastCalledWith({ where: { id: 'project-1' }, data: expect.objectContaining({
-      name: 'Old', description: 'Old description', areaSqFt: 10, budget: 100, status: 'ACTIVE',
+      name: 'Old', description: 'Old description', areaSqFt: 10, budget: 100, status: UI_STRINGS.common.aCTIVE,
     }) });
-    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'UPDATE', oldValue: { status: 'ACTIVE', name: 'Old' } }));
+    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.uPDATE, oldValue: { status: UI_STRINGS.common.aCTIVE, name: 'Old' } }));
   });
 
   it('creates revisions only from approved BOQs and copies available source lines', async () => {
@@ -149,10 +151,10 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     isContext.mockReturnValueOnce(false);
     await expect(createNewRevision(request(), revisionParams())).resolves.toEqual({ status: 403 });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(createNewRevision(request(), revisionParams())).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(createNewRevision(request(), revisionParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT' });
     await expect(createNewRevision(request(), revisionParams())).resolves.toEqual({
-      ok: false, error: 'New revisions can only be created from an approved revision.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqRevisionIdNewRevisionRoute.newRevisionsCanOnlyBeCreatedFromAnApprovedRevision, status: 400,
     });
 
     const source = {
@@ -178,7 +180,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     expect(db.boqLine.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       tenantId: 'tenant-1', boqRevisionId: 'revision-3', lineNumber: 1, quantity: 4, benchmarkEligible: true,
     })] });
-    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'CREATE', entityId: 'revision-3' }));
+    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.cREATE, entityId: 'revision-3' }));
   });
 
   it('records and lists rate-card clarification messages while enforcing tenant ownership', async () => {
@@ -186,12 +188,12 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     isContext.mockReturnValueOnce(false);
     await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({ status: 403 });
     await expect(addRateCardMessage(request({ message: '  ' }), cardParams())).resolves.toEqual({
-      ok: false, error: 'Message text is required', status: 400,
+      ok: false, error: UI_STRINGS.common.messageTextIsRequired, status: 400,
     });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'other-tenant' });
-    await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
 
     db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'tenant-1', approvalLevel: null });
     db.rateCardApproval.create.mockResolvedValueOnce({ id: 'message-1' });
@@ -199,7 +201,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
       ok: true, data: { approvalEntry: { id: 'message-1' } },
     });
     expect(db.rateCardApproval.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
-      level: 'LEVEL_1_PROJECT', approverName: 'Project User', approverEmail: 'user@example.test',
+      level: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, approverName: UI_STRINGS.common.projectUser, approverEmail: 'user@example.test',
       action: 'CLARIFICATION_MESSAGE', remarks: 'Please confirm lead time', timestamp: expect.any(Date),
     }) });
 
@@ -220,9 +222,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     isContext.mockReturnValueOnce(false);
     await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ status: 403 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'other-tenant' });
-    await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'tenant-1', approvals: [{ id: 'message-1' }] });
     await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: true, data: { approvals: [{ id: 'message-1' }] }, status: 200 });
     expect(db.vendorRateCard.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ include: { approvals: { orderBy: { timestamp: 'desc' } } } }));
@@ -232,13 +234,13 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     auth.mockResolvedValueOnce({ status: 403 });
     isContext.mockReturnValueOnce(false);
     await expect(rejectFinanceBudget(request({ contributionId: 'budget-1', reason: 'Overrun' }))).resolves.toEqual({ status: 403 });
-    await expect(rejectFinanceBudget(request({}))).resolves.toEqual({ ok: false, error: 'Contribution ID is required.', status: 400 });
+    await expect(rejectFinanceBudget(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.contributionIDIsRequired, status: 400 });
     await expect(rejectFinanceBudget(request({ contributionId: 'budget-1', reason: ' ' }))).resolves.toEqual({
-      ok: false, error: 'Mandatory finance rejection reason is required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBudgetsFinanceRejectRoute.mandatoryFinanceRejectionReasonIsRequired, status: 400,
     });
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
     await expect(rejectFinanceBudget(request({ contributionId: 'missing', reason: 'Overrun' }))).resolves.toEqual({
-      ok: false, error: 'Budget contribution not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404,
     });
     const contribution = {
       id: 'budget-1', projectId: 'project-1', boqRevisionId: 'revision-1', costCentreId: 'cc-1',
@@ -256,13 +258,13 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     auth.mockResolvedValueOnce({ status: 403 });
     isContext.mockReturnValueOnce(false);
     await expect(rejectProjectBudget(request({ contributionId: 'budget-2', reason: 'Overrun' }))).resolves.toEqual({ status: 403 });
-    await expect(rejectProjectBudget(request({}))).resolves.toEqual({ ok: false, error: 'Contribution ID is required.', status: 400 });
+    await expect(rejectProjectBudget(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.contributionIDIsRequired, status: 400 });
     await expect(rejectProjectBudget(request({ contributionId: 'budget-2', reason: ' ' }))).resolves.toEqual({
-      ok: false, error: 'Mandatory rejection reason must be provided.', status: 400,
+      ok: false, error: UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, status: 400,
     });
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
     await expect(rejectProjectBudget(request({ contributionId: 'missing', reason: 'Overrun' }))).resolves.toEqual({
-      ok: false, error: 'Budget contribution not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404,
     });
     db.budgetContribution.findFirst.mockResolvedValueOnce({ ...contribution, id: 'budget-2' });
     db.budgetContribution.update.mockResolvedValueOnce({ id: 'budget-2', status: 'REJECTED' });
@@ -296,9 +298,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     auth.mockResolvedValueOnce({ status: 403 });
     isContext.mockReturnValueOnce(false);
     await expect(approveProjectBudget(request({ contributionId: 'budget-approve-1' }))).resolves.toEqual({ status: 403 });
-    await expect(approveProjectBudget(request({}))).resolves.toEqual({ ok: false, error: 'Contribution ID is required.', status: 400 });
+    await expect(approveProjectBudget(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.contributionIDIsRequired, status: 400 });
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
-    await expect(approveProjectBudget(request({ contributionId: 'missing' }))).resolves.toEqual({ ok: false, error: 'Budget contribution not found.', status: 404 });
+    await expect(approveProjectBudget(request({ contributionId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404 });
     db.budgetContribution.findFirst.mockResolvedValueOnce({ ...contribution, status: 'REJECTED' });
     await expect(approveProjectBudget(request({ contributionId: 'budget-approve-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
 
@@ -316,7 +318,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     db.budget.findFirst.mockResolvedValueOnce({ id: 'budget-record-1', approvedAmount: 100, pendingAmount: 1000 });
     await approveProjectBudget(request({ contributionId: 'budget-approve-1', directApprove: true, remarks: 'Approved' }));
     expect(db.budget.update).toHaveBeenLastCalledWith({ where: { id: 'budget-record-1' }, data: {
-      approvedAmount: 800, pendingAmount: 150, status: 'APPROVED',
+      approvedAmount: 800, pendingAmount: 150, status: UI_STRINGS.common.aPPROVED,
     } });
 
     auth.mockResolvedValueOnce({ ...context, role: 'CLIENT_ADMIN' });
@@ -339,9 +341,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     await expect(approveFinanceBudget(request({ contributionId: 'budget-approve-1' }))).resolves.toEqual({ status: 403 });
     db.budgetContribution.findFirst.mockResolvedValueOnce(null);
     await expect(approveFinanceBudget(request({ contributionId: 'missing' }))).resolves.toEqual({
-      ok: false, error: 'Budget contribution not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.budgetContributionNotFound, status: 404,
     });
-    await expect(approveFinanceBudget(request({}))).resolves.toEqual({ ok: false, error: 'Contribution ID is required.', status: 400 });
+    await expect(approveFinanceBudget(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.contributionIDIsRequired, status: 400 });
     db.budgetContribution.findFirst.mockResolvedValueOnce({ ...contribution, status: 'PENDING_PROJECT_APPROVAL' });
     await expect(approveFinanceBudget(request({ contributionId: 'budget-approve-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
 
@@ -355,14 +357,14 @@ describe('project document, project detail, BOQ revision, rate-card message and 
       reason: 'Capex financial budget allocation validated and sanctioned.', approvalLevel: 'FINANCE',
     }) });
     expect(db.budget.update).toHaveBeenLastCalledWith({ where: { id: 'budget-record-2' }, data: {
-      totalAmount: 1200, approvedAmount: 950, pendingAmount: 0, status: 'APPROVED',
+      totalAmount: 1200, approvedAmount: 950, pendingAmount: 0, status: UI_STRINGS.common.aPPROVED,
     } });
 
     db.budgetContribution.findFirst.mockResolvedValueOnce({ ...contribution, status: 'PENDING_FINANCE_APPROVAL' });
     db.budgetContribution.update.mockResolvedValueOnce({ status: 'APPROVED' });
     db.budget.findFirst.mockResolvedValueOnce(null);
     await approveFinanceBudget(request({ contributionId: 'budget-approve-1', remarks: 'Sanctioned' }));
-    expect(db.budget.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ totalAmount: 700, approvedAmount: 700, status: 'APPROVED' }) });
+    expect(db.budget.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ totalAmount: 700, approvedAmount: 700, status: UI_STRINGS.common.aPPROVED }) });
 
     db.budgetContribution.findFirst.mockRejectedValueOnce(new Error('project approve failed'));
     await expect(approveProjectBudget(request({ contributionId: 'budget-1' }))).resolves.toEqual({
@@ -378,22 +380,22 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     auth.mockResolvedValueOnce({ status: 403 });
     isContext.mockReturnValueOnce(false);
     await expect(reverseBudgetTransaction(request({ transactionId: 'tx-1', reversalReason: 'Correction' }))).resolves.toEqual({ status: 403 });
-    await expect(reverseBudgetTransaction(request({}))).resolves.toEqual({ ok: false, error: 'Transaction ID is required.', status: 400 });
+    await expect(reverseBudgetTransaction(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBudgetsReverseRoute.transactionIDIsRequired, status: 400 });
     await expect(reverseBudgetTransaction(request({ transactionId: 'tx-1', reversalReason: ' ' }))).resolves.toEqual({
-      ok: false, error: 'Mandatory reversal reason must be provided.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBudgetsReverseRoute.mandatoryReversalReasonMustBeProvided, status: 400,
     });
     db.budgetTransaction.findFirst = jest.fn();
     db.budgetTransaction.findFirst.mockResolvedValueOnce(null);
     await expect(reverseBudgetTransaction(request({ transactionId: 'missing', reversalReason: 'Fix' }))).resolves.toEqual({
-      ok: false, error: 'Budget transaction not found.', status: 404,
+      ok: false, error: UI_STRINGS.appApiBudgetsReverseRoute.budgetTransactionNotFound, status: 404,
     });
     db.budgetTransaction.findFirst.mockResolvedValueOnce({ isReversal: true });
     await expect(reverseBudgetTransaction(request({ transactionId: 'reverse', reversalReason: 'Fix' }))).resolves.toEqual({
-      ok: false, error: 'Cannot reverse a transaction that is already a reversal.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBudgetsReverseRoute.cannotReverseATransactionThatIsAlreadyAReversal, status: 400,
     });
     db.budgetTransaction.findFirst.mockResolvedValueOnce({ isReversal: false, status: 'PENDING' });
     await expect(reverseBudgetTransaction(request({ transactionId: 'pending', reversalReason: 'Fix' }))).resolves.toEqual({
-      ok: false, error: 'Only approved budget transactions can be reversed.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBudgetsReverseRoute.onlyApprovedBudgetTransactionsCanBeReversed, status: 400,
     });
 
     const transaction = {

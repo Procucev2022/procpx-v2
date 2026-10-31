@@ -1,3 +1,4 @@
+import { uiStringPattern } from '@/lib/i18n';
 import {
   createLogRecord,
   redactText,
@@ -5,6 +6,8 @@ import {
   sanitizeLogValue,
   serializeConsoleArguments,
 } from '../src/lib/observability/shared';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 describe('shared observability helpers', () => {
   it('redacts credential fields, bearer tokens, inline secrets, and email addresses', () => {
@@ -45,7 +48,7 @@ describe('shared observability helpers', () => {
     expect(safe.symbol).toBe('Symbol(trace)');
     expect(safe.callback).toBe('[Function callback]');
     expect(safe.anonymous).toBe('[Function anonymous]');
-    expect(safe.noStack).toEqual({ name: 'Error', message: 'stackless' });
+    expect(safe.noStack).toEqual({ name: UI_STRINGS.common.error, message: 'stackless' });
     expect(JSON.stringify(safe.deep)).toContain('[MaxDepth]');
     expect((safe.items as unknown[])).toHaveLength(50);
     expect(Object.keys(safe.entries as object)).toHaveLength(50);

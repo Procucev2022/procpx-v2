@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorRatingsApprovalsPage from '../src/app/(app)/approvals/vendor-ratings/page';
@@ -93,29 +97,29 @@ describe('vendor performance approval desk', () => {
   it('shows the loading state and renders queue status, counters, tabs, and search filters', async () => {
     mockFetch.mockReturnValueOnce(new Promise(() => undefined));
     const pending = render(<VendorRatingsApprovalsPage />);
-    expect(screen.getByText('Loading vendor performance approvals...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.loadingVendorPerformanceApprovals))).toBeInTheDocument();
     pending.unmount();
 
     setupFetch();
     render(<VendorRatingsApprovalsPage />);
     expect(await screen.findByText('PPO-submitted')).toBeInTheDocument();
-    expect(screen.getByText('Pending Approval')).toBeInTheDocument();
-    expect(screen.getByText('Approved Ratings')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.pendingApproval, '', true)).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.approvedRatings))).toBeInTheDocument();
     expect(screen.getByText('Vendor submitted')).toBeInTheDocument();
-    expect(screen.getByText('₹2.5L')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.toLocaleString2, {"toLocaleString":"2.5L"})))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Approved \(1\)/ }));
     expect(screen.getByText('PPO-approved')).toBeInTheDocument();
-    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.approved, '', true))).toBeInTheDocument();
     expect(screen.queryByText('PPO-submitted')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Returned \(1\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppApprovalsVendorRatingsPage.returnedCount, { count: 1 })) }));
     expect(screen.getByText('PPO-returned')).toBeInTheDocument();
-    expect(screen.getByText('Returned')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.returned, '', true))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /All Records \(5\)/ }));
-    expect(screen.getByText('REJECTED')).toBeInTheDocument();
-    expect(screen.getByText('Project')).toBeInTheDocument();
-    expect(screen.getByText('Cost Centre')).toBeInTheDocument();
-    const search = screen.getByPlaceholderText('Search by PPO, vendor, or project...');
+    expect(screen.getByText(UI_STRINGS.componentsUiStatusBadge.rejected)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.project, '', true))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.costCentre2, '', true))).toBeInTheDocument();
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.searchByPPOVendorOrProject));
     fireEvent.change(search, { target: { value: 'ppo-rejected' } });
     expect(screen.getByText('PPO-REJECTED')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'rejected vendor' } });
@@ -123,114 +127,114 @@ describe('vendor performance approval desk', () => {
     fireEvent.change(search, { target: { value: 'project submitted' } });
     expect(screen.getByText('PPO-submitted')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'missing record' } });
-    expect(screen.getByText('No performance rating records matched the active filter criteria.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.noPerformanceRatingRecordsMatchedTheActiveFilterCriteria))).toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /All Records \(5\)/ }));
-    fireEvent.click(within(screen.getByRole('row', { name: /PPO-REJECTED/ })).getByRole('button', { name: 'View Assessment' }));
+    fireEvent.click(within(screen.getByRole('row', { name: /PPO-REJECTED/ })).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.viewAssessment) }));
     expect(screen.getByText(/submitted by Project User/)).toBeInTheDocument();
-    expect(screen.getAllByText('₹0').length).toBeGreaterThan(0);
-    expect(screen.getByText('No specific quality observations noted.')).toBeInTheDocument();
-    expect(screen.getByText('No specific delivery delays or issues recorded.')).toBeInTheDocument();
-    expect(screen.getByText('Invoices matched agreed PPO rate structure.')).toBeInTheDocument();
-    expect(screen.getByText('Documentation delivered per contract requirements.')).toBeInTheDocument();
-    expect(screen.getByText('Communication was prompt and constructive.')).toBeInTheDocument();
-    expect(screen.getByText('No explicit corrective actions requested.')).toBeInTheDocument();
-    expect(screen.queryByText('Decision & Audit Trail')).not.toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.toLocaleString2, {"toLocaleString":"0"}))).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.noSpecificQualityObservationsNoted))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.noSpecificDeliveryDelaysOrIssuesRecorded))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.invoicesMatchedAgreedPPORateStructure))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.documentationDeliveredPerContractRequirements))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.communicationWasPromptAndConstructive))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.noExplicitCorrectiveActionsRequested))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.decisionAuditTrail))).not.toBeInTheDocument();
   });
 
   it('shows complete submitted assessment details and requires comments for return and rejection', async () => {
     render(<VendorRatingsApprovalsPage />);
     await screen.findByText('PPO-submitted');
-    fireEvent.click(screen.getByRole('button', { name: /Review & Decide/ }));
-    expect(screen.getByText('Vendor Performance Assessment Review')).toBeInTheDocument();
-    expect(screen.getByText('Section A: Order & Scope Information')).toBeInTheDocument();
-    expect(screen.getByText('Category Ratings & Individual Observations')).toBeInTheDocument();
-    expect(screen.getByText('Quality of Goods / Work (30%)')).toBeInTheDocument();
-    expect(screen.getByText('Delivery & Time (25%)')).toBeInTheDocument();
-    expect(screen.getByText('Cost & Commercial (20%)')).toBeInTheDocument();
-    expect(screen.getByText('Documentation & Closure (10%)')).toBeInTheDocument();
-    expect(screen.getByText('Responsiveness & Coordination (15%)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.reviewDecide, "", false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.vendorPerformanceAssessmentReview))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.sectionAOrderScopeInformation))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.categoryRatingsIndividualObservations))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.qualityOfGoodsWork30))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.deliveryTime25))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.costCommercial20))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.documentationClosure10))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.responsivenessCoordination15))).toBeInTheDocument();
     expect(screen.getByText('Continue weekly status updates')).toBeInTheDocument();
-    expect(screen.getByText('Section B: Project Approver Comments')).toBeInTheDocument();
-    expect(screen.getByText('Decision & Audit Trail')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.sectionBProjectApproverComments))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.decisionAuditTrail))).toBeInTheDocument();
     expect(screen.getByText(/Submitted assessment/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Return for Correction' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.returnForCorrection) }));
     expect(screen.getByText('Approver comments are mandatory when returning or rejecting an assessment.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Assessment' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.rejectAssessment) }));
     expect(screen.getByText('Approver comments are mandatory when returning or rejecting an assessment.')).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Record justification for accepting/), { target: { value: 'Please attach completion certificates.' } });
     decisionResponse = { ok: false, body: { error: 'Return service unavailable' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Return for Correction' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.returnForCorrection) }));
     expect(await screen.findByText('Return service unavailable')).toBeInTheDocument();
     decisionResponse = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Return for Correction' }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Assessment returned to submitter for correction.', 'PPO-submitted'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.returnForCorrection) }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.assessmentReturnedToSubmitterForCorrection, 'PPO-submitted'));
     expect(mockFetch).toHaveBeenCalledWith('/api/approvals/vendor-ratings', expect.objectContaining({ method: 'POST' }));
   });
 
   it('confirms acceptance, handles rejection and request exceptions, and closes review dialogs', async () => {
     render(<VendorRatingsApprovalsPage />);
     await screen.findByText('PPO-submitted');
-    fireEvent.click(screen.getByRole('button', { name: /Review & Decide/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rating' }));
-    expect(screen.getByText('Confirm Performance Rating Acceptance')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Review' }));
-    expect(screen.queryByText('Confirm Performance Rating Acceptance')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rating' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Publish Score' }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Performance assessment accepted! Published to vendor scorecard.', 'PPO-submitted'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.reviewDecide, "", false) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.acceptRating) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.confirmPerformanceRatingAcceptance))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.backToReview) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.confirmPerformanceRatingAcceptance))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.acceptRating) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.confirmPublishScore) }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.performanceAssessmentAcceptedPublishedToVendorScorecard, 'PPO-submitted'));
 
     await screen.findByText('PPO-submitted');
-    fireEvent.click(screen.getByRole('button', { name: /Review & Decide/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.reviewDecide, "", false) }));
     fireEvent.change(screen.getByPlaceholderText(/Record justification for accepting/), { target: { value: 'Evidence does not support this score.' } });
     decisionResponse = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Assessment' }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Assessment rejected.', 'PPO-submitted'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.rejectAssessment) }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.assessmentRejected, 'PPO-submitted'));
 
     await screen.findByText('PPO-submitted');
-    fireEvent.click(screen.getByRole('button', { name: /Review & Decide/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.reviewDecide, "", false) }));
     fireEvent.change(screen.getByPlaceholderText(/Record justification for accepting/), { target: { value: 'Review evidence.' } });
     mockFetch.mockRejectedValueOnce(new Error('decision network down'));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Assessment' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.rejectAssessment) }));
     expect(await screen.findByText('decision network down')).toBeInTheDocument();
     decisionResponse = { ok: false, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Assessment' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.rejectAssessment) }));
     expect(await screen.findByText('Failed to record decision.')).toBeInTheDocument();
     mockFetch.mockRejectedValueOnce({});
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Assessment' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.rejectAssessment) }));
     expect(await screen.findByText('Network error recording decision.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close review' }));
-    expect(screen.queryByText('Vendor Performance Assessment Review')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.closeReview) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.vendorPerformanceAssessmentReview))).not.toBeInTheDocument();
   });
 
   it('renders approved assessment history and handles queue failures and empty results', async () => {
     render(<VendorRatingsApprovalsPage />);
     await screen.findByText('PPO-submitted');
     fireEvent.click(screen.getByRole('button', { name: /Approved \(1\)/ }));
-    fireEvent.click(screen.getByRole('button', { name: /View Assessment/ }));
-    expect(screen.getByText(/Approved by Project Approver on N\/A/)).toBeInTheDocument();
-    expect(screen.getByText('Approved with no additional remarks.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept Rating' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close review' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.viewAssessment, "", false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedByNameOnDate))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedWithNoAdditionalRemarks))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.acceptRating) })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.closeReview) }));
 
     queueResponse = { ok: false, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: /All Records/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.allRecords, "", false) }));
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Failed to load vendor performance approvals queue.'));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToLoadVendorPerformanceApprovalsQueue));
 
     queueResponse = { ok: true, body: {} };
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/approvals/vendor-ratings'));
-    fireEvent.click(screen.getByRole('button', { name: /Pending Approval/ }));
-    expect(await screen.findByText('There are currently no vendor performance ratings awaiting Project Approver review.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.pendingApproval, "", false) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.thereAreCurrentlyNoVendorPerformanceRatingsAwaitingProjectApproverReview))).toBeInTheDocument();
     queueResponse = { ok: true, body: { ratings: [], counts: { pendingCount: 0, approvedCount: 0, returnedCount: 0, totalCount: 0, totalEvaluatedValue: 0 } } };
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     mockFetch.mockRejectedValueOnce(new Error('queue network down'));
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
-    expect(mockToastError).toHaveBeenCalledWith('Network error while loading approvals queue.');
+    expect(mockToastError).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.networkErrorWhileLoadingApprovalsQueue);
     consoleError.mockRestore();
   });
 });

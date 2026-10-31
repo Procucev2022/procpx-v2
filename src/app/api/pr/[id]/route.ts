@@ -2,6 +2,8 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_VIEW');
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
-  if (!pr) return apiError('Procurement Request not found.', 404);
+  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
 
   return apiSuccess(pr);
 }

@@ -43,6 +43,9 @@ import {
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import { useToast } from '@/components/ui/Toast';
 import { STEP_THEMES } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function NewRfqPage() {
@@ -116,8 +119,8 @@ export default function NewRfqPage() {
     {
       number: 1,
       icon: <ClipboardList size={16} strokeWidth={2} />,
-      title: 'Project & BOQ',
-      description: 'Baseline Verification',
+      title: UI_STRINGS.common.projectBOQ,
+      description: UI_STRINGS.common.baselineVerification,
       primaryColor: STEP_THEMES[1].primary,
       lightBg: STEP_THEMES[1].lightBg,
       accentBorder: STEP_THEMES[1].accentBorder,
@@ -125,8 +128,8 @@ export default function NewRfqPage() {
     {
       number: 2,
       icon: <Package size={16} strokeWidth={2} />,
-      title: 'Scope & Package',
-      description: 'Package Lines',
+      title: UI_STRINGS.common.scopePackage,
+      description: UI_STRINGS.common.packageLines,
       primaryColor: STEP_THEMES[2].primary,
       lightBg: STEP_THEMES[2].lightBg,
       accentBorder: STEP_THEMES[2].accentBorder,
@@ -134,8 +137,8 @@ export default function NewRfqPage() {
     {
       number: 3,
       icon: <Scale size={16} strokeWidth={2} />,
-      title: 'Commercial & Technical',
-      description: 'Conditions & Specs',
+      title: UI_STRINGS.common.commercialTechnical,
+      description: UI_STRINGS.common.conditionsSpecs,
       primaryColor: STEP_THEMES[3].primary,
       lightBg: STEP_THEMES[3].lightBg,
       accentBorder: STEP_THEMES[3].accentBorder,
@@ -143,8 +146,8 @@ export default function NewRfqPage() {
     {
       number: 4,
       icon: <Building2 size={16} strokeWidth={2} />,
-      title: 'Vendor Selection',
-      description: 'Invite Suppliers',
+      title: UI_STRINGS.common.vendorSelection,
+      description: UI_STRINGS.common.inviteSuppliers,
       primaryColor: STEP_THEMES[4].primary,
       lightBg: STEP_THEMES[4].lightBg,
       accentBorder: STEP_THEMES[4].accentBorder,
@@ -152,8 +155,8 @@ export default function NewRfqPage() {
     {
       number: 5,
       icon: <Send size={16} strokeWidth={2} />,
-      title: 'Review & Release',
-      description: 'Validate & Launch',
+      title: UI_STRINGS.common.reviewRelease,
+      description: UI_STRINGS.common.validateLaunch,
       primaryColor: STEP_THEMES[5].primary,
       lightBg: STEP_THEMES[5].lightBg,
       accentBorder: STEP_THEMES[5].accentBorder,
@@ -218,13 +221,13 @@ export default function NewRfqPage() {
       // Check if creating directly from an Approved PR
       if (initialPrId) {
         if (!foundPr) {
-          setErrorMsg(`Unable to load Procurement Request (${initialPrId}). The PR was not found or access is restricted.`);
+          setErrorMsg(interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.unableToLoadProcurementRequestPrIdNotFoundOrAccessRestricted, { prId: initialPrId }));
           setLoading(false);
           return;
         }
 
         if (!foundPr.lines || foundPr.lines.length === 0) {
-          setErrorMsg(`Approved PR (${foundPr.prNumber}) has no approved line items available for sourcing.`);
+          setErrorMsg(interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.approvedPrPrNumberHasNoApprovedLineItemsAvailableForSourcing, { prNumber: foundPr.prNumber }));
           setLoading(false);
           return;
         }
@@ -285,7 +288,7 @@ export default function NewRfqPage() {
         setSelectedLineIds(prBoq.lines.map((l: any) => l.id));
         setRfqDetails((prev) => ({
           ...prev,
-          title: `RFQ for ${foundPr.title || foundPr.project?.name} (${foundPr.prNumber})`,
+          title: interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.rFQForValue1PrNumber, { "value1": foundPr.title || foundPr.project?.name, "prNumber": foundPr.prNumber }),
           packageName: `${foundPr.lines[0]?.category || 'General'} Package`,
         }));
       } else if (boqsData.approvedBoqs && boqsData.approvedBoqs.length > 0) {
@@ -299,7 +302,7 @@ export default function NewRfqPage() {
         setSelectedLineIds(activeBoq.lines.map((l: any) => l.id));
         setRfqDetails((prev) => ({
           ...prev,
-          title: `RFQ for ${activeBoq.projectName} — ${activeBoq.categories[0]?.category || 'Works'} Package`,
+          title: interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.rFQForProjectNameValue2Package, { "projectName": activeBoq.projectName, "value2": activeBoq.categories[0]?.category || 'Works' }),
           packageName: `${activeBoq.categories[0]?.category || 'Works'} Package`,
         }));
       }
@@ -324,7 +327,7 @@ export default function NewRfqPage() {
     setSelectedLineIds(boq.lines.map((l: any) => l.id));
     setRfqDetails((prev) => ({
       ...prev,
-      title: `RFQ for ${boq.projectName} — ${boq.categories[0]?.category || 'Works'} Package`,
+      title: interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.rFQForProjectNameValue2Package, { "projectName": boq.projectName, "value2": boq.categories[0]?.category || 'Works' }),
       packageName: `${boq.categories[0]?.category || 'Works'} Package`,
     }));
   };
@@ -384,17 +387,17 @@ export default function NewRfqPage() {
 
     // Moving forward enforces mandatory validation
     if (!selectedBoq) {
-      setErrorMsg('Step 1: Please select and verify an Approved Commercial Baseline.');
+      setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.step1SelectAndVerifyApprovedCommercialBaseline);
       return;
     }
 
     if (targetStep >= 3) {
       if (scopedLines.length === 0) {
-        setErrorMsg('Step 2: At least one BOQ line item must be included in the RFQ scope.');
+        setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.step2AtLeastOneBoqLineItemMustBeIncludedInRfqScope);
         return;
       }
       if (!rfqDetails.title.trim()) {
-        setErrorMsg('Step 2: RFQ Title is required.');
+        setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.step2RfqTitleIsRequired);
         return;
       }
     }
@@ -408,7 +411,7 @@ export default function NewRfqPage() {
 
     if (targetStep >= 5) {
       if (selectedVendorIds.length === 0) {
-        setErrorMsg('Step 4: Please invite at least 1 qualified vendor before proceeding to final review.');
+        setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.step4InviteAtLeastOneQualifiedVendorBeforeFinalReview);
         return;
       }
     }
@@ -420,19 +423,19 @@ export default function NewRfqPage() {
   const handleCreateRfq = async (action: 'SAVE_DRAFT' | 'RELEASE_RFQ') => {
     setErrorMsg('');
     if (existingActiveRfq) {
-      setErrorMsg(`An active RFQ (${existingActiveRfq.rfqNumber}) already exists for this PR. Duplicate sourcing is prevented.`);
+      setErrorMsg(interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.activeRfqRfqNumberAlreadyExistsForPrDuplicateSourcingPrevented, { rfqNumber: existingActiveRfq.rfqNumber }));
       return;
     }
     if (!selectedBoq) {
-      setErrorMsg('Please select an Approved BOQ Baseline in Step 1.');
+      setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.selectApprovedBoqBaselineInStep1);
       return;
     }
     if (scopedLines.length === 0) {
-      setErrorMsg('At least one BOQ line must be included in the RFQ scope in Step 2.');
+      setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.atLeastOneBoqLineMustBeIncludedInRfqScopeInStep2);
       return;
     }
     if (!rfqDetails.title.trim()) {
-      setErrorMsg('RFQ Title is required.');
+      setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.rfqTitleIsRequired);
       return;
     }
     if (timelineError) {
@@ -440,7 +443,7 @@ export default function NewRfqPage() {
       return;
     }
     if (action === 'RELEASE_RFQ' && selectedVendorIds.length === 0) {
-      setErrorMsg('Please invite at least one vendor before releasing the RFQ.');
+      setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.inviteAtLeastOneVendorBeforeReleasingRfq);
       return;
     }
 
@@ -480,22 +483,22 @@ export default function NewRfqPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to create RFQ');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToCreateRfq }));
       }
 
       toast.success(
-        action === 'RELEASE_RFQ' ? 'RFQ issued successfully.' : 'RFQ draft saved successfully.',
+        action === 'RELEASE_RFQ' ? UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully : UI_STRINGS.common.userMessages.rfqDraftSavedSuccessfully,
         data.rfq.rfqNumber,
-        action === 'RELEASE_RFQ' ? 'Awaiting Quotations' : 'Draft'
+        action === 'RELEASE_RFQ' ? UI_STRINGS.common.userMessages.awaitingQuotations : UI_STRINGS.common.draft
       );
 
       router.push(`/procurement/rfqs/${data.rfq.id}`);
     } catch (err: any) {
-      setErrorMsg(err.message || 'An unexpected error occurred');
+      setErrorMsg(err.message || UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred);
       setShowConfirmRelease(false);
       toast.error({
-        title: 'RFQ Creation Failed',
-        message: err.message || 'An unexpected error occurred while saving the RFQ.',
+        title: UI_STRINGS.appAppProcurementRfqsNewPage.rFQCreationFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anUnexpectedErrorOccurredWhileSavingTheRfq }),
         recordNumber: sourcePr?.prNumber,
       });
     } finally {
@@ -590,8 +593,8 @@ export default function NewRfqPage() {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
         <div className="spinner" style={{ margin: '0 auto 16px' }} />
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#334155' }}>Initializing RFQ Control Wizard</h3>
-        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Loading approved commercial baselines and vendor records...</p>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: '#334155' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.initializingRFQControlWizard}</h3>
+        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.loadingApprovedCommercialBaselinesAndVendorRecords}</p>
       </div>
     );
   }
@@ -601,12 +604,12 @@ export default function NewRfqPage() {
       {/* 1. Common Enterprise Page Header */}
       <PageHeader
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'RFQs', href: '/procurement/rfqs' },
-          { label: 'Create RFQ' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.common.rFQs, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.appAppProcurementRfqsNewPage.createRFQ },
         ]}
-        title="Create Request for Quotation"
-        description="Create a structured RFQ from an approved BOQ baseline and invite eligible vendors for competitive bidding."
+        title={UI_STRINGS.appAppProcurementRfqsNewPage.createRequestForQuotation}
+        description={UI_STRINGS.appAppProcurementRfqsNewPage.createAStructuredRFQFromAnApprovedBOQBaselineAndInviteEligibleVendorsForCompetitiveBidding}
         badge={<StatusBadge status="DRAFT" size="md" />}
         actions={
           <div style={{ display: 'flex', gap: 10 }}>
@@ -617,11 +620,8 @@ export default function NewRfqPage() {
               disabled={saving}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <Save size={14} /> Save Draft
-            </button>
-            <Link href="/procurement/rfqs" className="btn btn-secondary">
-              Cancel
-            </Link>
+              <Save size={14} />{UI_STRINGS.appAppProcurementRfqsNewPage.saveDraft}</button>
+            <Link href="/procurement/rfqs" className="btn btn-secondary">{UI_STRINGS.common.cancel}</Link>
           </div>
         }
       />
@@ -652,21 +652,15 @@ export default function NewRfqPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <AlertTriangle size={24} color="#d97706" style={{ flexShrink: 0 }} />
             <div>
-              <div style={{ fontWeight: 700, color: '#92400e', fontSize: 14 }}>
-                Active Sourcing Event Already Exists for this PR ({existingActiveRfq.rfqNumber})
-              </div>
-              <div style={{ fontSize: 13, color: '#b45309', marginTop: 3 }}>
-                Procurement business governance prohibits duplicate active RFQs for the same approved PR. The existing RFQ is currently in <strong>{existingActiveRfq.status}</strong> stage.
-              </div>
+              <div style={{ fontWeight: 700, color: '#92400e', fontSize: 14 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.activeSourcingEventAlreadyExistsForThisPR}{existingActiveRfq.rfqNumber}{UI_STRINGS.common.copyc7zu6c}</div>
+              <div style={{ fontSize: 13, color: '#b45309', marginTop: 3 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.procurementBusinessGovernanceProhibitsDuplicateActiveRFQsForTheSameApprovedPRTheExistingRFQIsCurrentlyIn}<strong>{existingActiveRfq.status}</strong>{UI_STRINGS.appAppProcurementRfqsNewPage.stage}</div>
             </div>
           </div>
           <Link
             href={`/procurement/rfqs/${existingActiveRfq.id}`}
             className="btn btn-primary"
             style={{ whiteSpace: 'nowrap', textDecoration: 'none' }}
-          >
-            Open Active RFQ ({existingActiveRfq.rfqNumber}) →
-          </Link>
+          >{UI_STRINGS.appAppProcurementRfqsNewPage.openActiveRFQ}{existingActiveRfq.rfqNumber}{UI_STRINGS.common.copydv17a2}</Link>
         </div>
       )}
 
@@ -720,26 +714,19 @@ export default function NewRfqPage() {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-              >
-                1
-              </span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[1].textDark, margin: 0 }}>
-                PROJECT & BOQ BASELINE VERIFICATION
-              </h3>
+              >{UI_STRINGS.common.copyefwnq4}</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[1].textDark, margin: 0 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.pROJECTBOQBASELINEVERIFICATION}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#475569', margin: '6px 0 0 34px' }}>
-              Select and verify the immutable, client-approved commercial baseline to establish package boundaries.
-            </p>
+            <p style={{ fontSize: 13, color: '#475569', margin: '6px 0 0 34px' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.selectAndVerifyTheImmutableClientApprovedCommercialBaselineToEstablishPackageBoundaries}</p>
           </div>
 
           <Card
-            title={sourcePr ? `Approved PR Baseline: ${sourcePr.prNumber}` : "Approved Commercial Baseline Selection"}
-            subtitle="Commercial baseline parameters are locked to the approved governance revision"
+            title={sourcePr ? interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.approvedPRBaselinePrNumber, { "prNumber": sourcePr.prNumber }) : UI_STRINGS.appAppProcurementRfqsNewPage.approvedCommercialBaselineSelection}
+            subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.commercialBaselineParametersAreLockedToTheApprovedGovernanceRevision}
           >
             {!sourcePr && (
               <div style={{ marginBottom: 24 }}>
-                <label className="form-label" htmlFor="boq-select">
-                  Select Approved Commercial Baseline <span className="required">*</span>
+                <label className="form-label" htmlFor="boq-select">{UI_STRINGS.appAppProcurementRfqsNewPage.selectApprovedCommercialBaseline}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <select
                   id="boq-select"
@@ -753,13 +740,10 @@ export default function NewRfqPage() {
                 >
                   {approvedBoqs.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.projectName} ({b.projectCode}) — Revision {b.approvedRevisionCode} ({b.totalLines} lines)
-                    </option>
+                      {b.projectName}{UI_STRINGS.common.copy1b3t0c5}{b.projectCode}{UI_STRINGS.appAppProcurementRfqsNewPage.revision}{b.approvedRevisionCode}{UI_STRINGS.common.copy1b3t0c5}{b.totalLines}{UI_STRINGS.appAppProcurementRfqsNewPage.lines}</option>
                   ))}
                 </select>
-                <div className="form-helper">
-                  Only client-approved, governance-locked BOQ revisions can be sourced by procurement.
-                </div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.onlyClientApprovedGovernanceLockedBOQRevisionsCanBeSourcedByProcurement}</div>
               </div>
             )}
 
@@ -773,9 +757,7 @@ export default function NewRfqPage() {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h4 style={{ fontSize: 12, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Baseline Verification Summary
-                  </h4>
+                  <h4 style={{ fontSize: 12, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary}</h4>
                   <span
                     style={{
                       fontSize: 11,
@@ -786,9 +768,7 @@ export default function NewRfqPage() {
                       color: '#1e40af',
                       border: '1px solid #bfdbfe',
                     }}
-                  >
-                    ✓ Baseline Verified
-                  </span>
+                  >{UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerified}</span>
                 </div>
                 <div
                   style={{
@@ -798,53 +778,52 @@ export default function NewRfqPage() {
                   }}
                 >
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Project Name</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.projectName}</div>
                     <div style={{ fontWeight: 600, fontSize: 15, marginTop: 4, color: '#0f172a' }}>
                       {selectedBoq.projectName}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Project Code</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.projectCode}</div>
                     <div className="font-mono" style={{ fontWeight: 600, fontSize: 14, marginTop: 4, color: '#1e40af' }}>
                       {selectedBoq.projectCode}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Location</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.location}</div>
                     <div style={{ fontWeight: 500, fontSize: 14, marginTop: 4, color: '#334155' }}>
-                      {selectedBoq.location || 'Bengaluru'}
+                      {selectedBoq.location || UI_STRINGS.common.bengaluru}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Cost Centre</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.costCentre2}</div>
                     <div style={{ fontWeight: 500, fontSize: 14, marginTop: 4, color: '#334155' }}>
-                      {selectedBoq.costCentre || 'General Works'}
+                      {selectedBoq.costCentre || UI_STRINGS.appAppProcurementRfqsNewPage.generalWorks}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Approved Revision</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.approvedRevision}</div>
                     <div style={{ marginTop: 4 }}>
                       <span className="badge badge-approved" style={{ fontSize: 11, fontWeight: 700 }}>
-                        {selectedBoq.approvedRevisionCode} (IMMUTABLE)
-                      </span>
+                        {selectedBoq.approvedRevisionCode}{UI_STRINGS.appAppProcurementRfqsNewPage.iMMUTABLE}</span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Approved Date</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.approvedDate}</div>
                     <div style={{ fontSize: 13, marginTop: 4, color: '#334155' }}>
-                      {selectedBoq.approvedAt ? new Date(selectedBoq.approvedAt).toLocaleDateString() : '—'}
+                      {selectedBoq.approvedAt ? new Date(selectedBoq.approvedAt).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Approved By</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.approvedBy}</div>
                     <div style={{ fontSize: 13, marginTop: 4, color: '#334155' }}>
                       {selectedBoq.approvedBy}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Baseline Items & Value</div>
+                    <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineItemsValue}</div>
                     <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: '#1e40af' }}>
-                      {selectedBoq.totalLines} Items • ₹ {selectedBoq.totalBenchmarkAmount?.toLocaleString()}
+                      {selectedBoq.totalLines}{UI_STRINGS.appAppProcurementRfqsNewPage.items}{selectedBoq.totalBenchmarkAmount?.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -866,8 +845,7 @@ export default function NewRfqPage() {
             >
               <Lock size={18} color="#2563eb" style={{ flexShrink: 0, marginTop: 2 }} />
               <div style={{ fontSize: 13, color: '#1e40af', lineHeight: 1.5 }}>
-                <strong>Immutable Baseline Governance:</strong> In accordance with enterprise procurement policy, all item descriptions, approved quantities, UOMs, and baseline rates are strictly immutable. Procurement RFQs package these line items for competitive market bidding without modifying baseline records.
-              </div>
+                <strong>{UI_STRINGS.appAppProcurementRfqsNewPage.immutableBaselineGovernance}</strong>{UI_STRINGS.appAppProcurementRfqsNewPage.inAccordanceWithEnterpriseProcurementPolicyAllItemDescriptionsApprovedQuantitiesUOMsAndBaselineRatesAreStrictlyImmutableProcurementRFQsPackageTheseLineItemsForCompetitiveMarketBiddingWithoutModifyingBaselineRecords}</div>
             </div>
           </Card>
         </div>
@@ -902,24 +880,17 @@ export default function NewRfqPage() {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-              >
-                2
-              </span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[2].textDark, margin: 0 }}>
-                SCOPE & PACKAGE DEFINITION
-              </h3>
+              >{UI_STRINGS.common.copyf9vgt1}</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[2].textDark, margin: 0 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.sCOPEPACKAGEDEFINITION}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#0f766e', margin: '6px 0 0 34px' }}>
-              Define RFQ package title, target trade, completion timeline, and line-item inclusions from the approved BOQ.
-            </p>
+            <p style={{ fontSize: 13, color: '#0f766e', margin: '6px 0 0 34px' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.defineRFQPackageTitleTargetTradeCompletionTimelineAndLineItemInclusionsFromTheApprovedBOQ}</p>
           </div>
 
           {/* Package Details Form */}
-          <Card title="Package Metadata" subtitle="Official branding and completion timeline for participating vendors">
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.packageMetadata} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.officialBrandingAndCompletionTimelineForParticipatingVendors}>
             <div className="form-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
               <div>
-                <label className="form-label" htmlFor="rfq-title">
-                  RFQ Title <span className="required">*</span>
+                <label className="form-label" htmlFor="rfq-title">{UI_STRINGS.appAppProcurementRfqsNewPage.rFQTitle}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="rfq-title"
@@ -927,14 +898,13 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.title}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, title: e.target.value })}
-                  placeholder="e.g. RFQ for Civil Finishing & Interior Fitout Package"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eGRFQForCivilFinishingInteriorFitoutPackage}
                 />
-                <div className="form-helper">Official title visible to participating vendors.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.officialTitleVisibleToParticipatingVendors}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="package-name">
-                  Package / Trade <span className="required">*</span>
+                <label className="form-label" htmlFor="package-name">{UI_STRINGS.appAppProcurementRfqsNewPage.packageTrade}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="package-name"
@@ -942,14 +912,13 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.packageName}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, packageName: e.target.value })}
-                  placeholder="e.g. Interior Finishing & Joinery"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eGInteriorFinishingJoinery}
                 />
-                <div className="form-helper">Target trade category for procurement categorization.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.targetTradeCategoryForProcurementCategorization}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="expected-completion">
-                  Expected Completion Date <span className="required">*</span>
+                <label className="form-label" htmlFor="expected-completion">{UI_STRINGS.appAppProcurementRfqsNewPage.expectedCompletionDate}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="expected-completion"
@@ -958,7 +927,7 @@ export default function NewRfqPage() {
                   value={rfqDetails.expectedCompletionDate}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, expectedCompletionDate: e.target.value })}
                 />
-                <div className="form-helper">Target project milestone completion date.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.targetProjectMilestoneCompletionDate}</div>
               </div>
             </div>
           </Card>
@@ -978,9 +947,7 @@ export default function NewRfqPage() {
             }}
           >
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>
-                Sourcing Scope Mode:
-              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.sourcingScopeMode}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -992,9 +959,7 @@ export default function NewRfqPage() {
                     fontWeight: 600,
                   }}
                   onClick={() => setScopeType('ENTIRE_BOQ')}
-                >
-                  Entire Approved BOQ ({selectedBoq?.lines.length} lines)
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.entireApprovedBOQ}{selectedBoq?.lines.length}{UI_STRINGS.appAppProcurementRfqsNewPage.lines}</button>
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -1010,9 +975,7 @@ export default function NewRfqPage() {
                       setSelectedCategory(selectedBoq.categories[0].category);
                     }
                   }}
-                >
-                  By Category / Package
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.byCategoryPackage}</button>
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -1023,9 +986,7 @@ export default function NewRfqPage() {
                     fontWeight: 600,
                   }}
                   onClick={() => setScopeType('SELECTED_LINES')}
-                >
-                  Select Individual Lines ({selectedLineIds.length} selected)
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.selectIndividualLines}{selectedLineIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.selected}</button>
               </div>
             </div>
 
@@ -1042,16 +1003,15 @@ export default function NewRfqPage() {
               }}
             >
               <div>
-                <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 600, textTransform: 'uppercase' }}>Scoped Items:</span>
+                <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.scopedItems}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginLeft: 6 }}>
-                  {scopedLines.length} / {selectedBoq?.lines.length}
+                  {scopedLines.length}{UI_STRINGS.common.copy3ml01c}{selectedBoq?.lines.length}
                 </span>
               </div>
               <div style={{ width: 1, height: 16, backgroundColor: '#99f6e4' }} />
               <div>
-                <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 600, textTransform: 'uppercase' }}>Benchmark Budget:</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginLeft: 6 }}>
-                  ₹ {scopedBenchmarkValue.toLocaleString()}
+                <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.benchmarkBudget}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginLeft: 6 }}>{UI_STRINGS.common.copy1g8b5tg}{scopedBenchmarkValue.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -1064,16 +1024,12 @@ export default function NewRfqPage() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => setSelectedLineIds(selectedBoq?.lines.map((l: any) => l.id) || [])}
-              >
-                Select All ({selectedBoq?.lines.length})
-              </button>
+              >{UI_STRINGS.common.selectAll}{selectedBoq?.lines.length}{UI_STRINGS.common.copyc7zu6c}</button>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => setSelectedLineIds([])}
-              >
-                Deselect All
-              </button>
+              >{UI_STRINGS.appAppProcurementRfqsNewPage.deselectAll}</button>
             </div>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -1086,8 +1042,7 @@ export default function NewRfqPage() {
                 >
                   {selectedBoq?.categories.map((c: any) => (
                     <option key={c.category} value={c.category}>
-                      {c.category} ({c.lineCount} lines)
-                    </option>
+                      {c.category}{UI_STRINGS.common.copy1b3t0c5}{c.lineCount}{UI_STRINGS.appAppProcurementRfqsNewPage.lines}</option>
                   ))}
                 </select>
               )}
@@ -1097,7 +1052,7 @@ export default function NewRfqPage() {
                   type="text"
                   className="input"
                   style={{ paddingLeft: 30, height: 34, fontSize: 12 }}
-                  placeholder="Filter items by description..."
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.filterItemsByDescription}
                   value={lineSearch}
                   onChange={(e) => setLineSearch(e.target.value)}
                 />
@@ -1106,7 +1061,7 @@ export default function NewRfqPage() {
           </div>
 
           {/* BOQ Line-Item Selection Table (Primary Dominant Component) */}
-          <Card title="Approved BOQ Line Items" subtitle="Quantities, specifications, and baseline rates are immutable" noPadding>
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.approvedBOQLineItems} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.quantitiesSpecificationsAndBaselineRatesAreImmutable} noPadding>
             <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
               <table className="table enterprise-table" style={{ width: '100%', minWidth: 1080 }}>
                 <thead>
@@ -1124,16 +1079,16 @@ export default function NewRfqPage() {
                         }}
                       />
                     </th>
-                    <th style={{ width: 60 }}>S.No.</th>
-                    <th style={{ minWidth: 260 }}>Item Description</th>
-                    <th style={{ minWidth: 160 }}>Specification</th>
-                    <th style={{ width: 120 }}>Category</th>
-                    <th style={{ width: 70 }}>UOM</th>
-                    <th style={{ width: 110, textAlign: 'right' }}>Quantity (Locked)</th>
-                    <th style={{ width: 120, textAlign: 'right' }}>Baseline Rate</th>
-                    <th style={{ width: 130, textAlign: 'right' }}>Baseline Amount</th>
-                    <th style={{ width: 130, textAlign: 'center' }}>Include in RFQ</th>
-                    <th style={{ minWidth: 160 }}>Remarks</th>
+                    <th style={{ width: 60 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th style={{ minWidth: 260 }}>{UI_STRINGS.common.itemDescription}</th>
+                    <th style={{ minWidth: 160 }}>{UI_STRINGS.common.specification}</th>
+                    <th style={{ width: 120 }}>{UI_STRINGS.common.category2}</th>
+                    <th style={{ width: 70 }}>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ width: 110, textAlign: 'right' }}>{UI_STRINGS.common.quantityLocked}</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineRate}</th>
+                    <th style={{ width: 130, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineAmount}</th>
+                    <th style={{ width: 130, textAlign: 'center' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.includeInRFQ}</th>
+                    <th style={{ minWidth: 160 }}>{UI_STRINGS.common.remarks}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1195,11 +1150,9 @@ export default function NewRfqPage() {
                           <td style={{ fontWeight: 700, textAlign: 'right', color: '#0f172a', fontSize: 13 }}>
                             {l.quantity.toLocaleString()}
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: 13, color: '#334155' }}>
-                            ₹ {l.benchmarkRate?.toLocaleString()}
+                          <td style={{ textAlign: 'right', fontSize: 13, color: '#334155' }}>{UI_STRINGS.common.copy1g8b5tg}{l.benchmarkRate?.toLocaleString()}
                           </td>
-                          <td style={{ fontWeight: 700, textAlign: 'right', color: '#0f766e', fontSize: 13 }}>
-                            ₹ {l.benchmarkAmount?.toLocaleString()}
+                          <td style={{ fontWeight: 700, textAlign: 'right', color: '#0f766e', fontSize: 13 }}>{UI_STRINGS.common.copy1g8b5tg}{l.benchmarkAmount?.toLocaleString()}
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <button
@@ -1220,7 +1173,7 @@ export default function NewRfqPage() {
                               }}
                             >
                               {isIncluded ? <Check size={12} strokeWidth={2.5} /> : <X size={12} />}
-                              {isIncluded ? 'Included' : 'Excluded'}
+                              {isIncluded ? UI_STRINGS.appAppProcurementRfqsNewPage.included : UI_STRINGS.appAppProcurementRfqsNewPage.excluded}
                             </button>
                           </td>
                           <td>
@@ -1228,7 +1181,7 @@ export default function NewRfqPage() {
                               type="text"
                               className="input"
                               style={{ height: 28, fontSize: 11, padding: '2px 8px' }}
-                              placeholder="Optional line note..."
+                              placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.optionalLineNote}
                               value={lineRemarks[l.id] || ''}
                               onChange={(e) =>
                                 setLineRemarks({ ...lineRemarks, [l.id]: e.target.value })
@@ -1274,24 +1227,17 @@ export default function NewRfqPage() {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-              >
-                3
-              </span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[3].textDark, margin: 0 }}>
-                COMMERCIAL & TECHNICAL CONDITIONS
-              </h3>
+              >{UI_STRINGS.common.copyezvv42}</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[3].textDark, margin: 0 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.cOMMERCIALTECHNICALCONDITIONS}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#7e22ce', margin: '6px 0 0 34px' }}>
-              Establish binding contractual conditions, commercial milestone deadlines, warranties, and technical compliance criteria.
-            </p>
+            <p style={{ fontSize: 13, color: '#7e22ce', margin: '6px 0 0 34px' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.establishBindingContractualConditionsCommercialMilestoneDeadlinesWarrantiesAndTechnicalComplianceCriteria}</p>
           </div>
 
           {/* Section 1: Commercial Terms & Milestones */}
-          <Card title="Commercial Terms & Milestones" subtitle="Standardized contractual conditions for vendor quote submissions">
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.commercialTermsMilestones} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.standardizedContractualConditionsForVendorQuoteSubmissions}>
             <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
               <div>
-                <label className="form-label" htmlFor="sub-deadline">
-                  Submission Deadline <span className="required">*</span>
+                <label className="form-label" htmlFor="sub-deadline">{UI_STRINGS.common.submissionDeadline}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="sub-deadline"
@@ -1304,13 +1250,12 @@ export default function NewRfqPage() {
                 {timelineError ? (
                   <div style={{ color: '#dc2626', fontSize: 12, marginTop: 4 }}>{timelineError}</div>
                 ) : (
-                  <div className="form-helper">Final timestamp for quote receipt. Sealed bidding applies.</div>
+                  <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.finalTimestampForQuoteReceiptSealedBiddingApplies}</div>
                 )}
               </div>
 
               <div>
-                <label className="form-label" htmlFor="clar-deadline">
-                  Clarification Deadline <span className="required">*</span>
+                <label className="form-label" htmlFor="clar-deadline">{UI_STRINGS.appAppProcurementRfqsNewPage.clarificationDeadline}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="clar-deadline"
@@ -1319,12 +1264,11 @@ export default function NewRfqPage() {
                   value={rfqDetails.clarificationDeadline}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, clarificationDeadline: e.target.value })}
                 />
-                <div className="form-helper">Cut-off date for vendor technical pre-bid queries.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.cutOffDateForVendorTechnicalPreBidQueries}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="validity-days">
-                  Commercial Validity (Days) <span className="required">*</span>
+                <label className="form-label" htmlFor="validity-days">{UI_STRINGS.appAppProcurementRfqsNewPage.commercialValidityDays}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="validity-days"
@@ -1335,12 +1279,11 @@ export default function NewRfqPage() {
                   value={rfqDetails.commercialValidityDays}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, commercialValidityDays: Number(e.target.value) })}
                 />
-                <div className="form-helper">Number of calendar days quotations must remain binding.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.numberOfCalendarDaysQuotationsMustRemainBinding}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="payment-terms">
-                  Payment Terms <span className="required">*</span>
+                <label className="form-label" htmlFor="payment-terms">{UI_STRINGS.common.paymentTerms}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="payment-terms"
@@ -1348,14 +1291,13 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.paymentTerms}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, paymentTerms: e.target.value })}
-                  placeholder="e.g. 30 days net from certified progressive invoice"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eG30DaysNetFromCertifiedProgressiveInvoice}
                 />
-                <div className="form-helper">Invoice certification and payment disbursement cycle.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.invoiceCertificationAndPaymentDisbursementCycle}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="delivery-requirement">
-                  Delivery Schedule / Requirement <span className="required">*</span>
+                <label className="form-label" htmlFor="delivery-requirement">{UI_STRINGS.appAppProcurementRfqsNewPage.deliveryScheduleRequirement}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="delivery-requirement"
@@ -1363,14 +1305,13 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.deliveryRequirement}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, deliveryRequirement: e.target.value })}
-                  placeholder="e.g. Site delivery within 45 days from work order"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eGSiteDeliveryWithin45DaysFromWorkOrder}
                 />
-                <div className="form-helper">Mandatory project milestone delivery timeline.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.mandatoryProjectMilestoneDeliveryTimeline}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="tax-terms">
-                  Taxes and GST <span className="required">*</span>
+                <label className="form-label" htmlFor="tax-terms">{UI_STRINGS.appAppProcurementRfqsNewPage.taxesAndGST}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="tax-terms"
@@ -1378,14 +1319,13 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.taxTerms}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, taxTerms: e.target.value })}
-                  placeholder="e.g. GST 18% extra as applicable"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eGGST18ExtraAsApplicable}
                 />
-                <div className="form-helper">Statutory duties, GST, and cess treatment.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.statutoryDutiesGSTAndCessTreatment}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="delivery-terms">
-                  Freight & Insurance (Incoterms) <span className="required">*</span>
+                <label className="form-label" htmlFor="delivery-terms">{UI_STRINGS.appAppProcurementRfqsNewPage.freightInsuranceIncoterms}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="delivery-terms"
@@ -1393,14 +1333,13 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.deliveryTerms}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, deliveryTerms: e.target.value })}
-                  placeholder="e.g. FOR Destination / Freight & Transit Insurance included"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eGFORDestinationFreightTransitInsuranceIncluded}
                 />
-                <div className="form-helper">Logistics, freight responsibility, and transit insurance.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.logisticsFreightResponsibilityAndTransitInsurance}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="warranty-terms">
-                  Warranty / Defect Liability <span className="required">*</span>
+                <label className="form-label" htmlFor="warranty-terms">{UI_STRINGS.appAppProcurementRfqsNewPage.warrantyDefectLiability}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <input
                   id="warranty-terms"
@@ -1408,44 +1347,39 @@ export default function NewRfqPage() {
                   className="input"
                   value={rfqDetails.warrantyTerms}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, warrantyTerms: e.target.value })}
-                  placeholder="e.g. 12 Months DLP from site handover"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eG12MonthsDLPFromSiteHandover}
                 />
-                <div className="form-helper">Post-handover defect liability or manufacturer warranty.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.postHandoverDefectLiabilityOrManufacturerWarranty}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="performance-security">
-                  Performance Security
-                </label>
+                <label className="form-label" htmlFor="performance-security">{UI_STRINGS.appAppProcurementRfqsNewPage.performanceSecurity}</label>
                 <input
                   id="performance-security"
                   type="text"
                   className="input"
                   value={rfqDetails.performanceSecurity}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, performanceSecurity: e.target.value })}
-                  placeholder="e.g. 5% PBG upon award"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eG5PBGUponAward}
                 />
-                <div className="form-helper">Security deposit or performance bank guarantee clause.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.securityDepositOrPerformanceBankGuaranteeClause}</div>
               </div>
 
               <div>
-                <label className="form-label" htmlFor="liquidated-damages">
-                  Liquidated Damages
-                </label>
+                <label className="form-label" htmlFor="liquidated-damages">{UI_STRINGS.appAppProcurementRfqsNewPage.liquidatedDamages}</label>
                 <input
                   id="liquidated-damages"
                   type="text"
                   className="input"
                   value={rfqDetails.liquidatedDamages}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, liquidatedDamages: e.target.value })}
-                  placeholder="e.g. 0.5% per week of delay up to max 5%"
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.eG05PerWeekOfDelayUpToMax5}
                 />
-                <div className="form-helper">Contractual delay penalty schedule.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.contractualDelayPenaltySchedule}</div>
               </div>
 
               <div style={{ gridColumn: 'span 2' }}>
-                <label className="form-label" htmlFor="price-basis">
-                  Price Basis <span className="required">*</span>
+                <label className="form-label" htmlFor="price-basis">{UI_STRINGS.appAppProcurementRfqsNewPage.priceBasis}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <select
                   id="price-basis"
@@ -1453,20 +1387,19 @@ export default function NewRfqPage() {
                   value={rfqDetails.priceBasis}
                   onChange={(e) => setRfqDetails({ ...rfqDetails, priceBasis: e.target.value })}
                 >
-                  <option value="Firm & Fixed — No escalation allowed">Firm & Fixed — No escalation allowed</option>
-                  <option value="Variable with Material Index escalation">Variable with Material Index escalation</option>
-                  <option value="Unit Rate Re-measureable based on actual site install">Unit Rate Re-measureable based on actual site install</option>
+                  <option value="Firm & Fixed — No escalation allowed">{UI_STRINGS.appAppProcurementRfqsNewPage.firmFixedNoEscalationAllowed}</option>
+                  <option value="Variable with Material Index escalation">{UI_STRINGS.appAppProcurementRfqsNewPage.variableWithMaterialIndexEscalation}</option>
+                  <option value="Unit Rate Re-measureable based on actual site install">{UI_STRINGS.appAppProcurementRfqsNewPage.unitRateReMeasureableBasedOnActualSiteInstall}</option>
                 </select>
-                <div className="form-helper">Contract price adjustment policy.</div>
+                <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.contractPriceAdjustmentPolicy}</div>
               </div>
             </div>
           </Card>
 
           {/* Section 2: Technical Specifications & Compliance */}
-          <Card title="Technical Specifications & Standards" subtitle="Mandatory engineering parameters and technical compliance criteria">
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.technicalSpecificationsStandards} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.mandatoryEngineeringParametersAndTechnicalComplianceCriteria}>
             <div>
-              <label className="form-label" htmlFor="tech-req">
-                Technical Specifications & Compliance Criteria <span className="required">*</span>
+              <label className="form-label" htmlFor="tech-req">{UI_STRINGS.appAppProcurementRfqsNewPage.technicalSpecificationsComplianceCriteria}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
               </label>
               <textarea
                 id="tech-req"
@@ -1475,14 +1408,12 @@ export default function NewRfqPage() {
                 value={rfqDetails.technicalRequirements}
                 onChange={(e) => setRfqDetails({ ...rfqDetails, technicalRequirements: e.target.value })}
               />
-              <div className="form-helper">
-                Specify engineering standards, approved brands, tolerances, testing certificates, and compliance statements.
-              </div>
+              <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.specifyEngineeringStandardsApprovedBrandsTolerancesTestingCertificatesAndComplianceStatements}</div>
             </div>
           </Card>
 
           {/* Section 3: Mandatory Compliance Documents */}
-          <Card title="Mandatory Compliance Documents & Attachments" subtitle="Documents required from vendors during quotation submission">
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.mandatoryComplianceDocumentsAttachments} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.documentsRequiredFromVendorsDuringQuotationSubmission}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               {rfqDetails.requiredDocuments.map((doc, idx) => (
                 <span
@@ -1522,7 +1453,7 @@ export default function NewRfqPage() {
               <input
                 type="text"
                 className="input"
-                placeholder="Add document requirement (e.g. ISO Certificate)..."
+                placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.addDocumentRequirementEGISOCertificate}
                 value={newDocInput}
                 onChange={(e) => setNewDocInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1549,16 +1480,14 @@ export default function NewRfqPage() {
                   }
                 }}
               >
-                <Plus size={14} style={{ marginRight: 4 }} /> Add
-              </button>
+                <Plus size={14} style={{ marginRight: 4 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.add}</button>
             </div>
           </Card>
 
           {/* Section 4: Commercial Inclusions & Exclusions */}
-          <Card title="Commercial Conditions & Inclusions/Exclusions" subtitle="Commercial schedule, tax breakdown, and general contractual terms">
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.commercialConditionsInclusionsExclusions} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.commercialScheduleTaxBreakdownAndGeneralContractualTerms}>
             <div>
-              <label className="form-label" htmlFor="comm-req">
-                Commercial Requirements & General Terms <span className="required">*</span>
+              <label className="form-label" htmlFor="comm-req">{UI_STRINGS.appAppProcurementRfqsNewPage.commercialRequirementsGeneralTerms}<span className="required">{UI_STRINGS.common.copyd1yn99}</span>
               </label>
               <textarea
                 id="comm-req"
@@ -1567,9 +1496,7 @@ export default function NewRfqPage() {
                 value={rfqDetails.commercialRequirements}
                 onChange={(e) => setRfqDetails({ ...rfqDetails, commercialRequirements: e.target.value })}
               />
-              <div className="form-helper">
-                Specify inclusions, exclusions, taxes, freight, unloading, site storage, and general contractual obligations.
-              </div>
+              <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.specifyInclusionsExclusionsTaxesFreightUnloadingSiteStorageAndGeneralContractualObligations}</div>
             </div>
           </Card>
         </div>
@@ -1604,16 +1531,10 @@ export default function NewRfqPage() {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-              >
-                4
-              </span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[4].textDark, margin: 0 }}>
-                VENDOR SELECTION & INVITATION
-              </h3>
+              >{UI_STRINGS.common.copydlxun7}</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[4].textDark, margin: 0 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.vENDORSELECTIONINVITATION}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#b45309', margin: '6px 0 0 34px' }}>
-              Filter and invite qualified, empanelled suppliers and eligible Rate Card vendors for competitive tender participation.
-            </p>
+            <p style={{ fontSize: 13, color: '#b45309', margin: '6px 0 0 34px' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.filterAndInviteQualifiedEmpanelledSuppliersAndEligibleRateCardVendorsForCompetitiveTenderParticipation}</p>
           </div>
 
           {/* Filter & Search Toolbar */}
@@ -1641,9 +1562,7 @@ export default function NewRfqPage() {
                     fontWeight: 600,
                   }}
                   onClick={() => setVendorTab('ALL')}
-                >
-                  All Eligible Vendors ({vendors.length})
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.allEligibleVendors}{vendors.length}{UI_STRINGS.common.copyc7zu6c}</button>
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -1654,9 +1573,7 @@ export default function NewRfqPage() {
                     fontWeight: 600,
                   }}
                   onClick={() => setVendorTab('RATE_CARD')}
-                >
-                  Rate Card Vendors ({applicableRateCards.length})
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.rateCardVendors}{applicableRateCards.length}{UI_STRINGS.common.copyc7zu6c}</button>
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -1667,9 +1584,7 @@ export default function NewRfqPage() {
                     fontWeight: 600,
                   }}
                   onClick={() => setVendorTab('PREVIOUS')}
-                >
-                  Previously Worked With
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.previouslyWorkedWith}</button>
               </div>
 
               {/* Invited Count Badge */}
@@ -1687,8 +1602,7 @@ export default function NewRfqPage() {
                   fontWeight: 700,
                 }}
               >
-                <span>★</span> {selectedVendorIds.length} Vendors Invited
-              </div>
+                <span>{UI_STRINGS.appAppProcurementRfqsNewPage.copy2bnsw}</span> {selectedVendorIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.vendorsInvited}</div>
             </div>
 
             {/* Filter Dropdowns Row */}
@@ -1699,7 +1613,7 @@ export default function NewRfqPage() {
                   type="text"
                   className="input"
                   style={{ paddingLeft: 30, height: 34, fontSize: 12 }}
-                  placeholder="Search name, code, contact..."
+                  placeholder={UI_STRINGS.appAppProcurementRfqsNewPage.searchNameCodeContact}
                   value={vendorSearch}
                   onChange={(e) => setVendorSearch(e.target.value)}
                 />
@@ -1711,7 +1625,7 @@ export default function NewRfqPage() {
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
               >
-                <option value="">All Regions / States</option>
+                <option value="">{UI_STRINGS.appAppProcurementRfqsNewPage.allRegionsStates}</option>
                 {availableRegions.map((r) => (
                   <option key={r} value={r}>
                     {r}
@@ -1725,7 +1639,7 @@ export default function NewRfqPage() {
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
               >
-                <option value="">All Cities</option>
+                <option value="">{UI_STRINGS.appAppProcurementRfqsNewPage.allCities}</option>
                 {availableCities.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -1739,7 +1653,7 @@ export default function NewRfqPage() {
                 value={selectedVendorCategory}
                 onChange={(e) => setSelectedVendorCategory(e.target.value)}
               >
-                <option value="">All Categories</option>
+                <option value="">{UI_STRINGS.common.allCategories}</option>
                 {availableVendorCategories.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -1753,9 +1667,9 @@ export default function NewRfqPage() {
                 value={selectedVendorType}
                 onChange={(e) => setSelectedVendorType(e.target.value)}
               >
-                <option value="ALL">All Vendor Types</option>
-                <option value="CLIENT_VENDOR">Client Empanelled</option>
-                <option value="PROCUCEV_VENDOR">proCPX Network</option>
+                <option value="ALL">{UI_STRINGS.appAppProcurementRfqsNewPage.allVendorTypes}</option>
+                <option value="CLIENT_VENDOR">{UI_STRINGS.appAppProcurementRfqsNewPage.clientEmpanelled}</option>
+                <option value="PROCUCEV_VENDOR">{UI_STRINGS.appAppProcurementRfqsNewPage.proCPXNetwork}</option>
               </select>
             </div>
 
@@ -1766,9 +1680,7 @@ export default function NewRfqPage() {
                   type="checkbox"
                   checked={rateCardOnly}
                   onChange={(e) => setRateCardOnly(e.target.checked)}
-                />
-                Show Only Rate Card Vendors
-              </label>
+                />{UI_STRINGS.appAppProcurementRfqsNewPage.showOnlyRateCardVendors}</label>
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
@@ -1780,36 +1692,32 @@ export default function NewRfqPage() {
                       .map((v: any) => v.id);
                     setSelectedVendorIds(Array.from(new Set([...selectedVendorIds, ...compliant])));
                   }}
-                >
-                  Select All Compliant ({filteredVendors.filter((v: any) => v.complianceStatus === 'COMPLIANT').length})
-                </button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.selectAllCompliant}{filteredVendors.filter((v: any) => v.complianceStatus === 'COMPLIANT').length}{UI_STRINGS.common.copyc7zu6c}</button>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => setSelectedVendorIds([])}
-                >
-                  Clear Selection
-                </button>
+                >{UI_STRINGS.common.clearSelection}</button>
               </div>
             </div>
           </div>
 
           {/* Main Eligible Vendors Table */}
-          <Card title="Eligible Suppliers" subtitle="Suppliers qualified under category, regional, and compliance governance" noPadding>
+          <Card title={UI_STRINGS.appAppProcurementRfqsNewPage.eligibleSuppliers} subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.suppliersQualifiedUnderCategoryRegionalAndComplianceGovernance} noPadding>
             <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
               <table className="table enterprise-table" style={{ width: '100%', minWidth: 1100 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 44, textAlign: 'center' }}>Invite</th>
-                    <th style={{ width: 50 }}>#</th>
-                    <th style={{ minWidth: 200 }}>Vendor Name</th>
-                    <th style={{ width: 130 }}>Region / City</th>
-                    <th style={{ minWidth: 160 }}>Categories</th>
-                    <th style={{ width: 120 }}>Qualification</th>
-                    <th style={{ width: 130 }}>Rate Card Status</th>
-                    <th style={{ width: 90, textAlign: 'center' }}>Rating</th>
-                    <th style={{ width: 140 }}>Contact Person</th>
-                    <th style={{ width: 120, textAlign: 'center' }}>Invitation Status</th>
+                    <th style={{ width: 44, textAlign: 'center' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.invite}</th>
+                    <th style={{ width: 50 }}>{UI_STRINGS.common.copyak280i}</th>
+                    <th style={{ minWidth: 200 }}>{UI_STRINGS.common.vendorName}</th>
+                    <th style={{ width: 130 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.regionCity}</th>
+                    <th style={{ minWidth: 160 }}>{UI_STRINGS.common.categories}</th>
+                    <th style={{ width: 120 }}>{UI_STRINGS.common.qualification}</th>
+                    <th style={{ width: 130 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.rateCardStatus}</th>
+                    <th style={{ width: 90, textAlign: 'center' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.rating2}</th>
+                    <th style={{ width: 140 }}>{UI_STRINGS.common.contactPerson}</th>
+                    <th style={{ width: 120, textAlign: 'center' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.invitationStatus}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1840,11 +1748,11 @@ export default function NewRfqPage() {
                         <td>
                           <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>{v.name}</div>
                           <div style={{ fontSize: 11, color: '#64748b' }}>
-                            {v.vendorCode || v.code} • {v.email || 'portal@vendor.com'}
+                            {v.vendorCode || v.code}{UI_STRINGS.common.copyko5tj9}{v.email || UI_STRINGS.appAppProcurementRfqsNewPage.portalVendorCom}
                           </div>
                         </td>
                         <td style={{ fontSize: 12, color: '#334155' }}>
-                          {v.city ? `${v.city}, ${v.state || 'IN'}` : v.state || 'India'}
+                          {v.city ? interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.cityValue2, { "city": v.city, "value2": v.state || 'IN' }) : v.state || UI_STRINGS.common.india}
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -1854,8 +1762,7 @@ export default function NewRfqPage() {
                               </span>
                             ))}
                             {cats.length > 2 && (
-                              <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
-                                +{cats.length - 2}
+                              <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{UI_STRINGS.common.copycrz1ka}{cats.length - 2}
                               </span>
                             )}
                           </div>
@@ -1867,7 +1774,7 @@ export default function NewRfqPage() {
                             }`}
                             style={{ fontSize: 11 }}
                           >
-                            {v.qualificationStatus || v.complianceStatus || 'QUALIFIED'}
+                            {v.qualificationStatus || v.complianceStatus || UI_STRINGS.common.qUALIFIED}
                           </span>
                         </td>
                         <td>
@@ -1884,22 +1791,20 @@ export default function NewRfqPage() {
                                 fontSize: 11,
                                 fontWeight: 700,
                               }}
-                            >
-                              ✓ Active (1)
-                            </span>
+                            >{UI_STRINGS.appAppProcurementRfqsNewPage.active1}</span>
                           ) : (
-                            <span style={{ fontSize: 11, color: '#94a3b8' }}>None</span>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.common.none}</span>
                           )}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span style={{ fontWeight: 700, color: '#d97706', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                             <Star size={12} fill="#d97706" color="#d97706" />
-                            {v.performanceScore || v.rating || '4.8'}
+                            {v.performanceScore || v.rating || UI_STRINGS.appAppProcurementRfqsNewPage.copy1cbbq8t}
                           </span>
                         </td>
                         <td style={{ fontSize: 12, color: '#475569' }}>
-                          <div>{v.contactPerson || 'Commercial Head'}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>{v.phone || '+91 98000 00000'}</div>
+                          <div>{v.contactPerson || UI_STRINGS.appAppProcurementRfqsNewPage.commercialHead}</div>
+                          <div style={{ fontSize: 11, color: '#94a3b8' }}>{v.phone || UI_STRINGS.appAppProcurementRfqsNewPage.copy196hfsz}</div>
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span
@@ -1913,7 +1818,7 @@ export default function NewRfqPage() {
                               color: isSelected ? '#92400e' : '#64748b',
                             }}
                           >
-                            {isSelected ? 'INVITED' : 'NOT INVITED'}
+                            {isSelected ? UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED : UI_STRINGS.appAppProcurementRfqsNewPage.nOTINVITED}
                           </span>
                         </td>
                       </tr>
@@ -1926,26 +1831,24 @@ export default function NewRfqPage() {
 
           {/* Compact Eligible Rate Card Vendors Table (Separate Section Below Main Table) */}
           <Card
-            title="Eligible Rate Card Vendors"
-            subtitle="Vendors holding approved, active master rate agreements applicable to this scope"
+            title={UI_STRINGS.appAppProcurementRfqsNewPage.eligibleRateCardVendors}
+            subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.vendorsHoldingApprovedActiveMasterRateAgreementsApplicableToThisScope}
             noPadding
           >
             {applicableRateCards.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
-                No active rate cards are currently registered for this package category.
-              </div>
+              <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.noActiveRateCardsAreCurrentlyRegisteredForThisPackageCategory}</div>
             ) : (
               <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
                 <table className="table enterprise-table" style={{ width: '100%', minWidth: 800 }}>
                   <thead>
                     <tr>
-                      <th>Vendor Name</th>
-                      <th>Rate Card Reference</th>
-                      <th>Category</th>
-                      <th>Valid From</th>
-                      <th>Valid To</th>
-                      <th>Status</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{UI_STRINGS.common.vendorName}</th>
+                      <th>{UI_STRINGS.common.rateCardReference}</th>
+                      <th>{UI_STRINGS.common.category2}</th>
+                      <th>{UI_STRINGS.common.validFrom}</th>
+                      <th>{UI_STRINGS.common.validTo}</th>
+                      <th>{UI_STRINGS.common.status}</th>
+                      <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.action}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1955,20 +1858,20 @@ export default function NewRfqPage() {
                       return (
                         <tr key={rc.id}>
                           <td style={{ fontWeight: 600, color: '#0f172a' }}>
-                            {rc.vendor?.name || 'Approved Supplier'}
+                            {rc.vendor?.name || UI_STRINGS.appAppProcurementRfqsNewPage.approvedSupplier}
                           </td>
-                          <td className="font-mono text-muted">{rc.rateCardNumber || 'VRC-2026-000001'}</td>
+                          <td className="font-mono text-muted">{rc.rateCardNumber || UI_STRINGS.appAppProcurementRfqsNewPage.vRC2026000001}</td>
                           <td>
                             <span className="badge badge-draft">{rc.category}</span>
                           </td>
                           <td style={{ fontSize: 12 }}>
-                            {rc.validFrom ? new Date(rc.validFrom).toLocaleDateString() : '01/01/2026'}
+                            {rc.validFrom ? new Date(rc.validFrom).toLocaleDateString() : UI_STRINGS.appAppProcurementRfqsNewPage.copy1tgk5l3}
                           </td>
                           <td style={{ fontSize: 12 }}>
-                            {rc.validTo ? new Date(rc.validTo).toLocaleDateString() : '31/12/2026'}
+                            {rc.validTo ? new Date(rc.validTo).toLocaleDateString() : UI_STRINGS.appAppProcurementRfqsNewPage.copyoxltlk}
                           </td>
                           <td>
-                            <span className="badge badge-approved">APPROVED</span>
+                            <span className="badge badge-approved">{UI_STRINGS.common.aPPROVED}</span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <button
@@ -1980,7 +1883,7 @@ export default function NewRfqPage() {
                                 borderColor: isInvited ? undefined : STEP_THEMES[4].primary,
                               }}
                             >
-                              {isInvited ? '✓ Invited' : 'Invite Vendor'}
+                              {isInvited ? UI_STRINGS.common.invited : UI_STRINGS.appAppProcurementRfqsNewPage.inviteVendor}
                             </button>
                           </td>
                         </tr>
@@ -2008,9 +1911,7 @@ export default function NewRfqPage() {
               }}
             >
               <AlertTriangle size={16} color="#d97706" />
-              <span>
-                Please invite at least 1 qualified supplier. A minimum of 3 vendors is recommended to guarantee competitive price discovery.
-              </span>
+              <span>{UI_STRINGS.appAppProcurementRfqsNewPage.pleaseInviteAtLeast1QualifiedSupplierAMinimumOf3VendorsIsRecommendedToGuaranteeCompetitivePriceDiscovery}</span>
             </div>
           )}
         </div>
@@ -2045,16 +1946,10 @@ export default function NewRfqPage() {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-              >
-                5
-              </span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[5].textDark, margin: 0 }}>
-                FINAL REVIEW & RELEASE TO MARKET
-              </h3>
+              >{UI_STRINGS.common.copydby8y8}</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: STEP_THEMES[5].textDark, margin: 0 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.fINALREVIEWRELEASETOMARKET}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#047857', margin: '6px 0 0 34px' }}>
-              Perform pre-release validation and publish the competitive RFQ package to invited vendors.
-            </p>
+            <p style={{ fontSize: 13, color: '#047857', margin: '6px 0 0 34px' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.performPreReleaseValidationAndPublishTheCompetitiveRFQPackageToInvitedVendors}</p>
           </div>
 
           {/* Executive Summary KPI Cards (Green Accents) */}
@@ -2066,25 +1961,24 @@ export default function NewRfqPage() {
             }}
           >
             <div className="kpi-card" style={{ borderLeft: `4px solid ${STEP_THEMES[5].primary}` }}>
-              <div className="kpi-label">Scoped BOQ Lines</div>
-              <div className="kpi-value">{scopedLines.length} Items</div>
+              <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.scopedBOQLines}</div>
+              <div className="kpi-value">{scopedLines.length}{UI_STRINGS.common.items}</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Total Quantity</div>
-              <div className="kpi-value">{totalQuantitySum.toLocaleString()} Units</div>
+              <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.totalQuantity}</div>
+              <div className="kpi-value">{totalQuantitySum.toLocaleString()}{UI_STRINGS.appAppProcurementRfqsNewPage.units}</div>
             </div>
             <div className="kpi-card" style={{ borderLeft: `4px solid ${STEP_THEMES[5].primary}` }}>
-              <div className="kpi-label">Benchmark Budget (Locked)</div>
-              <div className="kpi-value" style={{ color: STEP_THEMES[5].primary }}>
-                ₹ {scopedBenchmarkValue.toLocaleString()}
+              <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.benchmarkBudgetLocked}</div>
+              <div className="kpi-value" style={{ color: STEP_THEMES[5].primary }}>{UI_STRINGS.common.copy1g8b5tg}{scopedBenchmarkValue.toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Invited Vendors</div>
-              <div className="kpi-value">{selectedVendorIds.length} Suppliers</div>
+              <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.invitedVendors}</div>
+              <div className="kpi-value">{selectedVendorIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.suppliers}</div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Submission Deadline</div>
+              <div className="kpi-label">{UI_STRINGS.common.submissionDeadline}</div>
               <div className="kpi-value font-mono" style={{ fontSize: 15 }}>
                 {rfqDetails.submissionDeadline}
               </div>
@@ -2093,36 +1987,34 @@ export default function NewRfqPage() {
 
           {/* Review Panel 1: Project & BOQ Baseline */}
           <Card
-            title="Project & Commercial Baseline"
+            title={UI_STRINGS.appAppProcurementRfqsNewPage.projectCommercialBaseline}
             action={
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStep(1)}>
-                <Pencil size={12} style={{ marginRight: 4 }} /> Edit Step 1
-              </button>
+                <Pencil size={12} style={{ marginRight: 4 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.editStep1}</button>
             }
           >
             <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Project</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.project}</div>
                 <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>
-                  {selectedBoq?.projectName} ({selectedBoq?.projectCode})
-                </div>
+                  {selectedBoq?.projectName}{UI_STRINGS.common.copy1b3t0c5}{selectedBoq?.projectCode}{UI_STRINGS.common.copyc7zu6c}</div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Location & Cost Centre</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.locationCostCentre}</div>
                 <div style={{ fontWeight: 500, fontSize: 14, marginTop: 2 }}>
-                  {selectedBoq?.location || 'Bengaluru'} • {selectedBoq?.costCentre || 'General Works'}
+                  {selectedBoq?.location || UI_STRINGS.common.bengaluru}{UI_STRINGS.common.copyko5tj9}{selectedBoq?.costCentre || UI_STRINGS.appAppProcurementRfqsNewPage.generalWorks}
                 </div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Approved Revision</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.approvedRevision}</div>
                 <div style={{ marginTop: 2 }}>
-                  <span className="badge badge-approved">{selectedBoq?.approvedRevisionCode} (IMMUTABLE)</span>
+                  <span className="badge badge-approved">{selectedBoq?.approvedRevisionCode}{UI_STRINGS.appAppProcurementRfqsNewPage.iMMUTABLE}</span>
                 </div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Approved Date & Approver</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.approvedDateApprover}</div>
                 <div style={{ fontSize: 13, marginTop: 2, color: '#334155' }}>
-                  {selectedBoq?.approvedAt ? new Date(selectedBoq.approvedAt).toLocaleDateString() : '—'} by {selectedBoq?.approvedBy}
+                  {selectedBoq?.approvedAt ? new Date(selectedBoq.approvedAt).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}{UI_STRINGS.common.by}{selectedBoq?.approvedBy}
                 </div>
               </div>
             </div>
@@ -2130,21 +2022,20 @@ export default function NewRfqPage() {
 
           {/* Review Panel 2: Scope & Package Overview */}
           <Card
-            title="Package Scope & Line Items"
+            title={UI_STRINGS.appAppProcurementRfqsNewPage.packageScopeLineItems}
             action={
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStep(2)}>
-                <Pencil size={12} style={{ marginRight: 4 }} /> Edit Step 2
-              </button>
+                <Pencil size={12} style={{ marginRight: 4 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.editStep2}</button>
             }
           >
             <div style={{ marginBottom: 16 }}>
               <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
                 <div>
-                  <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>RFQ Title</div>
+                  <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.rFQTitle}</div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginTop: 2 }}>{rfqDetails.title}</div>
                 </div>
                 <div>
-                  <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Package / Trade</div>
+                  <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.packageTrade}</div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', marginTop: 2 }}>{rfqDetails.packageName}</div>
                 </div>
               </div>
@@ -2154,13 +2045,13 @@ export default function NewRfqPage() {
               <table className="table enterprise-table" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 50 }}>S.No.</th>
-                    <th>Item Description</th>
-                    <th>Category</th>
-                    <th>UOM</th>
-                    <th style={{ textAlign: 'right' }}>Quantity</th>
-                    <th style={{ textAlign: 'right' }}>Baseline Rate</th>
-                    <th style={{ textAlign: 'right' }}>Baseline Amount</th>
+                    <th style={{ width: 50 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th>{UI_STRINGS.common.itemDescription}</th>
+                    <th>{UI_STRINGS.common.category2}</th>
+                    <th>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                    <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineRate}</th>
+                    <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineAmount}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2171,17 +2062,14 @@ export default function NewRfqPage() {
                       <td><span className="badge badge-draft">{l.category}</span></td>
                       <td>{l.uom}</td>
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>{l.quantity.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>₹ {l.benchmarkRate?.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                        ₹ {l.benchmarkAmount?.toLocaleString()}
+                      <td style={{ textAlign: 'right' }}>{UI_STRINGS.common.copytfdhmk}{l.benchmarkRate?.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>{UI_STRINGS.common.copy1g8b5tg}{l.benchmarkAmount?.toLocaleString()}
                       </td>
                     </tr>
                   ))}
                   {scopedLines.length > 5 && (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', color: '#64748b', fontSize: 12, padding: '8px 0' }}>
-                        + {scopedLines.length - 5} more items included in package
-                      </td>
+                      <td colSpan={7} style={{ textAlign: 'center', color: '#64748b', fontSize: 12, padding: '8px 0' }}>{UI_STRINGS.common.copycrz1ka}{scopedLines.length - 5}{UI_STRINGS.appAppProcurementRfqsNewPage.moreItemsIncludedInPackage}</td>
                     </tr>
                   )}
                 </tbody>
@@ -2191,11 +2079,10 @@ export default function NewRfqPage() {
 
           {/* Review Panel 3: Commercial Terms & Milestones */}
           <Card
-            title="Commercial & Technical Terms"
+            title={UI_STRINGS.appAppProcurementRfqsNewPage.commercialTechnicalTerms}
             action={
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStep(3)}>
-                <Pencil size={12} style={{ marginRight: 4 }} /> Edit Step 3
-              </button>
+                <Pencil size={12} style={{ marginRight: 4 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.editStep3}</button>
             }
           >
             <div
@@ -2207,35 +2094,33 @@ export default function NewRfqPage() {
               }}
             >
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Submission Deadline</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.submissionDeadline}</div>
                 <div style={{ fontWeight: 600, marginTop: 2 }}>{rfqDetails.submissionDeadline}</div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Clarification Deadline</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.clarificationDeadline}</div>
                 <div style={{ fontWeight: 600, marginTop: 2 }}>{rfqDetails.clarificationDeadline}</div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Commercial Validity</div>
-                <div style={{ fontWeight: 600, marginTop: 2 }}>{rfqDetails.commercialValidityDays} Days</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.commercialValidity}</div>
+                <div style={{ fontWeight: 600, marginTop: 2 }}>{rfqDetails.commercialValidityDays}{UI_STRINGS.common.days}</div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Payment Terms</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.paymentTerms}</div>
                 <div style={{ fontWeight: 500, marginTop: 2 }}>{rfqDetails.paymentTerms}</div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Tax Terms</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.taxTerms}</div>
                 <div style={{ fontWeight: 500, marginTop: 2 }}>{rfqDetails.taxTerms}</div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Delivery / Incoterms</div>
+                <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.deliveryIncoterms}</div>
                 <div style={{ fontWeight: 500, marginTop: 2 }}>{rfqDetails.deliveryTerms}</div>
               </div>
             </div>
 
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-              <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase', marginBottom: 6 }}>
-                Mandatory Vendor Documents
-              </div>
+              <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.mandatoryVendorDocuments}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {rfqDetails.requiredDocuments.map((doc, i) => (
                   <span key={i} className="badge badge-draft" style={{ fontSize: 11 }}>
@@ -2248,11 +2133,10 @@ export default function NewRfqPage() {
 
           {/* Review Panel 4: Invited Vendors */}
           <Card
-            title="Invited Vendors"
+            title={UI_STRINGS.appAppProcurementRfqsNewPage.invitedVendors}
             action={
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStep(4)}>
-                <Pencil size={12} style={{ marginRight: 4 }} /> Edit Step 4
-              </button>
+                <Pencil size={12} style={{ marginRight: 4 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.editStep4}</button>
             }
           >
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -2272,8 +2156,8 @@ export default function NewRfqPage() {
                   >
                     <div style={{ fontWeight: 600, color: '#0f172a' }}>{v?.name || vId}</div>
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                      {v?.vendorCode || v?.code} • Rating: ★ {v?.performanceScore || '4.8'}
-                      {hasRc && <span style={{ marginLeft: 6, color: '#059669', fontWeight: 700 }}>• Rate Card</span>}
+                      {v?.vendorCode || v?.code}{UI_STRINGS.appAppProcurementRfqsNewPage.rating}{v?.performanceScore || UI_STRINGS.appAppProcurementRfqsNewPage.copy1cbbq8t}
+                      {hasRc && <span style={{ marginLeft: 6, color: '#059669', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.rateCard}</span>}
                     </div>
                   </div>
                 );
@@ -2291,21 +2175,16 @@ export default function NewRfqPage() {
             }}
           >
             <h4 style={{ fontSize: 14, fontWeight: 700, color: '#166534', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ShieldCheck size={18} color="#166534" /> Pre-Release Governance & Compliance Verification
-            </h4>
+              <ShieldCheck size={18} color="#166534" />{UI_STRINGS.appAppProcurementRfqsNewPage.preReleaseGovernanceComplianceVerification}</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, fontSize: 13, color: '#14532d' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={16} color="#16a34a" /> Baseline BOQ verified & immutable
-              </div>
+                <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.baselineBOQVerifiedImmutable}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={16} color="#16a34a" /> Sourcing scope defined ({scopedLines.length} line items)
-              </div>
+                <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.sourcingScopeDefined}{scopedLines.length}{UI_STRINGS.appAppProcurementRfqsNewPage.lineItems}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={16} color="#16a34a" /> Commercial terms & timelines validated
-              </div>
+                <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.commercialTermsTimelinesValidated}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={16} color="#16a34a" /> Qualified suppliers invited ({selectedVendorIds.length} vendors)
-              </div>
+                <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.qualifiedSuppliersInvited}{selectedVendorIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.vendors}</div>
             </div>
           </div>
         </div>
@@ -2322,12 +2201,10 @@ export default function NewRfqPage() {
               className="btn btn-secondary"
               onClick={() => handleStepNavigation(step - 1)}
             >
-              <ArrowLeft size={14} style={{ marginRight: 6 }} /> Back to Step {step - 1}
+              <ArrowLeft size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.backToStep}{step - 1}
             </button>
           ) : (
-            <Link href="/procurement/rfqs" className="btn btn-secondary">
-              Cancel RFQ
-            </Link>
+            <Link href="/procurement/rfqs" className="btn btn-secondary">{UI_STRINGS.appAppProcurementRfqsNewPage.cancelRFQ}</Link>
           )}
         </div>
 
@@ -2337,10 +2214,9 @@ export default function NewRfqPage() {
             className="btn btn-secondary"
             onClick={() => handleCreateRfq('SAVE_DRAFT')}
             disabled={saving || Boolean(existingActiveRfq)}
-            title={existingActiveRfq ? 'Duplicate RFQ creation is blocked: an active RFQ already exists for this PR' : undefined}
+            title={existingActiveRfq ? UI_STRINGS.appAppProcurementRfqsNewPage.duplicateRFQCreationIsBlockedAnActiveRFQAlreadyExistsForThisPR : undefined}
           >
-            <Save size={14} style={{ marginRight: 6 }} /> Save Draft
-          </button>
+            <Save size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.saveDraft}</button>
 
           {step < 5 ? (
             <button
@@ -2352,8 +2228,7 @@ export default function NewRfqPage() {
                 backgroundColor: activeTheme.primary,
                 borderColor: activeTheme.primary,
               }}
-            >
-              Continue to Step {step + 1} <ArrowRight size={14} style={{ marginLeft: 6 }} />
+            >{interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.continueToStep, { step: step + 1 })} <ArrowRight size={14} style={{ marginLeft: 6 }} />
             </button>
           ) : (
             <button
@@ -2365,10 +2240,9 @@ export default function NewRfqPage() {
                 background: STEP_THEMES[5].primary,
                 borderColor: STEP_THEMES[5].primary,
               }}
-              title={existingActiveRfq ? 'Duplicate RFQ creation is blocked: an active RFQ already exists for this PR' : undefined}
+              title={existingActiveRfq ? UI_STRINGS.appAppProcurementRfqsNewPage.duplicateRFQCreationIsBlockedAnActiveRFQAlreadyExistsForThisPR : undefined}
             >
-              <Send size={14} style={{ marginRight: 6 }} /> Release RFQ to Vendors ({selectedVendorIds.length})
-            </button>
+              <Send size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsNewPage.releaseRFQToVendors}{selectedVendorIds.length}{UI_STRINGS.common.copyc7zu6c}</button>
           )}
         </div>
       </div>
@@ -2377,8 +2251,8 @@ export default function NewRfqPage() {
       <Modal
         isOpen={showConfirmRelease}
         onClose={() => setShowConfirmRelease(false)}
-        title="Confirm RFQ Release to Market"
-        subtitle="Final verification before publishing competitive bidding package"
+        title={UI_STRINGS.appAppProcurementRfqsNewPage.confirmRFQReleaseToMarket}
+        subtitle={UI_STRINGS.appAppProcurementRfqsNewPage.finalVerificationBeforePublishingCompetitiveBiddingPackage}
         footer={
           <>
             <button
@@ -2386,9 +2260,7 @@ export default function NewRfqPage() {
               className="btn btn-secondary"
               onClick={() => setShowConfirmRelease(false)}
               disabled={saving}
-            >
-              Back to Review
-            </button>
+            >{UI_STRINGS.common.backToReview}</button>
             <button
               type="button"
               className="btn btn-primary"
@@ -2396,16 +2268,14 @@ export default function NewRfqPage() {
               disabled={saving}
               style={{ background: STEP_THEMES[5].primary, borderColor: STEP_THEMES[5].primary }}
             >
-              {saving ? 'Releasing RFQ...' : 'Confirm & Release RFQ'}
+              {saving ? UI_STRINGS.appAppProcurementRfqsNewPage.releasingRFQ : UI_STRINGS.appAppProcurementRfqsNewPage.confirmReleaseRFQ}
             </button>
           </>
         }
       >
         <div style={{ fontSize: 14, color: '#334155', lineHeight: 1.6 }}>
-          <p>
-            You are about to publish and release <strong>{rfqDetails.title}</strong> to{' '}
-            <strong>{selectedVendorIds.length} invited vendor(s)</strong>.
-          </p>
+          <p>{UI_STRINGS.appAppProcurementRfqsNewPage.youAreAboutToPublishAndRelease}<strong>{rfqDetails.title}</strong>{UI_STRINGS.common.to}{' '}
+            <strong>{selectedVendorIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.invitedVendorS}</strong>{UI_STRINGS.common.copyby08hd}</p>
           <div
             style={{
               margin: '16px 0',
@@ -2421,15 +2291,13 @@ export default function NewRfqPage() {
             }}
           >
             <CheckCircle2 size={16} color="#166534" />
-            <span>
-              Participating vendors will receive secure portal links to view locked baseline specifications and submit competitive item-rate quotations.
-            </span>
+            <span>{UI_STRINGS.appAppProcurementRfqsNewPage.participatingVendorsWillReceiveSecurePortalLinksToViewLockedBaselineSpecificationsAndSubmitCompetitiveItemRateQuotations}</span>
           </div>
           <ul style={{ paddingLeft: 20, margin: 0, fontSize: 13, color: '#64748b' }}>
-            <li>Baseline benchmark budget: ₹ {scopedBenchmarkValue.toLocaleString()}</li>
-            <li>Package line items: {scopedLines.length} Items</li>
-            <li>Submission deadline: {rfqDetails.submissionDeadline}</li>
-            <li>Commercial validity: {rfqDetails.commercialValidityDays} Days</li>
+            <li>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineBenchmarkBudget}{scopedBenchmarkValue.toLocaleString()}</li>
+            <li>{UI_STRINGS.appAppProcurementRfqsNewPage.packageLineItems}{scopedLines.length}{UI_STRINGS.common.items}</li>
+            <li>{UI_STRINGS.appAppProcurementRfqsNewPage.submissionDeadline}{rfqDetails.submissionDeadline}</li>
+            <li>{UI_STRINGS.appAppProcurementRfqsNewPage.commercialValidity}{rfqDetails.commercialValidityDays}{UI_STRINGS.common.days}</li>
           </ul>
         </div>
       </Modal>

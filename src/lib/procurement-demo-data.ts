@@ -1,6 +1,8 @@
 import type { DemoRfqState } from "@app-types/lib/procurement-demo-data.types";
 export type { DemoRfqState };
 import { DEMO_SCOPE_LINES, DEMO_VENDORS, DEMO_QUOTES_DATA } from "./procurement-demo-data.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 export { DEMO_SCOPE_LINES, DEMO_VENDORS, DEMO_QUOTES_DATA };
 
 
@@ -85,7 +87,7 @@ export function getInitialDemoRfq(startWithZeroQuotes: boolean = true): DemoRfqS
     return {
       id: 'RFQ-DEMO-001',
       rfqNumber: 'RFQ-DEMO-001',
-      title: 'Civil Finishing & Interior Fitout Package',
+      title: UI_STRINGS.libProcurementDemoData.civilFinishingInteriorFitoutPackage,
       packageName: 'Kundanahalli Retail Store — CC45 Fitout',
       prNumber: 'PR-DEMO-001',
       prId: 'PR-DEMO-001',
@@ -104,7 +106,7 @@ export function getInitialDemoRfq(startWithZeroQuotes: boolean = true): DemoRfqS
       boqRevision: {
         revisionCode: 'BOQ-R1',
         boq: {
-          title: 'Kundanahalli Retail Project BOQ',
+          title: UI_STRINGS.libProcurementDemoData.kundanahalliRetailProjectBOQ,
           boqCode: 'BOQ-KND-001',
         },
       },
@@ -126,7 +128,7 @@ export function getInitialDemoRfq(startWithZeroQuotes: boolean = true): DemoRfqS
   return {
     id: 'RFQ-DEMO-001',
     rfqNumber: 'RFQ-DEMO-001',
-    title: 'Civil Finishing & Interior Fitout Package',
+    title: UI_STRINGS.libProcurementDemoData.civilFinishingInteriorFitoutPackage,
     packageName: 'Kundanahalli Retail Store — CC45 Fitout',
     prNumber: 'PR-DEMO-001',
     prId: 'PR-DEMO-001',
@@ -145,7 +147,7 @@ export function getInitialDemoRfq(startWithZeroQuotes: boolean = true): DemoRfqS
     boqRevision: {
       revisionCode: 'BOQ-R1',
       boq: {
-        title: 'Kundanahalli Retail Project BOQ',
+        title: UI_STRINGS.libProcurementDemoData.kundanahalliRetailProjectBOQ,
         boqCode: 'BOQ-KND-001',
       },
     },
@@ -331,7 +333,7 @@ export function getDemoRateCards() {
       {
         rateCardId: 'vrc-demo-001',
         rateCardNumber: 'VRC-2026-000001',
-        title: 'Commercial Interior & Civil Fitouts (Kundanahalli Hub Master)',
+        title: UI_STRINGS.libProcurementDemoData.commercialInteriorCivilFitoutsKundanahalliHubMaster,
         vendorName: 'Acme Infra Solutions Pvt Ltd',
         vendorCode: 'VEND-ACME-01',
         vendor: {

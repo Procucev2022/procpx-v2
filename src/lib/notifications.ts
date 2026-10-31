@@ -1,6 +1,9 @@
 // src/lib/notifications.ts - Enterprise Workflow Notification & Communication Helper
 import { prisma } from './prisma';
 import type { WorkflowNotificationParams } from "@app-types/lib/notifications.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { WorkflowNotificationParams };
 
 
@@ -75,8 +78,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `PR ${recordNumber} Ready for Sourcing`,
-        message: `Approved PR ${recordNumber} has been released to Procurement. Create an RFQ or evaluate approved rate cards.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.pRRecordNumberReadyForSourcing, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.approvedPRRecordNumberHasBeenReleasedToProcurementCreateAnRFQOrEvaluateApprovedRateCards, { "recordNumber": recordNumber }),
         type: 'ACTION_REQUIRED',
         entityType: 'PR',
         entityId,
@@ -88,8 +91,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `RFQ ${recordNumber} Released to Vendors`,
-        message: `Sourcing package ${recordNumber} published. Quotation submissions are now open for invited vendors.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.rFQRecordNumberReleasedToVendors, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.sourcingPackageRecordNumberPublishedQuotationSubmissionsAreNowOpenForInvitedVendors, { "recordNumber": recordNumber }),
         type: 'INFO',
         entityType: 'RFQ',
         entityId,
@@ -101,8 +104,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `New Quotation for ${recordNumber}`,
-        message: `${details?.vendorName || 'A supplier'} submitted quotation (${details?.amount ? `₹${details.amount.toLocaleString()}` : 'rates recorded'}) for RFQ ${recordNumber}.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.newQuotationForRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.value1SubmittedQuotationValue2ForRFQRecordNumber, { "value1": details?.vendorName || 'A supplier', "value2": details?.amount ? `₹${details.amount.toLocaleString()}` : 'rates recorded', "recordNumber": recordNumber }),
         type: 'INFO',
         entityType: 'QUOTE',
         entityId,
@@ -114,8 +117,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Counter-Offer Dispatched: ${recordNumber}`,
-        message: `Round ${details?.roundNumber || 1} counter-offer of ₹${details?.amount?.toLocaleString() || 'negotiated total'} dispatched to ${details?.vendorName || 'vendor'}.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.counterOfferDispatchedRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.roundValue1CounterOfferOfValue2DispatchedToValue3, { "value1": details?.roundNumber || 1, "value2": details?.amount?.toLocaleString() || 'negotiated total', "value3": details?.vendorName || UI_STRINGS.appAppProcurementVendorsPage.vendor }),
         type: 'INFO',
         entityType: 'NEGOTIATION',
         entityId,
@@ -127,8 +130,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Revised Quote Received: ${recordNumber}`,
-        message: `${details?.vendorName || 'Vendor'} submitted revised quotation for ${recordNumber} following negotiation.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.revisedQuoteReceivedRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.value1SubmittedRevisedQuotationForRecordNumberFollowingNegotiation, { "value1": details?.vendorName || UI_STRINGS.common.vendor, "recordNumber": recordNumber }),
         type: 'ACTION_REQUIRED',
         entityType: 'QUOTE',
         entityId,
@@ -140,8 +143,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Commercial Rates Locked: ${recordNumber}`,
-        message: `Commercial rates finalized at ₹${details?.amount?.toLocaleString() || 'agreed amount'}. Ready to prepare award recommendation.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.commercialRatesLockedRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.commercialRatesFinalizedAtValue1ReadyToPrepareAwardRecommendation, { "value1": details?.amount?.toLocaleString() || 'agreed amount' }),
         type: 'ACTION_REQUIRED',
         entityType: 'RFQ',
         entityId,
@@ -153,8 +156,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'FINANCE_USER',
-        title: `Award Sign-off Required: ${recordNumber}`,
-        message: `Award recommendation of ₹${details?.amount?.toLocaleString() || 'amount'} for ${details?.vendorName || 'selected vendor'} submitted for Finance approval.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.awardSignOffRequiredRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.awardRecommendationOfValue1ForValue2SubmittedForFinanceApproval, { "value1": details?.amount?.toLocaleString() || 'amount', "value2": details?.vendorName || 'selected vendor' }),
         type: 'ACTION_REQUIRED',
         entityType: 'AWARD',
         entityId,
@@ -166,8 +169,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Award Approved for ${recordNumber}`,
-        message: `Finance approved commercial award for ${details?.vendorName || 'vendor'}. You may now issue the PPO contract.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.awardApprovedForRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.financeApprovedCommercialAwardForValue1YouMayNowIssueThePPOContract, { "value1": details?.vendorName || UI_STRINGS.appAppProcurementVendorsPage.vendor }),
         type: 'ACTION_REQUIRED',
         entityType: 'AWARD',
         entityId,
@@ -179,8 +182,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Award Returned: ${recordNumber}`,
-        message: `Award recommendation for ${recordNumber} was rejected/returned by Finance for review.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.awardReturnedRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.awardRecommendationForRecordNumberWasRejectedReturnedByFinanceForReview, { "recordNumber": recordNumber }),
         type: 'WARNING',
         entityType: 'AWARD',
         entityId,
@@ -192,8 +195,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'FINANCE_USER',
-        title: `PPO ${recordNumber} Generated`,
-        message: `Procurement order ${recordNumber} created for ₹${details?.amount?.toLocaleString() || 'order value'} (${details?.vendorName || 'vendor'}).`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.pPORecordNumberGenerated, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.procurementOrderRecordNumberCreatedForValue2Value3, { "recordNumber": recordNumber, "value2": details?.amount?.toLocaleString() || 'order value', "value3": details?.vendorName || UI_STRINGS.appAppProcurementVendorsPage.vendor }),
         type: 'SUCCESS',
         entityType: 'PPO',
         entityId,
@@ -204,8 +207,8 @@ export async function notifyNextResponsibleParty({
     case 'ENQUIRY_SENT':
       return createWorkflowNotification({
         tenantId,
-        title: `Clarification Enquiry on ${recordNumber}`,
-        message: `${actorName || 'User'} sent a message/enquiry on ${recordNumber}.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.clarificationEnquiryOnRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.value1SentAMessageEnquiryOnRecordNumber, { "value1": actorName || UI_STRINGS.common.user, "recordNumber": recordNumber }),
         type: 'INFO',
         entityType: 'RFQ',
         entityId,
@@ -217,8 +220,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Binding Final Offer on ${recordNumber}`,
-        message: `${details?.vendorName || 'Vendor'} submitted a binding final offer of ₹${details?.amount?.toLocaleString() || 'amount'}. Buyer decision pending.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.bindingFinalOfferOnRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.value1SubmittedABindingFinalOfferOfValue2BuyerDecisionPending, { "value1": details?.vendorName || UI_STRINGS.common.vendor, "value2": details?.amount?.toLocaleString() || 'amount' }),
         type: 'ACTION_REQUIRED',
         entityType: 'NEGOTIATION',
         entityId,
@@ -230,8 +233,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Offer Accepted for ${recordNumber}`,
-        message: `Vendor quote from ${details?.vendorName || 'vendor'} of ₹${details?.amount?.toLocaleString() || 'amount'} was accepted. PPO generation awaited.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.offerAcceptedForRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.vendorQuoteFromValue1OfValue2WasAcceptedPPOGenerationAwaited, { "value1": details?.vendorName || UI_STRINGS.appAppProcurementVendorsPage.vendor, "value2": details?.amount?.toLocaleString() || 'amount' }),
         type: 'SUCCESS',
         entityType: 'NEGOTIATION',
         entityId,
@@ -243,8 +246,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Negotiation Concluded for ${recordNumber}`,
-        message: `Negotiation with ${details?.vendorName || 'vendor'} was closed.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.negotiationConcludedForRecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.negotiationWithValue1WasClosed, { "value1": details?.vendorName || UI_STRINGS.appAppProcurementVendorsPage.vendor }),
         type: 'INFO',
         entityType: 'NEGOTIATION',
         entityId,
@@ -256,8 +259,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `PPO ${recordNumber} Accepted by Vendor`,
-        message: `${details?.vendorName || 'Vendor'} (${actorName || 'Signatory'}) formally accepted PPO ${recordNumber}. Order execution commenced.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.pPORecordNumberAcceptedByVendor, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.value1Value2FormallyAcceptedPPORecordNumberOrderExecutionCommenced, { "value1": details?.vendorName || UI_STRINGS.common.vendor, "value2": actorName || 'Signatory', "recordNumber": recordNumber }),
         type: 'SUCCESS',
         entityType: 'PPO',
         entityId,
@@ -269,8 +272,8 @@ export async function notifyNextResponsibleParty({
       return createWorkflowNotification({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
-        title: `Issue Raised on PPO ${recordNumber}`,
-        message: `${details?.vendorName || 'Vendor'} reported clarification/issue: "${details?.issueRemarks || 'Issue reported'}". PPO acceptance on hold.`,
+        title: interpolateUiString(UI_STRINGS.libNotifications.issueRaisedOnPPORecordNumber, { "recordNumber": recordNumber }),
+        message: interpolateUiString(UI_STRINGS.libNotifications.value1ReportedClarificationIssueValue2PPOAcceptanceOnHold, { "value1": details?.vendorName || UI_STRINGS.common.vendor, "value2": details?.issueRemarks || 'Issue reported' }),
         type: 'WARNING',
         entityType: 'PPO',
         entityId,

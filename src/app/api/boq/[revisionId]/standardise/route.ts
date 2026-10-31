@@ -6,6 +6,9 @@ import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils
 import { standardiseDescription, standardiseUom } from '@/lib/uom-standardise';
 import { validateBoqLine, computeQualityScore } from '@/lib/boq-validate';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_EDIT');
@@ -20,9 +23,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     },
   });
 
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
   if (revision.status === 'APPROVED') {
-    return apiError('Approved BOQs are immutable and cannot be standardised. Create a new revision.', 400);
+    return apiError(UI_STRINGS.appApiBoqRevisionIdStandardiseRoute.approvedBOQsAreImmutableAndCannotBeStandardisedCreateANewRevision, 400);
   }
 
   // Load masters for tenant
@@ -137,12 +140,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     entityType: 'BOQ_REVISION',
     entityId: revisionId,
     action: 'STANDARDISE',
-    description: `BOQ Revision ${revision.revisionCode} standardised: ${standardisedCount} descriptions standardised, ${uomNormalisedCount} UOMs normalized`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdStandardiseRoute.bOQRevisionRevisionCodeStandardisedStandardisedCountDescriptionsStandardisedUomNormalisedCountUOMsNormalized, { "revisionCode": revision.revisionCode, "standardisedCount": standardisedCount, "uomNormalisedCount": uomNormalisedCount }),
     newValue: { standardisedCount, uomNormalisedCount, qualityScore },
   });
 
   return apiSuccess({
-    message: `Standardisation complete. ${standardisedCount} descriptions matched catalog, ${uomNormalisedCount} UOMs normalized.`,
+    message: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdStandardiseRoute.standardisationCompleteStandardisedCountDescriptionsMatchedCatalogUomNormalisedCountUOMsNormalized, { "standardisedCount": standardisedCount, "uomNormalisedCount": uomNormalisedCount }),
     standardisedCount,
     uomNormalisedCount,
     totalLines: refreshedLines.length,

@@ -15,6 +15,9 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { TopNavProps } from "@app-types/components/ui/TopNav.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function TopNav({ user }: TopNavProps) {
@@ -77,9 +80,7 @@ export default function TopNav({ user }: TopNavProps) {
             <path d="M11 11H16C17.6569 11 19 12.3431 19 14C19 15.6569 17.6569 17 16 17H11V11Z" fill="#ffffff" />
             <circle cx="23" cy="9" r="4" fill="#0f52ba" />
           </svg>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#0284c7', letterSpacing: -0.5, lineHeight: 1 }}>
-            Procucev
-          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#0284c7', letterSpacing: -0.5, lineHeight: 1 }}>{UI_STRINGS.componentsUiTopNav.procucev}</div>
         </Link>
       </div>
 
@@ -107,7 +108,7 @@ export default function TopNav({ user }: TopNavProps) {
         </span>
         <input
           type="text"
-          placeholder="Search RFQs, BOQs, projects, vendors... (⌘K or /)"
+          placeholder={UI_STRINGS.componentsUiTopNav.searchRFQsBOQsProjectsVendorsKOr}
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
           style={{
@@ -137,9 +138,7 @@ export default function TopNav({ user }: TopNavProps) {
             pointerEvents: 'none',
             fontWeight: 600,
           }}
-        >
-          ⌘K
-        </span>
+        >{UI_STRINGS.componentsUiTopNav.k}</span>
       </div>
 
       {/* ── Right: Tenant, Notifications, Help & User Profile ── */}
@@ -169,7 +168,7 @@ export default function TopNav({ user }: TopNavProps) {
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            aria-label="Notifications"
+            aria-label={UI_STRINGS.componentsUiTopNav.notifications}
             onClick={() => setNotificationsOpen(!notificationsOpen)}
             style={{
               width: 34,
@@ -207,7 +206,7 @@ export default function TopNav({ user }: TopNavProps) {
                   border: '1.5px solid #ffffff',
                 }}
               >
-                {unreadCount > 9 ? '9+' : unreadCount}
+                {unreadCount > 9 ? UI_STRINGS.componentsUiTopNav.copyatifd9 : unreadCount}
               </span>
             )}
           </button>
@@ -238,8 +237,9 @@ export default function TopNav({ user }: TopNavProps) {
                   background: '#f8fafc',
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
-                  Workflow Notifications {unreadCount > 0 && `(${unreadCount})`}
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{unreadCount > 0
+                  ? interpolateUiString(UI_STRINGS.componentsUiTopNav.workflowNotificationsWithUnreadCount, { unreadCount })
+                  : UI_STRINGS.componentsUiTopNav.workflowNotifications}
                 </div>
                 {unreadCount > 0 && (
                   <button
@@ -254,17 +254,13 @@ export default function TopNav({ user }: TopNavProps) {
                       cursor: 'pointer',
                       padding: 0,
                     }}
-                  >
-                    Mark all as read
-                  </button>
+                  >{UI_STRINGS.componentsUiTopNav.markAllAsRead}</button>
                 )}
               </div>
 
               <div style={{ maxHeight: 340, overflowY: 'auto' }}>
                 {notifications.length === 0 ? (
-                  <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-                    No notifications yet. Workflow updates will appear here.
-                  </div>
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>{UI_STRINGS.componentsUiTopNav.noNotificationsYetWorkflowUpdatesWillAppearHere}</div>
                 ) : (
                   notifications.map((item) => (
                     <div
@@ -321,9 +317,7 @@ export default function TopNav({ user }: TopNavProps) {
                               alignItems: 'center',
                               gap: 2,
                             }}
-                          >
-                            View →
-                          </Link>
+                          >{UI_STRINGS.componentsUiTopNav.view}</Link>
                         )}
                       </div>
                     </div>
@@ -337,7 +331,7 @@ export default function TopNav({ user }: TopNavProps) {
         {/* Help / Docs */}
         <button
           type="button"
-          aria-label="Documentation and Help"
+          aria-label={UI_STRINGS.componentsUiTopNav.documentationAndHelp}
           style={{
             width: 34,
             height: 34,
@@ -411,7 +405,7 @@ export default function TopNav({ user }: TopNavProps) {
               }}
             >
               <div style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9' }}>
-                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Signed in as</div>
+                <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>{UI_STRINGS.componentsUiTopNav.signedInAs}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginTop: 2 }}>{user.email}</div>
                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{user.tenantName}</div>
               </div>
@@ -432,8 +426,7 @@ export default function TopNav({ user }: TopNavProps) {
                   onMouseOver={(e) => (e.currentTarget.style.background = '#f8fafc')}
                   onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <User size={15} color="#64748b" /> Profile
-                </Link>
+                  <User size={15} color="#64748b" />{UI_STRINGS.common.profile}</Link>
 
                 <Link
                   href="/audit"
@@ -450,8 +443,7 @@ export default function TopNav({ user }: TopNavProps) {
                   onMouseOver={(e) => (e.currentTarget.style.background = '#f8fafc')}
                   onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <Shield size={15} color="#64748b" /> Security & Audit
-                </Link>
+                  <Shield size={15} color="#64748b" />{UI_STRINGS.componentsUiTopNav.securityAudit}</Link>
               </div>
 
               <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 4, paddingTop: 4 }}>
@@ -474,8 +466,7 @@ export default function TopNav({ user }: TopNavProps) {
                   onMouseOver={(e) => (e.currentTarget.style.background = '#fef2f2')}
                   onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <LogOut size={15} color="#dc2626" /> Sign Out
-                </button>
+                  <LogOut size={15} color="#dc2626" />{UI_STRINGS.componentsUiTopNav.signOut}</button>
               </div>
             </div>
           )}

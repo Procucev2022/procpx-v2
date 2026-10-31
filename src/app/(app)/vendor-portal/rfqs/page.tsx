@@ -1,6 +1,7 @@
 'use client';
 // src/app/(app)/vendor-portal/rfqs/page.tsx
 // proCPX — Vendor Portal: My RFQs & Bids Register with Dedicated Negotiation Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -22,6 +23,9 @@ import {
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function VendorRfqsPage() {
   const [sessionUser, setSessionUser] = useState<any>(null);
@@ -51,7 +55,7 @@ export default function VendorRfqsPage() {
       const res = await fetch('/api/vendor-portal/rfqs');
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load RFQs');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadRfqs }));
       }
       const data = await res.json();
       const list = data.rfqs || [];
@@ -187,12 +191,8 @@ export default function VendorRfqsPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            My RFQs & Bids Register
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            Manage commercial bids, technical clarifications, and negotiation rounds for invited packages
-          </p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{UI_STRINGS.appAppVendorPortalRfqsPage.myRFQsBidsRegister}</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>{UI_STRINGS.appAppVendorPortalRfqsPage.manageCommercialBidsTechnicalClarificationsAndNegotiationRoundsForInvitedPackages}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
@@ -202,7 +202,7 @@ export default function VendorRfqsPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh</span>
+            <span>{UI_STRINGS.common.refresh2}</span>
           </button>
         </div>
       </div>
@@ -227,10 +227,10 @@ export default function VendorRfqsPage() {
               className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-secondary'}`}
               style={{ fontSize: 13, padding: '6px 14px' }}
             >
-              {tab === 'ALL' && `All Invited (${rfqs.length})`}
-              {tab === 'PENDING' && 'Pending Quote'}
-              {tab === 'NEGOTIATION' && 'In Negotiation'}
-              {tab === 'AWARDED' && 'PPO Awarded'}
+              {tab === 'ALL' && interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.allInvitedLength, { "length": rfqs.length })}
+              {tab === 'PENDING' && UI_STRINGS.common.pendingQuote}
+              {tab === 'NEGOTIATION' && UI_STRINGS.common.inNegotiation}
+              {tab === 'AWARDED' && UI_STRINGS.appAppVendorPortalRfqsPage.pPOAwarded}
             </button>
           ))}
         </div>
@@ -242,7 +242,7 @@ export default function VendorRfqsPage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search RFQ, Client, Project..."
+              placeholder={UI_STRINGS.appAppVendorPortalRfqsPage.searchRFQClientProject}
               className="form-control"
               style={{ paddingLeft: 34, fontSize: 13 }}
             />
@@ -260,24 +260,24 @@ export default function VendorRfqsPage() {
               borderRadius: 6,
               padding: '2px 4px',
             }}
-            title="Horizontal scroll helper for desktop"
+            title={UI_STRINGS.appAppVendorPortalRfqsPage.horizontalScrollHelperForDesktop}
           >
             <button
               type="button"
               onClick={handleScrollLeft}
               className="btn btn-secondary"
               style={{ padding: '4px 8px', fontSize: 11, border: 'none', background: 'transparent' }}
-              title="Scroll table left"
+              title={UI_STRINGS.appAppVendorPortalRfqsPage.scrollTableLeft}
             >
               <ChevronLeft size={14} />
             </button>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Scroll</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalRfqsPage.scroll}</span>
             <button
               type="button"
               onClick={handleScrollRight}
               className="btn btn-secondary"
               style={{ padding: '4px 8px', fontSize: 11, border: 'none', background: 'transparent' }}
-              title="Scroll table right to actions"
+              title={UI_STRINGS.appAppVendorPortalRfqsPage.scrollTableRightToActions}
             >
               <ChevronRight size={14} />
             </button>
@@ -296,14 +296,14 @@ export default function VendorRfqsPage() {
       {loading ? (
         <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
           <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
-          <div>Loading invited RFQs...</div>
+          <div>{UI_STRINGS.appAppVendorPortalRfqsPage.loadingInvitedRFQs}</div>
         </div>
       ) : filteredRfqs.length === 0 ? (
         <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
           <FileText size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-          <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>No RFQs Found</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>{UI_STRINGS.common.noRFQsFound}</h3>
           <p style={{ fontSize: 13, margin: 0 }}>
-            {searchTerm ? 'No RFQs match your search filter.' : 'You have not been invited to any RFQs at this time.'}
+            {searchTerm ? UI_STRINGS.appAppVendorPortalRfqsPage.noRFQsMatchYourSearchFilter : UI_STRINGS.appAppVendorPortalRfqsPage.youHaveNotBeenInvitedToAnyRFQsAtThisTime}
           </p>
         </div>
       ) : (
@@ -329,37 +329,37 @@ export default function VendorRfqsPage() {
             <thead>
               <tr>
                 {/* 1. RFQ Received Date */}
-                <th style={{ width: 135 }}>RFQ Received Date</th>
+                <th style={{ width: 135 }}>{UI_STRINGS.common.rFQReceivedDate}</th>
 
                 {/* 2. RFQ Reference */}
-                <th style={{ width: 155 }}>RFQ Reference</th>
+                <th style={{ width: 155 }}>{UI_STRINGS.common.rFQReference}</th>
 
                 {/* 3. Project / Package */}
-                <th style={{ width: 180 }}>Project / Package</th>
+                <th style={{ width: 180 }}>{UI_STRINGS.common.projectPackage}</th>
 
                 {/* 4. Buyer / Client */}
-                <th style={{ width: 145 }}>Buyer / Client</th>
+                <th style={{ width: 145 }}>{UI_STRINGS.common.buyerClient}</th>
 
                 {/* 5. Submission Deadline */}
-                <th style={{ width: 135 }}>Submission Deadline</th>
+                <th style={{ width: 135 }}>{UI_STRINGS.common.submissionDeadline}</th>
 
                 {/* 6. Commercial Summary */}
-                <th style={{ width: 150, textAlign: 'right' }}>Commercial Summary</th>
+                <th style={{ width: 150, textAlign: 'right' }}>{UI_STRINGS.common.commercialSummary}</th>
 
                 {/* 7. Quote Status */}
-                <th style={{ width: 120, textAlign: 'center' }}>Quote Status</th>
+                <th style={{ width: 120, textAlign: 'center' }}>{UI_STRINGS.common.quoteStatus}</th>
 
                 {/* 8. Buyer Decision Status */}
-                <th style={{ width: 175, textAlign: 'center' }}>Buyer Decision Status</th>
+                <th style={{ width: 175, textAlign: 'center' }}>{UI_STRINGS.common.buyerDecisionStatus}</th>
 
                 {/* 9. Last Activity */}
-                <th style={{ width: 135 }}>Last Activity</th>
+                <th style={{ width: 135 }}>{UI_STRINGS.common.lastActivity}</th>
 
                 {/* 10. Next Action / Responsible Party */}
-                <th style={{ width: 170 }}>Next Action / Party</th>
+                <th style={{ width: 170 }}>{UI_STRINGS.common.nextActionParty}</th>
 
                 {/* 11. Available Actions */}
-                <th style={{ width: 200, textAlign: 'right' }}>Available Actions</th>
+                <th style={{ width: 200, textAlign: 'right' }}>{UI_STRINGS.common.availableActions}</th>
               </tr>
             </thead>
             <tbody>
@@ -399,7 +399,7 @@ export default function VendorRfqsPage() {
                       <div
                         className="cell-compact-text"
                         style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}
-                        title={rfq.rfqReceivedDate ? new Date(rfq.rfqReceivedDate).toLocaleString('en-IN') : 'Persisted Received Date'}
+                        title={rfq.rfqReceivedDate ? new Date(rfq.rfqReceivedDate).toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.persistedReceivedDate}
                       >
                         <Calendar size={12} className="inline mr-1 text-slate-400" />
                         <span>{formatDate(rfq.rfqReceivedDate, true)}</span>
@@ -430,16 +430,16 @@ export default function VendorRfqsPage() {
                       <div
                         className="cell-compact-text"
                         style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}
-                        title={rfq.projectPackage || rfq.project?.name || 'General Project'}
+                        title={interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.projectPackage || rfq.project?.name || UI_STRINGS.common.generalProject })}
                       >
-                        {rfq.project?.name || 'General Project'}
+                        {rfq.project?.name || UI_STRINGS.common.generalProject}
                       </div>
                       <div
                         className="cell-compact-text text-muted"
                         style={{ fontSize: 11, marginTop: 2 }}
-                        title={rfq.packageName || rfq.project?.projectCode || 'Main Package'}
+                        title={interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.packageName || rfq.project?.projectCode || UI_STRINGS.common.mainPackage })}
                       >
-                        {rfq.packageName || rfq.project?.projectCode || 'Main Package'}
+                        {rfq.packageName || rfq.project?.projectCode || UI_STRINGS.common.mainPackage}
                       </div>
                     </td>
 
@@ -448,10 +448,10 @@ export default function VendorRfqsPage() {
                       <div
                         className="cell-compact-text"
                         style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}
-                        title={rfq.clientTenant || rfq.tenant?.name || 'Enterprise Client'}
+                        title={interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.clientTenant || rfq.tenant?.name || UI_STRINGS.common.enterpriseClient })}
                       >
                         <Building2 size={12} className="inline mr-1 text-slate-400" />
-                        <span>{rfq.clientTenant || rfq.tenant?.name || 'Enterprise Client'}</span>
+                        <span>{rfq.clientTenant || rfq.tenant?.name || UI_STRINGS.common.enterpriseClient}</span>
                       </div>
                     </td>
 
@@ -460,7 +460,7 @@ export default function VendorRfqsPage() {
                       <div
                         className="cell-compact-text"
                         style={{ fontSize: 12, fontWeight: 500, color: isOverdue ? '#b91c1c' : '#334155' }}
-                        title={rfq.submissionDeadline ? new Date(rfq.submissionDeadline).toLocaleString('en-IN') : 'No deadline specified'}
+                        title={rfq.submissionDeadline ? new Date(rfq.submissionDeadline).toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.appAppVendorPortalRfqsPage.noDeadlineSpecified}
                       >
                         <Clock size={12} className={`inline mr-1 ${isOverdue ? 'text-red-500' : 'text-amber-500'}`} />
                         <span>{formatDate(rfq.submissionDeadline, false)}</span>
@@ -474,17 +474,14 @@ export default function VendorRfqsPage() {
                           <div
                             className="cell-compact-text font-mono font-bold"
                             style={{ color: '#166534', fontSize: 13, textAlign: 'right' }}
-                            title={`₹${Number(latestQuote.totalQuoteAmount || 0).toLocaleString('en-IN')} (Quote v${latestQuote.quoteVersion})`}
-                          >
-                            ₹{Number(latestQuote.totalQuoteAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                            title={interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.toLocaleStringQuoteVQuoteVersion, { "toLocaleString": Number(latestQuote.totalQuoteAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale), "quoteVersion": latestQuote.quoteVersion })}
+                          >{UI_STRINGS.common.copy1g8b5tg}{Number(latestQuote.totalQuoteAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}
                           </div>
                           <div
                             className="cell-compact-text text-muted"
                             style={{ fontSize: 10, textAlign: 'right' }}
-                            title={`Version ${latestQuote.quoteVersion} submitted ${formatDate(latestQuote.submittedAt)}`}
-                          >
-                            v{latestQuote.quoteVersion} • {rfq.lines?.length || 0} lines
-                          </div>
+                            title={interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.versionQuoteVersionSubmittedValue2, { "quoteVersion": latestQuote.quoteVersion, "value2": formatDate(latestQuote.submittedAt) })}
+                          >{UI_STRINGS.common.v}{latestQuote.quoteVersion}{UI_STRINGS.common.copyko5tj9}{rfq.lines?.length || 0}{UI_STRINGS.common.lines2}</div>
                           {rfq.latestRound?.counterOfferAmount && (!rfq.latestRound?.revisedQuoteAmount || rfq.latestRound?.nextResponsibleParty === 'VENDOR') && (
                             <div style={{ marginTop: 3 }}>
                               <span
@@ -497,22 +494,20 @@ export default function VendorRfqsPage() {
                                   padding: '2px 5px',
                                   display: 'inline-block',
                                 }}
-                                title={`Buyer Counteroffer of ₹${Number(rfq.latestRound.counterOfferAmount).toLocaleString('en-IN')} (Round ${rfq.latestRound.roundNumber})`}
-                              >
-                                Buyer Offer: ₹{Number(rfq.latestRound.counterOfferAmount).toLocaleString('en-IN', { maximumFractionDigits: 0 })} (R{rfq.latestRound.roundNumber})
-                              </span>
+                                title={interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.buyerCounterofferOfToLocaleStringRoundRoundNumber, { "toLocaleString": Number(rfq.latestRound.counterOfferAmount).toLocaleString(I18N_CONFIG.defaultLocale), "roundNumber": rfq.latestRound.roundNumber })}
+                              >{UI_STRINGS.appAppVendorPortalRfqsPage.buyerOffer}{Number(rfq.latestRound.counterOfferAmount).toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}{UI_STRINGS.appAppVendorPortalRfqsPage.r}{rfq.latestRound.roundNumber}{UI_STRINGS.common.copyc7zu6c}</span>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <span className="badge badge-warning" style={{ fontSize: 11 }}>Awaiting Quote</span>
+                        <span className="badge badge-warning" style={{ fontSize: 11 }}>{UI_STRINGS.common.awaitingQuote}</span>
                       )}
                     </td>
 
                     {/* 7. Quote Status */}
                     <td style={{ textAlign: 'center' }}>
                       <span className={quoteBadgeClass} style={{ fontSize: 11 }}>
-                        {rfq.quoteStatus || (latestQuote ? 'SUBMITTED' : 'PENDING')}
+                        {rfq.quoteStatus || (latestQuote ? UI_STRINGS.common.sUBMITTED : UI_STRINGS.common.pENDING)}
                       </span>
                     </td>
 
@@ -521,10 +516,10 @@ export default function VendorRfqsPage() {
                       <div
                         className="cell-compact-text"
                         style={{ textAlign: 'center' }}
-                        title={rfq.buyerDecisionStatus || 'Under Evaluation'}
+                        title={interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.buyerDecisionStatus || UI_STRINGS.appAppVendorPortalRfqsPage.underEvaluation })}
                       >
                         <span className={decisionBadgeClass} style={{ fontSize: 11 }}>
-                          {rfq.buyerDecisionStatus || 'Under Evaluation'}
+                          {rfq.buyerDecisionStatus || UI_STRINGS.appAppVendorPortalRfqsPage.underEvaluation}
                         </span>
                       </div>
                     </td>
@@ -534,7 +529,7 @@ export default function VendorRfqsPage() {
                       <div
                         className="cell-compact-text text-slate-700"
                         style={{ fontSize: 12 }}
-                        title={rfq.lastActivityDate ? new Date(rfq.lastActivityDate).toLocaleString('en-IN') : 'Persisted Last Activity'}
+                        title={rfq.lastActivityDate ? new Date(rfq.lastActivityDate).toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.appAppVendorPortalRfqsPage.persistedLastActivity}
                       >
                         {formatDate(rfq.lastActivityDate, true)}
                       </div>
@@ -553,14 +548,14 @@ export default function VendorRfqsPage() {
                           }`}
                           style={{ fontSize: 10, padding: '2px 6px' }}
                         >
-                          {rfq.nextResponsibleParty || 'VENDOR'}
+                          {rfq.nextResponsibleParty || UI_STRINGS.common.vENDOR}
                         </span>
                         <div
                           className="cell-compact-text text-slate-600"
                           style={{ fontSize: 11, marginTop: 3 }}
-                          title={rfq.nextAction || 'Submit quote before deadline'}
+                          title={interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.nextAction || UI_STRINGS.appAppVendorPortalRfqsPage.submitQuoteBeforeDeadline })}
                         >
-                          {rfq.nextAction || 'Submit quote before deadline'}
+                          {rfq.nextAction || UI_STRINGS.appAppVendorPortalRfqsPage.submitQuoteBeforeDeadline}
                         </div>
                       </div>
                     </td>
@@ -577,7 +572,7 @@ export default function VendorRfqsPage() {
                           }}
                           className="btn btn-secondary"
                           style={{ padding: '5px 8px', fontSize: 12 }}
-                          title="Technical & Commercial Clarification Chat"
+                          title={UI_STRINGS.appAppVendorPortalRfqsPage.technicalCommercialClarificationChat}
                         >
                           <MessageSquare size={13} />
                         </button>
@@ -598,10 +593,10 @@ export default function VendorRfqsPage() {
                               background: '#0284c7',
                               borderColor: '#0284c7',
                             }}
-                            title="Open Commercial Negotiation Workspace"
+                            title={UI_STRINGS.common.openCommercialNegotiationWorkspace}
                           >
                             <TrendingDown size={13} />
-                            <span style={{ fontSize: 11, fontWeight: 700 }}>Negotiate</span>
+                            <span style={{ fontSize: 11, fontWeight: 700 }}>{UI_STRINGS.common.negotiate}</span>
                           </button>
                         )}
 
@@ -618,7 +613,7 @@ export default function VendorRfqsPage() {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          <span>{latestQuote ? 'Review' : 'Submit'}</span>
+                          <span>{latestQuote ? UI_STRINGS.common.review : UI_STRINGS.common.submit}</span>
                           <ArrowRight size={12} />
                         </Link>
                       </div>

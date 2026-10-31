@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -26,7 +29,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError('Vendor not found or access denied.', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
     }
 
     const body = await req.json();
@@ -40,7 +43,7 @@ export async function POST(
     } = body;
 
     if (!qualificationStatus || !['QUALIFIED', 'CONDITIONALLY_QUALIFIED', 'NOT_QUALIFIED'].includes(qualificationStatus)) {
-      return apiError('A valid qualification status is required: QUALIFIED, CONDITIONALLY_QUALIFIED, or NOT_QUALIFIED.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdEvaluationRoute.aValidQualificationStatusIsRequiredQUALIFIEDCONDITIONALLYQUALIFIEDOrNOTQUALIFIED, 400);
     }
 
     const bpScore = scores?.businessProfile !== undefined ? Number(scores.businessProfile) : null;
@@ -106,7 +109,7 @@ export async function POST(
       entityType: 'VENDOR',
       entityId: vendor.id,
       action: 'VENDOR_QUALIFIED',
-      description: `Category Manager set qualification status for ${vendor.name} to ${qualificationStatus} (Score: ${finalOverall}%)`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdEvaluationRoute.categoryManagerSetQualificationStatusForNameToQualificationStatusScoreFinalOverall, { "name": vendor.name, "qualificationStatus": qualificationStatus, "finalOverall": finalOverall }),
       newValue: {
         qualificationStatus,
         qualificationScore: finalOverall,
@@ -118,10 +121,10 @@ export async function POST(
     return apiSuccess({
       vendor: updatedVendor,
       evaluation,
-      message: `Vendor qualification updated to ${qualificationStatus} with score ${finalOverall}%.`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdEvaluationRoute.vendorQualificationUpdatedToQualificationStatusWithScoreFinalOverall, { "qualificationStatus": qualificationStatus, "finalOverall": finalOverall }),
     });
   } catch (error: any) {
     console.error('Error submitting vendor qualification:', error);
-    return apiError(error.message || 'Failed to submit vendor qualification', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitVendorQualification }), 500);
   }
 }

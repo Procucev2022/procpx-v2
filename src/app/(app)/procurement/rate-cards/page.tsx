@@ -1,6 +1,7 @@
 'use client';
 // src/app/(app)/procurement/rate-cards/page.tsx
 // Corrected Rate Card Management Architecture: Focused, full-width workflow workspaces
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -16,6 +17,9 @@ import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedD
 import PageHeader from '@/components/ui/PageHeader';
 import WorkflowStageNav from '@/components/ui/WorkflowStageNav';
 import type { ViewMode } from "@app-types/app/(app)/procurement/rate-cards/page.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { ViewMode };
 
 
@@ -43,7 +47,7 @@ export default function RateCardManagementPage() {
     {
       id: 'it-1',
       itemCode: 'INT-001',
-      description: 'Gypsum False Ceiling',
+      description: UI_STRINGS.common.gypsumFalseCeiling,
       specification: 'Supply & install 12.5mm Saint-Gobain Gyproc board on GI framework with perimeter channels',
       uom: 'SQFT',
       qty: 500,
@@ -55,7 +59,7 @@ export default function RateCardManagementPage() {
     {
       id: 'it-2',
       itemCode: 'INT-002',
-      description: 'Vitrified Tiles 2x2 ft',
+      description: UI_STRINGS.common.vitrifiedTiles2x2Ft,
       specification: 'Kajaria 600x600mm double charged vitrified floor tiles PEI-4 with epoxy grout',
       uom: 'SQFT',
       qty: 1000,
@@ -67,7 +71,7 @@ export default function RateCardManagementPage() {
     {
       id: 'it-3',
       itemCode: 'INT-003',
-      description: 'Modular Partitions',
+      description: UI_STRINGS.common.modularPartitions,
       specification: 'Full height double-glazed aluminum partition with 10mm toughened glass & acoustic gasket',
       uom: 'SQFT',
       qty: 300,
@@ -79,7 +83,7 @@ export default function RateCardManagementPage() {
     {
       id: 'it-4',
       itemCode: 'INT-004',
-      description: 'Wooden Carpentry',
+      description: UI_STRINGS.common.woodenCarpentry,
       specification: 'Commercial ply with 1mm Merino/Greenlam decorative laminate finish & hardwood beading',
       uom: 'SQFT',
       qty: 250,
@@ -91,7 +95,7 @@ export default function RateCardManagementPage() {
     {
       id: 'it-5',
       itemCode: 'INT-005',
-      description: 'Painting (Premium Emulsion)',
+      description: UI_STRINGS.common.paintingPremiumEmulsion,
       specification: 'Two coats Asian Paints Royale Luxury Emulsion over primer & wall putty',
       uom: 'SQFT',
       qty: 2000,
@@ -167,10 +171,10 @@ export default function RateCardManagementPage() {
       return rateCards.map((rc: any) => {
         const isActive = rc.status === 'APPROVED';
         const fromDate = rc.validFrom
-          ? new Date(rc.validFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          ? new Date(rc.validFrom).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
           : '01 Oct 2026';
         const toDate = rc.validTo
-          ? new Date(rc.validTo).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          ? new Date(rc.validTo).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
           : '30 Sep 2027';
 
         // Check if this is the active RC-2026-0006 undergoing in-memory workflow
@@ -204,7 +208,7 @@ export default function RateCardManagementPage() {
           : (rc.status ? rc.status.replace(/_/g, ' ') : 'In Progress');
 
         const lastUpdatedDate = rc.updatedAt
-          ? new Date(rc.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          ? new Date(rc.updatedAt).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
           : '22 Oct 2026';
 
         return {
@@ -220,9 +224,9 @@ export default function RateCardManagementPage() {
           status: displayStatus as any,
           detailedStatus: isCurrentWorkflowCard ? rcWorkflowStatus : rc.status,
           currentStage: isCurrentWorkflowCard ? rcWorkflowStatus : stageText,
-          latestBuyerOffer: totalBuyerOffer > 0 ? `₹ ${totalBuyerOffer.toLocaleString('en-IN')}` : '₹ 4,83,000',
-          latestSubmittedVendorQuote: totalVendorQuote > 0 ? `₹ ${totalVendorQuote.toLocaleString('en-IN')}` : '₹ 5,08,000',
-          latestVendorQuote: totalVendorQuote > 0 ? `₹ ${totalVendorQuote.toLocaleString('en-IN')}` : '₹ 5,08,000',
+          latestBuyerOffer: totalBuyerOffer > 0 ? `₹ ${totalBuyerOffer.toLocaleString(I18N_CONFIG.defaultLocale)}` : '₹ 4,83,000',
+          latestSubmittedVendorQuote: totalVendorQuote > 0 ? `₹ ${totalVendorQuote.toLocaleString(I18N_CONFIG.defaultLocale)}` : '₹ 5,08,000',
+          latestVendorQuote: totalVendorQuote > 0 ? `₹ ${totalVendorQuote.toLocaleString(I18N_CONFIG.defaultLocale)}` : '₹ 5,08,000',
           lastUpdated: lastUpdatedDate,
           nextResponsible: displayStatus === 'Active' ? 'Active Contract' : (isCurrentWorkflowCard ? rcNextParty : 'Category Manager'),
           round: 'Round 2',
@@ -278,19 +282,19 @@ export default function RateCardManagementPage() {
       });
 
       if (res.ok) {
-        showToast(`Rate Card "${formData.title}" initiated successfully and published to vendor!`, 'success');
+        showToast(interpolateUiString(UI_STRINGS.appAppProcurementRateCardsPage.rateCardTitleInitiatedSuccessfullyAndPublishedToVendor, { "title": formData.title }), 'success');
       } else {
-        showToast(`Rate Card "${formData.title}" initiated with reviewed target values!`, 'success');
+        showToast(interpolateUiString(UI_STRINGS.appAppProcurementRateCardsPage.rateCardTitleInitiatedWithReviewedTargetValues, { "title": formData.title }), 'success');
       }
     } catch {
-      showToast(`Rate Card "${formData.title}" initiated successfully and published to vendor!`, 'success');
+      showToast(interpolateUiString(UI_STRINGS.appAppProcurementRateCardsPage.rateCardTitleInitiatedSuccessfullyAndPublishedToVendor, { "title": formData.title }), 'success');
     }
     handleSwitchView('HOME');
     setActiveSummaryTab('in_progress');
   };
 
   const handleSendProposedOffer = () => {
-    showToast('Round 2 Counter Offer successfully sent to Ramakrishna Interiors!', 'success');
+    showToast(UI_STRINGS.appAppProcurementRateCardsPage.round2CounterOfferSuccessfullySentToRamakrishnaInteriors, 'success');
     setRcNextParty('Vendor (Review Offer)');
   };
 
@@ -299,11 +303,11 @@ export default function RateCardManagementPage() {
   const handleBuyerAcceptance = async (remarks: string, agreementData?: any | null) => {
     setCardAgreement(agreementData || null);
     if (agreementData && agreementData.required) {
-      showToast(`Vendor quote accepted & formal agreement (${agreementData.documentTitle}) sent to vendor for review & signature!`, 'success');
+      showToast(interpolateUiString(UI_STRINGS.appAppProcurementRateCardsPage.vendorQuoteAcceptedFormalAgreementDocumentTitleSentToVendorForReviewSignature, { "documentTitle": agreementData.documentTitle }), 'success');
       setRcWorkflowStatus('In Progress (Vendor Agreement Signature Pending)');
       setRcNextParty('Vendor (Review & Sign Agreement)');
     } else {
-      showToast('Vendor quote accepted by Category Manager! Rate Card routed to Vendor Acceptance (No formal agreement required).', 'success');
+      showToast(UI_STRINGS.appAppProcurementRateCardsPage.vendorQuoteAcceptedByCategoryManagerRateCardRoutedToVendorAcceptanceNoFormalAgreementRequired, 'success');
       setRcWorkflowStatus('In Progress (Vendor Acceptance Pending)');
       setRcNextParty('Vendor (Acceptance Required)');
     }
@@ -333,35 +337,35 @@ export default function RateCardManagementPage() {
           {
             id: 'stage-1',
             stageNumber: 1,
-            label: 'Home Workspace',
+            label: UI_STRINGS.appAppProcurementRateCardsPage.homeWorkspace,
             status: getStageStatus('HOME'),
             onClick: () => handleSwitchView('HOME'),
           },
           {
             id: 'stage-2',
             stageNumber: 2,
-            label: 'Initiate Rate Card',
+            label: UI_STRINGS.common.initiateRateCard,
             status: getStageStatus('INITIATE'),
             onClick: () => handleSwitchView('INITIATE'),
           },
           {
             id: 'stage-3',
             stageNumber: 3,
-            label: 'Item Negotiation',
+            label: UI_STRINGS.appAppProcurementRateCardsPage.itemNegotiation,
             status: getStageStatus('NEGOTIATION'),
             onClick: () => handleSwitchView('NEGOTIATION'),
           },
           {
             id: 'stage-4',
             stageNumber: 4,
-            label: 'Buyer Acceptance',
+            label: UI_STRINGS.appAppProcurementRateCardsPage.buyerAcceptance,
             status: getStageStatus('BUYER_ACCEPTANCE'),
             onClick: () => handleSwitchView('BUYER_ACCEPTANCE'),
           },
           {
             id: 'stage-7',
             stageNumber: 7,
-            label: 'Finalised Details',
+            label: UI_STRINGS.appAppProcurementRateCardsPage.finalisedDetails,
             status: getStageStatus('DETAILS'),
             onClick: () => handleSwitchView('DETAILS'),
           },
@@ -443,16 +447,16 @@ export default function RateCardManagementPage() {
           onItemsChange={setNegotiationItems}
           onReset={() => {
             setNegotiationItems([
-              { id: 'it-1', itemCode: 'INT-001', description: 'Gypsum False Ceiling', specification: 'Supply & install 12.5mm Saint-Gobain Gyproc board on GI framework with perimeter channels', uom: 'SQFT', qty: 500, buyerTargetRate: 120, latestVendorQuote: 110, currentBuyerOffer: 120, proposedAmount: 60000 },
-              { id: 'it-2', itemCode: 'INT-002', description: 'Vitrified Tiles 2x2 ft', specification: 'Kajaria 600x600mm double charged vitrified floor tiles PEI-4 with epoxy grout', uom: 'SQFT', qty: 1000, buyerTargetRate: 95, latestVendorQuote: 90, currentBuyerOffer: 95, proposedAmount: 95000 },
-              { id: 'it-3', itemCode: 'INT-003', description: 'Modular Partitions', specification: 'Full height double-glazed aluminum partition with 10mm toughened glass & acoustic gasket', uom: 'SQFT', qty: 300, buyerTargetRate: 350, latestVendorQuote: 330, currentBuyerOffer: 350, proposedAmount: 105000 },
-              { id: 'it-4', itemCode: 'INT-004', description: 'Wooden Carpentry', specification: 'Commercial ply with 1mm Merino/Greenlam decorative laminate finish & hardwood beading', uom: 'SQFT', qty: 250, buyerTargetRate: 450, latestVendorQuote: 420, currentBuyerOffer: 450, proposedAmount: 112500 },
-              { id: 'it-5', itemCode: 'INT-005', description: 'Painting (Premium Emulsion)', specification: 'Two coats Asian Paints Royale Luxury Emulsion over primer & wall putty', uom: 'SQFT', qty: 2000, buyerTargetRate: 80, latestVendorQuote: 75, currentBuyerOffer: 80, proposedAmount: 160000 },
+              { id: 'it-1', itemCode: 'INT-001', description: UI_STRINGS.common.gypsumFalseCeiling, specification: 'Supply & install 12.5mm Saint-Gobain Gyproc board on GI framework with perimeter channels', uom: 'SQFT', qty: 500, buyerTargetRate: 120, latestVendorQuote: 110, currentBuyerOffer: 120, proposedAmount: 60000 },
+              { id: 'it-2', itemCode: 'INT-002', description: UI_STRINGS.common.vitrifiedTiles2x2Ft, specification: 'Kajaria 600x600mm double charged vitrified floor tiles PEI-4 with epoxy grout', uom: 'SQFT', qty: 1000, buyerTargetRate: 95, latestVendorQuote: 90, currentBuyerOffer: 95, proposedAmount: 95000 },
+              { id: 'it-3', itemCode: 'INT-003', description: UI_STRINGS.common.modularPartitions, specification: 'Full height double-glazed aluminum partition with 10mm toughened glass & acoustic gasket', uom: 'SQFT', qty: 300, buyerTargetRate: 350, latestVendorQuote: 330, currentBuyerOffer: 350, proposedAmount: 105000 },
+              { id: 'it-4', itemCode: 'INT-004', description: UI_STRINGS.common.woodenCarpentry, specification: 'Commercial ply with 1mm Merino/Greenlam decorative laminate finish & hardwood beading', uom: 'SQFT', qty: 250, buyerTargetRate: 450, latestVendorQuote: 420, currentBuyerOffer: 450, proposedAmount: 112500 },
+              { id: 'it-5', itemCode: 'INT-005', description: UI_STRINGS.common.paintingPremiumEmulsion, specification: 'Two coats Asian Paints Royale Luxury Emulsion over primer & wall putty', uom: 'SQFT', qty: 2000, buyerTargetRate: 80, latestVendorQuote: 75, currentBuyerOffer: 80, proposedAmount: 160000 },
             ]);
-            showToast('Rates reset to initial target benchmarks', 'info');
+            showToast(UI_STRINGS.appAppProcurementRateCardsPage.ratesResetToInitialTargetBenchmarks, 'info');
           }}
           onSaveDraft={() => {
-            showToast('Negotiation draft saved successfully', 'success');
+            showToast(UI_STRINGS.appAppProcurementRateCardsPage.negotiationDraftSavedSuccessfully, 'success');
           }}
           onSendOffer={handleSendProposedOffer}
           onAcceptQuoteClick={() => handleSwitchView('BUYER_ACCEPTANCE')}
@@ -470,11 +474,11 @@ export default function RateCardManagementPage() {
           vendorQuoteTotal={469750}
           receivedDate="20 Oct 2026"
           items={[
-            { id: '1', itemCode: 'INT-001', description: 'Gypsum False Ceiling', uom: 'SQFT', qty: 500, vendorQuoteRate: 100 },
-            { id: '2', itemCode: 'INT-002', description: 'Vitrified Tiles 2x2 ft', uom: 'SQFT', qty: 1000, vendorQuoteRate: 88 },
-            { id: '3', itemCode: 'INT-003', description: 'Modular Partitions', uom: 'SQFT', qty: 300, vendorQuoteRate: 315 },
-            { id: '4', itemCode: 'INT-004', description: 'Wooden Carpentry', uom: 'SQFT', qty: 250, vendorQuoteRate: 405 },
-            { id: '5', itemCode: 'INT-005', description: 'Painting (Premium Emulsion)', uom: 'SQFT', qty: 2000, vendorQuoteRate: 68 },
+            { id: '1', itemCode: 'INT-001', description: UI_STRINGS.common.gypsumFalseCeiling, uom: 'SQFT', qty: 500, vendorQuoteRate: 100 },
+            { id: '2', itemCode: 'INT-002', description: UI_STRINGS.common.vitrifiedTiles2x2Ft, uom: 'SQFT', qty: 1000, vendorQuoteRate: 88 },
+            { id: '3', itemCode: 'INT-003', description: UI_STRINGS.common.modularPartitions, uom: 'SQFT', qty: 300, vendorQuoteRate: 315 },
+            { id: '4', itemCode: 'INT-004', description: UI_STRINGS.common.woodenCarpentry, uom: 'SQFT', qty: 250, vendorQuoteRate: 405 },
+            { id: '5', itemCode: 'INT-005', description: UI_STRINGS.common.paintingPremiumEmulsion, uom: 'SQFT', qty: 2000, vendorQuoteRate: 68 },
           ]}
           onAccept={handleBuyerAcceptance}
           onCancel={() => handleSwitchView('NEGOTIATION')}
@@ -484,8 +488,8 @@ export default function RateCardManagementPage() {
       {viewMode === 'DETAILS' && (
         <div className="space-y-6">
           <PageHeader
-            title="Finalised Rate Card"
-            subtitle="Authoritative view of active commercial terms and agreed rates schedule."
+            title={UI_STRINGS.appAppProcurementRateCardsPage.finalisedRateCard}
+            subtitle={UI_STRINGS.appAppProcurementRateCardsPage.authoritativeViewOfActiveCommercialTermsAndAgreedRatesSchedule}
             onBack={() => handleSwitchView('HOME')}
             backLabel="Back to Rate Cards"
             badge={
@@ -495,7 +499,7 @@ export default function RateCardManagementPage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  {selectedRateCard?.status === 'APPROVED' ? 'Active' : (selectedRateCard?.status || 'Active')}
+                  {selectedRateCard?.status === 'APPROVED' ? UI_STRINGS.common.active : (selectedRateCard?.status || UI_STRINGS.common.active)}
                 </span>
               </div>
             }

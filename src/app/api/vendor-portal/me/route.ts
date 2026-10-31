@@ -4,18 +4,21 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET() {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError('Forbidden: Vendor Portal is accessible only to mapped vendor accounts', 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError('Vendor record not associated with this user account', 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
   try {
@@ -27,13 +30,13 @@ export async function GET() {
     });
 
     if (!vendor) {
-      return apiError('Vendor profile not found', 404);
+      return apiError(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, 404);
     }
 
     return apiSuccess({ vendor });
   } catch (error: any) {
     console.error('Error fetching vendor profile:', error);
-    return apiError(error.message || 'Failed to fetch vendor profile', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorProfile }), 500);
   }
 }
 
@@ -42,12 +45,12 @@ export async function PATCH(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError('Forbidden: Vendor Portal is accessible only to mapped vendor accounts', 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError('Vendor record not associated with this user account', 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
   try {
@@ -59,7 +62,7 @@ export async function PATCH(req: NextRequest) {
     });
 
     if (!existing) {
-      return apiError('Vendor profile not found', 404);
+      return apiError(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, 404);
     }
 
     // Permitted self-service updates only (no tampering with qualificationScore, qualificationDecision, status, etc.)
@@ -106,12 +109,12 @@ export async function PATCH(req: NextRequest) {
       entityType: 'VENDOR',
       entityId: vendorId,
       action: 'VENDOR_PROFILE_SELF_UPDATED',
-      description: `Vendor profile self-updated by ${ctx.userName || ctx.userEmail}`,
+      description: interpolateUiString(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileSelfUpdatedByValue1, { "value1": ctx.userName || ctx.userEmail }),
     });
 
-    return apiSuccess({ vendor: updated, message: 'Company profile updated successfully' });
+    return apiSuccess({ vendor: updated, message: UI_STRINGS.appApiVendorPortalMeRoute.companyProfileUpdatedSuccessfully });
   } catch (error: any) {
     console.error('Error updating vendor profile:', error);
-    return apiError(error.message || 'Failed to update company profile', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateCompanyProfile }), 500);
   }
 }

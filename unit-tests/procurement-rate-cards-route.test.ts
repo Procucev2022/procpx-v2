@@ -3,6 +3,8 @@ import { GET, POST } from '../src/app/api/procurement/rate-cards/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -64,7 +66,7 @@ describe('procurement rate cards route', () => {
     await expect(POST(postRequest(requiredBody))).resolves.toBe(denied);
 
     await expect(POST(postRequest({ ...requiredBody, validTo: '' }))).resolves.toEqual({
-      ok: false, error: 'Vendor ID, Title, Category, Valid From, and Valid To are required', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRateCardsRoute.vendorIDTitleCategoryValidFromAndValidToAreRequired, status: 400,
     });
     expect(db.vendorRateCard.count).not.toHaveBeenCalled();
   });
@@ -95,7 +97,7 @@ describe('procurement rate cards route', () => {
     expect(result).toMatchObject({ ok: true, data: { total: 12, page: 1, totalPages: 4 } });
     expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        tenantId: 'tenant-1', vendorId: 'vendor-1', status: 'APPROVED', category: 'Electrical',
+        tenantId: 'tenant-1', vendorId: 'vendor-1', status: UI_STRINGS.common.aPPROVED, category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
         OR: [
           { rateCardNumber: { contains: 'panel' } }, { title: { contains: 'panel' } },
           { category: { contains: 'panel' } }, { vendor: { name: { contains: 'panel' } } },
@@ -172,7 +174,7 @@ describe('procurement rate cards route', () => {
       submittedBy: 'buyer@example.com', submittedAt: expect.any(Date), notes: 'manual notes',
     });
     expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      title: 'New Rate Card Offer Received', entityType: 'RATE_CARD', targetRole: 'VENDOR',
+      title: UI_STRINGS.appApiProcurementRateCardsRoute.newRateCardOfferReceived, entityType: 'RATE_CARD', targetRole: UI_STRINGS.common.vENDOR,
       recordNumber: sent.rateCardNumber, link: '/vendor-portal/rate-cards',
     }) });
     expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'RATE_CARD_OFFER_1_SENT' }));

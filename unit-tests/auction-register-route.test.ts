@@ -3,6 +3,8 @@ import { GET, POST } from '../src/app/api/procurement/auctions/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -143,29 +145,29 @@ describe('auction register API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({}))).resolves.toBe(denied);
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: '   ' }))).resolves.toEqual({
-      ok: false, error: 'RFQ ID and Auction Name are mandatory fields.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.rFQIDAndAuctionNameAreMandatoryFields, status: 400,
     });
     db.rfq.findFirst.mockResolvedValueOnce(null);
     await expect(POST(postRequest({ rfqId: 'missing', title: 'Auction' }))).resolves.toEqual({
-      ok: false, error: 'Selected RFQ was not found or is inaccessible in this workspace.', status: 404,
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, status: 404,
     });
 
     db.rfq.findFirst.mockResolvedValueOnce({ quotes: [{ vendorId: 'quoted-vendor', status: 'SUBMITTED' }] });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: [] }))).resolves.toEqual({
-      ok: false, error: 'Mandatory justification is required when excluding quoted vendors from the invited list.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.mandatoryJustificationIsRequiredWhenExcludingQuotedVendorsFromTheInvitedList, status: 400,
     });
     db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: [] }))).resolves.toEqual({
-      ok: false, error: 'At least one vendor must be invited to schedule an auction.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.atLeastOneVendorMustBeInvitedToScheduleAnAuction, status: 400,
     });
     db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: ['v-1'], startTime: 'invalid' }))).resolves.toEqual({
-      ok: false, error: 'Please provide valid Start and End Date & Time.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.pleaseProvideValidStartAndEndDateTime, status: 400,
     });
     db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: ['v-1'],
       startTime: '2026-11-01T10:00:00Z', endTime: '2026-11-01T09:00:00Z' }))).resolves.toEqual({
-      ok: false, error: 'Auction End Time must be later than Start Time.', status: 400,
+      ok: false, error: UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, status: 400,
     });
   });
 
@@ -188,7 +190,7 @@ describe('auction register API', () => {
     }) });
     expect(db.auctionVendor.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ vendorId: 'v-1', auctionId: 'auction-new' })] });
     expect(db.auctionItem.createMany).toHaveBeenCalledWith({ data: [
-      expect.objectContaining({ itemCode: 'ITEM-1', description: 'Auction Item', category: 'General', uom: 'EA', quantity: 1, startPrice: null }),
+      expect.objectContaining({ itemCode: 'ITEM-1', description: 'Auction Item', category: UI_STRINGS.common.general, uom: 'EA', quantity: 1, startPrice: null }),
       expect.objectContaining({ itemCode: 'PUMP', subcategory: 'Water', quantity: 3, startPrice: 400, currentLeadingBid: 400 }),
     ] });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'AUCTION_SCHEDULED', projectId: 'project-1' }));

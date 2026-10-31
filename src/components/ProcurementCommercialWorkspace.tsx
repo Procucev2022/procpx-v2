@@ -7,6 +7,7 @@
 // 3. Bottom Dispatch Controls directly below Buyer Offer column (Save as Draft, Reset, Selected Vendors, All Eligible Vendors)
 // 4. White/light-grey background, dark navy text, primary blue accent, green for savings/L1, muted amber for partial quotes
 
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
@@ -29,6 +30,9 @@ import {
 import { useToast } from '@/components/ui/Toast';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import type { ProcurementCommercialWorkspaceProps } from "@app-types/components/ProcurementCommercialWorkspace.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { ProcurementCommercialWorkspaceProps };
 
 
@@ -143,14 +147,14 @@ export default function ProcurementCommercialWorkspace({
         rates: lineCounterRates,
         notes: negNotes,
         deadline: negDeadline,
-        timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString(I18N_CONFIG.defaultLocale, { hour: '2-digit', minute: '2-digit' }),
       };
       localStorage.setItem(draftStorageKey, JSON.stringify(payload));
       setDraftSavedTimestamp(payload.timestamp);
-      toast.success('Draft counteroffer rates saved locally.');
+      toast.success(UI_STRINGS.common.userMessages.draftCounterofferRatesSavedLocally);
     } catch (e) {
       console.error('Failed to save draft:', e);
-      toast.error('Failed to save draft rates.');
+      toast.error(UI_STRINGS.common.userMessages.failedToSaveDraftRates);
     }
   };
 
@@ -462,7 +466,7 @@ export default function ProcurementCommercialWorkspace({
   const handleApplyOfferToItem = () => {
     if (!selectedLineForDetail || isApplyingOffer) return;
     if (drawerRateInput === '' || isNaN(Number(drawerRateInput)) || Number(drawerRateInput) < 0) {
-      toast.error('Please enter a valid non-negative buyer offer unit rate.');
+      toast.error(UI_STRINGS.common.userMessages.pleaseEnterAValidNonNegativeBuyerOfferUnitRate);
       return;
     }
     setIsApplyingOffer(true);
@@ -476,19 +480,19 @@ export default function ProcurementCommercialWorkspace({
         rates: next,
         notes: negNotes,
         deadline: negDeadline,
-        timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString(I18N_CONFIG.defaultLocale, { hour: '2-digit', minute: '2-digit' }),
       };
       localStorage.setItem(draftStorageKey, JSON.stringify(payload));
       setLineCounterRates(next);
       setDraftSavedTimestamp(payload.timestamp);
 
       setItemOfferFeedback(
-        `Buyer offer rate applied to this item: ₹${num.toLocaleString('en-IN')} / ${selectedLineForDetail.uom} (Line Total: ₹${lineAmount.toLocaleString('en-IN')}). Saved to draft.`
+        `Buyer offer rate applied to this item: ₹${num.toLocaleString(I18N_CONFIG.defaultLocale)} / ${selectedLineForDetail.uom} (Line Total: ₹${lineAmount.toLocaleString(I18N_CONFIG.defaultLocale)}). Saved to draft.`
       );
-      toast.success('Buyer offer rate applied to this item.');
+      toast.success(UI_STRINGS.common.userMessages.buyerOfferRateAppliedToThisItem);
     } catch (e) {
       console.error('Failed to update draft:', e);
-      toast.error('Failed to save draft rate. Please retry.');
+      toast.error(UI_STRINGS.common.userMessages.failedToSaveDraftRatePleaseRetry);
     } finally {
       setIsApplyingOffer(false);
     }
@@ -497,7 +501,7 @@ export default function ProcurementCommercialWorkspace({
   const handleSaveDrawerDraft = () => {
     if (!selectedLineForDetail || isApplyingOffer) return;
     if (drawerRateInput === '' || isNaN(Number(drawerRateInput)) || Number(drawerRateInput) < 0) {
-      toast.error('Please enter a valid non-negative buyer offer unit rate.');
+      toast.error(UI_STRINGS.common.userMessages.pleaseEnterAValidNonNegativeBuyerOfferUnitRate);
       return;
     }
     setIsApplyingOffer(true);
@@ -511,19 +515,19 @@ export default function ProcurementCommercialWorkspace({
         rates: next,
         notes: negNotes,
         deadline: negDeadline,
-        timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString(I18N_CONFIG.defaultLocale, { hour: '2-digit', minute: '2-digit' }),
       };
       localStorage.setItem(draftStorageKey, JSON.stringify(payload));
       setLineCounterRates(next);
       setDraftSavedTimestamp(payload.timestamp);
 
       setItemOfferFeedback(
-        `Draft rate saved for this item: ₹${num.toLocaleString('en-IN')} / ${selectedLineForDetail.uom} (Line Total: ₹${lineAmount.toLocaleString('en-IN')}).`
+        `Draft rate saved for this item: ₹${num.toLocaleString(I18N_CONFIG.defaultLocale)} / ${selectedLineForDetail.uom} (Line Total: ₹${lineAmount.toLocaleString(I18N_CONFIG.defaultLocale)}).`
       );
-      toast.success('Offer rate saved to draft.');
+      toast.success(UI_STRINGS.common.userMessages.offerRateSavedToDraft);
     } catch (e) {
       console.error('Failed to update draft:', e);
-      toast.error('Failed to save draft rate. Please retry.');
+      toast.error(UI_STRINGS.common.userMessages.failedToSaveDraftRatePleaseRetry);
     } finally {
       setIsApplyingOffer(false);
     }
@@ -592,20 +596,20 @@ export default function ProcurementCommercialWorkspace({
   // Dropdown direct send offer handler
   const handleDropdownSendOffer = async () => {
     if (selectedVendorIds.length === 0) {
-      toast.warning('Please select at least one vendor.');
+      toast.warning(UI_STRINGS.common.userMessages.pleaseSelectAtLeastOneVendor);
       return;
     }
 
     for (const [lineId, rate] of Object.entries(lineCounterRates)) {
       if (typeof rate !== 'number' || isNaN(rate) || rate <= 0) {
-        toast.error('Invalid counteroffer rate entered. Rates must be positive numbers.');
+        toast.error(UI_STRINGS.common.userMessages.invalidCounterofferRateEnteredRatesMustBePositiveNumbers);
         return;
       }
     }
 
     const targets = eligibleVendors.filter((v) => selectedVendorIds.includes(v.vendorId));
     if (targets.length === 0) {
-      toast.error('Selected vendors are not eligible to receive counteroffers.');
+      toast.error(UI_STRINGS.common.userMessages.selectedVendorsAreNotEligibleToReceiveCounteroffers);
       return;
     }
 
@@ -634,13 +638,13 @@ export default function ProcurementCommercialWorkspace({
         setTimeout(() => {
           setShowSendOfferDropdown(false);
           toast.success(
-            `Buyer offer dispatched to ${vendorIds.length} vendor${vendorIds.length > 1 ? 's' : ''}.`,
+            vendorIds.length === 1 ? UI_STRINGS.common.userMessages.buyerOfferDispatchedToOneVendor : interpolateUiString(UI_STRINGS.common.userMessages.buyerOfferDispatchedToVendorCount, { "vendorCount": vendorIds.length }),
             rfq.rfqNumber,
-            'Awaiting Vendor Revised Offer'
+            UI_STRINGS.common.userMessages.awaitingVendorRevisedOffer
           );
           setSubmissionFeedback({
             type: 'success',
-            text: `Buyer offer dispatched successfully to ${vendorIds.length} vendor${vendorIds.length > 1 ? 's' : ''}.`,
+            text: interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.buyerOfferDispatchedSuccessfullyToLengthVendorValue2, { "length": vendorIds.length, "value2": vendorIds.length > 1 ? 's' : '' }),
           });
           setLineCounterRates({});
           setSubmittingOffer(false);
@@ -668,7 +672,7 @@ export default function ProcurementCommercialWorkspace({
 
       const data = await res.json();
       if (!res.ok && (!data.dispatched || data.dispatched.length === 0)) {
-        throw new Error(data.error || 'Failed to dispatch buyer offer');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToDispatchBuyerOffer }));
       }
 
       setShowSendOfferDropdown(false);
@@ -681,19 +685,19 @@ export default function ProcurementCommercialWorkspace({
         localStorage.removeItem(draftStorageKey);
         setDraftSavedTimestamp(null);
         toast.success(
-          `Buyer offer dispatched to ${dispatchedCount} vendor${dispatchedCount > 1 ? 's' : ''}.`,
+          dispatchedCount === 1 ? UI_STRINGS.common.userMessages.buyerOfferDispatchedToOneVendor : interpolateUiString(UI_STRINGS.common.userMessages.buyerOfferDispatchedToVendorCount, { "vendorCount": dispatchedCount }),
           rfq.rfqNumber,
-          failedCount > 0 ? `${failedCount} vendors failed` : 'Awaiting Vendor Revised Offer'
+          failedCount > 0 ? failedCount === 1 ? UI_STRINGS.common.userMessages.oneVendorFailedToReceiveCounteroffer : interpolateUiString(UI_STRINGS.common.userMessages.vendorCountFailedToReceiveCounteroffers, { "failedCount": failedCount }) : UI_STRINGS.common.userMessages.awaitingVendorRevisedOffer
         );
         setSubmissionFeedback({
           type: failedCount > 0 ? 'error' : 'success',
-          text: `Offer dispatch completed: ${dispatchedCount} succeeded${failedCount > 0 ? `, ${failedCount} failed` : ''}.`,
+          text: interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.offerDispatchCompletedDispatchedCountSucceededValue2, { "dispatchedCount": dispatchedCount, "value2": failedCount > 0 ? `, ${failedCount} failed` : '' }),
         });
         setLineCounterRates({});
       } else {
         setSubmissionFeedback({
           type: 'error',
-          text: `Offer dispatch failed: ${data.failed?.[0]?.reason || data.error || 'Check vendor eligibility'}`,
+          text: interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.offerDispatchFailedValue1, { "value1": data.failed?.[0]?.reason || data.error || 'Check vendor eligibility' }),
         });
       }
 
@@ -702,9 +706,9 @@ export default function ProcurementCommercialWorkspace({
       setShowSendOfferDropdown(false);
       setSubmissionFeedback({
         type: 'error',
-        text: err.message || 'Counteroffer dispatch failed. Entered rates have been preserved.',
+        text: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || 'Counteroffer dispatch failed. Entered rates have been preserved.' }),
       });
-      toast.error(err.message || 'Counteroffer dispatch failed.');
+      toast.error(err.message || UI_STRINGS.common.userMessages.counterofferDispatchFailed);
     } finally {
       setSubmittingOffer(false);
     }
@@ -729,9 +733,7 @@ export default function ProcurementCommercialWorkspace({
             type="button"
             onClick={() => setSubmissionFeedback(null)}
             className="text-xs underline font-semibold text-slate-700 hover:text-slate-900"
-          >
-            Dismiss
-          </button>
+          >{UI_STRINGS.componentsProcurementCommercialWorkspace.dismiss}</button>
         </div>
       )}
 
@@ -740,16 +742,12 @@ export default function ProcurementCommercialWorkspace({
         <div className="bg-white border border-slate-200 rounded-lg p-3.5 space-y-2.5 shadow-2xs">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2 m-0">
-              <Users size={14} className="text-blue-600" />
-              Dispatch Breakdown
-            </h4>
+              <Users size={14} className="text-blue-600" />{UI_STRINGS.componentsProcurementCommercialWorkspace.dispatchBreakdown}</h4>
             <button
               type="button"
               onClick={() => setBulkDispatchResults(null)}
               className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
-            >
-              Dismiss
-            </button>
+            >{UI_STRINGS.componentsProcurementCommercialWorkspace.dismiss}</button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
             {bulkDispatchResults.results?.map((res: any, idx: number) => (
@@ -775,9 +773,8 @@ export default function ProcurementCommercialWorkspace({
                 </div>
                 <div className="text-[11px] mt-1 text-slate-600">
                   {res.status === 'DISPATCHED' ? (
-                    <span>
-                      Round {res.roundNumber} • ₹ {res.counterOfferAmount?.toLocaleString('en-IN')}
-                      {res.isSuperseding && ' (Superseded Pending Offer)'}
+                    <span>{UI_STRINGS.common.round}{res.roundNumber}{UI_STRINGS.componentsProcurementCommercialWorkspace.copyj2m2kc}{res.counterOfferAmount?.toLocaleString(I18N_CONFIG.defaultLocale)}
+                      {res.isSuperseding && UI_STRINGS.componentsProcurementCommercialWorkspace.supersededPendingOffer}
                     </span>
                   ) : (
                     <span className="text-rose-700">{res.reason}</span>
@@ -797,12 +794,8 @@ export default function ProcurementCommercialWorkspace({
         <div className="p-3 bg-white border-b border-slate-200 flex items-center gap-2">
           <FileText size={18} className="text-blue-600 shrink-0" />
           <div>
-            <h3 className="text-sm font-bold text-slate-900 m-0">
-              Vendor Comparison — Total Quote Amount
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 m-0">
-              All invited suppliers, latest submitted package quotes, variance vs AI benchmark, and dynamic ranking.
-            </p>
+            <h3 className="text-sm font-bold text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.vendorComparisonTotalQuoteAmount}</h3>
+            <p className="text-xs text-slate-500 mt-0.5 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.allInvitedSuppliersLatestSubmittedPackageQuotesVarianceVsAIBenchmarkAndDynamicRanking}</p>
           </div>
         </div>
 
@@ -811,27 +804,13 @@ export default function ProcurementCommercialWorkspace({
           <table className="w-full text-xs text-left" style={{ borderCollapse: 'collapse', border: '1px solid #B8C9DC', minWidth: 760 }}>
             <thead>
               <tr>
-                <th style={{ width: 45, textAlign: 'center', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 10px', fontWeight: 700, color: '#1e293b' }}>
-                  #
-                </th>
-                <th style={{ textAlign: 'left', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                  VENDOR NAME & VENDOR CODE
-                </th>
-                <th style={{ textAlign: 'center', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                  QUOTE STATUS
-                </th>
-                <th style={{ textAlign: 'right', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                  INITIAL QUOTE (₹)
-                </th>
-                <th style={{ textAlign: 'right', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                  LATEST SUBMITTED QUOTE (₹)
-                </th>
-                <th style={{ textAlign: 'right', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                  VARIANCE vs AI BENCHMARK
-                </th>
-                <th style={{ textAlign: 'center', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                  RANK
-                </th>
+                <th style={{ width: 45, textAlign: 'center', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 10px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.copyak280i}</th>
+                <th style={{ textAlign: 'left', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.vENDORNAMEVENDORCODE}</th>
+                <th style={{ textAlign: 'center', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.qUOTESTATUS}</th>
+                <th style={{ textAlign: 'right', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.iNITIALQUOTE}</th>
+                <th style={{ textAlign: 'right', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.lATESTSUBMITTEDQUOTE}</th>
+                <th style={{ textAlign: 'right', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.vARIANCEVsAIBENCHMARK}</th>
+                <th style={{ textAlign: 'center', border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.rANK}</th>
               </tr>
             </thead>
             <tbody>
@@ -848,21 +827,19 @@ export default function ProcurementCommercialWorkspace({
                       <span
                         className="font-semibold text-slate-900 hover:text-blue-600 cursor-pointer"
                         onClick={() => setSelectedTargetVendorId(vendor.vendorId)}
-                        title="Click to set as reference target vendor"
+                        title={UI_STRINGS.componentsProcurementCommercialWorkspace.clickToSetAsReferenceTargetVendor}
                       >
                         {vendor.vendorName}
                       </span>
                       {vendor.vendorCode && (
-                        <span className="text-[11px] font-mono text-slate-500">
-                          ({vendor.vendorCode})
-                        </span>
+                        <span className="text-[11px] font-mono text-slate-500">{UI_STRINGS.common.copychzfvb}{vendor.vendorCode}{UI_STRINGS.common.copyc7zu6c}</span>
                       )}
                       {vendor.rounds?.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setHistoryModalVendor(vendor)}
                           className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors rounded"
-                          title="View sequential negotiation audit history for this supplier"
+                          title={UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier}
                         >
                           <History size={12} />
                         </button>
@@ -873,29 +850,29 @@ export default function ProcurementCommercialWorkspace({
                   {/* Quote Status */}
                   <td style={{ textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b', fontSize: 12 }}>
                     {vendor.quoteStatus === 'COMPLETE' ? (
-                      'Complete Quote'
+                      UI_STRINGS.componentsProcurementCommercialWorkspace.completeQuote
                     ) : vendor.quoteStatus === 'PARTIAL' ? (
                       vendor.quoteStatusLabel
                     ) : (
-                      'No Quote'
+                      UI_STRINGS.componentsProcurementCommercialWorkspace.noQuote
                     )}
                   </td>
 
                   {/* Initial Quote (₹) */}
                   <td style={{ textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', fontFamily: 'monospace', color: '#1e293b' }}>
                     {vendor.initialQuoteTotal !== null ? (
-                      `₹ ${vendor.initialQuoteTotal.toLocaleString('en-IN')}`
+                      interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": vendor.initialQuoteTotal.toLocaleString(I18N_CONFIG.defaultLocale) })
                     ) : (
-                      '-'
+                      UI_STRINGS.componentsProcurementCommercialWorkspace.copyb41feg
                     )}
                   </td>
 
                   {/* Latest Submitted Quote (₹) */}
                   <td style={{ textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>
                     {vendor.latestSubmittedQuoteTotal !== null ? (
-                      `₹ ${vendor.latestSubmittedQuoteTotal.toLocaleString('en-IN')}`
+                      interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": vendor.latestSubmittedQuoteTotal.toLocaleString(I18N_CONFIG.defaultLocale) })
                     ) : (
-                      '-'
+                      UI_STRINGS.componentsProcurementCommercialWorkspace.copyb41feg
                     )}
                   </td>
 
@@ -904,17 +881,17 @@ export default function ProcurementCommercialWorkspace({
                     {vendor.isComparable && vendor.variancePercent !== null && vendor.varianceAmount !== null ? (
                       <span>
                         {vendor.varianceAmount < 0
-                          ? `▼ ${Math.abs(vendor.variancePercent)}% ( - ₹ ${Math.abs(vendor.varianceAmount).toLocaleString('en-IN')})`
-                          : `▲ ${vendor.variancePercent}% ( + ₹ ${vendor.varianceAmount.toLocaleString('en-IN')})`}
+                          ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.absToLocaleString, { "abs": Math.abs(vendor.variancePercent), "toLocaleString": Math.abs(vendor.varianceAmount).toLocaleString(I18N_CONFIG.defaultLocale) })
+                          : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.variancePercentToLocaleString, { "variancePercent": vendor.variancePercent, "toLocaleString": vendor.varianceAmount.toLocaleString(I18N_CONFIG.defaultLocale) })}
                       </span>
                     ) : (
-                      '-'
+                      UI_STRINGS.componentsProcurementCommercialWorkspace.copyb41feg
                     )}
                   </td>
 
                   {/* Rank */}
                   <td style={{ textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 700, color: '#0f172a' }}>
-                    {vendor.rank ? `#${vendor.rank}` : '-'}
+                    {vendor.rank ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.rank, { "rank": vendor.rank }) : UI_STRINGS.componentsProcurementCommercialWorkspace.copyb41feg}
                   </td>
                 </tr>
               ))}
@@ -924,30 +901,29 @@ export default function ProcurementCommercialWorkspace({
             <tfoot style={{ background: '#f8fafc', fontWeight: 600, fontSize: 12 }}>
               <tr>
                 <td colSpan={3} style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>
-                  <span style={{ color: '#475569' }}>Benchmark Total: </span>
+                  <span style={{ color: '#475569' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.benchmarkTotal}</span>
                   <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>
-                    {aiBenchmarkTotal > 0 ? `₹ ${aiBenchmarkTotal.toLocaleString('en-IN')}` : '—'}
+                    {aiBenchmarkTotal > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": aiBenchmarkTotal.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                   </span>
                 </td>
                 <td colSpan={2} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                  <span style={{ color: '#475569' }}>Lowest Complete Quote: </span>
+                  <span style={{ color: '#475569' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.lowestCompleteQuote}</span>
                   <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>
                     {lowestCompleteQuote > 0 ? (
-                      <span>
-                        ₹ {lowestCompleteQuote.toLocaleString('en-IN')}{' '}
-                        {l1Vendor && <span style={{ color: '#64748b', fontWeight: 400 }}>({l1Vendor.vendorName})</span>}
+                      <span>{UI_STRINGS.common.copy1g8b5tg}{lowestCompleteQuote.toLocaleString(I18N_CONFIG.defaultLocale)}{' '}
+                        {l1Vendor && <span style={{ color: '#64748b', fontWeight: 400 }}>{UI_STRINGS.common.copychzfvb}{l1Vendor.vendorName}{UI_STRINGS.common.copyc7zu6c}</span>}
                       </span>
                     ) : (
-                      '—'
+                      UI_STRINGS.common.copy4s9bsz
                     )}
                   </span>
                 </td>
                 <td colSpan={2} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                  <span style={{ color: '#475569' }}>Potential Savings: </span>
+                  <span style={{ color: '#475569' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.potentialSavings}</span>
                   <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>
                     {potentialSavings > 0
-                      ? `₹ ${potentialSavings.toLocaleString('en-IN')} (${potentialSavingsPercent}%)`
-                      : '—'}
+                      ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleStringPotentialSavingsPercent, { "toLocaleString": potentialSavings.toLocaleString(I18N_CONFIG.defaultLocale), "potentialSavingsPercent": potentialSavingsPercent })
+                      : UI_STRINGS.common.copy4s9bsz}
                   </span>
                 </td>
               </tr>
@@ -965,42 +941,31 @@ export default function ProcurementCommercialWorkspace({
           <div className="flex items-center gap-2">
             <FileText size={18} className="text-blue-600 shrink-0" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900 m-0">
-                Item-Level Quotation Comparison & Buyer Offer
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5 m-0">
-                Line-by-line commercial rates across all invited vendors with editable Buyer Offer column.
-              </p>
+              <h3 className="text-sm font-bold text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.itemLevelQuotationComparisonBuyerOffer}</h3>
+              <p className="text-xs text-slate-500 mt-0.5 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.lineByLineCommercialRatesAcrossAllInvitedVendorsWithEditableBuyerOfferColumn}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             {selectedLineIds.length > 0 && (
               <span className="text-xs font-semibold text-blue-600">
-                {selectedLineIds.length} of {allLines.length} lines selected
-              </span>
+                {selectedLineIds.length}{UI_STRINGS.common.of}{allLines.length}{UI_STRINGS.componentsProcurementCommercialWorkspace.linesSelected}</span>
             )}
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => handleApplyBatchDiscount(3)}
                 className="px-2 py-0.5 text-xs rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
-              >
-                -3%
-              </button>
+              >{UI_STRINGS.componentsProcurementCommercialWorkspace.copyomz2jg}</button>
               <button
                 type="button"
                 onClick={() => handleApplyBatchDiscount(5)}
                 className="px-2 py-0.5 text-xs rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
-              >
-                -5%
-              </button>
+              >{UI_STRINGS.componentsProcurementCommercialWorkspace.copypr3sba}</button>
               <button
                 type="button"
                 onClick={() => handleApplyBatchDiscount(10)}
                 className="px-2 py-0.5 text-xs rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
-              >
-                -10%
-              </button>
+              >{UI_STRINGS.componentsProcurementCommercialWorkspace.copyxbwjl8}</button>
             </div>
           </div>
         </div>
@@ -1041,7 +1006,7 @@ export default function ProcurementCommercialWorkspace({
                     checked={allLinesSelected}
                     onChange={toggleSelectAllLines}
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    title="Select all lines"
+                    title={UI_STRINGS.componentsProcurementCommercialWorkspace.selectAllLines}
                   />
                 </th>
                 <th
@@ -1055,9 +1020,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  S.No.
-                </th>
+                >{UI_STRINGS.common.sNo2}</th>
                 <th
                   rowSpan={2}
                   style={{
@@ -1069,9 +1032,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  Item Code
-                </th>
+                >{UI_STRINGS.common.itemCode}</th>
                 <th
                   rowSpan={2}
                   style={{
@@ -1083,9 +1044,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  Item Description
-                </th>
+                >{UI_STRINGS.common.itemDescription}</th>
                 <th
                   rowSpan={2}
                   style={{
@@ -1097,9 +1056,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  BOQ Description
-                </th>
+                >{UI_STRINGS.common.bOQDescription}</th>
                 <th
                   rowSpan={2}
                   style={{
@@ -1111,9 +1068,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  UOM
-                </th>
+                >{UI_STRINGS.common.uOM}</th>
                 <th
                   rowSpan={2}
                   style={{
@@ -1125,9 +1080,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  Quantity
-                </th>
+                >{UI_STRINGS.common.quantity}</th>
                 <th
                   rowSpan={2}
                   style={{
@@ -1139,9 +1092,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  AI Benchmark Rate (₹)
-                </th>
+                >{UI_STRINGS.componentsProcurementCommercialWorkspace.aIBenchmarkRate2}</th>
 
                 {/* Grouped Vendor Columns */}
                 {invitedVendorsComparison.map((vendor) => (
@@ -1159,9 +1110,7 @@ export default function ProcurementCommercialWorkspace({
                   >
                     <span>{vendor.vendorName}</span>
                     {vendor.vendorCode && (
-                      <span className="text-[11px] font-normal text-slate-500 ml-1">
-                        ({vendor.vendorCode})
-                      </span>
+                      <span className="text-[11px] font-normal text-slate-500 ml-1">{UI_STRINGS.common.copychzfvb}{vendor.vendorCode}{UI_STRINGS.common.copyc7zu6c}</span>
                     )}
                   </th>
                 ))}
@@ -1178,9 +1127,7 @@ export default function ProcurementCommercialWorkspace({
                     fontWeight: 700,
                     color: '#1e293b',
                   }}
-                >
-                  Buyer Offer Rate (₹)
-                </th>
+                >{UI_STRINGS.componentsProcurementCommercialWorkspace.buyerOfferRate}</th>
               </tr>
 
               {/* Row 2: Sub-columns for Vendors */}
@@ -1197,9 +1144,7 @@ export default function ProcurementCommercialWorkspace({
                         fontWeight: 700,
                         color: '#1e293b',
                       }}
-                    >
-                      Rate (₹)
-                    </th>
+                    >{UI_STRINGS.common.rate}</th>
                     <th
                       style={{
                         width: 95,
@@ -1210,9 +1155,7 @@ export default function ProcurementCommercialWorkspace({
                         fontWeight: 700,
                         color: '#1e293b',
                       }}
-                    >
-                      Amount (₹)
-                    </th>
+                    >{UI_STRINGS.componentsProcurementCommercialWorkspace.amount}</th>
                   </React.Fragment>
                 ))}
               </tr>
@@ -1276,7 +1219,7 @@ export default function ProcurementCommercialWorkspace({
 
                     {/* 3. Item Code */}
                     <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
-                      {itemCodeVal || '—'}
+                      {itemCodeVal || UI_STRINGS.common.copy4s9bsz}
                     </td>
 
                     {/* 4. Item Description */}
@@ -1284,7 +1227,7 @@ export default function ProcurementCommercialWorkspace({
                       <div
                         onClick={() => openLineDetailDrawer(line, compLine, sourceBoq, itemCodeVal, itemDescVal, boqDescVal)}
                         className="cursor-pointer group"
-                        title="Click to view details"
+                        title={UI_STRINGS.common.clickToViewDetails}
                       >
                         <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                           {itemDescVal}
@@ -1311,12 +1254,11 @@ export default function ProcurementCommercialWorkspace({
 
                     {/* 7. Quantity */}
                     <td style={{ border: '1px solid #B8C9DC', padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 500, color: '#0f172a' }}>
-                      {line.quantity?.toLocaleString('en-IN')}
+                      {line.quantity?.toLocaleString(I18N_CONFIG.defaultLocale)}
                     </td>
 
                     {/* 8. AI Benchmark Rate (₹) */}
-                    <td style={{ border: '1px solid #B8C9DC', padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
-                      ₹ {(line.benchmarkRate || compLine?.aiUnitCost || 0).toLocaleString('en-IN')}
+                    <td style={{ border: '1px solid #B8C9DC', padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{(line.benchmarkRate || compLine?.aiUnitCost || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                     </td>
 
                     {/* Dynamic Vendor Rates & Line Amounts */}
@@ -1326,10 +1268,10 @@ export default function ProcurementCommercialWorkspace({
                       return (
                         <React.Fragment key={vendor.vendorId}>
                           <td style={{ border: '1px solid #B8C9DC', padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
-                            {vQuote?.quoted ? `₹ ${vQuote.rate.toLocaleString('en-IN')}` : '-'}
+                            {vQuote?.quoted ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": vQuote.rate.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.componentsProcurementCommercialWorkspace.copyb41feg}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
-                            {vQuote?.quoted ? `₹ ${(vQuote.amount || vQuote.rate * line.quantity).toLocaleString('en-IN')}` : '-'}
+                            {vQuote?.quoted ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": (vQuote.amount || vQuote.rate * line.quantity).toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.componentsProcurementCommercialWorkspace.copyb41feg}
                           </td>
                         </React.Fragment>
                       );
@@ -1338,9 +1280,7 @@ export default function ProcurementCommercialWorkspace({
                     {/* Buyer Offer Rate (Final Column) */}
                     <td style={{ border: '1px solid #B8C9DC', padding: '6px 8px', textAlign: 'right' }}>
                       <div className="relative inline-flex items-center w-full">
-                        <span className="absolute left-2.5 text-slate-500 font-medium text-xs pointer-events-none">
-                          ₹
-                        </span>
+                        <span className="absolute left-2.5 text-slate-500 font-medium text-xs pointer-events-none">{UI_STRINGS.common.copy1g8b5tg}</span>
                         <input
                           type="number"
                           min="0"
@@ -1371,24 +1311,20 @@ export default function ProcurementCommercialWorkspace({
             {/* Table Footer Totals */}
             <tfoot style={{ background: '#f8fafc', fontWeight: 700, fontSize: 12 }}>
               <tr>
-                <td colSpan={7} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', color: '#0f172a' }}>
-                  TOTAL PACKAGE COMMERCIAL VALUE:
-                </td>
-                <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
-                  ₹ {aiBenchmarkTotal.toLocaleString('en-IN')}
+                <td colSpan={7} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', color: '#0f172a' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.tOTALPACKAGECOMMERCIALVALUE}</td>
+                <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{aiBenchmarkTotal.toLocaleString(I18N_CONFIG.defaultLocale)}
                 </td>
                 {invitedVendorsComparison.map((vendor) => (
                   <React.Fragment key={vendor.vendorId}>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', color: '#64748b' }}>—</td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', color: '#64748b' }}>{UI_STRINGS.common.copy4s9bsz}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
                       {vendor.latestSubmittedQuoteTotal !== null
-                        ? `₹ ${vendor.latestSubmittedQuoteTotal.toLocaleString('en-IN')}`
-                        : '—'}
+                        ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": vendor.latestSubmittedQuoteTotal.toLocaleString(I18N_CONFIG.defaultLocale) })
+                        : UI_STRINGS.common.copy4s9bsz}
                     </td>
                   </React.Fragment>
                 ))}
-                <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
-                  ₹ {proposedCounterTotal.toLocaleString('en-IN')}
+                <td style={{ border: '1px solid #B8C9DC', padding: '8px 8px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{proposedCounterTotal.toLocaleString(I18N_CONFIG.defaultLocale)}
                 </td>
               </tr>
             </tfoot>
@@ -1399,24 +1335,19 @@ export default function ProcurementCommercialWorkspace({
         <div className="p-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
           {/* Left: Summary */}
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-slate-700">
-              Total Proposed Offer:{' '}
-              <strong className="font-mono text-sm text-slate-900 font-bold ml-1">
-                ₹ {proposedCounterTotal.toLocaleString('en-IN')}
+            <span className="text-xs text-slate-700">{UI_STRINGS.componentsProcurementCommercialWorkspace.totalProposedOffer}{' '}
+              <strong className="font-mono text-sm text-slate-900 font-bold ml-1">{UI_STRINGS.common.copy1g8b5tg}{proposedCounterTotal.toLocaleString(I18N_CONFIG.defaultLocale)}
               </strong>
             </span>
             {modifiedLinesCount > 0 ? (
               <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                {modifiedLinesCount} line{modifiedLinesCount > 1 ? 's' : ''} modified
-              </span>
+                {modifiedLinesCount}{UI_STRINGS.common.line}{modifiedLinesCount > 1 ? UI_STRINGS.common.s : ''}{UI_STRINGS.componentsProcurementCommercialWorkspace.modified}</span>
             ) : (
-              <span className="text-xs text-slate-500 italic">
-                (Baseline rates applied; enter target rates in Buyer Offer column)
-              </span>
+              <span className="text-xs text-slate-500 italic">{UI_STRINGS.componentsProcurementCommercialWorkspace.baselineRatesAppliedEnterTargetRatesInBuyerOfferColumn}</span>
             )}
             {draftSavedTimestamp && (
               <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                <Check size={12} /> Draft saved at {draftSavedTimestamp}
+                <Check size={12} />{UI_STRINGS.componentsProcurementCommercialWorkspace.draftSavedAt}{draftSavedTimestamp}
               </span>
             )}
           </div>
@@ -1429,7 +1360,7 @@ export default function ProcurementCommercialWorkspace({
               className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium px-3 py-1.5 rounded inline-flex items-center gap-1.5 shadow-2xs"
             >
               <Save size={13} />
-              <span>Save as Draft</span>
+              <span>{UI_STRINGS.common.saveAsDraft}</span>
             </button>
 
             <button
@@ -1438,7 +1369,7 @@ export default function ProcurementCommercialWorkspace({
               className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium px-3 py-1.5 rounded inline-flex items-center gap-1.5 shadow-2xs"
             >
               <RotateCcw size={13} />
-              <span>Reset</span>
+              <span>{UI_STRINGS.common.reset}</span>
             </button>
 
             {/* Dropdown-style Send Offer to Vendors */}
@@ -1449,7 +1380,7 @@ export default function ProcurementCommercialWorkspace({
                 onClick={() => setShowSendOfferDropdown((prev) => !prev)}
                 className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold px-3 py-1.5 rounded inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
-                <span>Send Offer to Vendors</span>
+                <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors}</span>
                 <ChevronDown size={14} className="text-slate-600" />
               </button>
 
@@ -1466,7 +1397,7 @@ export default function ProcurementCommercialWorkspace({
                       onChange={toggleAllEligible}
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
-                    <span>Select All Vendors ({eligibleVendors.length})</span>
+                    <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.selectAllVendors}{eligibleVendors.length}{UI_STRINGS.common.copyc7zu6c}</span>
                   </label>
 
                   <div className="flex flex-col gap-1.5 pl-1">
@@ -1491,7 +1422,7 @@ export default function ProcurementCommercialWorkspace({
                       disabled={selectedVendorIds.length === 0 || submittingOffer}
                       className="w-full py-1.5 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-medium rounded text-center transition-colors shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {submittingOffer ? 'Sending...' : 'Send Offer'}
+                      {submittingOffer ? UI_STRINGS.common.sending : UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer}
                     </button>
                   </div>
                 </div>
@@ -1511,18 +1442,14 @@ export default function ProcurementCommercialWorkspace({
         >
           <div className="flex items-center gap-2">
             <FileText size={16} className="text-blue-600 shrink-0" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 m-0">
-              Commercial Terms & Vendor Conditions
-            </h4>
-            <span className="text-[11px] font-medium text-slate-500 ml-1">
-              ({invitedVendorsComparison.length} Vendors)
-            </span>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.commercialTermsVendorConditions}</h4>
+            <span className="text-[11px] font-medium text-slate-500 ml-1">{UI_STRINGS.common.copychzfvb}{invitedVendorsComparison.length}{UI_STRINGS.componentsProcurementCommercialWorkspace.vendors}</span>
           </div>
           <button
             type="button"
             className="text-xs font-semibold text-blue-600 hover:text-blue-800"
           >
-            {showCommercialTerms ? 'Collapse Terms ▲' : 'Expand Terms ▼'}
+            {showCommercialTerms ? UI_STRINGS.componentsProcurementCommercialWorkspace.collapseTerms : UI_STRINGS.componentsProcurementCommercialWorkspace.expandTerms}
           </button>
         </div>
 
@@ -1531,12 +1458,8 @@ export default function ProcurementCommercialWorkspace({
             <table className="w-full text-xs text-left" style={{ borderCollapse: 'collapse', border: '1px solid #B8C9DC', minWidth: 750 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 220, border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                    Commercial Parameter
-                  </th>
-                  <th style={{ width: 260, border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
-                    RFQ Published Baseline
-                  </th>
+                  <th style={{ width: 220, border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.commercialParameter}</th>
+                  <th style={{ width: 260, border: '1px solid #B8C9DC', background: '#f8fafc', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.rFQPublishedBaseline}</th>
                   {invitedVendorsComparison.map((v) => (
                     <th key={v.vendorId} style={{ minWidth: 180, border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 700, color: '#1e293b' }}>
                       {v.vendorName}
@@ -1546,47 +1469,36 @@ export default function ProcurementCommercialWorkspace({
               </thead>
               <tbody>
                 <tr style={{ background: '#ffffff' }}>
-                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>Payment Terms</td>
+                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.common.paymentTerms}</td>
                   <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                    {rfq.paymentTerms || '30 days net from certified progressive invoice'}
+                    {rfq.paymentTerms || UI_STRINGS.componentsProcurementCommercialWorkspace.copydnd1iv}
                   </td>
                   {invitedVendorsComparison.map((v) => (
-                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                      Net 30 days from invoice
-                    </td>
+                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.net30DaysFromInvoice}</td>
                   ))}
                 </tr>
                 <tr style={{ background: '#ffffff' }}>
-                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>Delivery Schedule</td>
+                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.common.deliverySchedule}</td>
                   <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                    {rfq.deliveryRequirement || 'Site delivery & completion within 45 days from work order issuance'}
+                    {rfq.deliveryRequirement || UI_STRINGS.componentsProcurementCommercialWorkspace.siteDeliveryCompletionWithin45DaysFromWorkOrderIssuance}
                   </td>
                   {invitedVendorsComparison.map((v) => (
-                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                      30 calendar days
-                    </td>
+                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.copyxshmsv}</td>
                   ))}
                 </tr>
                 <tr style={{ background: '#ffffff' }}>
-                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>Warranty</td>
-                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                    12 Months defect liability period
-                  </td>
+                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.warranty}</td>
+                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.copy6tu93e}</td>
                   {invitedVendorsComparison.map((v) => (
-                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                      12 Months standard warranty
-                    </td>
+                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.copy14uvrzq}</td>
                   ))}
                 </tr>
                 <tr style={{ background: '#ffffff' }}>
-                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>Commercial Validity</td>
+                  <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.common.commercialValidity}</td>
                   <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                    {rfq.commercialValidityDays || 60} Days
-                  </td>
+                    {rfq.commercialValidityDays || 60}{UI_STRINGS.common.days}</td>
                   {invitedVendorsComparison.map((v) => (
-                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>
-                      60 Days
-                    </td>
+                    <td key={v.vendorId} style={{ border: '1px solid #B8C9DC', padding: '8px 12px', color: '#1e293b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.copy1vaqoda}</td>
                   ))}
                 </tr>
               </tbody>
@@ -1606,13 +1518,9 @@ export default function ProcurementCommercialWorkspace({
                 <RotateCcw size={18} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900 m-0">Reset Counteroffer Rates?</h3>
-                <p className="text-xs text-slate-600 mt-1 m-0">
-                  You have entered custom rates across <strong>{modifiedLinesCount} lines</strong> with a proposed total of <strong>₹ {proposedCounterTotal.toLocaleString('en-IN')}</strong>.
-                </p>
-                <p className="text-xs text-slate-500 mt-2 m-0">
-                  Are you sure you want to discard these entered rates?
-                </p>
+                <h3 className="text-sm font-bold text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.resetCounterofferRates}</h3>
+                <p className="text-xs text-slate-600 mt-1 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.youHaveEnteredCustomRatesAcross}<strong>{modifiedLinesCount}{UI_STRINGS.common.lines2}</strong>{UI_STRINGS.componentsProcurementCommercialWorkspace.withAProposedTotalOf}<strong>{UI_STRINGS.common.copytfdhmk}{proposedCounterTotal.toLocaleString(I18N_CONFIG.defaultLocale)}</strong>{UI_STRINGS.common.copyby08hd}</p>
+                <p className="text-xs text-slate-500 mt-2 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.areYouSureYouWantToDiscardTheseEnteredRates}</p>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -1620,9 +1528,7 @@ export default function ProcurementCommercialWorkspace({
                 type="button"
                 onClick={() => setShowResetModal(false)}
                 className="btn btn-secondary btn-sm text-xs"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={() => {
@@ -1630,9 +1536,7 @@ export default function ProcurementCommercialWorkspace({
                   setShowResetModal(false);
                 }}
                 className="btn btn-primary btn-sm text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium"
-              >
-                Confirm Reset
-              </button>
+              >{UI_STRINGS.componentsProcurementCommercialWorkspace.confirmReset}</button>
             </div>
           </div>
         </div>
@@ -1646,16 +1550,13 @@ export default function ProcurementCommercialWorkspace({
           <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-w-2xl w-full p-5 space-y-3 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-start border-b border-slate-100 pb-2.5">
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                  Negotiation History & Audit Trail
-                </span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded">{UI_STRINGS.componentsProcurementCommercialWorkspace.negotiationHistoryAuditTrail}</span>
                 <h3 className="text-base font-bold text-slate-900 mt-1 m-0">
                   {historyModalVendor.vendorName}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5 m-0">
-                  RFQ: <span className="font-mono font-semibold">{rfq.rfqNumber}</span>
+                <p className="text-xs text-slate-500 mt-0.5 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.rFQ}<span className="font-mono font-semibold">{rfq.rfqNumber}</span>
                   {historyModalVendor.vendorCode && (
-                    <span> • Code: {historyModalVendor.vendorCode}</span>
+                    <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.code}{historyModalVendor.vendorCode}</span>
                   )}
                 </p>
               </div>
@@ -1673,35 +1574,29 @@ export default function ProcurementCommercialWorkspace({
               {/* Initial Quote Record */}
               <div className="p-2.5 bg-slate-50 rounded border border-slate-200 flex justify-between items-center">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                    Initial Quote (Round 0)
-                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">{UI_STRINGS.componentsProcurementCommercialWorkspace.initialQuoteRound0}</span>
                   <span className="font-mono font-bold text-sm text-slate-900">
                     {historyModalVendor.initialQuoteTotal !== null
-                      ? `₹ ${historyModalVendor.initialQuoteTotal.toLocaleString('en-IN')}`
-                      : '—'}
+                      ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": historyModalVendor.initialQuoteTotal.toLocaleString(I18N_CONFIG.defaultLocale) })
+                      : UI_STRINGS.common.copy4s9bsz}
                   </span>
                 </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                  Initial Submission
-                </span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.initialSubmission}</span>
               </div>
 
               {/* Rounds */}
               {historyModalVendor.rounds?.length === 0 ? (
-                <div className="p-6 text-center text-slate-500 bg-slate-50/50 rounded border border-dashed border-slate-200">
-                  No negotiation counteroffers logged yet for this vendor.
-                </div>
+                <div className="p-6 text-center text-slate-500 bg-slate-50/50 rounded border border-dashed border-slate-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.noNegotiationCounteroffersLoggedYetForThisVendor}</div>
               ) : (
                 <div className="border border-slate-200 rounded overflow-hidden">
                   <table className="w-full text-xs text-left border-collapse">
                     <thead className="bg-slate-100 text-slate-700 font-semibold">
                       <tr>
-                        <th className="py-2 px-3">Round</th>
-                        <th className="py-2 px-3 text-right">Buyer Offer</th>
-                        <th className="py-2 px-3 text-right">Vendor Response</th>
-                        <th className="py-2 px-3 text-center">Status</th>
-                        <th className="py-2 px-3">Notes</th>
+                        <th className="py-2 px-3">{UI_STRINGS.common.round}</th>
+                        <th className="py-2 px-3 text-right">{UI_STRINGS.componentsProcurementCommercialWorkspace.buyerOffer}</th>
+                        <th className="py-2 px-3 text-right">{UI_STRINGS.componentsProcurementCommercialWorkspace.vendorResponse}</th>
+                        <th className="py-2 px-3 text-center">{UI_STRINGS.common.status}</th>
+                        <th className="py-2 px-3">{UI_STRINGS.componentsProcurementCommercialWorkspace.notes}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1721,38 +1616,30 @@ export default function ProcurementCommercialWorkspace({
                                 : ''
                             }
                           >
-                            <td className="py-2 px-3 font-mono font-semibold text-slate-800">
-                              Round {r.roundNumber}
+                            <td className="py-2 px-3 font-mono font-semibold text-slate-800">{UI_STRINGS.common.round}{r.roundNumber}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono font-semibold text-blue-900">
-                              ₹ {r.counterOfferAmount ? r.counterOfferAmount.toLocaleString('en-IN') : '—'}
+                            <td className="py-2 px-3 text-right font-mono font-semibold text-blue-900">{UI_STRINGS.common.copy1g8b5tg}{r.counterOfferAmount ? r.counterOfferAmount.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.copy4s9bsz}
                             </td>
                             <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
                               {r.revisedQuoteAmount && r.revisedQuoteAmount > 0 ? (
-                                `₹ ${r.revisedQuoteAmount.toLocaleString('en-IN')}`
+                                interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": r.revisedQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale) })
                               ) : isSuperseded ? (
-                                <span className="text-slate-400 font-normal italic">Superseded</span>
+                                <span className="text-slate-400 font-normal italic">{UI_STRINGS.componentsProcurementCommercialWorkspace.superseded}</span>
                               ) : (
-                                <span className="text-amber-700 font-normal italic">Awaiting Response</span>
+                                <span className="text-amber-700 font-normal italic">{UI_STRINGS.componentsProcurementCommercialWorkspace.awaitingResponse}</span>
                               )}
                             </td>
                             <td className="py-2 px-3 text-center">
                               {isSuperseded ? (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                  SUPERSEDED
-                                </span>
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.sUPERSEDED}</span>
                               ) : isRevised ? (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                  REVISED
-                                </span>
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.rEVISED}</span>
                               ) : (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                  PENDING
-                                </span>
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">{UI_STRINGS.common.pENDING}</span>
                               )}
                             </td>
-                            <td className="py-2 px-3 text-slate-600 max-w-[180px] truncate" title={r.notes || ''}>
-                              {r.notes || '—'}
+                            <td className="py-2 px-3 text-slate-600 max-w-[180px] truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": r.notes || '' })}>
+                              {r.notes || UI_STRINGS.common.copy4s9bsz}
                             </td>
                           </tr>
                         );
@@ -1768,9 +1655,7 @@ export default function ProcurementCommercialWorkspace({
                 type="button"
                 onClick={() => setHistoryModalVendor(null)}
                 className="btn btn-secondary btn-sm text-xs"
-              >
-                Close
-              </button>
+              >{UI_STRINGS.common.close}</button>
             </div>
           </div>
         </div>
@@ -1862,8 +1747,7 @@ export default function ProcurementCommercialWorkspace({
               <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-start justify-between shrink-0">
                 <div className="space-y-1.5 pr-4">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded border border-blue-200">
-                      Line {selectedLineForDetail.lineNumber}
+                    <span className="text-xs font-mono font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded border border-blue-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.line}{selectedLineForDetail.lineNumber}
                     </span>
                     {selectedLineForDetail.itemCode && (
                       <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-200 px-2.5 py-0.5 rounded border border-slate-300">
@@ -1876,8 +1760,7 @@ export default function ProcurementCommercialWorkspace({
                       </span>
                     )}
                     {isLineModifiedInDraft && (
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded border border-emerald-300">
-                        Draft Rate: ₹{lineCounterRates[selectedLineForDetail.id].toLocaleString('en-IN')}
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded border border-emerald-300">{UI_STRINGS.componentsProcurementCommercialWorkspace.draftRate}{lineCounterRates[selectedLineForDetail.id].toLocaleString(I18N_CONFIG.defaultLocale)}
                       </span>
                     )}
                   </div>
@@ -1889,7 +1772,7 @@ export default function ProcurementCommercialWorkspace({
                   type="button"
                   onClick={() => setSelectedLineForDetail(null)}
                   className="text-slate-400 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-200 transition-colors shrink-0"
-                  title="Close drawer"
+                  title={UI_STRINGS.componentsProcurementCommercialWorkspace.closeDrawer}
                 >
                   <X size={20} />
                 </button>
@@ -1905,44 +1788,37 @@ export default function ProcurementCommercialWorkspace({
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2">
                       <FileText size={18} className="text-blue-700" />
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">
-                        Section 1 — Item Details
-                      </h4>
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.section1ItemDetails}</h4>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-medium">Baseline Specification &amp; Technical Scope</span>
+                    <span className="text-[11px] text-slate-500 font-medium">{UI_STRINGS.componentsProcurementCommercialWorkspace.baselineSpecificationAmpTechnicalScope}</span>
                   </div>
 
                   {/* Complete BOQ Description (Full text, natural wrapping) */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                        Complete BOQ Description
-                      </span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">{UI_STRINGS.componentsProcurementCommercialWorkspace.completeBOQDescription}</span>
                       {selectedLineForDetail.fullBoqDescription && (
                         <span className="text-[10px] text-slate-400 font-mono">
-                          {selectedLineForDetail.fullBoqDescription.length} characters
-                        </span>
+                          {selectedLineForDetail.fullBoqDescription.length}{UI_STRINGS.common.characters}</span>
                       )}
                     </div>
                     <div className="bg-slate-50/80 p-3.5 rounded-lg border border-slate-200 text-slate-900 leading-relaxed text-xs sm:text-sm whitespace-pre-wrap font-sans">
                       {selectedLineForDetail.fullBoqDescription && selectedLineForDetail.fullBoqDescription.trim() !== '' ? (
                         selectedLineForDetail.fullBoqDescription
                       ) : (
-                        <span className="text-slate-400 italic">Not provided in source BOQ</span>
+                        <span className="text-slate-400 italic">{UI_STRINGS.componentsProcurementCommercialWorkspace.notProvidedInSourceBOQ}</span>
                       )}
                     </div>
                   </div>
 
                   {/* Specification / Technical Scope */}
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                      Specification / Technical Scope
-                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">{UI_STRINGS.componentsProcurementCommercialWorkspace.specificationTechnicalScope}</span>
                     <div className="bg-slate-50/80 p-3.5 rounded-lg border border-slate-200 text-slate-800 leading-relaxed text-xs sm:text-sm whitespace-pre-wrap">
                       {selectedLineForDetail.specification && selectedLineForDetail.specification.trim() !== '' ? (
                         selectedLineForDetail.specification
                       ) : (
-                        <span className="text-slate-400 italic">Not provided in technical specification</span>
+                        <span className="text-slate-400 italic">{UI_STRINGS.componentsProcurementCommercialWorkspace.notProvidedInTechnicalSpecification}</span>
                       )}
                     </div>
                   </div>
@@ -1950,77 +1826,61 @@ export default function ProcurementCommercialWorkspace({
                   {/* Structured Responsive Grid of Existing Fields */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Item Code
-                      </span>
-                      <strong className="text-slate-900 font-mono text-xs block truncate" title={selectedLineForDetail.itemCode || '—'}>
-                        {selectedLineForDetail.itemCode || '—'}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.common.itemCode}</span>
+                      <strong className="text-slate-900 font-mono text-xs block truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": selectedLineForDetail.itemCode || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}>
+                        {selectedLineForDetail.itemCode || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Category &amp; Sub-Category
-                      </span>
-                      <strong className="text-slate-900 font-medium text-xs block truncate" title={[selectedLineForDetail.category, selectedLineForDetail.subcategory].filter(Boolean).join(' • ') || '—'}>
-                        {[selectedLineForDetail.category, selectedLineForDetail.subcategory].filter(Boolean).join(' • ') || '—'}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.componentsProcurementCommercialWorkspace.categoryAmpSubCategory}</span>
+                      <strong className="text-slate-900 font-medium text-xs block truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": [selectedLineForDetail.category, selectedLineForDetail.subcategory].filter(Boolean).join(' • ') || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}>
+                        {[selectedLineForDetail.category, selectedLineForDetail.subcategory].filter(Boolean).join(' • ') || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        UOM &amp; Estimated Quantity
-                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.componentsProcurementCommercialWorkspace.uOMAmpEstimatedQuantity}</span>
                       <strong className="text-slate-900 font-mono text-xs block">
-                        {qty.toLocaleString('en-IN')} <span className="font-sans font-normal text-slate-600">{uom}</span>
+                        {qty.toLocaleString(I18N_CONFIG.defaultLocale)} <span className="font-sans font-normal text-slate-600">{uom}</span>
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Location / Area
-                      </span>
-                      <strong className="text-slate-900 font-medium text-xs block truncate" title={selectedLineForDetail.location || '—'}>
-                        {selectedLineForDetail.location || '—'}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.common.locationArea}</span>
+                      <strong className="text-slate-900 font-medium text-xs block truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": selectedLineForDetail.location || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}>
+                        {selectedLineForDetail.location || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Drawing Reference
-                      </span>
-                      <strong className="text-slate-900 font-mono text-xs block truncate" title={selectedLineForDetail.drawingReference || '—'}>
-                        {selectedLineForDetail.drawingReference || '—'}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.common.drawingReference}</span>
+                      <strong className="text-slate-900 font-mono text-xs block truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": selectedLineForDetail.drawingReference || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}>
+                        {selectedLineForDetail.drawingReference || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Brand / Make
-                      </span>
-                      <strong className="text-slate-900 font-medium text-xs block truncate" title={selectedLineForDetail.brand || '—'}>
-                        {selectedLineForDetail.brand || '—'}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.common.brandMake}</span>
+                      <strong className="text-slate-900 font-medium text-xs block truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": selectedLineForDetail.brand || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}>
+                        {selectedLineForDetail.brand || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Material / Grade
-                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.common.materialGrade}</span>
                       <strong
                         className="text-slate-900 font-medium text-xs block truncate"
-                        title={[selectedLineForDetail.model, selectedLineForDetail.material, selectedLineForDetail.grade].filter(Boolean).join(' • ') || '—'}
+                        title={interpolateUiString(UI_STRINGS.common.value1, { "value1": [selectedLineForDetail.model, selectedLineForDetail.material, selectedLineForDetail.grade].filter(Boolean).join(' • ') || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}
                       >
-                        {[selectedLineForDetail.model, selectedLineForDetail.material, selectedLineForDetail.grade].filter(Boolean).join(' • ') || '—'}
+                        {[selectedLineForDetail.model, selectedLineForDetail.material, selectedLineForDetail.grade].filter(Boolean).join(' • ') || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
 
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Standard / Reference
-                      </span>
-                      <strong className="text-slate-900 font-mono text-xs block truncate" title={selectedLineForDetail.standardReference || '—'}>
-                        {selectedLineForDetail.standardReference || '—'}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.componentsProcurementCommercialWorkspace.standardReference}</span>
+                      <strong className="text-slate-900 font-mono text-xs block truncate" title={interpolateUiString(UI_STRINGS.common.value1, { "value1": selectedLineForDetail.standardReference || UI_STRINGS.appAppDashboardPage.copyk7zqc9 })}>
+                        {selectedLineForDetail.standardReference || UI_STRINGS.common.copy4s9bsz}
                       </strong>
                     </div>
                   </div>
@@ -2028,9 +1888,7 @@ export default function ProcurementCommercialWorkspace({
                   {/* Remarks */}
                   {selectedLineForDetail.remarks && (
                     <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Remarks
-                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.common.remarks}</span>
                       <p className="text-xs text-slate-800 m-0 leading-relaxed">
                         {selectedLineForDetail.remarks}
                       </p>
@@ -2045,21 +1903,17 @@ export default function ProcurementCommercialWorkspace({
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2">
                       <TrendingDown size={18} className="text-emerald-700" />
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">
-                        Section 2 — Commercial Details &amp; Vendor Comparison
-                      </h4>
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.section2CommercialDetailsAmpVendorComparison}</h4>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-medium">Pricing Baseline &amp; Submitted Quotations</span>
+                    <span className="text-[11px] text-slate-500 font-medium">{UI_STRINGS.componentsProcurementCommercialWorkspace.pricingBaselineAmpSubmittedQuotations}</span>
                   </div>
 
                   {/* Three Compact Summary Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                        Quantity &amp; UOM
-                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">{UI_STRINGS.componentsProcurementCommercialWorkspace.quantityAmpUOM}</span>
                       <strong className="text-slate-900 font-mono text-base block">
-                        {qty.toLocaleString('en-IN')}{' '}
+                        {qty.toLocaleString(I18N_CONFIG.defaultLocale)}{' '}
                         <span className="text-xs font-normal text-slate-600 font-sans">
                           {uom}
                         </span>
@@ -2067,54 +1921,33 @@ export default function ProcurementCommercialWorkspace({
                     </div>
 
                     <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block mb-1">
-                        AI Benchmark Unit Rate
-                      </span>
-                      <strong className="text-blue-950 font-mono text-base block">
-                        ₹ {aiBenchmarkRate.toLocaleString('en-IN')}{' '}
-                        <span className="text-xs font-normal text-blue-700 font-sans">
-                          / {uom}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block mb-1">{UI_STRINGS.componentsProcurementCommercialWorkspace.aIBenchmarkUnitRate}</span>
+                      <strong className="text-blue-950 font-mono text-base block">{UI_STRINGS.common.copy1g8b5tg}{aiBenchmarkRate.toLocaleString(I18N_CONFIG.defaultLocale)}{' '}
+                        <span className="text-xs font-normal text-blue-700 font-sans">{UI_STRINGS.common.copybo0mse}{uom}
                         </span>
                       </strong>
                     </div>
 
                     <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-200">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block mb-1">
-                        AI Benchmark Total
-                      </span>
-                      <strong className="text-blue-950 font-mono text-base block">
-                        ₹ {aiBenchmarkTotal.toLocaleString('en-IN')}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 block mb-1">{UI_STRINGS.componentsProcurementCommercialWorkspace.aIBenchmarkTotal}</span>
+                      <strong className="text-blue-950 font-mono text-base block">{UI_STRINGS.common.copy1g8b5tg}{aiBenchmarkTotal.toLocaleString(I18N_CONFIG.defaultLocale)}
                       </strong>
                     </div>
                   </div>
 
                   {/* Vendor Comparison Table */}
                   <div className="space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                      Submitted Vendor Quotes for this Line
-                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">{UI_STRINGS.componentsProcurementCommercialWorkspace.submittedVendorQuotesForThisLine}</span>
                     <div className="border border-slate-300 rounded-lg overflow-x-auto shadow-2xs">
                       <table className="w-full text-xs text-left" style={{ borderCollapse: 'collapse' }}>
                         <thead className="bg-slate-100 text-slate-700 font-bold">
                           <tr>
-                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 10px', textAlign: 'center', width: 48 }}>
-                              S.No.
-                            </th>
-                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>
-                              Vendor Name
-                            </th>
-                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                              Quoted Rate
-                            </th>
-                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                              Line Amount
-                            </th>
-                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                              Variance vs AI
-                            </th>
-                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>
-                              Remarks
-                            </th>
+                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 10px', textAlign: 'center', width: 48 }}>{UI_STRINGS.common.sNo2}</th>
+                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>{UI_STRINGS.common.vendorName}</th>
+                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.quotedRate}</th>
+                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.lineAmount}</th>
+                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.varianceVsAI}</th>
+                            <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>{UI_STRINGS.common.remarks}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2130,33 +1963,29 @@ export default function ProcurementCommercialWorkspace({
                               <td style={{ border: '1px solid #B8C9DC', padding: '7px 12px' }}>
                                 <div className="flex items-center gap-2">
                                   {vq.isL1 && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-600 text-white">
-                                      L1
-                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-600 text-white">{UI_STRINGS.componentsProcurementCommercialWorkspace.l1}</span>
                                   )}
                                   <span className="font-semibold text-slate-900">{vq.vendorName}</span>
                                   {vq.vendorCode && (
-                                    <span className="text-[10px] text-slate-500 font-mono">
-                                      ({vq.vendorCode})
-                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-mono">{UI_STRINGS.common.copychzfvb}{vq.vendorCode}{UI_STRINGS.common.copyc7zu6c}</span>
                                   )}
                                 </div>
                               </td>
                               <td style={{ border: '1px solid #B8C9DC', padding: '7px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
-                                {vq.rate !== null ? `₹ ${vq.rate.toLocaleString('en-IN')}` : '—'}
+                                {vq.rate !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": vq.rate.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                               </td>
                               <td style={{ border: '1px solid #B8C9DC', padding: '7px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#334155' }}>
-                                {vq.amount !== null ? `₹ ${vq.amount.toLocaleString('en-IN')}` : '—'}
+                                {vq.amount !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": vq.amount.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                               </td>
                               <td style={{ border: '1px solid #B8C9DC', padding: '7px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
                                 {vq.varianceAmount !== null ? (
                                   <span className={vq.varianceAmount >= 0 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
                                     {vq.varianceAmount >= 0
-                                      ? `+₹ ${vq.varianceAmount.toLocaleString('en-IN')} (${vq.variancePercent?.toFixed(1)}%)`
-                                      : `-₹ ${Math.abs(vq.varianceAmount).toLocaleString('en-IN')} (${Math.abs(Number(vq.variancePercent)).toFixed(1)}%)`}
+                                      ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleStringToFixed, { "toLocaleString": vq.varianceAmount.toLocaleString(I18N_CONFIG.defaultLocale), "toFixed": vq.variancePercent?.toFixed(1) })
+                                      : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleStringToFixed2, { "toLocaleString": Math.abs(vq.varianceAmount).toLocaleString(I18N_CONFIG.defaultLocale), "toFixed": Math.abs(Number(vq.variancePercent)).toFixed(1) })}
                                   </span>
                                 ) : (
-                                  <span className="text-slate-400">—</span>
+                                  <span className="text-slate-400">{UI_STRINGS.common.copy4s9bsz}</span>
                                 )}
                               </td>
                               <td style={{ border: '1px solid #B8C9DC', padding: '7px 12px', color: '#475569' }}>
@@ -2177,26 +2006,19 @@ export default function ProcurementCommercialWorkspace({
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2">
                       <Tag size={18} className="text-blue-700" />
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">
-                        Section 3 — Buyer Offer for This Item
-                      </h4>
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.section3BuyerOfferForThisItem}</h4>
                     </div>
-                    <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">
-                      Editable Target Rate
-                    </span>
+                    <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.editableTargetRate}</span>
                   </div>
 
                   <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-4 space-y-3.5 shadow-2xs">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Editable Target Unit Rate */}
                       <div>
-                        <label className="text-xs font-bold text-slate-800 block mb-1.5">
-                          Target Unit Rate (₹ / {uom}) <span className="text-rose-500">*</span>
+                        <label className="text-xs font-bold text-slate-800 block mb-1.5">{UI_STRINGS.componentsProcurementCommercialWorkspace.targetUnitRate}{uom}{UI_STRINGS.componentsProcurementCommercialWorkspace.copy1xvkpbg}<span className="text-rose-500">{UI_STRINGS.common.copyd1yn99}</span>
                         </label>
                         <div className="relative">
-                          <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-sm pointer-events-none select-none">
-                            ₹
-                          </span>
+                          <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-sm pointer-events-none select-none">{UI_STRINGS.common.copy1g8b5tg}</span>
                           <input
                             type="number"
                             min="0"
@@ -2217,20 +2039,17 @@ export default function ProcurementCommercialWorkspace({
                           />
                         </div>
                         <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-500">
-                          <span>AI Baseline: <strong className="text-slate-700 font-mono">₹ {aiBenchmarkRate.toLocaleString('en-IN')} / {uom}</strong></span>
+                          <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.aIBaseline}<strong className="text-slate-700 font-mono">{UI_STRINGS.common.copytfdhmk}{aiBenchmarkRate.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.common.copy3ml01c}{uom}</strong></span>
                         </div>
                       </div>
 
                       {/* Read-only Calculated Line Amount */}
                       <div>
-                        <label className="text-xs font-bold text-slate-800 block mb-1.5">
-                          Calculated Line Amount (₹)
-                        </label>
-                        <div className="h-10 bg-white border border-slate-300 rounded px-3.5 flex items-center justify-end font-mono font-bold text-sm text-blue-950 shadow-2xs">
-                          ₹ {calculatedDrawerLineAmount.toLocaleString('en-IN')}
+                        <label className="text-xs font-bold text-slate-800 block mb-1.5">{UI_STRINGS.componentsProcurementCommercialWorkspace.calculatedLineAmount}</label>
+                        <div className="h-10 bg-white border border-slate-300 rounded px-3.5 flex items-center justify-end font-mono font-bold text-sm text-blue-950 shadow-2xs">{UI_STRINGS.common.copy1g8b5tg}{calculatedDrawerLineAmount.toLocaleString(I18N_CONFIG.defaultLocale)}
                         </div>
                         <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-500">
-                          <span>Quantity: <strong className="text-slate-700 font-mono">{qty.toLocaleString('en-IN')} {uom}</strong></span>
+                          <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.quantity}<strong className="text-slate-700 font-mono">{qty.toLocaleString(I18N_CONFIG.defaultLocale)} {uom}</strong></span>
                         </div>
                       </div>
                     </div>
@@ -2245,9 +2064,7 @@ export default function ProcurementCommercialWorkspace({
 
                     <div className="pt-1 text-[11px] text-slate-500 flex items-center gap-1.5">
                       <Info size={13} className="text-slate-400 shrink-0" />
-                      <span>
-                        Applying an offer updates the draft rate and quotation comparison table only. Final counteroffers are dispatched explicitly.
-                      </span>
+                      <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.applyingAnOfferUpdatesTheDraftRateAndQuotationComparisonTableOnlyFinalCounteroffersAreDispatchedExplicitly}</span>
                     </div>
                   </div>
                 </div>
@@ -2259,132 +2076,105 @@ export default function ProcurementCommercialWorkspace({
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2">
                       <Scale size={18} className="text-indigo-700" />
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">
-                        Section 4 — Cost Analysis
-                      </h4>
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900 m-0">{UI_STRINGS.componentsProcurementCommercialWorkspace.section4CostAnalysis}</h4>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-medium">Comparative Savings &amp; Variance Analysis</span>
+                    <span className="text-[11px] text-slate-500 font-medium">{UI_STRINGS.componentsProcurementCommercialWorkspace.comparativeSavingsAmpVarianceAnalysis}</span>
                   </div>
 
                   <div className="border border-slate-300 rounded-lg overflow-x-auto shadow-2xs">
                     <table className="w-full text-xs text-left" style={{ borderCollapse: 'collapse' }}>
                       <thead className="bg-slate-100 text-slate-700 font-bold">
                         <tr>
-                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>
-                            Cost Metric / Parameter
-                          </th>
-                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                            Unit Rate (₹ / {uom})
-                          </th>
-                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                            Total Line Amount (₹)
-                          </th>
-                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>
-                            Variance / Savings Impact
-                          </th>
+                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.costMetricParameter}</th>
+                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.unitRate}{uom}{UI_STRINGS.common.copyc7zu6c}</th>
+                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.totalLineAmount}</th>
+                          <th style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.varianceSavingsImpact}</th>
                         </tr>
                       </thead>
                       <tbody style={{ background: '#ffffff' }}>
                         {/* 1. AI Benchmark Rate */}
                         <tr>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>
-                            AI Benchmark Rate
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.aIBenchmarkRate}</td>
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}{aiBenchmarkRate.toLocaleString(I18N_CONFIG.defaultLocale)}
                           </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
-                            ₹ {aiBenchmarkRate.toLocaleString('en-IN')}
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}{aiBenchmarkTotal.toLocaleString(I18N_CONFIG.defaultLocale)}
                           </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
-                            ₹ {aiBenchmarkTotal.toLocaleString('en-IN')}
-                          </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>
-                            Baseline Reference (0.0%)
-                          </td>
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.baselineReference00}</td>
                         </tr>
 
                         {/* 2. Lowest Quoted Rate */}
                         <tr>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>
-                            Lowest Quoted Rate {lowestQuote ? `(${lowestQuote.vendorName})` : ''}
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.lowestQuotedRate}{lowestQuote ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.vendorName, { "vendorName": lowestQuote.vendorName }) : ''}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
-                            {lowestQuote?.rate !== null && lowestQuote ? `₹ ${lowestQuote.rate.toLocaleString('en-IN')}` : '—'}
+                            {lowestQuote?.rate !== null && lowestQuote ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": lowestQuote.rate.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
-                            {lowestQuote?.amount !== null && lowestQuote ? `₹ ${lowestQuote.amount.toLocaleString('en-IN')}` : '—'}
+                            {lowestQuote?.amount !== null && lowestQuote ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": lowestQuote.amount.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
                             {lowestQuote && lowestQuote.varianceAmount !== null ? (
                               <span className={lowestQuote.varianceAmount >= 0 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
                                 {lowestQuote.varianceAmount >= 0
-                                  ? `+₹ ${lowestQuote.varianceAmount.toLocaleString('en-IN')} (${lowestQuote.variancePercent?.toFixed(1)}%)`
-                                  : `-₹ ${Math.abs(lowestQuote.varianceAmount).toLocaleString('en-IN')} (${Math.abs(Number(lowestQuote.variancePercent)).toFixed(1)}%)`}
+                                  ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleStringToFixed, { "toLocaleString": lowestQuote.varianceAmount.toLocaleString(I18N_CONFIG.defaultLocale), "toFixed": lowestQuote.variancePercent?.toFixed(1) })
+                                  : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleStringToFixed2, { "toLocaleString": Math.abs(lowestQuote.varianceAmount).toLocaleString(I18N_CONFIG.defaultLocale), "toFixed": Math.abs(Number(lowestQuote.variancePercent)).toFixed(1) })}
                               </span>
                             ) : (
-                              '—'
+                              UI_STRINGS.common.copy4s9bsz
                             )}
                           </td>
                         </tr>
 
                         {/* 3. Buyer Offer Rate */}
                         <tr style={{ background: '#f8fafc' }}>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 700, color: '#1d4ed8' }}>
-                            Buyer Offer Rate (Proposed)
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 700, color: '#1d4ed8' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.buyerOfferRateProposed}</td>
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8' }}>{UI_STRINGS.common.copy1g8b5tg}{buyerOfferRateNum.toLocaleString(I18N_CONFIG.defaultLocale)}
                           </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8' }}>
-                            ₹ {buyerOfferRateNum.toLocaleString('en-IN')}
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8' }}>{UI_STRINGS.common.copy1g8b5tg}{buyerOfferTotal.toLocaleString(I18N_CONFIG.defaultLocale)}
                           </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8' }}>
-                            ₹ {buyerOfferTotal.toLocaleString('en-IN')}
-                          </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#1d4ed8', fontWeight: 600 }}>
-                            Target Buyer Negotiation
-                          </td>
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#1d4ed8', fontWeight: 600 }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.targetBuyerNegotiation}</td>
                         </tr>
 
                         {/* 4. Savings vs AI Benchmark */}
                         <tr>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>
-                            Savings vs AI Benchmark
-                          </td>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>
-                            ₹ {savingsVsAiRate.toLocaleString('en-IN')}
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.savingsVsAIBenchmark}</td>
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}{savingsVsAiRate.toLocaleString(I18N_CONFIG.defaultLocale)}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
                             <span className={savingsVsAiTotal >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                              {savingsVsAiTotal >= 0 ? `+₹ ${savingsVsAiTotal.toLocaleString('en-IN')}` : `-₹ ${Math.abs(savingsVsAiTotal).toLocaleString('en-IN')}`}
+                              {savingsVsAiTotal >= 0 ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleString, { "toLocaleString": savingsVsAiTotal.toLocaleString(I18N_CONFIG.defaultLocale) }) : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleString2, { "toLocaleString": Math.abs(savingsVsAiTotal).toLocaleString(I18N_CONFIG.defaultLocale) })}
                             </span>
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
                             <span className={savingsVsAiPercent >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                              {savingsVsAiPercent >= 0 ? `+${savingsVsAiPercent.toFixed(1)}%` : `${savingsVsAiPercent.toFixed(1)}%`}
+                              {savingsVsAiPercent >= 0 ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toFixed, { "toFixed": savingsVsAiPercent.toFixed(1) }) : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toFixed2, { "toFixed": savingsVsAiPercent.toFixed(1) })}
                             </span>
                           </td>
                         </tr>
 
                         {/* 5. Savings vs Next Best Offer (only when supported by actual data) */}
                         <tr>
-                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>
-                            Savings vs Next Best Offer {nextBestQuote ? `(${nextBestQuote.vendorName})` : ''}
+                          <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.componentsProcurementCommercialWorkspace.savingsVsNextBestOffer}{nextBestQuote ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.vendorName, { "vendorName": nextBestQuote.vendorName }) : ''}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
-                            {savingsVsNextBestRate !== null ? `₹ ${savingsVsNextBestRate.toLocaleString('en-IN')}` : '—'}
+                            {savingsVsNextBestRate !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": savingsVsNextBestRate.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
                             {savingsVsNextBestTotal !== null ? (
                               <span className={savingsVsNextBestTotal >= 0 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
-                                {savingsVsNextBestTotal >= 0 ? `+₹ ${savingsVsNextBestTotal.toLocaleString('en-IN')}` : `-₹ ${Math.abs(savingsVsNextBestTotal).toLocaleString('en-IN')}`}
+                                {savingsVsNextBestTotal >= 0 ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleString, { "toLocaleString": savingsVsNextBestTotal.toLocaleString(I18N_CONFIG.defaultLocale) }) : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toLocaleString2, { "toLocaleString": Math.abs(savingsVsNextBestTotal).toLocaleString(I18N_CONFIG.defaultLocale) })}
                               </span>
                             ) : (
-                              <span className="text-slate-400">—</span>
+                              <span className="text-slate-400">{UI_STRINGS.common.copy4s9bsz}</span>
                             )}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
                             {savingsVsNextBestPercent !== null ? (
                               <span className={savingsVsNextBestPercent >= 0 ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
-                                {savingsVsNextBestPercent >= 0 ? `+${savingsVsNextBestPercent.toFixed(1)}%` : `${savingsVsNextBestPercent.toFixed(1)}%`}
+                                {savingsVsNextBestPercent >= 0 ? interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toFixed, { "toFixed": savingsVsNextBestPercent.toFixed(1) }) : interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.toFixed2, { "toFixed": savingsVsNextBestPercent.toFixed(1) })}
                               </span>
                             ) : (
-                              <span className="text-slate-400 italic text-[11px]">Requires at least 2 vendor quotations</span>
+                              <span className="text-slate-400 italic text-[11px]">{UI_STRINGS.componentsProcurementCommercialWorkspace.requiresAtLeast2VendorQuotations}</span>
                             )}
                           </td>
                         </tr>
@@ -2399,18 +2189,14 @@ export default function ProcurementCommercialWorkspace({
               {/* STICKY FOOTER ACTIONS (BOTTOM-RIGHT)                         */}
               {/* ------------------------------------------------------------- */}
               <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
-                <span className="text-[11px] text-slate-500 max-w-sm sm:max-w-md">
-                  Draft rates update the comparison table &amp; totals. Final offer dispatch is executed via the workspace controls.
-                </span>
+                <span className="text-[11px] text-slate-500 max-w-sm sm:max-w-md">{UI_STRINGS.componentsProcurementCommercialWorkspace.draftRatesUpdateTheComparisonTableAmpTotalsFinalOfferDispatchIsExecutedViaTheWorkspaceControls}</span>
                 <div className="flex items-center gap-2.5 shrink-0">
                   {/* 1. Cancel */}
                   <button
                     type="button"
                     onClick={handleCancelDrawerRate}
                     className="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors shadow-2xs"
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
 
                   {/* 2. Save to Draft */}
                   <button
@@ -2425,7 +2211,7 @@ export default function ProcurementCommercialWorkspace({
                     className="px-4 py-2 rounded-lg border border-blue-300 bg-blue-50/70 hover:bg-blue-100 active:bg-blue-200 text-xs font-bold text-blue-700 shadow-2xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
                     <Save size={14} />
-                    <span>Save to Draft</span>
+                    <span>{UI_STRINGS.componentsProcurementCommercialWorkspace.saveToDraft}</span>
                   </button>
 
                   {/* 3. Apply Offer to Item */}
@@ -2441,7 +2227,7 @@ export default function ProcurementCommercialWorkspace({
                     className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                   >
                     <Check size={14} />
-                    <span>{isApplyingOffer ? 'Applying...' : 'Apply Offer to Item'}</span>
+                    <span>{isApplyingOffer ? UI_STRINGS.componentsProcurementCommercialWorkspace.applying : UI_STRINGS.componentsProcurementCommercialWorkspace.applyOfferToItem}</span>
                   </button>
                 </div>
               </div>

@@ -3,6 +3,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -158,7 +161,7 @@ export async function GET(req: NextRequest) {
         lines: rev.lines.map((l) => ({
           id: l.id,
           lineNumber: l.lineNumber || l.itemCode || 'L-1',
-          description: l.standardDescription || l.originalDescription,
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": l.standardDescription || l.originalDescription }),
           specification: l.specification || 'Standard commercial grade',
           category: l.category?.name || 'General',
           subcategory: (l as any).subcategoryId || '',
@@ -173,6 +176,6 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ approvedBoqs: formatted, total: formatted.length });
   } catch (error: any) {
     console.error('Error fetching approved BOQs for sourcing:', error);
-    return apiError(error.message || 'Failed to fetch approved BOQs', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs }), 500);
   }
 }

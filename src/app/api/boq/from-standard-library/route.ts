@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');
@@ -12,20 +15,20 @@ export async function POST(req: NextRequest) {
     const { projectId, costCentreId, items } = body;
 
     if (!projectId || !items || !Array.isArray(items) || items.length === 0) {
-      return apiError('Project ID and a list of selected standard items are required.', 400);
+      return apiError(UI_STRINGS.appApiBoqFromStandardLibraryRoute.projectIDAndAListOfSelectedStandardItemsAreRequired, 400);
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError('Project not found.', 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
     // Verify Cost Centre if provided
     if (costCentreId) {
       const cc = await prisma.costCentre.findFirst({
         where: { id: costCentreId, projectId, tenantId: ctx.tenantId },
       });
-      if (!cc) return apiError('Cost centre not found for this project.', 404);
+      if (!cc) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
     }
 
     // Generate unique BOQ Code
@@ -117,7 +120,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BOQ',
         entityId: boq.id,
         action: 'BOQ_GENERATED_FROM_STANDARD_LIBRARY',
-        description: `Draft BOQ ${boq.boqCode} generated from Standard Library with ${items.length} items`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqFromStandardLibraryRoute.draftBOQBoqCodeGeneratedFromStandardLibraryWithLengthItems, { "boqCode": boq.boqCode, "length": items.length }),
       },
     });
 
@@ -130,6 +133,6 @@ export async function POST(req: NextRequest) {
       qualityScore: 100,
     }, 201);
   } catch (err: any) {
-    return apiError(err.message || 'Standard BOQ generation failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.standardBoqGenerationFailed }), 500);
   }
 }

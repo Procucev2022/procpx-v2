@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { POST, resetClientLogRateLimits } from '../src/app/api/observability/client/route';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/observability/server-logger', () => ({
   writeStructuredLog: jest.fn().mockResolvedValue(undefined),
@@ -46,7 +48,7 @@ describe('client observability endpoint', () => {
 
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ accepted: 1 });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'browser failed', expect.objectContaining({
+    expect(writeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.common.error2, 'browser failed', expect.objectContaining({
       clientTimestamp: event.timestamp,
       clientPath: '/api/pr?id=%5BREDACTED%5D',
     }), 'browser');

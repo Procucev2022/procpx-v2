@@ -26,6 +26,9 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { FileSpreadsheet, CheckCircle, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function QualityBar({ score }: { score?: number | null }) {
   if (score == null) return null;
@@ -33,7 +36,7 @@ function QualityBar({ score }: { score?: number | null }) {
   return (
     <div className="quality-score" style={{ width: 180 }}>
       <div className="quality-bar"><div className="quality-fill" style={{ width: `${score}%`, background: color }} /></div>
-      <span className="quality-label" style={{ color }}>{score}%</span>
+      <span className="quality-label" style={{ color }}>{score}{UI_STRINGS.common.copy8w4luo}</span>
     </div>
   );
 }
@@ -123,11 +126,11 @@ export default function BoqWorkspacePage() {
   };
 
   const standardiseBoq = async () => {
-    setActionMsg({ isError: false, text: 'Standardising descriptions and UOMs against enterprise catalog...' });
+    setActionMsg({ isError: false, text: UI_STRINGS.appAppBoqRevisionIdPage.standardisingDescriptionsAndUOMsAgainstEnterpriseCatalog });
     const res = await fetch(`/api/boq/${revisionId}/standardise`, { method: 'POST' });
     const d = await res.json();
     if (res.ok) {
-      setActionMsg({ isError: false, text: `${d.message} (Score: ${d.qualityScore}%)` });
+      setActionMsg({ isError: false, text: interpolateUiString(UI_STRINGS.appAppBoqRevisionIdPage.messageScoreQualityScore, { "message": d.message, "qualityScore": d.qualityScore }) });
       loadLines();
     } else {
       setActionMsg({ isError: true, text: d.error });
@@ -135,11 +138,11 @@ export default function BoqWorkspacePage() {
   };
 
   const validateBoq = async () => {
-    setActionMsg({ isError: false, text: 'Running full line-level validation checks...' });
+    setActionMsg({ isError: false, text: UI_STRINGS.appAppBoqRevisionIdPage.runningFullLineLevelValidationChecks });
     const res = await fetch(`/api/boq/${revisionId}/validate`, { method: 'POST' });
     const d = await res.json();
     if (res.ok) {
-      setActionMsg({ isError: false, text: `Validation updated: Quality Score is ${d.qualityScore}%, ${d.errorLines} errors, ${d.warningLines} warnings.` });
+      setActionMsg({ isError: false, text: interpolateUiString(UI_STRINGS.appAppBoqRevisionIdPage.validationUpdatedQualityScoreIsQualityScoreErrorLinesErrorsWarningLinesWarnings, { "qualityScore": d.qualityScore, "errorLines": d.errorLines, "warningLines": d.warningLines }) });
       loadLines();
     } else {
       setActionMsg({ isError: true, text: d.error });
@@ -147,29 +150,29 @@ export default function BoqWorkspacePage() {
   };
 
   const submitBoq = async () => {
-    if (!confirm('Submit this BOQ for approval?')) return;
+    if (!confirm(UI_STRINGS.appAppBoqRevisionIdPage.submitThisBOQForApproval)) return;
     const res = await fetch(`/api/boq/${revisionId}/submit`, { method: 'POST' });
     const d = await res.json();
     if (res.ok) {
-      toast.success('BOQ submitted successfully.', d.revisionCode || revision?.revisionCode, 'Awaiting Project Approver');
-      setActionMsg({ isError: false, text: 'BOQ submitted successfully.' });
+      toast.success(UI_STRINGS.common.bOQSubmittedSuccessfully, d.revisionCode || revision?.revisionCode, UI_STRINGS.appAppProcurementPposPage.awaitingProjectApprover);
+      setActionMsg({ isError: false, text: UI_STRINGS.common.bOQSubmittedSuccessfully });
       loadLines();
     } else {
-      toast.error(d.error || 'Failed to submit BOQ');
+      toast.error(d.error || UI_STRINGS.common.userMessages.failedToSubmitBoq);
       setActionMsg({ isError: true, text: d.error });
     }
   };
 
   const approveBoq = async () => {
-    if (!confirm('Approve this BOQ? This action will make it an immutable commercial baseline.')) return;
+    if (!confirm(UI_STRINGS.appAppBoqRevisionIdPage.approveThisBOQThisActionWillMakeItAnImmutableCommercialBaseline)) return;
     const res = await fetch(`/api/boq/${revisionId}/approve`, { method: 'POST' });
     const d = await res.json();
     if (res.ok) {
-      toast.success('BOQ approved successfully.');
-      setActionMsg({ isError: false, text: 'BOQ approved successfully.' });
+      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully);
+      setActionMsg({ isError: false, text: UI_STRINGS.common.bOQApprovedSuccessfully });
       loadLines();
     } else {
-      toast.error(d.error || 'Failed to approve BOQ');
+      toast.error(d.error || UI_STRINGS.common.userMessages.failedToApproveBoq);
       setActionMsg({ isError: true, text: d.error });
     }
   };
@@ -183,12 +186,12 @@ export default function BoqWorkspacePage() {
     });
     const d = await res.json();
     setShowRejectModal(false);
-    if (res.ok) { setActionMsg({ isError: false, text: 'BOQ rejected with mandatory reason.' }); loadLines(); }
+    if (res.ok) { setActionMsg({ isError: false, text: UI_STRINGS.appAppBoqRevisionIdPage.bOQRejectedWithMandatoryReason }); loadLines(); }
     else setActionMsg({ isError: true, text: d.error });
   };
 
   const newRevision = async () => {
-    if (!confirm('Create a new draft revision from this approved BOQ?')) return;
+    if (!confirm(UI_STRINGS.appAppBoqRevisionIdPage.createANewDraftRevisionFromThisApprovedBOQ)) return;
     const res = await fetch(`/api/boq/${revisionId}/new-revision`, { method: 'POST' });
     const d = await res.json();
     if (res.ok) { window.location.href = `/boq/${d.revisionId}`; }
@@ -206,8 +209,8 @@ export default function BoqWorkspacePage() {
     <div className="page-content">
       {/* Header */}
       <PageHeader
-        title={revision?.revisionCode ? `BOQ Workspace — ${revision.revisionCode}` : 'BOQ Workspace'}
-        subtitle="Manage BOQ lines, validate specifications, run automated standardisation, and submit for approval"
+        title={revision?.revisionCode ? interpolateUiString(UI_STRINGS.appAppBoqRevisionIdPage.bOQWorkspaceRevisionCode, { "revisionCode": revision.revisionCode }) : UI_STRINGS.common.bOQWorkspace}
+        subtitle={UI_STRINGS.appAppBoqRevisionIdPage.manageBOQLinesValidateSpecificationsRunAutomatedStandardisationAndSubmitForApproval}
         backHref="/boq"
         backLabel="← Back to BOQ Register"
         badge={revision ? <StatusBadge status={revision.status} /> : undefined}
@@ -217,34 +220,28 @@ export default function BoqWorkspacePage() {
             {isEditable && (
               <>
                 <button className="btn btn-secondary btn-sm" onClick={standardiseBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Wand2 size={14} /> Standardise
-                </button>
+                  <Wand2 size={14} />{UI_STRINGS.appAppBoqRevisionIdPage.standardise}</button>
                 <button className="btn btn-secondary btn-sm" onClick={validateBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Check size={14} /> Validate
-                </button>
+                  <Check size={14} />{UI_STRINGS.appAppBoqRevisionIdPage.validate}</button>
                 {revision?.errorLines === 0 ? (
                   <button className="btn btn-primary btn-sm" onClick={submitBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Send size={14} /> Submit for Approval
-                  </button>
+                    <Send size={14} />{UI_STRINGS.appAppBoqRevisionIdPage.submitForApproval}</button>
                 ) : (
-                  <button className="btn btn-secondary btn-sm" disabled title="Fix validation errors before submitting" style={{ opacity: 0.6, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <AlertCircle size={14} /> {revision?.errorLines} Errors Block Submit
-                  </button>
+                  <button className="btn btn-secondary btn-sm" disabled title={UI_STRINGS.appAppBoqRevisionIdPage.fixValidationErrorsBeforeSubmitting} style={{ opacity: 0.6, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <AlertCircle size={14} /> {revision?.errorLines}{UI_STRINGS.appAppBoqRevisionIdPage.errorsBlockSubmit}</button>
                 )}
               </>
             )}
             {isSubmitted && (
               <>
                 <button className="btn btn-primary btn-sm" onClick={approveBoq} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <CheckCircle2 size={14} /> Approve BOQ
-                </button>
+                  <CheckCircle2 size={14} />{UI_STRINGS.appAppBoqRevisionIdPage.approveBOQ}</button>
                 <button className="btn btn-danger btn-sm" onClick={() => setShowRejectModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <XCircle size={14} /> Reject BOQ
-                </button>
+                  <XCircle size={14} />{UI_STRINGS.common.rejectBOQ}</button>
               </>
             )}
             {isApproved && (
-              <button className="btn btn-primary btn-sm" onClick={newRevision}>+ Create New Revision</button>
+              <button className="btn btn-primary btn-sm" onClick={newRevision}>{UI_STRINGS.appAppBoqRevisionIdPage.createNewRevision}</button>
             )}
           </div>
         }
@@ -264,7 +261,7 @@ export default function BoqWorkspacePage() {
       {revision?.status === 'REJECTED' && revision?.rejectionReason && (
         <div className="alert alert-error mb-4" style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
           <XCircle size={18} />
-          <span><strong>Revision Rejected:</strong> {revision.rejectionReason}</span>
+          <span><strong>{UI_STRINGS.appAppBoqRevisionIdPage.revisionRejected}</strong> {revision.rejectionReason}</span>
         </div>
       )}
 
@@ -273,10 +270,7 @@ export default function BoqWorkspacePage() {
         <div className="alert alert-success mb-4" style={{ marginTop: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <Lock size={20} style={{ color: '#166534', flexShrink: 0, marginTop: 2 }} />
           <div>
-            <strong>Immutable Commercial Baseline:</strong> This BOQ revision has been formally approved and locked.
-            <div style={{ fontSize: 12, marginTop: 2 }}>
-              Modifications are prohibited on this revision. Use <strong>&quot;+ Create New Revision&quot;</strong> to start a new branch.
-            </div>
+            <strong>{UI_STRINGS.appAppBoqRevisionIdPage.immutableCommercialBaseline}</strong>{UI_STRINGS.appAppBoqRevisionIdPage.thisBOQRevisionHasBeenFormallyApprovedAndLocked}<div style={{ fontSize: 12, marginTop: 2 }}>{UI_STRINGS.appAppBoqRevisionIdPage.modificationsAreProhibitedOnThisRevisionUse}<strong>{UI_STRINGS.appAppBoqRevisionIdPage.quotCreateNewRevisionQuot}</strong>{UI_STRINGS.appAppBoqRevisionIdPage.toStartANewBranch}</div>
           </div>
         </div>
       )}
@@ -286,30 +280,30 @@ export default function BoqWorkspacePage() {
         <div className="mb-6">
           <SummaryCardGrid columns={4}>
             <SummaryCard
-              label="Total Lines"
+              label={UI_STRINGS.common.totalLines}
               value={revision.totalLines || 0}
-              secondary="Total items in BOQ"
+              secondary={UI_STRINGS.appAppBoqRevisionIdPage.totalItemsInBOQ}
               icon={<FileSpreadsheet size={16} />}
               accent="default"
             />
             <SummaryCard
-              label="Valid Lines"
+              label={UI_STRINGS.appAppBoqRevisionIdPage.validLines}
               value={revision.validLines || 0}
-              secondary="Passed validation rules"
+              secondary={UI_STRINGS.appAppBoqRevisionIdPage.passedValidationRules}
               icon={<CheckCircle size={16} />}
               accent="emerald"
             />
             <SummaryCard
-              label="Warnings"
+              label={UI_STRINGS.common.warnings}
               value={revision.warningLines || 0}
-              secondary="Non-blocking notices"
+              secondary={UI_STRINGS.appAppBoqRevisionIdPage.nonBlockingNotices}
               icon={<AlertTriangle size={16} />}
               accent="amber"
             />
             <SummaryCard
-              label="Errors"
+              label={UI_STRINGS.common.errors}
               value={revision.errorLines || 0}
-              secondary="Blocking issues"
+              secondary={UI_STRINGS.appAppBoqRevisionIdPage.blockingIssues}
               icon={<AlertOctagon size={16} />}
               accent="rose"
             />
@@ -319,11 +313,10 @@ export default function BoqWorkspacePage() {
 
       {/* Tabs */}
       <div className="tabs mb-4">
-        <div className={`tab ${activeTab === 'lines' ? 'active' : ''}`} onClick={() => setActiveTab('lines')}>BOQ Lines ({total})</div>
-        <div className={`tab ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>Quality & Summary</div>
+        <div className={`tab ${activeTab === 'lines' ? 'active' : ''}`} onClick={() => setActiveTab('lines')}>{UI_STRINGS.appAppBoqRevisionIdPage.bOQLines}{total}{UI_STRINGS.common.copyc7zu6c}</div>
+        <div className={`tab ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>{UI_STRINGS.appAppBoqRevisionIdPage.qualitySummary}</div>
         <div className={`tab ${activeTab === 'compare' ? 'active' : ''}`} onClick={() => setActiveTab('compare')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <GitCompare size={14} /> Revision Comparison / Diff
-        </div>
+          <GitCompare size={14} />{UI_STRINGS.appAppBoqRevisionIdPage.revisionComparisonDiff}</div>
       </div>
 
       {/* ── TAB 1: BOQ Lines Grid ──────────────────────────────── */}
@@ -334,44 +327,44 @@ export default function BoqWorkspacePage() {
               <span className="search-icon" style={{ display: 'flex', alignItems: 'center' }}>
                 <Search size={16} color="#94a3b8" />
               </span>
-              <input className="form-control search-input" placeholder="Search descriptions, line numbers..." value={search}
+              <input className="form-control search-input" placeholder={UI_STRINGS.appAppBoqRevisionIdPage.searchDescriptionsLineNumbers} value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1); }} />
             </div>
             <select className="form-control" style={{ width: 160 }} value={filterStatus}
               onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-              <option value="">All Statuses</option>
-              <option value="VALID">Valid</option>
-              <option value="WARNING">Warning</option>
-              <option value="ERROR">Error</option>
+              <option value="">{UI_STRINGS.common.allStatuses}</option>
+              <option value="VALID">{UI_STRINGS.common.valid}</option>
+              <option value="WARNING">{UI_STRINGS.common.warning}</option>
+              <option value="ERROR">{UI_STRINGS.common.error}</option>
             </select>
-            <span className="text-muted text-sm">{total} lines</span>
+            <span className="text-muted text-sm">{total}{UI_STRINGS.common.lines2}</span>
           </div>
 
           {loading ? (
-            <div className="loading-overlay"><div className="spinner" /> Loading BOQ lines...</div>
+            <div className="loading-overlay"><div className="spinner" />{UI_STRINGS.appAppBoqRevisionIdPage.loadingBOQLines}</div>
           ) : lines.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">
                 <ClipboardCheck size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No BOQ lines found</div>
+              <div className="empty-title">{UI_STRINGS.appAppBoqRevisionIdPage.noBOQLinesFound}</div>
             </div>
           ) : (
             <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
               <table className="data-table enterprise-table" style={{ width: '100%', minWidth: 1200 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 60 }}>S.No.</th>
-                    <th style={{ width: 110 }}>Item Code</th>
-                    <th style={{ minWidth: 240 }}>Item Description</th>
-                    <th style={{ minWidth: 160 }}>BOQ Description</th>
-                    <th style={{ width: 80, textAlign: 'center' }}>UOM</th>
-                    <th style={{ width: 90, textAlign: 'right' }}>Quantity</th>
-                    <th style={{ minWidth: 120 }}>Category</th>
-                    <th style={{ minWidth: 120 }}>Sub-category</th>
-                    <th style={{ width: 100 }}>Location</th>
-                    <th style={{ width: 130, textAlign: 'center' }}>Status & Rules</th>
-                    <th style={{ width: 90, textAlign: 'center' }} className="col-actions">Actions</th>
+                    <th style={{ width: 60 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th style={{ width: 110 }}>{UI_STRINGS.common.itemCode}</th>
+                    <th style={{ minWidth: 240 }}>{UI_STRINGS.common.itemDescription}</th>
+                    <th style={{ minWidth: 160 }}>{UI_STRINGS.common.bOQDescription}</th>
+                    <th style={{ width: 80, textAlign: 'center' }}>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ width: 90, textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                    <th style={{ minWidth: 120 }}>{UI_STRINGS.common.category2}</th>
+                    <th style={{ minWidth: 120 }}>{UI_STRINGS.common.subCategory}</th>
+                    <th style={{ width: 100 }}>{UI_STRINGS.common.location}</th>
+                    <th style={{ width: 130, textAlign: 'center' }}>{UI_STRINGS.appAppBoqRevisionIdPage.statusRules}</th>
+                    <th style={{ width: 90, textAlign: 'center' }} className="col-actions">{UI_STRINGS.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -380,14 +373,14 @@ export default function BoqWorkspacePage() {
                       <td><span className="font-mono text-muted">{(page - 1) * pageSize + idx + 1}</span></td>
                       <td>
                         <span className="font-mono font-bold text-xs" style={{ color: '#1e40af' }}>
-                          {line.itemCode || line.lineNumber || '—'}
+                          {line.itemCode || line.lineNumber || UI_STRINGS.common.copy4s9bsz}
                         </span>
                       </td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{line.standardDescription || line.originalDescription}</div>
                         {line.standardDescription && line.standardDescription !== line.originalDescription && (
                           <div style={{ fontSize: 11, color: '#4338ca', marginTop: 2 }}>
-                            <strong>Original:</strong> {line.originalDescription}
+                            <strong>{UI_STRINGS.appAppBoqRevisionIdPage.original}</strong> {line.originalDescription}
                           </div>
                         )}
                       </td>
@@ -402,23 +395,22 @@ export default function BoqWorkspacePage() {
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <span className="font-mono font-bold" style={{ color: line.uom?.code ? '#059669' : '#d97706' }}>
-                          {line.uom?.code || line.uomRaw || '—'}
+                          {line.uom?.code || line.uomRaw || UI_STRINGS.common.copy4s9bsz}
                         </span>
                         {line.uomRaw && line.uom?.code && line.uomRaw.toUpperCase() !== line.uom.code && (
-                          <span style={{ fontSize: 10, color: '#6b7280', display: 'block' }}>raw: {line.uomRaw}</span>
+                          <span style={{ fontSize: 10, color: '#6b7280', display: 'block' }}>{UI_STRINGS.appAppBoqRevisionIdPage.raw}{line.uomRaw}</span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{line.quantity !== null && line.quantity !== undefined ? line.quantity.toLocaleString() : '—'}</td>
-                      <td>{line.category?.name || <span className="text-muted">—</span>}</td>
-                      <td>{line.subcategory?.name || <span className="text-muted">—</span>}</td>
-                      <td className="text-muted">{line.location || '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{line.quantity !== null && line.quantity !== undefined ? line.quantity.toLocaleString() : UI_STRINGS.common.copy4s9bsz}</td>
+                      <td>{line.category?.name || <span className="text-muted">{UI_STRINGS.common.copy4s9bsz}</span>}</td>
+                      <td>{line.subcategory?.name || <span className="text-muted">{UI_STRINGS.common.copy4s9bsz}</span>}</td>
+                      <td className="text-muted">{line.location || UI_STRINGS.common.copy4s9bsz}</td>
                       <td style={{ textAlign: 'center' }}>
                         <StatusBadge status={line.validationStatus} />
                         {line.validationMessages && (
                           <div style={{ marginTop: 4, textAlign: 'left' }}>
                             {JSON.parse(line.validationMessages).map((m: any, i: number) => (
-                              <div key={i} style={{ color: m.level === 'ERROR' ? '#dc2626' : m.level === 'WARNING' ? '#d97706' : '#2563eb', fontSize: 11, lineHeight: 1.2 }}>
-                                • {m.message}
+                              <div key={i} style={{ color: m.level === 'ERROR' ? '#dc2626' : m.level === 'WARNING' ? '#d97706' : '#2563eb', fontSize: 11, lineHeight: 1.2 }}>{UI_STRINGS.common.copyaw0l2d}{m.message}
                               </div>
                             ))}
                           </div>
@@ -431,13 +423,13 @@ export default function BoqWorkspacePage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn btn-sm btn-ghost"
-                            title="Open Complete Line Item in a Separate View"
+                            title={UI_STRINGS.appAppBoqRevisionIdPage.openCompleteLineItemInASeparateView}
                             style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 6px', color: '#0284c7' }}
                           >
                             <ExternalLink size={13} />
                           </a>
                           {isEditable && (
-                            <button className="btn btn-sm btn-ghost" onClick={() => setEditingLine({ ...line })} title="Edit Line" style={{ padding: '4px 6px' }}>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setEditingLine({ ...line })} title={UI_STRINGS.common.editLine} style={{ padding: '4px 6px' }}>
                               <Pencil size={13} />
                             </button>
                           )}
@@ -452,11 +444,11 @@ export default function BoqWorkspacePage() {
 
           {totalPages > 1 && (
             <div className="pagination">
-              <button className="page-btn" onClick={() => setPage(1)} disabled={page === 1}>«</button>
-              <button className="page-btn" onClick={() => setPage(p => p - 1)} disabled={page === 1}>‹</button>
-              <span className="page-info">Page {page} of {totalPages}</span>
-              <button className="page-btn" onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>›</button>
-              <button className="page-btn" onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</button>
+              <button className="page-btn" onClick={() => setPage(1)} disabled={page === 1}>{UI_STRINGS.common.copy1cahyqy}</button>
+              <button className="page-btn" onClick={() => setPage(p => p - 1)} disabled={page === 1}>{UI_STRINGS.common.copygps8ms}</button>
+              <span className="page-info">{UI_STRINGS.common.page2}{page}{UI_STRINGS.common.of}{totalPages}</span>
+              <button className="page-btn" onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>{UI_STRINGS.common.copyhjr1pp}</button>
+              <button className="page-btn" onClick={() => setPage(totalPages)} disabled={page === totalPages}>{UI_STRINGS.common.copy1gqblui}</button>
             </div>
           )}
         </div>
@@ -466,29 +458,28 @@ export default function BoqWorkspacePage() {
       {activeTab === 'summary' && (
         <div className="form-grid">
           <div className="card">
-            <div className="card-header"><span className="card-title">BOQ Quality Score & Health</span></div>
+            <div className="card-header"><span className="card-title">{UI_STRINGS.appAppBoqRevisionIdPage.bOQQualityScoreHealth}</span></div>
             <div className="card-body">
               <div style={{ textAlign: 'center', padding: '16px 0', borderBottom: '1px solid #f1f5f9', marginBottom: 16 }}>
                 <div style={{ fontSize: 36, fontWeight: 800, color: (revision?.qualityScore ?? 0) >= 80 ? '#059669' : '#d97706' }}>
-                  {revision?.qualityScore ?? 0} / 100
-                </div>
-                <div className="text-muted text-sm">Enterprise Quality Index</div>
+                  {revision?.qualityScore ?? 0}{UI_STRINGS.appAppBoqRevisionIdPage.copy1uj03ij}</div>
+                <div className="text-muted text-sm">{UI_STRINGS.appAppBoqRevisionIdPage.enterpriseQualityIndex}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Error Lines (Submission Blockers)</span>
+                  <span>{UI_STRINGS.appAppBoqRevisionIdPage.errorLinesSubmissionBlockers}</span>
                   <span className="badge badge-error">{revision?.errorLines || 0}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Warning Lines</span>
+                  <span>{UI_STRINGS.appAppBoqRevisionIdPage.warningLines}</span>
                   <span className="badge badge-warning">{revision?.warningLines || 0}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Valid / Standardised Lines</span>
+                  <span>{UI_STRINGS.appAppBoqRevisionIdPage.validStandardisedLines}</span>
                   <span className="badge badge-valid">{revision?.validLines || 0}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Total Parsed Lines</span>
+                  <span>{UI_STRINGS.appAppBoqRevisionIdPage.totalParsedLines}</span>
                   <span style={{ fontWeight: 600 }}>{revision?.totalLines || 0}</span>
                 </div>
               </div>
@@ -496,7 +487,7 @@ export default function BoqWorkspacePage() {
           </div>
 
           <div className="card">
-            <div className="card-header"><span className="card-title">Revision Metadata</span></div>
+            <div className="card-header"><span className="card-title">{UI_STRINGS.appAppBoqRevisionIdPage.revisionMetadata}</span></div>
             <div className="card-body">
               {revision && [
                 ['Revision Code', revision.revisionCode],
@@ -522,11 +513,10 @@ export default function BoqWorkspacePage() {
         <div className="card">
           <div className="card-header flex justify-between items-center" style={{ flexWrap: 'wrap', gap: 12 }}>
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <GitCompare size={18} /> Compare Revision {revision?.revisionCode} with Another Revision
-            </span>
+              <GitCompare size={18} />{UI_STRINGS.appAppBoqRevisionIdPage.compareRevision}{revision?.revisionCode}{UI_STRINGS.appAppBoqRevisionIdPage.withAnotherRevision}</span>
             {compareData?.availableRevisions?.length > 1 && (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted">Compare against:</span>
+                <span className="text-sm text-muted">{UI_STRINGS.appAppBoqRevisionIdPage.compareAgainst}</span>
                 <select
                   className="form-control"
                   style={{ width: 140 }}
@@ -535,8 +525,7 @@ export default function BoqWorkspacePage() {
                 >
                   {compareData.availableRevisions.map((r: any) => (
                     <option key={r.id} value={r.id}>
-                      {r.revisionCode} ({r.status})
-                    </option>
+                      {r.revisionCode}{UI_STRINGS.common.copy1b3t0c5}{r.status}{UI_STRINGS.common.copyc7zu6c}</option>
                   ))}
                 </select>
               </div>
@@ -544,27 +533,27 @@ export default function BoqWorkspacePage() {
           </div>
 
           {loadingCompare ? (
-            <div className="loading-overlay"><div className="spinner" /> Computing revision diff...</div>
+            <div className="loading-overlay"><div className="spinner" />{UI_STRINGS.appAppBoqRevisionIdPage.computingRevisionDiff}</div>
           ) : !compareData ? (
-            <div className="empty-state"><div className="empty-title">Select revisions to compare</div></div>
+            <div className="empty-state"><div className="empty-title">{UI_STRINGS.appAppBoqRevisionIdPage.selectRevisionsToCompare}</div></div>
           ) : (
             <div className="card-body">
               {/* Diff summary badges */}
               <div className="kpi-grid mb-6">
                 <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
-                  <div className="kpi-label">Lines Added</div>
+                  <div className="kpi-label">{UI_STRINGS.appAppBoqRevisionIdPage.linesAdded}</div>
                   <div className="kpi-value" style={{ color: '#059669' }}>{compareData.summary?.addedCount || 0}</div>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '3px solid #dc2626' }}>
-                  <div className="kpi-label">Lines Removed</div>
+                  <div className="kpi-label">{UI_STRINGS.appAppBoqRevisionIdPage.linesRemoved}</div>
                   <div className="kpi-value" style={{ color: '#dc2626' }}>{compareData.summary?.removedCount || 0}</div>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
-                  <div className="kpi-label">Lines Modified</div>
+                  <div className="kpi-label">{UI_STRINGS.appAppBoqRevisionIdPage.linesModified}</div>
                   <div className="kpi-value" style={{ color: '#d97706' }}>{compareData.summary?.modifiedCount || 0}</div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-label">Lines Unchanged</div>
+                  <div className="kpi-label">{UI_STRINGS.appAppBoqRevisionIdPage.linesUnchanged}</div>
                   <div className="kpi-value">{compareData.summary?.unchangedCount || 0}</div>
                 </div>
               </div>
@@ -572,16 +561,16 @@ export default function BoqWorkspacePage() {
               {/* Modified Lines Table */}
               {compareData.modified?.length > 0 && (
                 <div className="mb-6">
-                  <h4 style={{ fontWeight: 700, marginBottom: 8 }}>Modified Line Items</h4>
+                  <h4 style={{ fontWeight: 700, marginBottom: 8 }}>{UI_STRINGS.appAppBoqRevisionIdPage.modifiedLineItems}</h4>
                   <div className="table-wrapper">
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>S.No.</th>
-                          <th>Item Description</th>
-                          <th>Field</th>
-                          <th>Previous ({compareData.compareRevision?.revisionCode})</th>
-                          <th>Current ({compareData.currentRevision?.revisionCode})</th>
+                          <th>{UI_STRINGS.common.sNo2}</th>
+                          <th>{UI_STRINGS.common.itemDescription}</th>
+                          <th>{UI_STRINGS.appAppBoqRevisionIdPage.field}</th>
+                          <th>{UI_STRINGS.appAppBoqRevisionIdPage.previous}{compareData.compareRevision?.revisionCode}{UI_STRINGS.common.copyc7zu6c}</th>
+                          <th>{interpolateUiString(UI_STRINGS.appAppBoqRevisionIdPage.current, { revisionCode: compareData.currentRevision?.revisionCode || '' })}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -605,10 +594,10 @@ export default function BoqWorkspacePage() {
               {/* Added Lines Table */}
               {compareData.added?.length > 0 && (
                 <div className="mb-6">
-                  <h4 style={{ fontWeight: 700, marginBottom: 8, color: '#059669' }}>+ Added Line Items</h4>
+                  <h4 style={{ fontWeight: 700, marginBottom: 8, color: '#059669' }}>{UI_STRINGS.appAppBoqRevisionIdPage.addedLineItems}</h4>
                   <div className="table-wrapper">
                     <table className="data-table">
-                      <thead><tr><th>S.No.</th><th>Item Description</th><th>Quantity</th><th>UOM</th><th>Category</th></tr></thead>
+                      <thead><tr><th>{UI_STRINGS.common.sNo2}</th><th>{UI_STRINGS.common.itemDescription}</th><th>{UI_STRINGS.common.quantity}</th><th>{UI_STRINGS.common.uOM}</th><th>{UI_STRINGS.common.category2}</th></tr></thead>
                       <tbody>
                         {compareData.added.map((l: any) => (
                           <tr key={l.lineNumber} style={{ background: '#f0fdf4' }}>
@@ -630,8 +619,8 @@ export default function BoqWorkspacePage() {
                   <div className="empty-state-icon">
                     <CheckCircle2 size={36} color="#059669" strokeWidth={1.5} />
                   </div>
-                  <div className="empty-title">Revisions Are Identical</div>
-                  <div className="empty-desc">No line differences detected between {compareData.currentRevision?.revisionCode} and {compareData.compareRevision?.revisionCode}.</div>
+                  <div className="empty-title">{UI_STRINGS.appAppBoqRevisionIdPage.revisionsAreIdentical}</div>
+                  <div className="empty-desc">{UI_STRINGS.appAppBoqRevisionIdPage.noLineDifferencesDetectedBetween}{compareData.currentRevision?.revisionCode}{UI_STRINGS.appAppBoqRevisionIdPage.and}{compareData.compareRevision?.revisionCode}{UI_STRINGS.common.copyby08hd}</div>
                 </div>
               )}
             </div>
@@ -644,7 +633,7 @@ export default function BoqWorkspacePage() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditingLine(null)}>
           <div className="modal modal-lg">
             <div className="modal-header">
-              <span className="modal-title">Edit BOQ Line — Line {editingLine.lineNumber}</span>
+              <span className="modal-title">{UI_STRINGS.appAppBoqRevisionIdPage.editBOQLineLine}{editingLine.lineNumber}</span>
               <button className="btn btn-ghost btn-icon" onClick={() => setEditingLine(null)}>
                 <X size={16} />
               </button>
@@ -653,61 +642,61 @@ export default function BoqWorkspacePage() {
               <div className="alert alert-info mb-4" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Info size={16} />
                 <div>
-                  <strong>Original (Source Document):</strong> {editingLine.originalDescription}
+                  <strong>{UI_STRINGS.appAppBoqRevisionIdPage.originalSourceDocument}</strong> {editingLine.originalDescription}
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Standard Description <span className="required">*</span></label>
+                <label className="form-label">{UI_STRINGS.appAppBoqRevisionIdPage.standardDescription}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                 <input className="form-control" value={editingLine.standardDescription || ''} onChange={e => setEditingLine((l: any) => ({ ...l, standardDescription: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Specification</label>
+                <label className="form-label">{UI_STRINGS.common.specification}</label>
                 <textarea className="form-control" value={editingLine.specification || ''} onChange={e => setEditingLine((l: any) => ({ ...l, specification: e.target.value }))} rows={2} />
               </div>
               <div className="form-grid">
                 <div className="form-group">
-                  <label className="form-label">Category</label>
+                  <label className="form-label">{UI_STRINGS.common.category2}</label>
                   <select className="form-control" value={editingLine.categoryId || ''} onChange={e => setEditingLine((l: any) => ({ ...l, categoryId: e.target.value, subcategoryId: '' }))}>
-                    <option value="">— Select Category —</option>
+                    <option value="">{UI_STRINGS.appAppBoqRevisionIdPage.selectCategory}</option>
                     {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Subcategory</label>
+                  <label className="form-label">{UI_STRINGS.common.subcategory}</label>
                   <select className="form-control" value={editingLine.subcategoryId || ''} onChange={e => setEditingLine((l: any) => ({ ...l, subcategoryId: e.target.value }))}>
-                    <option value="">— Select Subcategory —</option>
+                    <option value="">{UI_STRINGS.appAppBoqRevisionIdPage.selectSubcategory}</option>
                     {getSubcategories(editingLine.categoryId || '').map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">UOM <span className="required">*</span></label>
+                  <label className="form-label">{UI_STRINGS.appAppBoqRevisionIdPage.uOM}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   <select className="form-control" value={editingLine.uomId || ''} onChange={e => setEditingLine((l: any) => ({ ...l, uomId: e.target.value }))}>
-                    <option value="">— Select UOM —</option>
-                    {uoms.map((u: any) => <option key={u.id} value={u.id}>{u.code} — {u.name}</option>)}
+                    <option value="">{UI_STRINGS.appAppBoqRevisionIdPage.selectUOM}</option>
+                    {uoms.map((u: any) => <option key={u.id} value={u.id}>{u.code}{UI_STRINGS.common.copyq9aflv}{u.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Quantity <span className="required">*</span></label>
+                  <label className="form-label">{UI_STRINGS.appAppBoqRevisionIdPage.quantity}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   <input type="number" className="form-control" value={editingLine.quantity !== null && editingLine.quantity !== undefined ? editingLine.quantity : ''} onChange={e => setEditingLine((l: any) => ({ ...l, quantity: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Location</label>
+                  <label className="form-label">{UI_STRINGS.common.location}</label>
                   <input className="form-control" value={editingLine.location || ''} onChange={e => setEditingLine((l: any) => ({ ...l, location: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Drawing Reference</label>
+                  <label className="form-label">{UI_STRINGS.common.drawingReference}</label>
                   <input className="form-control" value={editingLine.drawingReference || ''} onChange={e => setEditingLine((l: any) => ({ ...l, drawingReference: e.target.value }))} />
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Remarks</label>
+                <label className="form-label">{UI_STRINGS.common.remarks}</label>
                 <input className="form-control" value={editingLine.remarks || ''} onChange={e => setEditingLine((l: any) => ({ ...l, remarks: e.target.value }))} />
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setEditingLine(null)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => setEditingLine(null)}>{UI_STRINGS.common.cancel}</button>
               <button className="btn btn-primary" onClick={saveEdit} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? UI_STRINGS.common.saving : UI_STRINGS.common.saveChanges}
               </button>
             </div>
           </div>
@@ -719,21 +708,21 @@ export default function BoqWorkspacePage() {
         <div className="modal-overlay">
           <div className="modal modal-sm">
             <div className="modal-header">
-              <span className="modal-title">Reject BOQ Revision</span>
+              <span className="modal-title">{UI_STRINGS.appAppBoqRevisionIdPage.rejectBOQRevision}</span>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowRejectModal(false)}>
                 <X size={16} />
               </button>
             </div>
             <div className="modal-body">
-              <p className="text-muted mb-4">Rejection reason is mandatory. It will be recorded in the audit trail and displayed to the project user.</p>
+              <p className="text-muted mb-4">{UI_STRINGS.appAppBoqRevisionIdPage.rejectionReasonIsMandatoryItWillBeRecordedInTheAuditTrailAndDisplayedToTheProjectUser}</p>
               <div className="form-group">
-                <label className="form-label">Rejection Reason <span className="required">*</span></label>
-                <textarea className="form-control" value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={4} placeholder="Specify technical discrepancies or corrections required..." autoFocus />
+                <label className="form-label">{UI_STRINGS.appAppBoqRevisionIdPage.rejectionReason}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
+                <textarea className="form-control" value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={4} placeholder={UI_STRINGS.appAppBoqRevisionIdPage.specifyTechnicalDiscrepanciesOrCorrectionsRequired} autoFocus />
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={rejectBoq} disabled={!rejectReason.trim()}>Confirm Rejection</button>
+              <button className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>{UI_STRINGS.common.cancel}</button>
+              <button className="btn btn-danger" onClick={rejectBoq} disabled={!rejectReason.trim()}>{UI_STRINGS.common.confirmRejection}</button>
             </div>
           </div>
         </div>

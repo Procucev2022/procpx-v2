@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('RATE_CARD_VIEW');
@@ -118,7 +121,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching rate cards:', error);
-    return apiError(error.message || 'Failed to fetch rate cards', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500);
   }
 }
 
@@ -147,7 +150,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!vendorId || !title || !category || !validFrom || !validTo) {
-      return apiError('Vendor ID, Title, Category, Valid From, and Valid To are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsRoute.vendorIDTitleCategoryValidFromAndValidToAreRequired, 400);
     }
 
     const count = await prisma.vendorRateCard.count({ where: { tenantId: ctx.tenantId } });
@@ -244,8 +247,8 @@ export async function POST(req: NextRequest) {
       await prisma.notification.create({
         data: {
           tenantId: ctx.tenantId,
-          title: 'New Rate Card Offer Received',
-          message: `Buyer submitted Buyer RC Offer-1 for Rate Card ${rateCardNumber} (${category})`,
+          title: UI_STRINGS.appApiProcurementRateCardsRoute.newRateCardOfferReceived,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsRoute.buyerSubmittedBuyerRCOffer1ForRateCardRateCardNumberCategory, { "rateCardNumber": rateCardNumber, "category": category }),
           type: 'ACTION_REQUIRED',
           entityType: 'RATE_CARD',
           entityId: rateCard.id,
@@ -262,13 +265,13 @@ export async function POST(req: NextRequest) {
       entityType: 'VENDOR',
       entityId: vendorId,
       action: isSendingToVendor ? 'RATE_CARD_OFFER_1_SENT' : isSubmittingL1 ? 'RATE_CARD_SUBMITTED' : 'RATE_CARD_CREATED',
-      description: `Rate card ${rateCardNumber} (${version}) ${isSendingToVendor ? 'sent to vendor (Buyer RC Offer-1)' : isSubmittingL1 ? 'submitted for Level 1 Project Approval' : 'created as draft'} for vendor ${rateCard.vendor.name} (${items.length} items)`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsRoute.rateCardRateCardNumberVersionValue3ForVendorNameLengthItems, { "rateCardNumber": rateCardNumber, "version": version, "value3": isSendingToVendor ? 'sent to vendor (Buyer RC Offer-1)' : isSubmittingL1 ? 'submitted for Level 1 Project Approval' : 'created as draft', "name": rateCard.vendor.name, "length": items.length }),
       newValue: { rateCardNumber, title, status: effectiveStatus, version },
     });
 
     return apiSuccess({ rateCard }, 201);
   } catch (error: any) {
     console.error('Error creating rate card:', error);
-    return apiError(error.message || 'Failed to create rate card', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRateCard }), 500);
   }
 }

@@ -7,3 +7,4 @@ Follow `AGENTS.md` and `.agents/rules/unit-test-coverage.md`. After every code c
 Use the shared structured logger and follow `AGENTS.md` for safe context, local JSONL retention, and Playwright screenshots/diagnostic snapshots. Logs and screenshots must be redacted, searchable, and managed under the 30-day retention policy.
 
 Follow `.agents/rules/application-structure.md` for dedicated constants and type/interface modules.
+Follow `.agents/rules/internationalization.md` for the full `UI_STRINGS`, interpolation, locale formatting, and test assertion policy.

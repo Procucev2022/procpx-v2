@@ -5,6 +5,8 @@ import { createAuditLog } from '../src/lib/audit';
 import { GET as getVendorProfile, PATCH as updateVendorProfile } from '../src/app/api/vendor-portal/me/route';
 import { GET as getCostCentre, PUT as updateCostCentre } from '../src/app/api/cost-centres/[id]/route';
 import { POST as inviteRfqVendors } from '../src/app/api/procurement/rfqs/[id]/vendors/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -59,13 +61,13 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
 
     auth.mockResolvedValueOnce({ ...baseContext, role: 'PROJECT_USER', vendorId: undefined });
     await expect(getVendorProfile()).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
     auth.mockResolvedValueOnce({ ...baseContext, vendorId: undefined });
-    await expect(getVendorProfile()).resolves.toEqual({ ok: false, error: 'Vendor record not associated with this user account', status: 404 });
+    await expect(getVendorProfile()).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404 });
 
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(getVendorProfile()).resolves.toEqual({ ok: false, error: 'Vendor profile not found', status: 404 });
+    await expect(getVendorProfile()).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, status: 404 });
     const vendor = { id: 'vendor-1', tenantId: 'tenant-1', name: 'Acme', tenant: { slug: 'tenant-one' } };
     db.vendor.findFirst.mockResolvedValueOnce(vendor);
     await expect(getVendorProfile()).resolves.toEqual({ ok: true, data: { vendor }, status: 200 });
@@ -86,13 +88,13 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     await expect(updateVendorProfile(request({ phone: '123' }))).resolves.toBe(denied);
     auth.mockResolvedValueOnce({ ...baseContext, role: 'PROJECT_USER', vendorId: undefined });
     await expect(updateVendorProfile(request({ phone: '123' }))).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
     auth.mockResolvedValueOnce({ ...baseContext, vendorId: undefined });
-    await expect(updateVendorProfile(request({ phone: '123' }))).resolves.toEqual({ ok: false, error: 'Vendor record not associated with this user account', status: 404 });
+    await expect(updateVendorProfile(request({ phone: '123' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404 });
     await expect(updateVendorProfile(request())).resolves.toMatchObject({ ok: false, status: 500 });
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(updateVendorProfile(request({ phone: '123' }))).resolves.toEqual({ ok: false, error: 'Vendor profile not found', status: 404 });
+    await expect(updateVendorProfile(request({ phone: '123' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, status: 404 });
 
     const body = {
       contactPerson: 'Buyer Contact', phone: '9876543210', website: 'https://acme.test', address: 'Main Road', city: 'Pune',
@@ -107,7 +109,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     });
     expect(db.vendor.update).toHaveBeenLastCalledWith({ where: { id: 'vendor-1' }, data: {
       contactPerson: 'Buyer Contact', phone: '9876543210', website: 'https://acme.test', address: 'Main Road', city: 'Pune',
-      state: 'Maharashtra', country: 'India', operatingLocation: 'West', capabilities: ['electrical'], serviceCoverage: ['MH'],
+      state: 'Maharashtra', country: UI_STRINGS.common.india, operatingLocation: 'West', capabilities: ['electrical'], serviceCoverage: ['MH'],
       clientReferences: ['Client A'], certifications: ['ISO'], documents: [{ name: 'certificate.pdf' }], gstin: 'GST-1', pan: 'PAN-1',
       legalStructure: 'Private Limited', experienceYears: 12, turnoverCrores: 5.5,
     } });
@@ -137,7 +139,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(getCostCentre(request(), idParams('cc-1'))).resolves.toBe(denied);
     db.costCentre.findFirst.mockResolvedValueOnce(null);
-    await expect(getCostCentre(request(), idParams('cc-1'))).resolves.toEqual({ ok: false, error: 'Cost centre not found.', status: 404 });
+    await expect(getCostCentre(request(), idParams('cc-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, status: 404 });
 
     db.costCentre.findFirst.mockResolvedValueOnce({
       id: 'cc-1', areaSqFt: 30, budgets: [{ totalAmount: 1000, approvedAmount: 500 }, { totalAmount: null, approvedAmount: 250 }],
@@ -159,7 +161,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(updateCostCentre(request({ name: 'New' }), idParams('cc-1'))).resolves.toBe(denied);
     db.costCentre.findFirst.mockResolvedValueOnce(null);
-    await expect(updateCostCentre(request({ name: 'New' }), idParams('cc-1'))).resolves.toEqual({ ok: false, error: 'Cost centre not found.', status: 404 });
+    await expect(updateCostCentre(request({ name: 'New' }), idParams('cc-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, status: 404 });
 
     const existing = { id: 'cc-1', projectId: 'project-1', code: 'CC-1', name: 'Old', description: 'Old desc', areaSqFt: 12, location: 'East', floorZone: 'L1', status: 'ACTIVE' };
     db.costCentre.findFirst.mockResolvedValueOnce(existing);
@@ -168,13 +170,13 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     expect(db.costCentre.update).toHaveBeenLastCalledWith({ where: { id: 'cc-1' }, data: {
       name: 'New', description: 'New desc', areaSqFt: 12.5, location: 'West', floorZone: 'L2', status: 'INACTIVE',
     } });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'UPDATE', entityType: 'COST_CENTRE', entityId: 'cc-1' }) });
+    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.uPDATE, entityType: 'COST_CENTRE', entityId: 'cc-1' }) });
 
     db.costCentre.findFirst.mockResolvedValueOnce(existing);
     db.costCentre.update.mockResolvedValueOnce(existing);
     await updateCostCentre(request({ name: '  ', description: null, areaSqFt: 0, location: null, floorZone: null }), idParams('cc-1'));
     expect(db.costCentre.update).toHaveBeenLastCalledWith({ where: { id: 'cc-1' }, data: {
-      name: '', description: undefined, areaSqFt: null, location: undefined, floorZone: undefined, status: 'ACTIVE',
+      name: '', description: undefined, areaSqFt: null, location: undefined, floorZone: undefined, status: UI_STRINGS.common.aCTIVE,
     } });
 
     db.costCentre.findFirst.mockResolvedValueOnce(existing);
@@ -191,12 +193,12 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(inviteRfqVendors(request({ vendorIds: ['vendor-1'] }), idParams('rfq-1'))).resolves.toBe(denied);
-    await expect(inviteRfqVendors(request({}), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: 'At least one vendor ID is required', status: 400 });
+    await expect(inviteRfqVendors(request({}), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(inviteRfqVendors(request({ vendorIds: ['vendor-1'] }), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(inviteRfqVendors(request({ vendorIds: ['vendor-1'] }), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'DRAFT' });
     db.vendor.findMany.mockResolvedValueOnce([]);
-    await expect(inviteRfqVendors(request({ vendorIds: ['blocked'] }), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: 'None of the selected vendors are eligible or active', status: 400 });
+    await expect(inviteRfqVendors(request({ vendorIds: ['blocked'] }), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, status: 400 });
 
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', tenantId: 'tenant-1', status: 'DRAFT', projectId: 'project-1', rfqNumber: 'RFQ-001' });
     db.vendor.findMany.mockResolvedValueOnce([{ id: 'vendor-1', name: 'Acme' }, { id: 'vendor-2', name: 'BuildCo' }]);
@@ -208,7 +210,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
       where: { id: { in: ['vendor-1', 'vendor-2'] }, tenantId: 'tenant-1', isBlacklisted: false },
     });
     expect(db.rfqVendor.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
-      update: { invitationStatus: 'PENDING' }, create: expect.objectContaining({ invitationStatus: 'PENDING', submissionStatus: 'PENDING' }),
+      update: { invitationStatus: UI_STRINGS.common.pENDING }, create: expect.objectContaining({ invitationStatus: UI_STRINGS.common.pENDING, submissionStatus: UI_STRINGS.common.pENDING }),
     }));
 
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'RELEASED', projectId: 'project-1', rfqNumber: 'RFQ-001' });
@@ -216,7 +218,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     db.rfqVendor.upsert.mockResolvedValueOnce({ id: 'invite-3' });
     await inviteRfqVendors(request({ vendorIds: ['vendor-3'] }), idParams('rfq-1'));
     expect(db.rfqVendor.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
-      update: { invitationStatus: 'INVITED' }, create: expect.objectContaining({ invitationStatus: 'INVITED' }),
+      update: { invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED }, create: expect.objectContaining({ invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED }),
     }));
 
     await expect(inviteRfqVendors(request(), idParams('rfq-1'))).resolves.toMatchObject({ ok: false, status: 500 });

@@ -1,8 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '../src/components/Sidebar';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/navigation', () => ({ usePathname: jest.fn() }));
 jest.mock('next/link', () => ({
@@ -33,7 +36,7 @@ describe('Sidebar role navigation', () => {
     render(<Sidebar user={user(role)} />);
     for (const label of labels) expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     if (role === 'PROCUREMENT_USER') {
-      expect(screen.getByRole('link', { name: 'RFQs' })).toHaveClass('active');
+      expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.rFQs) })).toHaveClass('active');
       expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
     }
   });
@@ -47,8 +50,8 @@ describe('Sidebar role navigation', () => {
     cleanup();
     render(<Sidebar user={user('VIEWER')} />);
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Projects' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.projects) })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.common.users) })).not.toBeInTheDocument();
   });
 
   it('restores, toggles and persists collapsed navigation state', () => {
@@ -58,14 +61,14 @@ describe('Sidebar role navigation', () => {
     const main = container.querySelector('.app-main');
     expect(sidebar).toHaveClass('collapsed');
     expect(main).toHaveClass('sidebar-collapsed');
-    expect(screen.queryByText('Approved PRs')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Approved PRs' })).toHaveAttribute('title', 'Approved PRs');
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedPrsPage.approvedPRs))).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedPrsPage.approvedPRs) })).toHaveAttribute('title', UI_STRINGS.appAppProcurementApprovedPrsPage.approvedPRs);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsSidebar.expandSidebar) }));
     expect(sidebar).not.toHaveClass('collapsed');
     expect(main).not.toHaveClass('sidebar-collapsed');
     expect(localStorage.getItem('sidebar_collapsed')).toBe('false');
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsSidebar.collapseSidebar2) }));
     expect(sidebar).toHaveClass('collapsed');
     expect(main).toHaveClass('sidebar-collapsed');
     expect(localStorage.getItem('sidebar_collapsed')).toBe('true');
@@ -73,9 +76,9 @@ describe('Sidebar role navigation', () => {
 
   it('toggles when no app-main layout node exists', () => {
     const { container } = render(<Sidebar user={user('VENDOR')} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsSidebar.collapseSidebar2) }));
     expect(container.querySelector('.app-sidebar')).toHaveClass('collapsed');
-    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsSidebar.expandSidebar) }));
     expect(container.querySelector('.app-sidebar')).not.toHaveClass('collapsed');
   });
 });

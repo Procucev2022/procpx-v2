@@ -1,7 +1,11 @@
 // src/app/api/budgets/add-boq/route.ts - Add BOQ to Cost Centre Budget API
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_CREATE');
@@ -12,7 +16,7 @@ export async function POST(req: NextRequest) {
     const { boqRevisionId, costCentreId, projectId, autoSubmit } = body;
 
     if (!boqRevisionId || !costCentreId) {
-      return apiError('BOQ Revision ID and Cost Centre ID are mandatory.', 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDAndCostCentreIDAreMandatory, 400);
     }
 
     // Retrieve revision with lines and categories
@@ -30,13 +34,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!revision) return apiError('BOQ Revision not found.', 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
 
     const targetProjectId = projectId || revision.boq.projectId;
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: costCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
-    if (!costCentre) return apiError('Cost centre not found for this project.', 404);
+    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
 
     // Calculate total value based on AI unit cost or benchmark rate
     let totalEstimated = 0;
@@ -127,7 +131,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BUDGET_CONTRIBUTION',
         entityId: contribution.id,
         action: 'BOQ_ADDED_TO_BUDGET',
-        description: `BOQ ${revision.boq.boqCode} R${revision.revisionNumber} added to Budget for Cost Centre ${costCentre.code} (${costCentre.name}). Total value: ₹ ${totalEstimated.toLocaleString('en-IN')}`,
+        description: interpolateUiString(UI_STRINGS.appApiBudgetsAddBoqRoute.bOQBoqCodeRRevisionNumberAddedToBudgetForCostCentreCodeNameTotalValueToLocaleString, { "boqCode": revision.boq.boqCode, "revisionNumber": revision.revisionNumber, "code": costCentre.code, "name": costCentre.name, "toLocaleString": totalEstimated.toLocaleString(I18N_CONFIG.defaultLocale) }),
       },
     });
 
@@ -145,6 +149,6 @@ export async function POST(req: NextRequest) {
       categoriesCount: categoryTotals.size,
     }, 201);
   } catch (err: any) {
-    return apiError(err.message || 'Failed to add BOQ to budget.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500);
   }
 }

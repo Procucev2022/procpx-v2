@@ -1,7 +1,10 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 import { useSearchParams } from 'next/navigation';
 import RfqsListPage from '../src/app/(app)/procurement/rfqs/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => {
   const React = require('react');
@@ -88,23 +91,23 @@ describe('RFQ sourcing register page', () => {
     render(<RfqsListPage />);
 
     expect(await screen.findAllByText('PPO in Progress')).toHaveLength(3);
-    expect(screen.getAllByText('Award Approved')).toHaveLength(3);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.awardApproved))).toHaveLength(3);
     expect(screen.getAllByText('Award Pending Approval')).toHaveLength(3);
     expect(screen.getAllByText('Negotiation in Progress')).toHaveLength(3);
     expect(screen.getAllByText('Quote Comparison')).toHaveLength(5);
-    expect(screen.getAllByText('Awaiting Quotations')).toHaveLength(3);
-    expect(screen.getAllByText('Draft')).toHaveLength(1);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.userMessages.awaitingQuotations))).toHaveLength(3);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.draft, '', true))).toHaveLength(1);
     expect(screen.getByText('Electrical package')).toBeInTheDocument();
     expect(screen.getByText('CC-1')).toBeInTheDocument();
     expect(screen.getByText('BOQ-1')).toBeInTheDocument();
-    expect(screen.getByText('₹ 5,000')).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: UI_STRINGS.common.indianRupeeSymbol, amount: '5,000' }));
     expect(screen.getByText('2 Vendors')).toBeInTheDocument();
     expect(screen.getByText('Fallback trade')).toBeInTheDocument();
-    expect(screen.getAllByText('India').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.india)).length).toBeGreaterThan(0);
     expect(screen.getAllByText('BOQ-R1').length).toBeGreaterThan(0);
-    expect(screen.getByText('RE-RFQ')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.rERFQ))).toBeInTheDocument();
     expect(screen.getByText('21')).toBeInTheDocument();
-    expect(screen.getByText('All sourcing packages')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.allSourcingPackages))).toBeInTheDocument();
   });
 
   it('uses the query filter, sends active and search filters, and narrows re-RFQs', async () => {
@@ -126,7 +129,7 @@ describe('RFQ sourcing register page', () => {
       '/api/procurement/rfqs?search=pump%20%26%20motor&status=active',
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Re-RFQs' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.reRFQs) }));
     expect(await screen.findByText('RFQ-marked')).toBeInTheDocument();
     expect(screen.getByText('RFQ-named')).toBeInTheDocument();
     expect(screen.queryByText('RFQ-ordinary')).not.toBeInTheDocument();
@@ -136,18 +139,18 @@ describe('RFQ sourcing register page', () => {
   it('builds a status filter for non-default tabs and handles missing rows and request errors', async () => {
     mockFetch.mockResolvedValue({ json: async () => ({}) });
     const { unmount } = render(<RfqsListPage />);
-    await screen.findByText('No RFQs Found');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.noRFQsFound));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Under Comparison' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.underComparison) }));
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/procurement/rfqs?search=&status=COMPARISON'));
-    await screen.findByText('No RFQs Found');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.noRFQsFound));
 
     const error = new Error('network unavailable');
     mockFetch.mockRejectedValueOnce(error);
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    fireEvent.click(screen.getByRole('button', { name: 'Drafts' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.drafts) }));
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(error));
-    expect(await screen.findByText('No RFQs Found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.noRFQsFound))).toBeInTheDocument();
     consoleError.mockRestore();
     unmount();
   });

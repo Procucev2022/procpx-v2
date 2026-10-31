@@ -6,6 +6,9 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { hasPermission } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { getUserAuthorizedProjectIds } from '@/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -69,7 +72,7 @@ export async function GET(
     });
 
     if (!vendor) {
-      return apiError('Vendor not found or access denied.', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
     }
 
     const isProcurementUser = ctx.role === 'PROCUREMENT_USER';
@@ -195,7 +198,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching vendor profile:', error);
-    return apiError(error.message || 'Failed to fetch vendor profile', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorProfile }), 500);
   }
 }
 
@@ -215,7 +218,7 @@ export async function PUT(
   const isVendorSelf = ctx.role === 'VENDOR' && hasPermission(ctx.role, 'VENDOR_PROFILE_EDIT') && ctx.vendorId === id;
 
   if (!isInternalManager && !isVendorSelf) {
-    return apiError('Forbidden: insufficient permissions', 403);
+    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
   }
 
   try {
@@ -230,7 +233,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return apiError('Vendor not found or access denied.', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
     }
 
     const body = await req.json();
@@ -293,14 +296,14 @@ export async function PUT(
       entityType: 'VENDOR',
       entityId: id,
       action: 'VENDOR_UPDATED',
-      description: `Vendor profile ${updated.name} (${updated.code}) updated`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdRoute.vendorProfileNameCodeUpdated, { "name": updated.name, "code": updated.code }),
       oldValue: { name: existing.name, contactPerson: existing.contactPerson },
       newValue: { name: updated.name, contactPerson: updated.contactPerson },
     });
 
-    return apiSuccess({ vendor: updated, message: 'Vendor profile updated successfully.' });
+    return apiSuccess({ vendor: updated, message: UI_STRINGS.appApiProcurementVendorsIdRoute.vendorProfileUpdatedSuccessfully });
   } catch (error: any) {
     console.error('Error updating vendor profile:', error);
-    return apiError(error.message || 'Failed to update vendor profile', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateVendorProfile }), 500);
   }
 }

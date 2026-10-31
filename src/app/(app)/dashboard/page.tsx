@@ -1,5 +1,6 @@
 'use client';
 // app/(app)/dashboard/page.tsx - Role-aware dashboard
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, Fragment } from 'react';
 import Link from 'next/link';
 import {
@@ -36,6 +37,9 @@ import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
 import { useToast } from '@/components/ui/Toast';
 import PrDetailModal from '@/components/PrDetailModal';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function StatusBadge({ status }: { status: string }) {
   const cls: Record<string, string> = {
@@ -135,10 +139,10 @@ export default function DashboardPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Approval failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.approvalFailed }));
       }
-      toast.success('BOQ approved successfully.', approverSelectedPr?.prNumber || prId, 'Released to Category Manager');
-      setApproverStatusMessage('BOQ approved successfully.');
+      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully, approverSelectedPr?.prNumber || prId, UI_STRINGS.common.userMessages.releasedToCategoryManager);
+      setApproverStatusMessage(UI_STRINGS.common.bOQApprovedSuccessfully);
       setApproverReviewModalOpen(false);
       loadDashboard();
     } catch (err: any) {
@@ -161,12 +165,12 @@ export default function DashboardPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Revert failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.revertFailed }));
       }
       setApproverRevertModalOpen(false);
       setApproverRevertReason('');
       setApproverSelectedPr(null);
-      setApproverStatusMessage('✓ BOQ successfully returned to Project User for correction.');
+      setApproverStatusMessage(UI_STRINGS.common.bOQSuccessfullyReturnedToProjectUserForCorrection);
       loadDashboard();
     } catch (err: any) {
       setApproverActionError(err.message);
@@ -188,12 +192,12 @@ export default function DashboardPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Rejection failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.rejectionFailed }));
       }
       setApproverRejectModalOpen(false);
       setApproverRejectReason('');
       setApproverSelectedPr(null);
-      setApproverStatusMessage('BOQ rejected and returned to requester with feedback remarks.');
+      setApproverStatusMessage(UI_STRINGS.common.bOQRejectedAndReturnedToRequesterWithFeedbackRemarks);
       loadDashboard();
     } catch (err: any) {
       setApproverActionError(err.message);
@@ -217,7 +221,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="page-content">
-        <div className="loading-overlay"><div className="spinner" /> Loading role dashboard...</div>
+        <div className="loading-overlay"><div className="spinner" />{UI_STRINGS.appAppDashboardPage.loadingRoleDashboard}</div>
       </div>
     );
   }
@@ -231,23 +235,23 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Super Admin Platform Overview</div>
-            <div className="page-subtitle">Cross-Tenant Infrastructure & Platform Security</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.superAdminPlatformOverview}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.crossTenantInfrastructurePlatformSecurity}</div>
           </div>
-          <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>Role: SUPER_ADMIN</span>
+          <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>{UI_STRINGS.appAppDashboardPage.roleSUPERADMIN}</span>
         </div>
 
         <div className="kpi-grid mb-6">
           <div className="kpi-card" style={{ borderLeft: '3px solid #6366f1' }}>
-            <div className="kpi-label">Active Tenants</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeTenants}</div>
             <div className="kpi-value" style={{ color: '#6366f1' }}>{data.tenants ?? 0}</div>
           </div>
           <div className="kpi-card">
-            <div className="kpi-label">Platform Projects</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.platformProjects}</div>
             <div className="kpi-value">{data.projects ?? 0}</div>
           </div>
           <div className="kpi-card">
-            <div className="kpi-label">Total Users</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalUsers}</div>
             <div className="kpi-value">{data.users ?? 0}</div>
           </div>
         </div>
@@ -256,19 +260,18 @@ export default function DashboardPage() {
         <div className="card mb-6">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Building2 size={18} /> Enterprise Tenant Isolation Matrix
-            </span>
+              <Building2 size={18} />{UI_STRINGS.appAppDashboardPage.enterpriseTenantIsolationMatrix}</span>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Tenant Name</th>
-                  <th>Tenant Slug</th>
-                  <th>Status</th>
-                  <th>Projects</th>
-                  <th>Users</th>
-                  <th>Isolation Boundary</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.tenantName}</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.tenantSlug}</th>
+                  <th>{UI_STRINGS.common.status}</th>
+                  <th>{UI_STRINGS.common.projects}</th>
+                  <th>{UI_STRINGS.common.users}</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.isolationBoundary}</th>
                 </tr>
               </thead>
               <tbody>
@@ -279,7 +282,7 @@ export default function DashboardPage() {
                     <td><span className="badge badge-approved">{t.status}</span></td>
                     <td style={{ fontWeight: 600 }}>{t.projectCount}</td>
                     <td>{t.userCount}</td>
-                    <td><span className="badge badge-info">Strict SQLite Row-Level FK</span></td>
+                    <td><span className="badge badge-info">{UI_STRINGS.appAppDashboardPage.strictSQLiteRowLevelFK}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -291,28 +294,27 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <ShieldCheck size={18} /> Global Audit Activity
-            </span>
-            <Link href="/audit" className="btn btn-sm btn-secondary">Full Audit Trail</Link>
+              <ShieldCheck size={18} />{UI_STRINGS.appAppDashboardPage.globalAuditActivity}</span>
+            <Link href="/audit" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.fullAuditTrail}</Link>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Tenant</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>User</th>
-                  <th>Time</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.tenant}</th>
+                  <th>{UI_STRINGS.common.action}</th>
+                  <th>{UI_STRINGS.common.entity}</th>
+                  <th>{UI_STRINGS.common.user}</th>
+                  <th>{UI_STRINGS.common.time}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.recentLogs?.map((log: any) => (
                   <tr key={log.id}>
-                    <td><span className="badge badge-draft">{log.tenant?.name || 'System'}</span></td>
+                    <td><span className="badge badge-draft">{log.tenant?.name || UI_STRINGS.common.system}</span></td>
                     <td><span className="badge badge-info">{log.action}</span></td>
-                    <td>{log.entityType}: <span className="text-muted">{log.description?.slice(0, 50)}</span></td>
-                    <td>{log.user?.name || log.user?.email || 'System'}</td>
+                    <td>{log.entityType}{UI_STRINGS.common.copy13emybb}<span className="text-muted">{log.description?.slice(0, 50)}</span></td>
+                    <td>{log.user?.name || log.user?.email || UI_STRINGS.common.system}</td>
                     <td className="text-muted">{new Date(log.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
@@ -332,10 +334,10 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Approval Dashboard</div>
-            <div className="page-subtitle">Capex BOQ Approval Queue & Compliance Checks</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.approvalDashboard}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.capexBOQApprovalQueueComplianceChecks}</div>
           </div>
-          <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>Role: PROJECT_APPROVER</span>
+          <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>{UI_STRINGS.appAppDashboardPage.rolePROJECTAPPROVER}</span>
         </div>
 
         {approverStatusMessage && (
@@ -344,7 +346,7 @@ export default function DashboardPage() {
               <CheckCircle2 size={16} />
               <span>{approverStatusMessage}</span>
             </div>
-            <button type="button" onClick={() => setApproverStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>✕</button>
+            <button type="button" onClick={() => setApproverStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>{UI_STRINGS.common.copy4i33ao}</button>
           </div>
         )}
 
@@ -354,21 +356,21 @@ export default function DashboardPage() {
               <AlertTriangle size={16} />
               <span>{approverActionError}</span>
             </div>
-            <button type="button" onClick={() => setApproverActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>✕</button>
+            <button type="button" onClick={() => setApproverActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>{UI_STRINGS.common.copy4i33ao}</button>
           </div>
         )}
 
         <div className="kpi-grid mb-6">
           <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
-            <div className="kpi-label">BOQs Awaiting Approval</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.bOQsAwaitingApproval}</div>
             <div className="kpi-value" style={{ color: '#d97706' }}>{data.pending ?? 0}</div>
           </div>
           <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
-            <div className="kpi-label">Approved BOQs</div>
+            <div className="kpi-label">{UI_STRINGS.common.approvedBOQs}</div>
             <div className="kpi-value" style={{ color: '#059669' }}>{data.recentApproved ?? 0}</div>
           </div>
           <div className="kpi-card" style={{ borderLeft: '3px solid #dc2626' }}>
-            <div className="kpi-label">Rejected / Returned BOQs</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.rejectedReturnedBOQs}</div>
             <div className="kpi-value" style={{ color: '#dc2626' }}>{data.recentRejected ?? 0}</div>
           </div>
         </div>
@@ -376,35 +378,32 @@ export default function DashboardPage() {
         <div className="card mb-6">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <ClipboardCheck size={18} /> BOQs Awaiting Approval Queue
-            </span>
-            <Link href="/approvals/boq-pr" className="btn btn-sm btn-secondary">
-              View All in BOQ Approvals →
-            </Link>
+              <ClipboardCheck size={18} />{UI_STRINGS.appAppDashboardPage.bOQsAwaitingApprovalQueue}</span>
+            <Link href="/approvals/boq-pr" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.viewAllInBOQApprovals}</Link>
           </div>
           {!data.pendingPrs?.length ? (
             <div className="empty-state">
               <div className="empty-state-icon">
                 <CheckCircle2 size={36} color="#059669" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">Approval Queue is Clear</div>
-              <div className="empty-desc">No BOQ submissions pending your approval right now.</div>
+              <div className="empty-title">{UI_STRINGS.appAppDashboardPage.approvalQueueIsClear}</div>
+              <div className="empty-desc">{UI_STRINGS.appAppDashboardPage.noBOQSubmissionsPendingYourApprovalRightNow}</div>
             </div>
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>BOQ Code / ID</th>
-                    <th>BOQ Name / Lines</th>
-                    <th>Project</th>
-                    <th>Cost Centre</th>
-                    <th>Category</th>
-                    <th style={{ textAlign: 'right' }}>Amount</th>
-                    <th>Requester</th>
-                    <th>BOQ Date</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>{UI_STRINGS.common.bOQCodeID}</th>
+                    <th>{UI_STRINGS.appAppDashboardPage.bOQNameLines}</th>
+                    <th>{UI_STRINGS.common.project}</th>
+                    <th>{UI_STRINGS.common.costCentre2}</th>
+                    <th>{UI_STRINGS.common.category2}</th>
+                    <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.amount}</th>
+                    <th>{UI_STRINGS.common.requester}</th>
+                    <th>{UI_STRINGS.common.bOQDate}</th>
+                    <th>{UI_STRINGS.common.status}</th>
+                    <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -416,10 +415,10 @@ export default function DashboardPage() {
                       </td>
                       <td style={{ fontWeight: 600, color: '#0f172a' }}>
                         <div>{pr.title}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{pr.lines?.length || pr.totalLines || 0} line items</div>
+                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{pr.lines?.length || pr.totalLines || 0}{UI_STRINGS.common.lineItems}</div>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 500 }}>{pr.project?.name || '—'}</div>
+                        <div style={{ fontWeight: 500 }}>{pr.project?.name || UI_STRINGS.common.copy4s9bsz}</div>
                         <div style={{ fontSize: 11, color: '#64748b' }}>{pr.project?.projectCode}</div>
                       </td>
                       <td>
@@ -428,28 +427,23 @@ export default function DashboardPage() {
                       </td>
                       <td>
                         <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#334155', fontWeight: 500 }}>
-                          {(pr.categories || []).join(', ') || 'Standard'}
+                          {(pr.categories || []).join(', ') || UI_STRINGS.common.standard}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                        ₹ {(pr.totalEstimatedValue || 0).toLocaleString('en-IN')}
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(pr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                       </td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{pr.requesterName || pr.requestedBy}</div>
                         {pr.requesterEmail && <div style={{ fontSize: 11, color: '#64748b' }}>{pr.requesterEmail}</div>}
                       </td>
                       <td className="text-muted" style={{ fontSize: 12 }}>
-                        {new Date(pr.requestedDate || pr.createdAt).toLocaleDateString('en-IN')}
+                        {new Date(pr.requestedDate || pr.createdAt).toLocaleDateString(I18N_CONFIG.defaultLocale)}
                       </td>
                       <td>
-                        <span className="badge badge-warning" style={{ fontSize: 11, padding: '3px 8px' }}>
-                          Under Review
-                        </span>
+                        <span className="badge badge-warning" style={{ fontSize: 11, padding: '3px 8px' }}>{UI_STRINGS.common.underReview}</span>
                         {pr.hasEnquiry && (
                           <div style={{ marginTop: 2 }}>
-                            <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>
-                              Clarification Pending
-                            </span>
+                            <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>{UI_STRINGS.common.clarificationPending}</span>
                           </div>
                         )}
                       </td>
@@ -459,55 +453,50 @@ export default function DashboardPage() {
                             type="button"
                             className="btn btn-secondary btn-sm"
                             style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-                            title="Review complete BOQ details and line items"
+                            title={UI_STRINGS.common.reviewCompleteBOQDetailsAndLineItems}
                             onClick={() => {
                               setApproverSelectedPr(pr);
                               setApproverReviewModalOpen(true);
                             }}
                           >
-                            <Eye size={12} /> Review BOQ
-                          </button>
+                            <Eye size={12} />{UI_STRINGS.common.reviewBOQ}</button>
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
                             style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#d97706', borderColor: '#fde68a', background: '#fffbeb' }}
-                            title="Send query or clarification to submitter"
+                            title={UI_STRINGS.common.sendQueryOrClarificationToSubmitter}
                             onClick={() => openApproverEnquiry(pr)}
                           >
-                            <HelpCircle size={12} /> Message
-                          </button>
+                            <HelpCircle size={12} />{UI_STRINGS.common.message}</button>
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
                             style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' }}
-                            title="Open communication and chat history"
+                            title={UI_STRINGS.common.openCommunicationAndChatHistory}
                             onClick={() => openApproverChat(pr)}
                           >
-                            <MessageSquare size={12} /> Chat
-                          </button>
+                            <MessageSquare size={12} />{UI_STRINGS.common.chat}</button>
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
                             style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#b45309', borderColor: '#fed7aa', background: '#fff7ed' }}
-                            title="Revert BOQ to Project User for correction"
+                            title={UI_STRINGS.common.revertBOQToProjectUserForCorrection}
                             onClick={() => {
                               setApproverSelectedPr(pr);
                               setApproverRevertModalOpen(true);
                             }}
                             disabled={approverProcessing}
                           >
-                            <RotateCcw size={12} /> Revert
-                          </button>
+                            <RotateCcw size={12} />{UI_STRINGS.common.revert}</button>
                           <button
                             type="button"
                             className="btn btn-primary btn-sm"
                             style={{ height: 28, padding: '0 10px', fontSize: 11, background: '#047857', borderColor: '#047857' }}
                             onClick={() => handleApproverApprove(pr.id)}
                             disabled={approverProcessing}
-                            title="Approve BOQ and release to Category Manager"
+                            title={UI_STRINGS.common.approveBOQAndReleaseToCategoryManager}
                           >
-                            <CheckCircle2 size={12} /> Approve
-                          </button>
+                            <CheckCircle2 size={12} />{UI_STRINGS.common.approve}</button>
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
@@ -517,10 +506,9 @@ export default function DashboardPage() {
                               setApproverRejectModalOpen(true);
                             }}
                             disabled={approverProcessing}
-                            title="Reject BOQ with mandatory reason"
+                            title={UI_STRINGS.common.rejectBOQWithMandatoryReason}
                           >
-                            <XCircle size={12} /> Reject
-                          </button>
+                            <XCircle size={12} />{UI_STRINGS.common.reject}</button>
                         </div>
                       </td>
                     </tr>
@@ -535,18 +523,17 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Clock size={18} /> Recently Actioned BOQs
-            </span>
+              <Clock size={18} />{UI_STRINGS.appAppDashboardPage.recentlyActionedBOQs}</span>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>BOQ / PR Number</th>
-                  <th>Project</th>
-                  <th>Cost Centre</th>
-                  <th>Status</th>
-                  <th>Action Date</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.bOQPRNumber}</th>
+                  <th>{UI_STRINGS.common.project}</th>
+                  <th>{UI_STRINGS.common.costCentre2}</th>
+                  <th>{UI_STRINGS.common.status}</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.actionDate}</th>
                 </tr>
               </thead>
               <tbody>
@@ -570,12 +557,10 @@ export default function DashboardPage() {
             <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 780, maxWidth: '92vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <div>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                    BOQ Details: {approverSelectedPr.prNumber}
+                  <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.common.bOQDetails}{approverSelectedPr.prNumber}
                   </h3>
                   <div style={{ fontSize: 12, color: '#64748b' }}>
-                    {approverSelectedPr.title} • Cost Centre: {approverSelectedPr.costCentre?.code} ({approverSelectedPr.costCentre?.name})
-                  </div>
+                    {approverSelectedPr.title}{UI_STRINGS.common.costCentre}{approverSelectedPr.costCentre?.code}{UI_STRINGS.common.copy1b3t0c5}{approverSelectedPr.costCentre?.name}{UI_STRINGS.common.copyc7zu6c}</div>
                 </div>
                 <button type="button" onClick={() => setApproverReviewModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                   <X size={18} />
@@ -585,20 +570,20 @@ export default function DashboardPage() {
               {/* PR Metadata Summary */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, padding: 12, background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0', marginBottom: 16 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Source BOQ</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.boq?.boqCode} ({approverSelectedPr.boqRevision?.revisionCode || 'R0'})</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.sourceBOQ}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.boq?.boqCode}{UI_STRINGS.common.copy1b3t0c5}{approverSelectedPr.boqRevision?.revisionCode || UI_STRINGS.common.r0}{UI_STRINGS.common.copyc7zu6c}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Requester</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.requester}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.requesterName || approverSelectedPr.requestedBy}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Total Line Items</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.lines?.length || 0} Lines</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.totalLineItems}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.lines?.length || 0}{UI_STRINGS.common.lines}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Requested Value</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#047857' }}>₹ {(approverSelectedPr.totalEstimatedValue || 0).toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.requestedValue}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copytfdhmk}{(approverSelectedPr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</div>
                 </div>
               </div>
 
@@ -607,14 +592,14 @@ export default function DashboardPage() {
                 <table className="table" style={{ width: '100%', fontSize: 12 }}>
                   <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                     <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0' }}>
-                      <th style={{ padding: '0 10px', width: 50 }}>S.No.</th>
-                      <th style={{ padding: '0 10px' }}>Item Description</th>
-                      <th style={{ padding: '0 10px' }}>BOQ Description</th>
-                      <th style={{ padding: '0 10px' }}>Category</th>
-                      <th style={{ padding: '0 10px', textAlign: 'right' }}>Quantity</th>
-                      <th style={{ padding: '0 10px' }}>UOM</th>
-                      <th style={{ padding: '0 10px', textAlign: 'right' }}>Rate (₹)</th>
-                      <th style={{ padding: '0 10px', textAlign: 'right' }}>Total (₹)</th>
+                      <th style={{ padding: '0 10px', width: 50 }}>{UI_STRINGS.common.sNo2}</th>
+                      <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.itemDescription}</th>
+                      <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.bOQDescription}</th>
+                      <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.category2}</th>
+                      <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                      <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.uOM}</th>
+                      <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.rate}</th>
+                      <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.total}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -634,9 +619,8 @@ export default function DashboardPage() {
                         <td style={{ padding: '0 10px', color: '#475569' }}>{line.category}</td>
                         <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 600 }}>{line.quantity}</td>
                         <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uom}</td>
-                        <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.estimatedRate || 0).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                          ₹ {(line.estimatedValue || (line.quantity * (line.estimatedRate || 0))).toLocaleString('en-IN')}
+                        <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.estimatedRate || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</td>
+                        <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(line.estimatedValue || (line.quantity * (line.estimatedRate || 0))).toLocaleString(I18N_CONFIG.defaultLocale)}
                         </td>
                       </tr>
                     ))}
@@ -656,8 +640,7 @@ export default function DashboardPage() {
                       openApproverEnquiry(approverSelectedPr);
                     }}
                   >
-                    <HelpCircle size={13} /> Ask Clarification
-                  </button>
+                    <HelpCircle size={13} />{UI_STRINGS.common.askClarification}</button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
@@ -666,8 +649,7 @@ export default function DashboardPage() {
                       openApproverChat(approverSelectedPr);
                     }}
                   >
-                    <MessageSquare size={13} /> Chat with Requester
-                  </button>
+                    <MessageSquare size={13} />{UI_STRINGS.common.chatWithRequester}</button>
                 </div>
 
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -675,9 +657,7 @@ export default function DashboardPage() {
                     type="button"
                     className="btn btn-secondary"
                     onClick={() => setApproverReviewModalOpen(false)}
-                  >
-                    Close
-                  </button>
+                  >{UI_STRINGS.common.close}</button>
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -688,8 +668,7 @@ export default function DashboardPage() {
                     }}
                     disabled={approverProcessing}
                   >
-                    <RotateCcw size={14} /> Revert for Correction
-                  </button>
+                    <RotateCcw size={14} />{UI_STRINGS.common.revertForCorrection}</button>
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -700,8 +679,7 @@ export default function DashboardPage() {
                     }}
                     disabled={approverProcessing}
                   >
-                    <XCircle size={14} /> Reject BOQ
-                  </button>
+                    <XCircle size={14} />{UI_STRINGS.common.rejectBOQ}</button>
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -709,8 +687,7 @@ export default function DashboardPage() {
                     onClick={() => handleApproverApprove(approverSelectedPr.id)}
                     disabled={approverProcessing}
                   >
-                    <CheckCircle2 size={14} /> Approve & Release to Procurement
-                  </button>
+                    <CheckCircle2 size={14} />{UI_STRINGS.common.approveReleaseToProcurement}</button>
                 </div>
               </div>
             </div>
@@ -723,19 +700,15 @@ export default function DashboardPage() {
             <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, maxWidth: '90vw', padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#b45309' }}>
                 <RotateCcw size={20} />
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  Revert BOQ for Correction
-                </h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.common.revertBOQForCorrection}</h3>
               </div>
-              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>
-                Specify the correction instructions for <strong>{approverSelectedPr.prNumber}</strong> ({approverSelectedPr.title}). The BOQ will be returned to the submitting Project User with these feedback remarks.
-              </p>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>{UI_STRINGS.common.specifyTheCorrectionInstructionsFor}<strong>{approverSelectedPr.prNumber}</strong>{UI_STRINGS.common.copy1b3t0c5}{approverSelectedPr.title}{UI_STRINGS.common.theBOQWillBeReturnedToTheSubmittingProjectUserWithTheseFeedbackRemarks}</p>
 
               <form onSubmit={handleApproverRevert}>
                 <textarea
                   value={approverRevertReason}
                   onChange={e => setApproverRevertReason(e.target.value)}
-                  placeholder="Specific reasons and correction instructions for Project User (mandatory)..."
+                  placeholder={UI_STRINGS.common.specificReasonsAndCorrectionInstructionsForProjectUserMandatory}
                   rows={4}
                   required
                   style={{
@@ -758,16 +731,14 @@ export default function DashboardPage() {
                       setApproverRevertReason('');
                     }}
                     disabled={approverProcessing}
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
                   <button
                     type="submit"
                     className="btn btn-primary"
                     style={{ background: '#b45309', borderColor: '#b45309' }}
                     disabled={approverProcessing || !approverRevertReason.trim()}
                   >
-                    {approverProcessing ? 'Reverting...' : 'Confirm Revert for Correction'}
+                    {approverProcessing ? UI_STRINGS.common.reverting : UI_STRINGS.common.confirmRevertForCorrection}
                   </button>
                 </div>
               </form>
@@ -779,18 +750,14 @@ export default function DashboardPage() {
         {approverRejectModalOpen && approverSelectedPr && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, maxWidth: '90vw', padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
-                Reject Purchase Request
-              </h3>
-              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>
-                Please state the specific reason for rejecting <strong>{approverSelectedPr.prNumber}</strong>. The request will be returned to the requester with these feedback remarks.
-              </p>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>{UI_STRINGS.common.rejectPurchaseRequest}</h3>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>{UI_STRINGS.common.pleaseStateTheSpecificReasonForRejecting}<strong>{approverSelectedPr.prNumber}</strong>{UI_STRINGS.common.theRequestWillBeReturnedToTheRequesterWithTheseFeedbackRemarks}</p>
 
               <form onSubmit={handleApproverReject}>
                 <textarea
                   value={approverRejectReason}
                   onChange={e => setApproverRejectReason(e.target.value)}
-                  placeholder="Reason for rejection (mandatory)..."
+                  placeholder={UI_STRINGS.common.reasonForRejectionMandatory}
                   rows={4}
                   required
                   style={{
@@ -813,16 +780,14 @@ export default function DashboardPage() {
                       setApproverRejectReason('');
                     }}
                     disabled={approverProcessing}
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
                   <button
                     type="submit"
                     className="btn btn-primary"
                     style={{ background: '#dc2626', borderColor: '#dc2626' }}
                     disabled={approverProcessing || !approverRejectReason.trim()}
                   >
-                    {approverProcessing ? 'Rejecting...' : 'Confirm Rejection'}
+                    {approverProcessing ? UI_STRINGS.common.rejecting : UI_STRINGS.common.confirmRejection}
                   </button>
                 </div>
               </form>
@@ -978,7 +943,7 @@ export default function DashboardPage() {
       try {
         const d = new Date(dVal);
         if (isNaN(d.getTime())) return '—';
-        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        return d.toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' });
       } catch {
         return '—';
       }
@@ -988,8 +953,8 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Procurement Workspace</div>
-            <div className="page-subtitle">BOQ sourcing, quotation comparison, negotiation and awards.</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.procurementWorkspace}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.bOQSourcingQuotationComparisonNegotiationAndAwards}</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Link
@@ -997,9 +962,8 @@ export default function DashboardPage() {
               className="btn btn-sm btn-secondary"
               style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
             >
-              <Sparkles size={14} color="#16a34a" /> View Workflow Example
-            </Link>
-            <Link href="/procurement/rfqs/new" className="btn btn-primary btn-sm">+ Create RFQ</Link>
+              <Sparkles size={14} color="#16a34a" />{UI_STRINGS.appAppDashboardPage.viewWorkflowExample}</Link>
+            <Link href="/procurement/rfqs/new" className="btn btn-primary btn-sm">{UI_STRINGS.appAppDashboardPage.createRFQ2}</Link>
           </div>
         </div>
 
@@ -1020,19 +984,19 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'boqs_received' ? '0 0 0 2px #2563eb' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter BOQs awaiting sourcing"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterBOQsAwaitingSourcing}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <FileText size={16} color="#2563eb" />
-                <div className="kpi-label" style={{ margin: 0 }}>BOQs Received</div>
+                <div className="kpi-label" style={{ margin: 0 }}>{UI_STRINGS.appAppDashboardPage.bOQsReceived}</div>
               </div>
               {activeCardFilter === 'boqs_received' && (
-                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#2563eb', border: '1px solid #2563eb', fontWeight: 600 }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#2563eb', border: '1px solid #2563eb', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#2563eb', marginTop: 6 }}>{summary.boqsReceived ?? summary.prsReceived ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Approved BOQs awaiting sourcing</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.approvedBOQsAwaitingSourcing2}</div>
           </div>
 
           {/* Card 2: RFQs in Progress */}
@@ -1050,19 +1014,19 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'rfqs_in_progress' ? '0 0 0 2px #0d9488' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter RFQs in progress"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterRFQsInProgress}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Layers size={16} color="#0d9488" />
-                <div className="kpi-label" style={{ margin: 0 }}>RFQs in Progress</div>
+                <div className="kpi-label" style={{ margin: 0 }}>{UI_STRINGS.appAppDashboardPage.rFQsInProgress}</div>
               </div>
               {activeCardFilter === 'rfqs_in_progress' && (
-                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#0d9488', border: '1px solid #0d9488', fontWeight: 600 }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#0d9488', border: '1px solid #0d9488', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#0d9488', marginTop: 6 }}>{summary.rfqsInProgress ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Active sourcing & quote collection</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.activeSourcingQuoteCollection}</div>
           </div>
 
           {/* Card 3: Negotiations Pending */}
@@ -1080,19 +1044,19 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'negotiations_pending' ? '0 0 0 2px #d97706' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter negotiations pending"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterNegotiationsPending}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Scale size={16} color="#d97706" />
-                <div className="kpi-label" style={{ margin: 0 }}>Negotiations Pending</div>
+                <div className="kpi-label" style={{ margin: 0 }}>{UI_STRINGS.common.negotiationsPending}</div>
               </div>
               {activeCardFilter === 'negotiations_pending' && (
-                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#d97706', border: '1px solid #d97706', fontWeight: 600 }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#d97706', border: '1px solid #d97706', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#d97706', marginTop: 6 }}>{summary.negotiationsPending ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Active rounds & commercial reviews</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.activeRoundsCommercialReviews}</div>
           </div>
 
           {/* Card 4: Awards / PPO Pending */}
@@ -1110,19 +1074,19 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'awards_ppo_pending' ? '0 0 0 2px #123B7A' : '0 1px 3px rgba(0,0,0,0.05)',
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter awards and PPOs pending"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterAwardsAndPPOsPending}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Award size={16} color="#123B7A" />
-                <div className="kpi-label" style={{ margin: 0 }}>Awards / PPO Pending</div>
+                <div className="kpi-label" style={{ margin: 0 }}>{UI_STRINGS.appAppDashboardPage.awardsPPOPending}</div>
               </div>
               {activeCardFilter === 'awards_ppo_pending' && (
-                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#123B7A', border: '1px solid #123B7A', fontWeight: 600 }}>Filtered</span>
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: '#ffffff', color: '#123B7A', border: '1px solid #123B7A', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#123B7A', marginTop: 6 }}>{summary.awardsPpoPending ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Award approval & order issuance</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.awardApprovalOrderIssuance}</div>
           </div>
         </div>
 
@@ -1131,15 +1095,14 @@ export default function DashboardPage() {
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <FileText size={18} /> BOQ Register
-              </span>
+                <FileText size={18} />{UI_STRINGS.appAppDashboardPage.bOQRegister}</span>
               <button
                 type="button"
                 onClick={toggleExpandAll}
                 className="btn btn-sm btn-ghost"
                 style={{ fontSize: 11, color: '#2563eb' }}
               >
-                {filteredRegister.length > 0 && filteredRegister.every((b) => expandedPrs[b.id]) ? 'Collapse All RFQs' : 'Expand All RFQs'}
+                {filteredRegister.length > 0 && filteredRegister.every((b) => expandedPrs[b.id]) ? UI_STRINGS.appAppDashboardPage.collapseAllRFQs : UI_STRINGS.appAppDashboardPage.expandAllRFQs}
               </button>
             </div>
 
@@ -1147,7 +1110,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 type="text"
-                placeholder="Search BOQ #, BOQ description, Cost Centre, RFQ #..."
+                placeholder={UI_STRINGS.appAppDashboardPage.searchBOQBOQDescriptionCostCentreRFQ}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input input-sm"
@@ -1160,13 +1123,12 @@ export default function DashboardPage() {
                 className="input input-sm"
                 style={{ width: 190, fontSize: 12 }}
               >
-                <option value="">All Stages ({register.length})</option>
+                <option value="">{UI_STRINGS.appAppDashboardPage.allStages}{register.length}{UI_STRINGS.common.copyc7zu6c}</option>
                 {stagesList.map((st) => {
                   const cnt = register.filter((r) => (r.sourcingStage || r.currentStage) === st).length;
                   return (
                     <option key={st} value={st}>
-                      {st} ({cnt})
-                    </option>
+                      {st}{UI_STRINGS.common.copy1b3t0c5}{cnt}{UI_STRINGS.common.copyc7zu6c}</option>
                   );
                 })}
               </select>
@@ -1181,9 +1143,7 @@ export default function DashboardPage() {
                   }}
                   className="btn btn-sm btn-ghost"
                   style={{ fontSize: 11, color: '#dc2626' }}
-                >
-                  Clear All Filters
-                </button>
+                >{UI_STRINGS.appAppDashboardPage.clearAllFilters}</button>
               )}
             </div>
           </div>
@@ -1191,23 +1151,18 @@ export default function DashboardPage() {
           {/* Active Card Filter Banner */}
           {activeCardFilter && (
             <div style={{ background: '#f8fafc', padding: '8px 16px', borderBottom: '1px solid #e2e8f0', fontSize: 12, color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>
-                Filtered by:{' '}
+              <span>{UI_STRINGS.appAppDashboardPage.filteredBy}{' '}
                 <strong style={{ color: '#0f172a' }}>
-                  {(activeCardFilter === 'boqs_received' || activeCardFilter === 'prs_received') && 'BOQs Received (Awaiting RFQ)'}
-                  {activeCardFilter === 'rfqs_in_progress' && 'RFQs in Progress'}
-                  {activeCardFilter === 'negotiations_pending' && 'Negotiations Pending'}
-                  {activeCardFilter === 'awards_ppo_pending' && 'Awards / PPO Pending'}
-                </strong>{' '}
-                — Showing {filteredRegister.length} BOQs
-              </span>
+                  {(activeCardFilter === 'boqs_received' || activeCardFilter === 'prs_received') && UI_STRINGS.appAppDashboardPage.bOQsReceivedAwaitingRFQ}
+                  {activeCardFilter === 'rfqs_in_progress' && UI_STRINGS.appAppDashboardPage.rFQsInProgress}
+                  {activeCardFilter === 'negotiations_pending' && UI_STRINGS.common.negotiationsPending}
+                  {activeCardFilter === 'awards_ppo_pending' && UI_STRINGS.appAppDashboardPage.awardsPPOPending}
+                </strong>{' '}{UI_STRINGS.appAppDashboardPage.showing2}{filteredRegister.length}{UI_STRINGS.appAppDashboardPage.bOQs}</span>
               <button
                 type="button"
                 onClick={() => setActiveCardFilter(null)}
                 style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
-              >
-                Reset Filter ✕
-              </button>
+              >{UI_STRINGS.appAppDashboardPage.resetFilter}</button>
             </div>
           )}
 
@@ -1216,11 +1171,11 @@ export default function DashboardPage() {
               <div className="empty-state-icon">
                 <FileText size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No matching BOQ records found</div>
+              <div className="empty-title">{UI_STRINGS.appAppDashboardPage.noMatchingBOQRecordsFound}</div>
               <div className="empty-desc">
                 {searchTerm || selectedStage || activeCardFilter
-                  ? 'Try clearing the search or stage filters.'
-                  : 'Eligible approved BOQs available to Procurement will appear here.'}
+                  ? UI_STRINGS.appAppDashboardPage.tryClearingTheSearchOrStageFilters
+                  : UI_STRINGS.appAppDashboardPage.eligibleApprovedBOQsAvailableToProcurementWillAppearHere}
               </div>
             </div>
           ) : (
@@ -1239,15 +1194,15 @@ export default function DashboardPage() {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'center' }}>Date</th>
-                    <th style={{ textAlign: 'center' }}>BOQ Number</th>
-                    <th style={{ textAlign: 'center' }}>BOQ / Package Description</th>
-                    <th style={{ textAlign: 'center' }}>Items</th>
-                    <th style={{ textAlign: 'center' }}>Cost Centre</th>
-                    <th style={{ textAlign: 'center' }}>BOQ Amount</th>
-                    <th style={{ textAlign: 'center' }}>Procurement Stage</th>
-                    <th style={{ textAlign: 'center' }}>RFQ Count</th>
-                    <th className="col-actions" style={{ textAlign: 'center' }}>Action</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.date}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.bOQNumber}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.appAppDashboardPage.bOQPackageDescription}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.items4}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.costCentre2}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.appAppDashboardPage.bOQAmount}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.procurementStage}</th>
+                    <th style={{ textAlign: 'center' }}>{UI_STRINGS.common.rFQCount}</th>
+                    <th className="col-actions" style={{ textAlign: 'center' }}>{UI_STRINGS.common.action}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1259,7 +1214,7 @@ export default function DashboardPage() {
                     const costCentreCode = item.costCentreCode || (item.costCentre ? item.costCentre.split(' - ')[0] : '—');
                     const boqDisplayCode = item.boqCode || item.boqNumber || item.code || '—';
                     const dateFormatted = formatBoqDate(item.date || item.createdAt || item.updatedAt);
-                    const amountFormatted = (item.requestedValue || item.benchmarkTotal || 0).toLocaleString('en-IN');
+                    const amountFormatted = (item.requestedValue || item.benchmarkTotal || 0).toLocaleString(I18N_CONFIG.defaultLocale);
 
                     return (
                       <Fragment key={item.id}>
@@ -1284,8 +1239,8 @@ export default function DashboardPage() {
                                   onClick={() => toggleExpand(item.id)}
                                   className="btn btn-ghost btn-xs"
                                   style={{ padding: 2, color: '#64748b' }}
-                                  title={isExpanded ? 'Collapse nested RFQs' : 'Expand nested RFQs'}
-                                  aria-label={isExpanded ? 'Collapse RFQs' : 'Expand RFQs'}
+                                  title={isExpanded ? UI_STRINGS.appAppDashboardPage.collapseNestedRFQs : UI_STRINGS.appAppDashboardPage.expandNestedRFQs}
+                                  aria-label={isExpanded ? UI_STRINGS.appAppDashboardPage.collapseRFQs : UI_STRINGS.appAppDashboardPage.expandRFQs}
                                 >
                                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                 </button>
@@ -1331,7 +1286,7 @@ export default function DashboardPage() {
                           {/* 4. Items */}
                           <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span className="text-muted" style={{ fontSize: 12, fontWeight: 500 }}>
-                              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                              {itemCount} {itemCount === 1 ? UI_STRINGS.common.item : UI_STRINGS.common.items5}
                             </span>
                           </td>
 
@@ -1354,7 +1309,7 @@ export default function DashboardPage() {
 
                           {/* 6. BOQ Amount */}
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                            <span className="font-mono">₹ {amountFormatted}</span>
+                            <span className="font-mono">{UI_STRINGS.common.copytfdhmk}{amountFormatted}</span>
                           </td>
 
                           {/* 7. Procurement Stage */}
@@ -1372,14 +1327,12 @@ export default function DashboardPage() {
                                 onClick={() => toggleExpand(item.id)}
                                 className="badge badge-info"
                                 style={{ cursor: 'pointer', border: 'none', fontSize: 11 }}
-                                title="Click to toggle associated RFQ packages"
+                                title={UI_STRINGS.appAppDashboardPage.clickToToggleAssociatedRFQPackages}
                               >
-                                {rfqCount} {rfqCount === 1 ? 'RFQ' : 'RFQs'}
+                                {rfqCount} {rfqCount === 1 ? UI_STRINGS.common.rFQ : UI_STRINGS.common.rFQs}
                               </button>
                             ) : (
-                              <span className="badge badge-draft" style={{ fontSize: 11 }}>
-                                0 RFQs
-                              </span>
+                              <span className="badge badge-draft" style={{ fontSize: 11 }}>{UI_STRINGS.appAppDashboardPage.copy1fhxk1l}</span>
                             )}
                           </td>
 
@@ -1390,26 +1343,23 @@ export default function DashboardPage() {
                                 href={`/procurement/rfqs/new?boqId=${item.boqId || item.id}&boqRevisionId=${item.boqRevisionId || item.id}`}
                                 className="btn btn-xs btn-primary"
                                 style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                title="Raise RFQ for this approved BOQ"
+                                title={UI_STRINGS.appAppDashboardPage.raiseRFQForThisApprovedBOQ}
                               >
-                                <Plus size={12} /> Raise RFQ
-                              </Link>
+                                <Plus size={12} />{UI_STRINGS.appAppDashboardPage.raiseRFQ}</Link>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => toggleExpand(item.id)}
                                 className="btn btn-xs btn-secondary"
                                 style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                title={isExpanded ? 'Hide linked RFQs' : 'View linked RFQs'}
+                                title={isExpanded ? UI_STRINGS.appAppDashboardPage.hideLinkedRFQs : UI_STRINGS.appAppDashboardPage.viewLinkedRFQs}
                               >
                                 {isExpanded ? (
                                   <>
-                                    <ChevronDown size={12} /> Hide RFQs
-                                  </>
+                                    <ChevronDown size={12} />{UI_STRINGS.appAppDashboardPage.hideRFQs}</>
                                 ) : (
                                   <>
-                                    <ChevronRight size={12} /> View RFQs
-                                  </>
+                                    <ChevronRight size={12} />{UI_STRINGS.appAppDashboardPage.viewRFQs}</>
                                 )}
                               </button>
                             )}
@@ -1433,20 +1383,17 @@ export default function DashboardPage() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <Layers size={16} color="#2563eb" />
-                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
-                                      Associated RFQs for {boqDisplayCode}
+                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{UI_STRINGS.appAppDashboardPage.associatedRFQsFor}{boqDisplayCode}
                                     </span>
                                     <span className="badge badge-info" style={{ fontSize: 11 }}>
-                                      {rfqCount} Package{rfqCount === 1 ? '' : 's'} Linked
-                                    </span>
+                                      {rfqCount}{UI_STRINGS.appAppDashboardPage.package}{rfqCount === 1 ? '' : UI_STRINGS.common.s}{UI_STRINGS.appAppDashboardPage.linked}</span>
                                   </div>
                                   <Link
                                     href={`/procurement/rfqs/new?boqId=${item.boqId || item.id}&boqRevisionId=${item.boqRevisionId || item.id}`}
                                     className="btn btn-sm btn-primary"
                                     style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
                                   >
-                                    <Plus size={12} style={{ marginRight: 4 }} /> Create RFQ
-                                  </Link>
+                                    <Plus size={12} style={{ marginRight: 4 }} />{UI_STRINGS.appAppDashboardPage.createRFQ}</Link>
                                 </div>
 
                                 {rfqCount === 0 ? (
@@ -1459,18 +1406,13 @@ export default function DashboardPage() {
                                       textAlign: 'center',
                                     }}
                                   >
-                                    <p style={{ margin: 0, fontSize: 13, color: '#475569', fontWeight: 600 }}>
-                                      No RFQ packages created for this BOQ yet.
-                                    </p>
-                                    <p style={{ margin: '4px 0 12px', fontSize: 12, color: '#64748b' }}>
-                                      Approved BOQ line items are ready for vendor invitations and sourcing package initiation.
-                                    </p>
+                                    <p style={{ margin: 0, fontSize: 13, color: '#475569', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.noRFQPackagesCreatedForThisBOQYet}</p>
+                                    <p style={{ margin: '4px 0 12px', fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppDashboardPage.approvedBOQLineItemsAreReadyForVendorInvitationsAndSourcingPackageInitiation}</p>
                                     <Link
                                       href={`/procurement/rfqs/new?boqId=${item.boqId || item.id}&boqRevisionId=${item.boqRevisionId || item.id}`}
                                       className="btn btn-sm btn-primary"
                                       style={{ fontWeight: 700, fontSize: 12 }}
-                                    >
-                                      + Create RFQ for {boqDisplayCode}
+                                    >{UI_STRINGS.appAppDashboardPage.createRFQFor}{boqDisplayCode}
                                     </Link>
                                   </div>
                                 ) : (
@@ -1478,15 +1420,15 @@ export default function DashboardPage() {
                                     <table className="data-table" style={{ fontSize: 12, margin: 0 }}>
                                       <thead>
                                         <tr style={{ background: '#f1f5f9' }}>
-                                          <th>RFQ Number</th>
-                                          <th>RFQ Description / Scope</th>
-                                          <th>Vendor Invitation / Progress</th>
-                                          <th>Quotation Stage</th>
-                                          <th>Negotiation Stage</th>
-                                          <th>Award Status</th>
-                                          <th>PPO Status</th>
-                                          <th>Last Updated</th>
-                                          <th style={{ textAlign: 'right' }}>Open RFQ Action</th>
+                                          <th>{UI_STRINGS.common.rFQNumber}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.rFQDescriptionScope}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.vendorInvitationProgress}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.quotationStage}</th>
+                                          <th>{UI_STRINGS.common.negotiationStage}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.awardStatus}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.pPOStatus}</th>
+                                          <th>{UI_STRINGS.common.lastUpdated}</th>
+                                          <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppDashboardPage.openRFQAction}</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -1557,13 +1499,13 @@ export default function DashboardPage() {
                                                   {rfq.ppoStatus}
                                                 </span>
                                               ) : (
-                                                <span className="text-muted" style={{ fontSize: 11 }}>—</span>
+                                                <span className="text-muted" style={{ fontSize: 11 }}>{UI_STRINGS.common.copy4s9bsz}</span>
                                               )}
                                             </td>
 
                                             {/* Last Updated */}
                                             <td className="text-muted" style={{ fontSize: 11 }}>
-                                              {rfq.lastUpdated ? new Date(rfq.lastUpdated).toLocaleDateString() : '—'}
+                                              {rfq.lastUpdated ? new Date(rfq.lastUpdated).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}
                                             </td>
 
                                             {/* Open RFQ Action */}
@@ -1572,8 +1514,7 @@ export default function DashboardPage() {
                                                 href={`/procurement/rfqs/${rfq.id}`}
                                                 className="btn btn-sm btn-secondary"
                                                 style={{ fontSize: 11, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                              >
-                                                Open RFQ <ArrowRight size={12} />
+                                              >{UI_STRINGS.appAppDashboardPage.openRFQ}<ArrowRight size={12} />
                                               </Link>
                                             </td>
                                           </tr>
@@ -1595,8 +1536,8 @@ export default function DashboardPage() {
           )}
 
           <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: 12, color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Showing {filteredRegister.length} of {register.length} eligible BOQ records</span>
-            <span style={{ fontSize: 11 }}>Tenant Isolation: {data.tenant?.name || 'Active Tenant'}</span>
+            <span>{UI_STRINGS.appAppDashboardPage.showing}{filteredRegister.length}{UI_STRINGS.common.of}{register.length}{UI_STRINGS.appAppDashboardPage.eligibleBOQRecords}</span>
+            <span style={{ fontSize: 11 }}>{UI_STRINGS.appAppDashboardPage.tenantIsolation}{data.tenant?.name || UI_STRINGS.appAppDashboardPage.activeTenant}</span>
           </div>
         </div>
       </div>
@@ -1611,35 +1552,31 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Finance & Capex Control Workspace</div>
-            <div className="page-subtitle">Budget Monitoring, Cost Centre Audit & BOQ Financial Baseline</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.financeCapexControlWorkspace}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.budgetMonitoringCostCentreAuditBOQFinancialBaseline}</div>
           </div>
-          <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>Role: FINANCE_USER</span>
+          <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>{UI_STRINGS.appAppDashboardPage.roleFINANCEUSER}</span>
         </div>
 
         <div className="alert alert-info mb-6" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', display: 'flex', gap: 12, alignItems: 'center' }}>
           <Briefcase size={22} style={{ color: '#2563eb', flexShrink: 0 }} />
           <div>
-            <strong>Financial Audit View (Read-Only):</strong> Tracking approved budgets and cost center assignments.
-            <div style={{ fontSize: 12, marginTop: 4, color: '#64748b' }}>
-              * Benchmark engine, line pricing comparison, and ERP cost ledger synchronization are scheduled for Phase 2.
-            </div>
+            <strong>{UI_STRINGS.appAppDashboardPage.financialAuditViewReadOnly}</strong>{UI_STRINGS.appAppDashboardPage.trackingApprovedBudgetsAndCostCenterAssignments}<div style={{ fontSize: 12, marginTop: 4, color: '#64748b' }}>{UI_STRINGS.appAppDashboardPage.benchmarkEngineLinePricingComparisonAndERPCostLedgerSynchronizationAreScheduledForPhase2}</div>
           </div>
         </div>
 
         <div className="kpi-grid mb-6">
           <div className="kpi-card" style={{ borderLeft: '3px solid #2563eb' }}>
-            <div className="kpi-label">Total Allocated Capex Budget</div>
-            <div className="kpi-value" style={{ color: '#2563eb' }}>
-              ₹ {(data.totalBudget ?? 0).toLocaleString()}
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalAllocatedCapexBudget}</div>
+            <div className="kpi-value" style={{ color: '#2563eb' }}>{UI_STRINGS.common.copy1g8b5tg}{(data.totalBudget ?? 0).toLocaleString()}
             </div>
           </div>
           <div className="kpi-card">
-            <div className="kpi-label">Active Capex Projects</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeCapexProjects}</div>
             <div className="kpi-value">{data.totalProjects ?? 0}</div>
           </div>
           <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
-            <div className="kpi-label">BOQ Approved Projects</div>
+            <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.bOQApprovedProjects}</div>
             <div className="kpi-value" style={{ color: '#059669' }}>{data.approvedProjects ?? 0}</div>
           </div>
         </div>
@@ -1647,20 +1584,19 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Briefcase size={18} /> Project Financial & Cost Centre Master
-            </span>
+              <Briefcase size={18} />{UI_STRINGS.appAppDashboardPage.projectFinancialCostCentreMaster}</span>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Project Code</th>
-                  <th>Project Name</th>
-                  <th>Cost Centre</th>
-                  <th>Budget</th>
-                  <th>Currency</th>
-                  <th>Status</th>
-                  <th>Owner</th>
+                  <th>{UI_STRINGS.common.projectCode}</th>
+                  <th>{UI_STRINGS.common.projectName}</th>
+                  <th>{UI_STRINGS.common.costCentre2}</th>
+                  <th>{UI_STRINGS.common.budget}</th>
+                  <th>{UI_STRINGS.common.currency}</th>
+                  <th>{UI_STRINGS.common.status}</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.owner}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -1669,13 +1605,13 @@ export default function DashboardPage() {
                   <tr key={p.id}>
                     <td className="font-mono font-bold">{p.projectCode}</td>
                     <td>{p.name}</td>
-                    <td><span className="badge badge-draft font-mono">{p.costCentre || '—'}</span></td>
-                    <td style={{ fontWeight: 600 }}>{p.budget ? `₹ ${p.budget.toLocaleString()}` : '—'}</td>
-                    <td>{p.currency || 'INR'}</td>
+                    <td><span className="badge badge-draft font-mono">{p.costCentre || UI_STRINGS.common.copy4s9bsz}</span></td>
+                    <td style={{ fontWeight: 600 }}>{p.budget ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": p.budget.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}</td>
+                    <td>{p.currency || UI_STRINGS.common.iNR}</td>
                     <td><StatusBadge status={p.status} /></td>
-                    <td className="text-muted">{p.projectOwner || '—'}</td>
+                    <td className="text-muted">{p.projectOwner || UI_STRINGS.common.copy4s9bsz}</td>
                     <td>
-                      <Link href={`/projects/${p.id}`} className="btn btn-sm btn-ghost">View Details →</Link>
+                      <Link href={`/projects/${p.id}`} className="btn btn-sm btn-ghost">{UI_STRINGS.appAppDashboardPage.viewDetails2}</Link>
                     </td>
                   </tr>
                 ))}
@@ -1705,8 +1641,8 @@ export default function DashboardPage() {
       boqId: 'BOQ-KND-001',
       boqCode: 'BOQ-KND-001',
       prNumber: 'PR-DEMO-001',
-      title: 'Civil Finishing & Interior Fitout Package (8 items)',
-      description: 'Civil Finishing & Interior Fitout Package (8 items)',
+      title: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
+      description: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
       projectName: 'Kundanahalli Retail Project',
       projectCode: 'KND-RET-01',
       costCentre: 'CC45 - Civil & Interior Fitout',
@@ -1728,8 +1664,8 @@ export default function DashboardPage() {
         {
           id: 'RFQ-DEMO-001',
           rfqNumber: 'RFQ-DEMO-001',
-          title: 'Civil Finishing & Interior Fitout Package (8 items)',
-          description: 'Civil Finishing & Interior Fitout Package (8 items)',
+          title: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
+          description: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
           packageName: 'Kundanahalli Retail Store — CC45 Fitout',
           status: 'NEGOTIATION',
           stage: 'Negotiation',
@@ -1884,19 +1820,18 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Category Manager Sourcing Gateway</div>
-            <div className="page-subtitle">Central Gateway: Approved BOQs, Multi-Package RFQs, Quotation Comparison, Negotiation Hub, Awarding & PPO Lifecycle</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.categoryManagerSourcingGateway}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.centralGatewayApprovedBOQsMultiPackageRFQsQuotationComparisonNegotiationHubAwardingPPOLifecycle}</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>Role: CATEGORY_MANAGER</span>
+            <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>{UI_STRINGS.appAppDashboardPage.roleCATEGORYMANAGER}</span>
             <Link
               href="/procurement/rfqs/RFQ-DEMO-001?demo=true"
               className="btn btn-sm btn-secondary"
               style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
             >
-              <Sparkles size={14} color="#16a34a" /> View Interactive Demo
-            </Link>
-            <Link href="/procurement/rfqs/new" className="btn btn-primary btn-sm">+ Create New RFQ</Link>
+              <Sparkles size={14} color="#16a34a" />{UI_STRINGS.appAppDashboardPage.viewInteractiveDemo}</Link>
+            <Link href="/procurement/rfqs/new" className="btn btn-primary btn-sm">{UI_STRINGS.appAppDashboardPage.createNewRFQ}</Link>
           </div>
         </div>
 
@@ -1934,16 +1869,10 @@ export default function DashboardPage() {
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <strong style={{ fontSize: 13, color: '#166534' }}>
-                  Central Sourcing Gateway — BOQ Commercial Lifecycle
-                </strong>
-                <span className="badge badge-approved" style={{ fontSize: 10, padding: '1px 6px' }}>
-                  SINGLE SOURCING ENTRY POINT
-                </span>
+                <strong style={{ fontSize: 13, color: '#166534' }}>{UI_STRINGS.appAppDashboardPage.centralSourcingGatewayBOQCommercialLifecycle}</strong>
+                <span className="badge badge-approved" style={{ fontSize: 10, padding: '1px 6px' }}>{UI_STRINGS.appAppDashboardPage.sINGLESOURCINGENTRYPOINT}</span>
               </div>
-              <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
-                Click or expand any Approved BOQ below to inspect its complete sourcing lifecycle: linked RFQs, invited vendors, quote comparison matrix, full-window Negotiation Hub, award sanctions, and PPO issuance.
-              </div>
+              <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>{UI_STRINGS.appAppDashboardPage.clickOrExpandAnyApprovedBOQBelowToInspectItsCompleteSourcingLifecycleLinkedRFQsInvitedVendorsQuoteComparisonMatrixFullWindowNegotiationHubAwardSanctionsAndPPOIssuance}</div>
             </div>
           </div>
 
@@ -1961,8 +1890,7 @@ export default function DashboardPage() {
               borderColor: '#15803d',
             }}
           >
-            <Sparkles size={14} /> View Workflow Example →
-          </Link>
+            <Sparkles size={14} />{UI_STRINGS.appAppDashboardPage.viewWorkflowExample2}</Link>
         </div>
 
         {/* 1. Four Compact, Live Clickable Summary Cards */}
@@ -1978,19 +1906,19 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'prs_received' ? '0 0 0 2px #059669' : undefined,
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter Approved BOQs awaiting sourcing"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterApprovedBOQsAwaitingSourcing}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">Approved BOQs</div>
+              <div className="kpi-label">{UI_STRINGS.common.approvedBOQs}</div>
               {activeCardFilter === 'prs_received' && (
-                <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 6px' }}>Filtered</span>
+                <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 6px' }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#059669' }}>{summary.approvedBoqs ?? 0}</div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
               {summary.prsReceived !== undefined
-                ? `${summary.prsReceived} awaiting RFQ of ${summary.approvedBoqs ?? 0} total`
-                : 'Commercial baselines in sourcing queue'}
+                ? interpolateUiString(UI_STRINGS.appAppDashboardPage.prsReceivedAwaitingRFQOfValue2Total, { "prsReceived": summary.prsReceived, "value2": summary.approvedBoqs ?? 0 })
+                : UI_STRINGS.appAppDashboardPage.commercialBaselinesInSourcingQueue}
             </div>
           </div>
 
@@ -2005,16 +1933,16 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'rfqs_in_progress' ? '0 0 0 2px #2563eb' : undefined,
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter RFQs in progress"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterRFQsInProgress}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">Active RFQs</div>
+              <div className="kpi-label">{UI_STRINGS.common.activeRFQs}</div>
               {activeCardFilter === 'rfqs_in_progress' && (
-                <span className="badge badge-info" style={{ fontSize: 10, padding: '2px 6px' }}>Filtered</span>
+                <span className="badge badge-info" style={{ fontSize: 10, padding: '2px 6px' }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#2563eb' }}>{summary.rfqsInProgress ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Active bidding & quote comparison</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.activeBiddingQuoteComparison}</div>
           </div>
 
           {/* Card 3: Negotiations Pending */}
@@ -2028,16 +1956,16 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'negotiations_pending' ? '0 0 0 2px #d97706' : undefined,
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter negotiations pending"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterNegotiationsPending}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">In Negotiation</div>
+              <div className="kpi-label">{UI_STRINGS.common.inNegotiation}</div>
               {activeCardFilter === 'negotiations_pending' && (
-                <span className="badge badge-review" style={{ fontSize: 10, padding: '2px 6px' }}>Filtered</span>
+                <span className="badge badge-review" style={{ fontSize: 10, padding: '2px 6px' }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#d97706' }}>{summary.negotiationsPending ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Active counteroffer rounds & rate locking</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.activeCounterofferRoundsRateLocking}</div>
           </div>
 
           {/* Card 4: Awards / PPO Pending */}
@@ -2051,16 +1979,16 @@ export default function DashboardPage() {
               boxShadow: activeCardFilter === 'awards_ppo_pending' ? '0 0 0 2px #7c3aed' : undefined,
               transition: 'all 0.15s ease',
             }}
-            title="Click to filter awards and PPOs pending"
+            title={UI_STRINGS.appAppDashboardPage.clickToFilterAwardsAndPPOsPending}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="kpi-label">Awards & PPOs</div>
+              <div className="kpi-label">{UI_STRINGS.common.awardsPPOs}</div>
               {activeCardFilter === 'awards_ppo_pending' && (
-                <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 6px', background: '#f3e8ff', color: '#7c3aed' }}>Filtered</span>
+                <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 6px', background: '#f3e8ff', color: '#7c3aed' }}>{UI_STRINGS.appAppDashboardPage.filtered}</span>
               )}
             </div>
             <div className="kpi-value" style={{ color: '#7c3aed' }}>{summary.awardsPpoPending ?? 0}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Award sanction & order issuance</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.awardSanctionOrderIssuance}</div>
           </div>
         </div>
 
@@ -2069,15 +1997,14 @@ export default function DashboardPage() {
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <ClipboardCheck size={18} color="#059669" /> Approved BOQ Sourcing Register
-              </span>
+                <ClipboardCheck size={18} color="#059669" />{UI_STRINGS.appAppDashboardPage.approvedBOQSourcingRegister}</span>
               <button
                 type="button"
                 onClick={toggleExpandAll}
                 className="btn btn-sm btn-ghost"
                 style={{ fontSize: 11, color: '#2563eb' }}
               >
-                {filteredRegister.every((b) => expandedPrs[b.id]) ? 'Collapse All BOQs' : 'Expand All BOQs'}
+                {filteredRegister.every((b) => expandedPrs[b.id]) ? UI_STRINGS.appAppDashboardPage.collapseAllBOQs : UI_STRINGS.appAppDashboardPage.expandAllBOQs}
               </button>
             </div>
 
@@ -2085,7 +2012,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <input
                 type="text"
-                placeholder="Search BOQ code, RFQ #, package, project, cost centre..."
+                placeholder={UI_STRINGS.appAppDashboardPage.searchBOQCodeRFQPackageProjectCostCentre}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input input-sm"
@@ -2098,13 +2025,12 @@ export default function DashboardPage() {
                 className="input input-sm"
                 style={{ width: 220, fontSize: 12 }}
               >
-                <option value="">All Stages ({register.length})</option>
+                <option value="">{UI_STRINGS.appAppDashboardPage.allStages}{register.length}{UI_STRINGS.common.copyc7zu6c}</option>
                 {stagesList.map((st) => {
                   const cnt = register.filter((r) => (r.sourcingStage || r.currentStage || r.overallStage) === st).length;
                   return (
                     <option key={st} value={st}>
-                      {st} ({cnt})
-                    </option>
+                      {st}{UI_STRINGS.common.copy1b3t0c5}{cnt}{UI_STRINGS.common.copyc7zu6c}</option>
                   );
                 })}
               </select>
@@ -2119,9 +2045,7 @@ export default function DashboardPage() {
                   }}
                   className="btn btn-sm btn-ghost"
                   style={{ fontSize: 11, color: '#dc2626' }}
-                >
-                  Clear All Filters
-                </button>
+                >{UI_STRINGS.appAppDashboardPage.clearAllFilters}</button>
               )}
             </div>
           </div>
@@ -2129,23 +2053,18 @@ export default function DashboardPage() {
           {/* Active Card Filter Banner */}
           {activeCardFilter && (
             <div style={{ background: '#f8fafc', padding: '8px 16px', borderBottom: '1px solid #e2e8f0', fontSize: 12, color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>
-                Filtered by:{' '}
+              <span>{UI_STRINGS.appAppDashboardPage.filteredBy}{' '}
                 <strong style={{ color: '#0f172a' }}>
-                  {activeCardFilter === 'prs_received' && 'Approved BOQs (Awaiting Sourcing)'}
-                  {activeCardFilter === 'rfqs_in_progress' && 'RFQs in Progress (Quotes & Comparison)'}
-                  {activeCardFilter === 'negotiations_pending' && 'Negotiations Pending'}
-                  {activeCardFilter === 'awards_ppo_pending' && 'Awards & PPOs Pending'}
-                </strong>{' '}
-                — Showing {filteredRegister.length} BOQs
-              </span>
+                  {activeCardFilter === 'prs_received' && UI_STRINGS.appAppDashboardPage.approvedBOQsAwaitingSourcing}
+                  {activeCardFilter === 'rfqs_in_progress' && UI_STRINGS.appAppDashboardPage.rFQsInProgressQuotesComparison}
+                  {activeCardFilter === 'negotiations_pending' && UI_STRINGS.common.negotiationsPending}
+                  {activeCardFilter === 'awards_ppo_pending' && UI_STRINGS.appAppDashboardPage.awardsPPOsPending}
+                </strong>{' '}{UI_STRINGS.appAppDashboardPage.showing2}{filteredRegister.length}{UI_STRINGS.appAppDashboardPage.bOQs}</span>
               <button
                 type="button"
                 onClick={() => setActiveCardFilter(null)}
                 style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
-              >
-                Reset Filter ✕
-              </button>
+              >{UI_STRINGS.appAppDashboardPage.resetFilter}</button>
             </div>
           )}
 
@@ -2154,11 +2073,11 @@ export default function DashboardPage() {
               <div className="empty-state-icon">
                 <FileText size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No matching BOQ commercial baselines found</div>
+              <div className="empty-title">{UI_STRINGS.appAppDashboardPage.noMatchingBOQCommercialBaselinesFound}</div>
               <div className="empty-desc">
                 {searchTerm || selectedStage || activeCardFilter
-                  ? 'Try clearing the search or stage filters.'
-                  : 'Approved BOQs will automatically appear here once released by the Project Approver.'}
+                  ? UI_STRINGS.appAppDashboardPage.tryClearingTheSearchOrStageFilters
+                  : UI_STRINGS.appAppDashboardPage.approvedBOQsWillAutomaticallyAppearHereOnceReleasedByTheProjectApprover}
               </div>
             </div>
           ) : (
@@ -2166,15 +2085,15 @@ export default function DashboardPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 140 }}>PR Number</th>
-                    <th>Package Description</th>
-                    <th style={{ width: 85, textAlign: 'center' }}>Items</th>
-                    <th style={{ width: 95 }}>Cost Centre</th>
-                    <th style={{ width: 130, textAlign: 'right' }}>PR Amount</th>
-                    <th style={{ width: 110 }}>Approval Status</th>
-                    <th style={{ width: 140 }}>Procurement Stage</th>
-                    <th style={{ width: 90, textAlign: 'center' }}>RFQ Count</th>
-                    <th className="col-actions" style={{ width: 115, textAlign: 'right' }}>Action</th>
+                    <th style={{ width: 140 }}>{UI_STRINGS.common.pRNumber}</th>
+                    <th>{UI_STRINGS.common.packageDescription}</th>
+                    <th style={{ width: 85, textAlign: 'center' }}>{UI_STRINGS.common.items4}</th>
+                    <th style={{ width: 95 }}>{UI_STRINGS.common.costCentre2}</th>
+                    <th style={{ width: 130, textAlign: 'right' }}>{UI_STRINGS.common.pRAmount}</th>
+                    <th style={{ width: 110 }}>{UI_STRINGS.common.approvalStatus}</th>
+                    <th style={{ width: 140 }}>{UI_STRINGS.common.procurementStage}</th>
+                    <th style={{ width: 90, textAlign: 'center' }}>{UI_STRINGS.common.rFQCount}</th>
+                    <th className="col-actions" style={{ width: 115, textAlign: 'right' }}>{UI_STRINGS.common.action}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2203,8 +2122,8 @@ export default function DashboardPage() {
                                   onClick={() => toggleExpand(item.id)}
                                   className="btn btn-ghost btn-xs"
                                   style={{ padding: 2, color: '#64748b' }}
-                                  title={isExpanded ? 'Collapse nested RFQs' : 'Expand nested RFQs'}
-                                  aria-label={isExpanded ? 'Collapse RFQs' : 'Expand RFQs'}
+                                  title={isExpanded ? UI_STRINGS.appAppDashboardPage.collapseNestedRFQs : UI_STRINGS.appAppDashboardPage.expandNestedRFQs}
+                                  aria-label={isExpanded ? UI_STRINGS.appAppDashboardPage.collapseRFQs : UI_STRINGS.appAppDashboardPage.expandRFQs}
                                 >
                                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                 </button>
@@ -2212,7 +2131,7 @@ export default function DashboardPage() {
                               <span
                                 style={{ cursor: 'pointer', textDecoration: 'none' }}
                                 onClick={() => handleOpenPrDetails(item)}
-                                title="Click to view details"
+                                title={UI_STRINGS.common.clickToViewDetails}
                               >
                                 {item.prNumber || item.boqCode}
                               </span>
@@ -2226,9 +2145,7 @@ export default function DashboardPage() {
                                     color: '#15803d',
                                     fontWeight: 700,
                                   }}
-                                >
-                                  SAMPLE
-                                </span>
+                                >{UI_STRINGS.appAppDashboardPage.sAMPLE}</span>
                               )}
                             </div>
                           </td>
@@ -2243,7 +2160,7 @@ export default function DashboardPage() {
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                               }}
-                              title={item.title || item.description}
+                              title={interpolateUiString(UI_STRINGS.common.value1, { "value1": item.title || item.description })}
                             >
                               {item.title || item.description}
                             </div>
@@ -2252,7 +2169,7 @@ export default function DashboardPage() {
                           {/* 3. Item Count */}
                           <td style={{ textAlign: 'center' }}>
                             <span className="text-muted" style={{ fontSize: 12, fontWeight: 500 }}>
-                              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                              {itemCount} {itemCount === 1 ? UI_STRINGS.common.item : UI_STRINGS.common.items5}
                             </span>
                           </td>
 
@@ -2274,8 +2191,7 @@ export default function DashboardPage() {
                           </td>
 
                           {/* 5. PR Amount */}
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                            ₹ {(item.benchmarkValue || item.requestedValue || 0).toLocaleString('en-IN')}
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{(item.benchmarkValue || item.requestedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                           </td>
 
                           {/* 6. Approval Status */}
@@ -2297,9 +2213,9 @@ export default function DashboardPage() {
                               onClick={() => toggleExpand(item.id)}
                               className={`badge ${rfqCount > 0 ? 'badge-info' : 'badge-draft'}`}
                               style={{ cursor: 'pointer', border: 'none', fontSize: 11 }}
-                              title="Click to toggle associated RFQ packages"
+                              title={UI_STRINGS.appAppDashboardPage.clickToToggleAssociatedRFQPackages}
                             >
-                              {rfqCount} {rfqCount === 1 ? 'RFQ' : 'RFQs'}
+                              {rfqCount} {rfqCount === 1 ? UI_STRINGS.common.rFQ : UI_STRINGS.common.rFQs}
                             </button>
                           </td>
 
@@ -2311,8 +2227,7 @@ export default function DashboardPage() {
                               className="btn btn-sm btn-secondary"
                               style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             >
-                              <Eye size={12} /> View Details
-                            </button>
+                              <Eye size={12} />{UI_STRINGS.appAppDashboardPage.viewDetails}</button>
                           </td>
                         </tr>
 
@@ -2333,14 +2248,11 @@ export default function DashboardPage() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <Layers size={16} color="#2563eb" />
-                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
-                                      Associated Sourcing Packages for {item.boqCode || item.prNumber}
+                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{UI_STRINGS.appAppDashboardPage.associatedSourcingPackagesFor}{item.boqCode || item.prNumber}
                                     </span>
                                     <span className="badge badge-info" style={{ fontSize: 11 }}>
-                                      {rfqCount} Package{rfqCount === 1 ? '' : 's'} Linked
-                                    </span>
-                                    <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>
-                                      Project: <strong style={{ color: '#334155' }}>{item.projectName}</strong>
+                                      {rfqCount}{UI_STRINGS.appAppDashboardPage.package}{rfqCount === 1 ? '' : UI_STRINGS.common.s}{UI_STRINGS.appAppDashboardPage.linked}</span>
+                                    <span style={{ fontSize: 11, color: '#64748b', marginLeft: 8 }}>{UI_STRINGS.common.project2}<strong style={{ color: '#334155' }}>{item.projectName}</strong>
                                     </span>
                                   </div>
                                   <Link
@@ -2348,8 +2260,7 @@ export default function DashboardPage() {
                                     className="btn btn-sm btn-primary"
                                     style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
                                   >
-                                    <Plus size={12} style={{ marginRight: 4 }} /> Create RFQ Package
-                                  </Link>
+                                    <Plus size={12} style={{ marginRight: 4 }} />{UI_STRINGS.appAppDashboardPage.createRFQPackage}</Link>
                                 </div>
 
                                 {rfqCount === 0 ? (
@@ -2362,34 +2273,28 @@ export default function DashboardPage() {
                                       textAlign: 'center',
                                     }}
                                   >
-                                    <p style={{ margin: 0, fontSize: 13, color: '#475569', fontWeight: 600 }}>
-                                      No RFQ packages created for this commercial baseline yet.
-                                    </p>
-                                    <p style={{ margin: '4px 0 12px', fontSize: 12, color: '#64748b' }}>
-                                      Approved BOQ line items and benchmark rates are locked and ready for packaging and vendor quotation dispatch.
-                                    </p>
+                                    <p style={{ margin: 0, fontSize: 13, color: '#475569', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.noRFQPackagesCreatedForThisCommercialBaselineYet}</p>
+                                    <p style={{ margin: '4px 0 12px', fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppDashboardPage.approvedBOQLineItemsAndBenchmarkRatesAreLockedAndReadyForPackagingAndVendorQuotationDispatch}</p>
                                     <Link
                                       href={item.createRfqUrl || `/procurement/rfqs/new?revisionId=${item.id}&projectId=${item.projectId}`}
                                       className="btn btn-sm btn-primary"
                                       style={{ fontWeight: 700, fontSize: 12 }}
-                                    >
-                                      + Create First RFQ Package
-                                    </Link>
+                                    >{UI_STRINGS.appAppDashboardPage.createFirstRFQPackage}</Link>
                                   </div>
                                 ) : (
                                   <div className="table-wrapper" style={{ borderRadius: 6, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                     <table className="data-table" style={{ fontSize: 12, margin: 0 }}>
                                       <thead>
                                         <tr style={{ background: '#f1f5f9' }}>
-                                          <th>RFQ Number</th>
-                                          <th>RFQ Description / Package</th>
-                                          <th>Invited Vendors & Bids</th>
-                                          <th>Quotation Comparison</th>
-                                          <th>Negotiation Stage</th>
-                                          <th>Pending Action & Turn</th>
-                                          <th>Award Status</th>
-                                          <th>PPO Status</th>
-                                          <th style={{ textAlign: 'right' }}>Sourcing Lifecycle Actions</th>
+                                          <th>{UI_STRINGS.common.rFQNumber}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.rFQDescriptionPackage}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.invitedVendorsBids}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.quotationComparison}</th>
+                                          <th>{UI_STRINGS.common.negotiationStage}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.pendingActionTurn}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.awardStatus}</th>
+                                          <th>{UI_STRINGS.appAppDashboardPage.pPOStatus}</th>
+                                          <th style={{ textAlign: 'right' }}>{UI_STRINGS.appAppDashboardPage.sourcingLifecycleActions}</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -2400,7 +2305,7 @@ export default function DashboardPage() {
                                               <Link
                                                 href={rfq.openUrl || `/procurement/rfqs/${rfq.id}`}
                                                 style={{ color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                                title="Open full commercial workspace"
+                                                title={UI_STRINGS.appAppDashboardPage.openFullCommercialWorkspace}
                                               >
                                                 {rfq.rfqNumber}
                                               </Link>
@@ -2423,7 +2328,7 @@ export default function DashboardPage() {
 
                                             {/* Quotation Comparison Status */}
                                             <td>
-                                              <div style={{ fontWeight: 500 }}>{rfq.comparisonStatus || rfq.quotationStage || '—'}</div>
+                                              <div style={{ fontWeight: 500 }}>{rfq.comparisonStatus || rfq.quotationStage || UI_STRINGS.common.copy4s9bsz}</div>
                                             </td>
 
                                             {/* Negotiation Stage */}
@@ -2434,7 +2339,7 @@ export default function DashboardPage() {
                                                 }`}
                                                 style={{ fontSize: 10 }}
                                               >
-                                                {rfq.negotiationStage || rfq.negotiationRound || '—'}
+                                                {rfq.negotiationStage || rfq.negotiationRound || UI_STRINGS.common.copy4s9bsz}
                                               </span>
                                             </td>
 
@@ -2442,7 +2347,7 @@ export default function DashboardPage() {
                                             <td>
                                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                                 <span style={{ fontSize: 11, fontWeight: 500, color: '#0f172a' }}>
-                                                  {rfq.pendingAction || 'Awaiting Action'}
+                                                  {rfq.pendingAction || UI_STRINGS.appAppDashboardPage.awaitingAction}
                                                 </span>
                                                 {rfq.nextResponsibleParty && (
                                                   <div>
@@ -2455,8 +2360,7 @@ export default function DashboardPage() {
                                                         background: rfq.nextResponsibleParty === 'BUYER' ? '#eff6ff' : (rfq.nextResponsibleParty === 'VENDOR' ? '#fef3c7' : '#f1f5f9'),
                                                         color: rfq.nextResponsibleParty === 'BUYER' ? '#1d4ed8' : (rfq.nextResponsibleParty === 'VENDOR' ? '#92400e' : '#475569'),
                                                       }}
-                                                    >
-                                                      TURN: {rfq.nextResponsibleParty}
+                                                    >{UI_STRINGS.appAppDashboardPage.tURN}{rfq.nextResponsibleParty}
                                                     </span>
                                                   </div>
                                                 )}
@@ -2491,7 +2395,7 @@ export default function DashboardPage() {
                                                   {rfq.ppoStatus}
                                                 </span>
                                               ) : (
-                                                <span className="text-muted" style={{ fontSize: 11 }}>—</span>
+                                                <span className="text-muted" style={{ fontSize: 11 }}>{UI_STRINGS.common.copy4s9bsz}</span>
                                               )}
                                             </td>
 
@@ -2502,26 +2406,21 @@ export default function DashboardPage() {
                                                   href={rfq.openUrl || `/procurement/rfqs/${rfq.id}`}
                                                   className="btn btn-sm btn-secondary"
                                                   style={{ fontSize: 10, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                                  title="Open Quotation Comparison Matrix"
-                                                >
-                                                  Open RFQ <ArrowRight size={10} />
+                                                  title={UI_STRINGS.appAppDashboardPage.openQuotationComparisonMatrix}
+                                                >{UI_STRINGS.appAppDashboardPage.openRFQ}<ArrowRight size={10} />
                                                 </Link>
                                                 <Link
                                                   href={rfq.negotiationUrl || `/procurement/rfqs/${rfq.id}?tab=negotiation`}
                                                   className="btn btn-sm btn-outline"
                                                   style={{ fontSize: 10, padding: '3px 8px', color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
-                                                  title="Open Negotiation Workspace"
-                                                >
-                                                  Negotiate
-                                                </Link>
+                                                  title={UI_STRINGS.common.openNegotiationWorkspace}
+                                                >{UI_STRINGS.common.negotiate}</Link>
                                                 <Link
                                                   href={rfq.awardingUrl || `/procurement/rfqs/${rfq.id}?tab=awarding`}
                                                   className="btn btn-sm btn-outline"
                                                   style={{ fontSize: 10, padding: '3px 8px', color: '#6b21a8', borderColor: '#e9d5ff', background: '#faf5ff' }}
-                                                  title="Open Awarding & PPO Workspace"
-                                                >
-                                                  Award / PPO
-                                                </Link>
+                                                  title={UI_STRINGS.appAppDashboardPage.openAwardingPPOWorkspace}
+                                                >{UI_STRINGS.appAppDashboardPage.awardPPO}</Link>
                                               </div>
                                             </td>
                                           </tr>
@@ -2551,17 +2450,15 @@ export default function DashboardPage() {
             onClick={() => setShowCategoryGovernance(!showCategoryGovernance)}
           >
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Folder size={18} color="#2563eb" /> Category Masters & Specification Quality Health
-              <span className="badge badge-draft" style={{ fontSize: 11, marginLeft: 8 }}>
-                {data.categoryCount ?? 0} Taxonomy Trees • {data.revisionsWithExceptions?.length ?? 0} Exceptions
-              </span>
+              <Folder size={18} color="#2563eb" />{UI_STRINGS.appAppDashboardPage.categoryMastersSpecificationQualityHealth}<span className="badge badge-draft" style={{ fontSize: 11, marginLeft: 8 }}>
+                {data.categoryCount ?? 0}{UI_STRINGS.appAppDashboardPage.taxonomyTrees}{data.revisionsWithExceptions?.length ?? 0}{UI_STRINGS.appAppDashboardPage.exceptions}</span>
             </span>
             <button
               type="button"
               className="btn btn-sm btn-ghost"
               style={{ fontSize: 11, color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              {showCategoryGovernance ? 'Hide Category Controls ▲' : 'Show Category Controls ▼'}
+              {showCategoryGovernance ? UI_STRINGS.appAppDashboardPage.hideCategoryControls : UI_STRINGS.appAppDashboardPage.showCategoryControls}
             </button>
           </div>
 
@@ -2570,8 +2467,8 @@ export default function DashboardPage() {
               {/* Category taxonomy cards */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <strong style={{ fontSize: 13, color: '#1e293b' }}>Active Taxonomy Trees & Categories</strong>
-                  <Link href="/masters/categories" className="btn btn-sm btn-secondary">Manage Category Masters →</Link>
+                  <strong style={{ fontSize: 13, color: '#1e293b' }}>{UI_STRINGS.appAppDashboardPage.activeTaxonomyTreesCategories}</strong>
+                  <Link href="/masters/categories" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.manageCategoryMasters}</Link>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
                   {data.categories?.map((cat: any) => (
@@ -2583,7 +2480,7 @@ export default function DashboardPage() {
                         {cat.children?.map((sub: any) => (
                           <span key={sub.id} className="badge badge-draft" style={{ fontSize: 10 }}>{sub.name}</span>
                         ))}
-                        {!cat.children?.length && <span className="text-muted" style={{ fontSize: 11 }}>No subcategories</span>}
+                        {!cat.children?.length && <span className="text-muted" style={{ fontSize: 11 }}>{UI_STRINGS.common.noSubcategories}</span>}
                       </div>
                     </div>
                   ))}
@@ -2594,25 +2491,22 @@ export default function DashboardPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <strong style={{ fontSize: 13, color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <AlertTriangle size={15} color="#d97706" /> BOQs Requiring Category Specification Quality Attention
-                  </strong>
+                    <AlertTriangle size={15} color="#d97706" />{UI_STRINGS.appAppDashboardPage.bOQsRequiringCategorySpecificationQualityAttention}</strong>
                 </div>
                 {!data.revisionsWithExceptions?.length ? (
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px 16px', borderRadius: 6, fontSize: 12 }}>
-                    ✓ All BOQ revisions meet category taxonomy and UOM standards. No validation exceptions found.
-                  </div>
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '12px 16px', borderRadius: 6, fontSize: 12 }}>{UI_STRINGS.appAppDashboardPage.allBOQRevisionsMeetCategoryTaxonomyAndUOMStandardsNoValidationExceptionsFound}</div>
                 ) : (
                   <div className="table-wrapper">
                     <table className="data-table" style={{ fontSize: 12 }}>
                       <thead>
                         <tr>
-                          <th>Project</th>
-                          <th>BOQ Code</th>
-                          <th>Revision</th>
-                          <th>Errors</th>
-                          <th>Warnings</th>
-                          <th>Quality Score</th>
-                          <th>Action</th>
+                          <th>{UI_STRINGS.common.project}</th>
+                          <th>{UI_STRINGS.appAppDashboardPage.bOQCode}</th>
+                          <th>{UI_STRINGS.common.revision}</th>
+                          <th>{UI_STRINGS.common.errors}</th>
+                          <th>{UI_STRINGS.common.warnings}</th>
+                          <th>{UI_STRINGS.common.qualityScore}</th>
+                          <th>{UI_STRINGS.common.action}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2621,11 +2515,11 @@ export default function DashboardPage() {
                             <td>{r.boq?.project?.name}</td>
                             <td className="font-mono">{r.boq?.boqCode}</td>
                             <td><span className="badge badge-submitted">{r.revisionCode}</span></td>
-                            <td><span className="badge badge-error">{r.errorLines} Errors</span></td>
-                            <td><span className="badge badge-warning">{r.warningLines} Warnings</span></td>
-                            <td><strong>{r.qualityScore ?? '—'}%</strong></td>
+                            <td><span className="badge badge-error">{r.errorLines}{UI_STRINGS.appAppDashboardPage.errors}</span></td>
+                            <td><span className="badge badge-warning">{r.warningLines}{UI_STRINGS.appAppDashboardPage.warnings}</span></td>
+                            <td><strong>{r.qualityScore ?? UI_STRINGS.common.copy4s9bsz}{UI_STRINGS.common.copy8w4luo}</strong></td>
                             <td>
-                              <Link href={`/boq/${r.id}`} className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}>Inspect Workspace →</Link>
+                              <Link href={`/boq/${r.id}`} className="btn btn-sm btn-secondary" style={{ fontSize: 11 }}>{UI_STRINGS.appAppDashboardPage.inspectWorkspace}</Link>
                             </td>
                           </tr>
                         ))}
@@ -2662,43 +2556,41 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Client Administration Dashboard</div>
-            <div className="page-subtitle">Tenant Governance: {data.tenant?.name || 'Organization'}</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.clientAdministrationDashboard}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.tenantGovernance}{data.tenant?.name || UI_STRINGS.appAppDashboardPage.organization}</div>
           </div>
           <div className="flex gap-2">
             <Link href="/admin/users" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Users size={16} /> Manage Users
-            </Link>
-            <Link href="/projects/new" className="btn btn-primary">+ New Project</Link>
+              <Users size={16} />{UI_STRINGS.appAppDashboardPage.manageUsers}</Link>
+            <Link href="/projects/new" className="btn btn-primary">{UI_STRINGS.appAppDashboardPage.newProject}</Link>
           </div>
         </div>
 
         <div className="kpi-grid mb-6">
-          <div className="kpi-card"><div className="kpi-label">Total Projects</div><div className="kpi-value">{data.totalProjects ?? 0}</div></div>
-          <div className="kpi-card"><div className="kpi-label">Active Projects</div><div className="kpi-value">{data.activeProjects ?? 0}</div></div>
+          <div className="kpi-card"><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalProjects}</div><div className="kpi-value">{data.totalProjects ?? 0}</div></div>
+          <div className="kpi-card"><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeProjects}</div><div className="kpi-value">{data.activeProjects ?? 0}</div></div>
           <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
-            <div className="kpi-label">Pending Approval</div>
+            <div className="kpi-label">{UI_STRINGS.common.pendingApproval}</div>
             <div className="kpi-value" style={{ color: '#d97706' }}>{data.pendingApprovals ?? 0}</div>
           </div>
-          <div className="kpi-card"><div className="kpi-label">Total Users</div><div className="kpi-value">{data.totalUsers ?? 0}</div></div>
+          <div className="kpi-card"><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalUsers}</div><div className="kpi-value">{data.totalUsers ?? 0}</div></div>
         </div>
 
         <div className="card">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Clock size={18} /> Recent Tenant Audit Activity
-            </span>
-            <Link href="/audit" className="btn btn-sm btn-secondary">View Full Audit Log</Link>
+              <Clock size={18} />{UI_STRINGS.appAppDashboardPage.recentTenantAuditActivity}</span>
+            <Link href="/audit" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.viewFullAuditLog}</Link>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
-              <thead><tr><th>Action</th><th>Entity</th><th>User</th><th>Time</th></tr></thead>
+              <thead><tr><th>{UI_STRINGS.common.action}</th><th>{UI_STRINGS.common.entity}</th><th>{UI_STRINGS.common.user}</th><th>{UI_STRINGS.common.time}</th></tr></thead>
               <tbody>
                 {data.recentActivity?.map((log: any) => (
                   <tr key={log.id}>
                     <td><span className="badge badge-info">{log.action}</span></td>
-                    <td>{log.entityType}: <span className="text-muted">{log.description?.slice(0, 60)}</span></td>
-                    <td>{log.user?.name || log.user?.email || '—'}</td>
+                    <td>{log.entityType}{UI_STRINGS.common.copy13emybb}<span className="text-muted">{log.description?.slice(0, 60)}</span></td>
+                    <td>{log.user?.name || log.user?.email || UI_STRINGS.common.copy4s9bsz}</td>
                     <td className="text-muted">{new Date(log.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
@@ -2718,30 +2610,29 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
           <div>
-            <div className="page-title">Project & BOQ Viewer (Read-Only)</div>
-            <div className="page-subtitle">Auditor & Stakeholder Observation View</div>
+            <div className="page-title">{UI_STRINGS.appAppDashboardPage.projectBOQViewerReadOnly}</div>
+            <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.auditorStakeholderObservationView}</div>
           </div>
-          <span className="badge badge-draft" style={{ fontSize: 13, padding: '6px 12px' }}>Role: VIEWER (Read-Only)</span>
+          <span className="badge badge-draft" style={{ fontSize: 13, padding: '6px 12px' }}>{UI_STRINGS.appAppDashboardPage.roleVIEWERReadOnly}</span>
         </div>
 
         <div className="alert alert-info mb-6" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', display: 'flex', gap: 12, alignItems: 'center' }}>
           <Lock size={20} style={{ color: '#475569', flexShrink: 0 }} />
           <div>
-            <strong>Restricted Access Mode:</strong> Your account has read-only observation permissions. Creating projects, editing lines, uploading BOQs, and approvals are disabled.
-          </div>
+            <strong>{UI_STRINGS.appAppDashboardPage.restrictedAccessMode}</strong>{UI_STRINGS.appAppDashboardPage.yourAccountHasReadOnlyObservationPermissionsCreatingProjectsEditingLinesUploadingBOQsAndApprovalsAreDisabled}</div>
         </div>
 
         <div className="card">
-          <div className="card-header"><span className="card-title">Permitted Projects ({data.totalProjects ?? 0})</span></div>
+          <div className="card-header"><span className="card-title">{UI_STRINGS.appAppDashboardPage.permittedProjects}{data.totalProjects ?? 0}{UI_STRINGS.common.copyc7zu6c}</span></div>
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Name</th>
-                  <th>Sector</th>
-                  <th>Status</th>
-                  <th>Latest BOQ</th>
+                  <th>{UI_STRINGS.common.code}</th>
+                  <th>{UI_STRINGS.common.name}</th>
+                  <th>{UI_STRINGS.common.sector}</th>
+                  <th>{UI_STRINGS.common.status}</th>
+                  <th>{UI_STRINGS.appAppDashboardPage.latestBOQ}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -2754,9 +2645,9 @@ export default function DashboardPage() {
                       <td>{p.name}</td>
                       <td><span className="badge badge-info">{p.sector}</span></td>
                       <td><StatusBadge status={p.status} /></td>
-                      <td>{latestRev ? `${latestRev.revisionCode} (${latestRev.totalLines} lines)` : 'No BOQ'}</td>
+                      <td>{latestRev ? interpolateUiString(UI_STRINGS.appAppDashboardPage.revisionCodeTotalLinesLines, { "revisionCode": latestRev.revisionCode, "totalLines": latestRev.totalLines }) : UI_STRINGS.appAppDashboardPage.noBOQ}</td>
                       <td>
-                        <Link href={`/projects/${p.id}`} className="btn btn-sm btn-secondary">View Project →</Link>
+                        <Link href={`/projects/${p.id}`} className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.viewProject}</Link>
                       </td>
                     </tr>
                   );
@@ -2776,10 +2667,10 @@ export default function DashboardPage() {
     <div className="page-content">
       <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
         <div>
-          <div className="page-title">Procurement Transaction Dashboard</div>
-          <div className="page-subtitle">Live BOQ Transaction Ledger, Approval Queue & Budget Baseline</div>
+          <div className="page-title">{UI_STRINGS.appAppDashboardPage.procurementTransactionDashboard}</div>
+          <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.liveBOQTransactionLedgerApprovalQueueBudgetBaseline}</div>
         </div>
-        <Link href="/boq/studio" className="btn btn-primary">+ Create BOQ</Link>
+        <Link href="/boq/studio" className="btn btn-primary">{UI_STRINGS.appAppDashboardPage.createBOQ}</Link>
       </div>
 
       {/* Role-based Pending Actions Alert (if any require attention) */}
@@ -2795,9 +2686,7 @@ export default function DashboardPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <AlertTriangle size={18} color="#d97706" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
-              Pending Actions Requiring Your Attention ({data.pendingActions.length})
-            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>{UI_STRINGS.appAppDashboardPage.pendingActionsRequiringYourAttention}{data.pendingActions.length}{UI_STRINGS.common.copyc7zu6c}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {data.pendingActions.slice(0, 3).map((act: any) => (
@@ -2818,11 +2707,9 @@ export default function DashboardPage() {
                   <span className="font-mono font-bold" style={{ color: '#1e40af' }}>{act.boqCode}</span>
                   <span style={{ color: '#334155', fontWeight: 600 }}>{act.title}</span>
                   <StatusBadge status={act.status} />
-                  <span style={{ color: '#64748b' }}>— {act.actionText}</span>
+                  <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppDashboardPage.copyk7zqc9}{act.actionText}</span>
                 </div>
-                <Link href={act.link} className="btn btn-sm btn-secondary" style={{ padding: '3px 10px', fontSize: 11 }}>
-                  Action Now →
-                </Link>
+                <Link href={act.link} className="btn btn-sm btn-secondary" style={{ padding: '3px 10px', fontSize: 11 }}>{UI_STRINGS.appAppDashboardPage.actionNow}</Link>
               </div>
             ))}
           </div>
@@ -2840,68 +2727,54 @@ export default function DashboardPage() {
       >
         {/* Card 1: Total BOQs Raised */}
         <div className="kpi-card" style={{ borderLeft: '3px solid #2563eb' }}>
-          <div className="kpi-label">Total BOQs Raised</div>
+          <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalBOQsRaised}</div>
           <div className="kpi-value" style={{ color: '#2563eb' }}>
             {data.totalBoqsRaised ?? 0}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-            All BOQs in repository
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.allBOQsInRepository}</div>
         </div>
 
         {/* Card 2: BOQs Pending Approval */}
         <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
-          <div className="kpi-label">BOQs Pending Approval</div>
+          <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.bOQsPendingApproval}</div>
           <div className="kpi-value" style={{ color: '#d97706' }}>
             {data.boqsPendingApproval ?? 0}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-            Submitted & in review
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.submittedInReview}</div>
         </div>
 
         {/* Card 3: Approved BOQs */}
         <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
-          <div className="kpi-label">Approved BOQs</div>
+          <div className="kpi-label">{UI_STRINGS.common.approvedBOQs}</div>
           <div className="kpi-value" style={{ color: '#059669' }}>
             {data.approvedBoqs ?? 0}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-            Ready for PR / budget
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.readyForPRBudget}</div>
         </div>
 
         {/* Card 4: BOQs Requiring Action */}
         <div className="kpi-card" style={{ borderLeft: '3px solid #dc2626' }}>
-          <div className="kpi-label">BOQs Requiring Action</div>
+          <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.bOQsRequiringAction}</div>
           <div className="kpi-value" style={{ color: '#dc2626' }}>
             {data.boqsRequiringAction ?? 0}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-            Draft & rejected BOQs
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.draftRejectedBOQs}</div>
         </div>
 
         {/* Card 5: Total Proposed Budget */}
         <div className="kpi-card" style={{ borderLeft: '3px solid #6366f1' }}>
-          <div className="kpi-label">Total Proposed Budget</div>
-          <div className="kpi-value" style={{ color: '#6366f1', fontSize: 20 }}>
-            ₹ {(data.totalProposedBudget ?? 0).toLocaleString('en-IN')}
+          <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalProposedBudget}</div>
+          <div className="kpi-value" style={{ color: '#6366f1', fontSize: 20 }}>{UI_STRINGS.common.copy1g8b5tg}{(data.totalProposedBudget ?? 0).toLocaleString(I18N_CONFIG.defaultLocale)}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-            Total proposed value
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.totalProposedValue}</div>
         </div>
 
         {/* Card 6: Total Approved Budget */}
         <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
-          <div className="kpi-label">Total Approved Budget</div>
-          <div className="kpi-value" style={{ color: '#059669', fontSize: 20 }}>
-            ₹ {(data.totalApprovedBudget ?? 0).toLocaleString('en-IN')}
+          <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalApprovedBudget}</div>
+          <div className="kpi-value" style={{ color: '#059669', fontSize: 20 }}>{UI_STRINGS.common.copy1g8b5tg}{(data.totalApprovedBudget ?? 0).toLocaleString(I18N_CONFIG.defaultLocale)}
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-            Baselined approved Capex
-          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppDashboardPage.baselinedApprovedCapex}</div>
         </div>
       </div>
 
@@ -2909,11 +2782,8 @@ export default function DashboardPage() {
       <div className="card">
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <FileText size={18} /> Recent BOQs
-          </span>
-          <Link href="/boq/studio" className="btn btn-sm btn-secondary">
-            Open BOQ Studio →
-          </Link>
+            <FileText size={18} />{UI_STRINGS.appAppDashboardPage.recentBOQs}</span>
+          <Link href="/boq/studio" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.openBOQStudio}</Link>
         </div>
 
         {!data.recentBoqs || data.recentBoqs.length === 0 ? (
@@ -2921,24 +2791,22 @@ export default function DashboardPage() {
             <div className="empty-state-icon">
               <FileText size={36} color="#94a3b8" strokeWidth={1.5} />
             </div>
-            <div className="empty-title">No BOQs recorded yet</div>
-            <div className="empty-desc">Create or upload a BOQ to start tracking procurement transactions.</div>
-            <Link href="/boq/studio" className="btn btn-primary" style={{ marginTop: 16 }}>
-              + Create BOQ
-            </Link>
+            <div className="empty-title">{UI_STRINGS.appAppDashboardPage.noBOQsRecordedYet}</div>
+            <div className="empty-desc">{UI_STRINGS.appAppDashboardPage.createOrUploadABOQToStartTrackingProcurementTransactions}</div>
+            <Link href="/boq/studio" className="btn btn-primary" style={{ marginTop: 16 }}>{UI_STRINGS.appAppDashboardPage.createBOQ}</Link>
           </div>
         ) : (
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 140 }}>BOQ Number</th>
-                  <th>BOQ Description</th>
-                  <th style={{ width: 180 }}>Cost Centre</th>
-                  <th style={{ width: 150 }}>Estimated Value</th>
-                  <th style={{ width: 120 }}>Status</th>
-                  <th style={{ width: 130 }}>Last Updated</th>
-                  <th className="col-actions" style={{ width: 100, textAlign: 'right' }}>Action</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.bOQNumber}</th>
+                  <th>{UI_STRINGS.common.bOQDescription}</th>
+                  <th style={{ width: 180 }}>{UI_STRINGS.common.costCentre2}</th>
+                  <th style={{ width: 150 }}>{UI_STRINGS.appAppDashboardPage.estimatedValue}</th>
+                  <th style={{ width: 120 }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ width: 130 }}>{UI_STRINGS.common.lastUpdated}</th>
+                  <th className="col-actions" style={{ width: 100, textAlign: 'right' }}>{UI_STRINGS.common.action}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2960,31 +2828,28 @@ export default function DashboardPage() {
                         }}
                         title={b.boqDescription !== '—' ? b.boqDescription : undefined}
                       >
-                        {b.boqDescription || '—'}
+                        {b.boqDescription || UI_STRINGS.common.copy4s9bsz}
                       </div>
                     </td>
                     <td>
                       <span className="font-mono" style={{ fontSize: 12, color: '#475569' }}>
-                        {b.costCentre || '—'}
+                        {b.costCentre || UI_STRINGS.common.copy4s9bsz}
                       </span>
                     </td>
-                    <td style={{ fontWeight: 600, color: '#0f172a' }}>
-                      ₹ {(b.estimatedValue || 0).toLocaleString('en-IN')}
+                    <td style={{ fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{(b.estimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                     </td>
                     <td>
                       <StatusBadge status={b.status} />
                     </td>
                     <td className="text-muted" style={{ fontSize: 12 }}>
-                      {b.lastUpdated ? new Date(b.lastUpdated).toLocaleDateString() : '—'}
+                      {b.lastUpdated ? new Date(b.lastUpdated).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}
                     </td>
                     <td className="col-actions" style={{ textAlign: 'right' }}>
                       <Link
                         href={`/boq/studio?boqId=${b.id}`}
                         className="btn btn-sm btn-primary"
                         style={{ padding: '4px 12px', fontSize: 11 }}
-                      >
-                        Open
-                      </Link>
+                      >{UI_STRINGS.common.open}</Link>
                     </td>
                   </tr>
                 ))}

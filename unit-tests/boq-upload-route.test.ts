@@ -6,6 +6,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { mkdir, writeFile } from 'fs/promises';
 import { createNextBoqRevision } from '../src/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -88,17 +90,17 @@ describe('BOQ upload route', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(request())).resolves.toBe(denied);
 
-    await expect(POST(request({ projectId: 'project-1' }))).resolves.toEqual({ ok: false, error: 'No file provided.', status: 400 });
+    await expect(POST(request({ projectId: 'project-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqUploadRoute.noFileProvided, status: 400 });
     const file = uploadFile();
-    await expect(POST(request({ file }))).resolves.toEqual({ ok: false, error: 'Project ID is required.', status: 400 });
+    await expect(POST(request({ file }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectIDIsRequired, status: 400 });
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ file, projectId: 'foreign-project' }))).resolves.toEqual({ ok: false, error: 'Project not found.', status: 404 });
+    await expect(POST(request({ file, projectId: 'foreign-project' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404 });
     expect(db.project.findFirst).toHaveBeenCalledWith({ where: { id: 'foreign-project', tenantId: 'tenant-1' } });
   });
 
   it('rejects unsupported extensions before storing or parsing the upload', async () => {
     await expect(POST(request({ file: uploadFile('source.pdf'), projectId: 'project-1' }))).resolves.toEqual({
-      ok: false, error: 'BOQ upload failed. Only .xlsx, .xls, and .csv files are supported.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqUploadRoute.bOQUploadFailedOnlyXlsxXlsAndCsvFilesAreSupported, status: 400,
     });
     expect(mkdir).not.toHaveBeenCalled();
     expect(writeFile).not.toHaveBeenCalled();
@@ -122,7 +124,7 @@ describe('BOQ upload route', () => {
       originalFileName: 'source.xlsx', originalFileHash: hash,
     }) });
     expect(makeRevision).not.toHaveBeenCalled();
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'UPLOAD', entityId: 'revision-1' }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.uPLOAD, entityId: 'revision-1' }));
     expect(db.projectDocument.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-1', category: 'ORIGINAL_BOQ', fileType: expect.stringContaining('spreadsheetml'),
     }) });

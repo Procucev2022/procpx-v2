@@ -1,8 +1,12 @@
 // src/app/api/boq/estimate-cost/route.ts - AI Generated Cost & Benchmark Engine
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');
@@ -14,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const targetId = boqRevisionId || boqId;
     if (!targetId) {
-      return apiError('BOQ Revision ID or BOQ ID is required.', 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
     }
 
     let revision = await prisma.boqRevision.findFirst({
@@ -60,7 +64,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!revision) return apiError('BOQ Revision not found.', 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
 
     // Comprehensive Benchmark dictionary for retail, hospitality, banking & corporate fitouts
     const benchmarkRates: Record<string, { rate: number; source: string; conf: number; category: string }> = {
@@ -169,7 +173,7 @@ export async function POST(req: NextRequest) {
         unestimatedItems.push({
           id: line.id,
           lineNumber: line.lineNumber,
-          description: line.standardDescription || line.originalDescription,
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": line.standardDescription || line.originalDescription }),
           reason: qty === null ? 'Quantity is pending input.' : 'Quantity must be greater than zero.',
           suggestedAction: 'Edit the line item in BOQ Workspace to enter quantity.',
         });
@@ -199,7 +203,7 @@ export async function POST(req: NextRequest) {
         costResults.push({
           id: updated.id,
           lineNumber: updated.lineNumber,
-          description: updated.standardDescription || updated.originalDescription,
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": updated.standardDescription || updated.originalDescription }),
           uom: line.uom?.code || updated.uomRaw || 'NOS',
           quantity: null,
           aiUnitCost: unitCost,
@@ -252,7 +256,7 @@ export async function POST(req: NextRequest) {
       costResults.push({
         id: updated.id,
         lineNumber: updated.lineNumber,
-        description: updated.standardDescription || updated.originalDescription,
+        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": updated.standardDescription || updated.originalDescription }),
         uom: line.uom?.code || updated.uomRaw || 'NOS',
         quantity: qty,
         aiUnitCost: unitCost,
@@ -294,7 +298,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BOQ_REVISION',
         entityId: revision.id,
         action: 'AI_COST_GENERATED',
-        description: `AI Cost Estimation generated for ${costResults.length} lines. Total estimated benchmark: ₹ ${totalEstimatedRevValue.toLocaleString('en-IN')}`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqEstimateCostRoute.aICostEstimationGeneratedForLengthLinesTotalEstimatedBenchmarkToLocaleString, { "length": costResults.length, "toLocaleString": totalEstimatedRevValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
       },
     });
 
@@ -311,6 +315,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error generating AI cost:', err);
-    return apiError(err.message || 'AI cost estimation failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiCostEstimationFailed }), 500);
   }
 }

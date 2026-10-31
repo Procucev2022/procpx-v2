@@ -1,5 +1,6 @@
 'use client';
 // src/app/(app)/budget/transactions/page.tsx - Budget Transactions Audit Ledger & BOQ Traceability
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -19,6 +20,9 @@ import {
   Filter,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function BudgetTransactionsContent() {
   const searchParams = useSearchParams();
@@ -102,12 +106,12 @@ function BudgetTransactionsContent() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Reversal failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.reversalFailed }));
       }
       setReverseModalOpen(false);
       setReversalReason('');
       setTargetTx(null);
-      setStatusMessage(`Transaction ${targetTx.transactionCode} reversed successfully!`);
+      setStatusMessage(interpolateUiString(UI_STRINGS.appAppBudgetTransactionsPage.transactionTransactionCodeReversedSuccessfully, { "transactionCode": targetTx.transactionCode }));
       loadTransactions();
     } catch (err: any) {
       setReversalError(err.message);
@@ -165,22 +169,18 @@ function BudgetTransactionsContent() {
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
       {/* Header */}
       <PageHeader
-        title="Budget Transaction Ledger"
-        subtitle="Comprehensive immutable audit trail of commercial BOQ allocations, category contributions, and financial reversals"
+        title={UI_STRINGS.appAppBudgetTransactionsPage.budgetTransactionLedger}
+        subtitle={UI_STRINGS.appAppBudgetTransactionsPage.comprehensiveImmutableAuditTrailOfCommercialBOQAllocationsCategoryContributionsAndFinancialReversals}
         breadcrumbs={[
-          { label: 'Budget', href: '/budget' },
-          { label: 'Ledger' },
+          { label: UI_STRINGS.common.budget, href: '/budget' },
+          { label: UI_STRINGS.common.ledger },
         ]}
         actions={
           <div className="flex gap-2 items-center">
             <Link href="/budget" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Landmark size={14} />
-              Project Budget
-            </Link>
+              <Landmark size={14} />{UI_STRINGS.common.projectBudget}</Link>
             <Link href="/budget/vs-actual" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Scale size={14} />
-              Budget vs Actual
-            </Link>
+              <Scale size={14} />{UI_STRINGS.common.budgetVsActual}</Link>
           </div>
         }
       />
@@ -191,9 +191,7 @@ function BudgetTransactionsContent() {
             <CheckCircle2 size={16} />
             <span>{statusMessage}</span>
           </div>
-          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>
-            ✕
-          </button>
+          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -211,10 +209,10 @@ function BudgetTransactionsContent() {
               }}
               style={{ minWidth: 200, height: 36, fontSize: 13 }}
             >
-              <option value="">All Projects</option>
+              <option value="">{UI_STRINGS.common.allProjects}</option>
               {projects.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.projectCode} — {p.name}
+                  {p.projectCode}{UI_STRINGS.common.copyq9aflv}{p.name}
                 </option>
               ))}
             </select>
@@ -226,10 +224,10 @@ function BudgetTransactionsContent() {
               onChange={e => setSelectedCostCentreId(e.target.value)}
               style={{ minWidth: 180, height: 36, fontSize: 13 }}
             >
-              <option value="">All Cost Centres</option>
+              <option value="">{UI_STRINGS.common.allCostCentres}</option>
               {costCentres.map(cc => (
                 <option key={cc.id} value={cc.id}>
-                  {cc.code} — {cc.name}
+                  {cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}
                 </option>
               ))}
             </select>
@@ -241,7 +239,7 @@ function BudgetTransactionsContent() {
               onChange={e => setSelectedCategory(e.target.value)}
               style={{ minWidth: 160, height: 36, fontSize: 13 }}
             >
-              <option value="">All Categories</option>
+              <option value="">{UI_STRINGS.common.allCategories}</option>
               {availableCategories.map(cat => (
                 <option key={cat} value={cat}>
                   {cat}
@@ -256,9 +254,9 @@ function BudgetTransactionsContent() {
               onChange={e => setSelectedType(e.target.value)}
               style={{ minWidth: 140, height: 36, fontSize: 13 }}
             >
-              <option value="">All Types</option>
-              <option value="ALLOCATION">Allocation</option>
-              <option value="REVERSAL">Reversal</option>
+              <option value="">{UI_STRINGS.appAppBudgetTransactionsPage.allTypes}</option>
+              <option value="ALLOCATION">{UI_STRINGS.appAppBudgetTransactionsPage.allocation}</option>
+              <option value="REVERSAL">{UI_STRINGS.appAppBudgetTransactionsPage.reversal}</option>
             </select>
 
             {/* Status Filter */}
@@ -268,12 +266,12 @@ function BudgetTransactionsContent() {
               onChange={e => setSelectedStatus(e.target.value)}
               style={{ minWidth: 160, height: 36, fontSize: 13 }}
             >
-              <option value="">All Statuses</option>
-              <option value="UNDER_APPROVAL">Under Project Approval</option>
-              <option value="PENDING_FINANCE_APPROVAL">Under Finance Approval</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="REVERSED">Reversed</option>
+              <option value="">{UI_STRINGS.common.allStatuses}</option>
+              <option value="UNDER_APPROVAL">{UI_STRINGS.common.underProjectApproval}</option>
+              <option value="PENDING_FINANCE_APPROVAL">{UI_STRINGS.common.underFinanceApproval}</option>
+              <option value="APPROVED">{UI_STRINGS.common.approved}</option>
+              <option value="REJECTED">{UI_STRINGS.common.rejected}</option>
+              <option value="REVERSED">{UI_STRINGS.appAppBudgetTransactionsPage.reversed}</option>
             </select>
 
             {/* Search Input */}
@@ -281,7 +279,7 @@ function BudgetTransactionsContent() {
               <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: 10, top: 11 }} />
               <input
                 type="text"
-                placeholder="Search Tx ID, BOQ Number, description..."
+                placeholder={UI_STRINGS.appAppBudgetTransactionsPage.searchTxIDBOQNumberDescription}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="input-field"
@@ -296,67 +294,60 @@ function BudgetTransactionsContent() {
             onClick={loadTransactions}
             style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, fontSize: 12 }}
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
         </div>
       </div>
 
       {/* Transactions Table (Part E - Columns Preserved) */}
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-            Audit Ledger ({filtered.length} Records)
-          </h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppBudgetTransactionsPage.auditLedger}{filtered.length}{UI_STRINGS.appAppBudgetTransactionsPage.records}</h2>
         </div>
 
         {loading ? (
           <div style={{ padding: '40px 0', textAlign: 'center', color: '#64748b', fontSize: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <RefreshCw size={16} className="animate-spin" /> Loading ledger transactions...
-            </div>
+              <RefreshCw size={16} className="animate-spin" />{UI_STRINGS.appAppBudgetTransactionsPage.loadingLedgerTransactions}</div>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: '48px 0', textAlign: 'center' }}>
             <History size={36} color="#cbd5e1" style={{ margin: '0 auto 12px auto' }} />
-            <div style={{ fontWeight: 600, color: '#334155', fontSize: 14 }}>No Transactions Found</div>
-            <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0 0 0' }}>
-              Add a BOQ to budget to create transaction lineage entries.
-            </p>
+            <div style={{ fontWeight: 600, color: '#334155', fontSize: 14 }}>{UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound}</div>
+            <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0 0 0' }}>{UI_STRINGS.appAppBudgetTransactionsPage.addABOQToBudgetToCreateTransactionLineageEntries}</p>
           </div>
         ) : (
           <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
             <table className="table enterprise-table" style={{ width: '100%', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', height: 42, borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Date</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Transaction ID</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Project</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Cost Centre</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Category</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>BOQ / Source Ref</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Description</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'center' }}>Type</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'center' }}>Status</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600 }}>Created By</th>
-                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.common.date}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.appAppBudgetTransactionsPage.transactionID}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.common.project}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.common.costCentre2}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.common.category2}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.appAppBudgetTransactionsPage.bOQSourceRef}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.common.description}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'right' }}>{UI_STRINGS.common.amount}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'center' }}>{UI_STRINGS.common.type}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'center' }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600 }}>{UI_STRINGS.appAppBudgetTransactionsPage.createdBy}</th>
+                  <th style={{ padding: '0 10px', fontWeight: 600, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(tx => (
                   <tr key={tx.id} style={{ borderBottom: '1px solid #f1f5f9', height: 46, background: tx.isReversal ? '#fef2f2' : 'transparent' }}>
                     <td style={{ padding: '0 10px', color: '#64748b', whiteSpace: 'nowrap' }}>
-                      {tx.budgetDate ? new Date(tx.budgetDate).toLocaleDateString() : '—'}
+                      {tx.budgetDate ? new Date(tx.budgetDate).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}
                     </td>
                     <td style={{ padding: '0 10px', fontWeight: 700, color: tx.isReversal ? '#dc2626' : '#1e40af', whiteSpace: 'nowrap' }}>
                       {tx.transactionCode}
                     </td>
                     <td style={{ padding: '0 10px', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                      {tx.projectName || '—'}
+                      {tx.projectName || UI_STRINGS.common.copy4s9bsz}
                     </td>
                     <td style={{ padding: '0 10px', color: '#334155', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontWeight: 600, color: '#1e40af' }}>{tx.costCentreCode}</span> &bull; {tx.costCentreName}
+                      <span style={{ fontWeight: 600, color: '#1e40af' }}>{tx.costCentreCode}</span>{UI_STRINGS.common.bull}{tx.costCentreName}
                     </td>
                     <td style={{ padding: '0 10px', color: '#0f172a', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {tx.category}
@@ -366,20 +357,20 @@ function BudgetTransactionsContent() {
                       {tx.boqNumber && tx.boqNumber !== '—' ? (
                         <div style={{ fontSize: 11 }}>
                           <span style={{ fontWeight: 700, color: '#0f172a' }}>{tx.boqNumber}</span>
-                          <span style={{ color: '#64748b', marginLeft: 4 }}>({tx.boqRevision || 'R0'})</span>
+                          <span style={{ color: '#64748b', marginLeft: 4 }}>{UI_STRINGS.common.copychzfvb}{tx.boqRevision || UI_STRINGS.common.r0}{UI_STRINGS.common.copyc7zu6c}</span>
                           {tx.boqLineReference && tx.boqLineReference !== '—' && (
                             <div style={{ color: '#64748b', fontSize: 10 }}>{tx.boqLineReference}</div>
                           )}
                         </div>
                       ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
+                        <span style={{ color: '#94a3b8' }}>{UI_STRINGS.common.copy4s9bsz}</span>
                       )}
                     </td>
                     <td style={{ padding: '0 10px', color: '#475569', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.description}>
-                      {tx.description || tx.reference || '—'}
+                      {tx.description || tx.reference || UI_STRINGS.common.copy4s9bsz}
                     </td>
                     <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: tx.amount < 0 ? '#dc2626' : '#047857', whiteSpace: 'nowrap' }}>
-                      {tx.amount < 0 ? `- ₹ ${Math.abs(tx.amount).toLocaleString('en-IN')}` : `₹ ${tx.amount.toLocaleString('en-IN')}`}
+                      {tx.amount < 0 ? interpolateUiString(UI_STRINGS.appAppBudgetTransactionsPage.toLocaleString, { "toLocaleString": Math.abs(tx.amount).toLocaleString(I18N_CONFIG.defaultLocale) }) : interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": tx.amount.toLocaleString(I18N_CONFIG.defaultLocale) })}
                     </td>
                     <td style={{ padding: '0 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <span
@@ -393,7 +384,7 @@ function BudgetTransactionsContent() {
                           color: tx.isReversal ? '#dc2626' : '#166534',
                         }}
                       >
-                        {tx.isReversal ? 'REVERSAL' : 'ALLOCATION'}
+                        {tx.isReversal ? UI_STRINGS.appAppBudgetTransactionsPage.rEVERSAL : UI_STRINGS.appAppBudgetTransactionsPage.aLLOCATION}
                       </span>
                     </td>
                     <td style={{ padding: '0 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -435,41 +426,35 @@ function BudgetTransactionsContent() {
                         }}
                       >
                         {tx.isReversal
-                          ? 'REVERSED'
+                          ? UI_STRINGS.appAppBudgetTransactionsPage.rEVERSED
                           : tx.status === 'UNDER_APPROVAL' || tx.status === 'PENDING_PROJECT_APPROVAL'
-                          ? 'Under Project Approval'
+                          ? UI_STRINGS.common.underProjectApproval
                           : tx.status === 'PENDING_FINANCE_APPROVAL' || tx.status === 'UNDER_FINANCE_APPROVAL'
-                          ? 'Under Finance Approval'
+                          ? UI_STRINGS.common.underFinanceApproval
                           : tx.status === 'APPROVED'
-                          ? 'Approved'
+                          ? UI_STRINGS.common.approved
                           : tx.status === 'REJECTED'
-                          ? 'Rejected'
+                          ? UI_STRINGS.common.rejected
                           : tx.status}
                       </span>
                     </td>
                     <td style={{ padding: '0 10px', color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>
-                        {tx.submitterName || tx.createdByName || (tx.createdBy ? tx.createdBy.slice(0, 10) : 'System')}
+                        {tx.submitterName || tx.createdByName || (tx.createdBy ? tx.createdBy.slice(0, 10) : UI_STRINGS.common.system)}
                       </div>
                       {tx.status === 'APPROVED' && tx.approverName && (
-                        <div style={{ fontSize: 10, color: '#047857' }}>
-                          ✓ Approver: {tx.approverName} {tx.approvedAt ? `(${new Date(tx.approvedAt).toLocaleDateString()})` : ''}
+                        <div style={{ fontSize: 10, color: '#047857' }}>{UI_STRINGS.appAppBudgetTransactionsPage.approver}{tx.approverName} {tx.approvedAt ? interpolateUiString(UI_STRINGS.appAppBudgetTransactionsPage.toLocaleDateString, { "toLocaleDateString": new Date(tx.approvedAt).toLocaleDateString() }) : ''}
                         </div>
                       )}
                       {tx.status === 'REJECTED' && (
-                        <div style={{ fontSize: 10, color: '#b91c1c' }} title={tx.rejectionReason || ''}>
-                          ✕ Rejected {tx.rejectionReason ? `: ${tx.rejectionReason.slice(0, 20)}...` : ''}
+                        <div style={{ fontSize: 10, color: '#b91c1c' }} title={interpolateUiString(UI_STRINGS.common.value1, { "value1": tx.rejectionReason || '' })}>{UI_STRINGS.appAppBudgetTransactionsPage.rejected}{tx.rejectionReason ? interpolateUiString(UI_STRINGS.appAppBudgetTransactionsPage.slice, { "slice": tx.rejectionReason.slice(0, 20) }) : ''}
                         </div>
                       )}
                       {(tx.status === 'UNDER_APPROVAL' || tx.status === 'PENDING_PROJECT_APPROVAL') && (
-                        <div style={{ fontSize: 10, color: '#b45309' }}>
-                          ⏳ Awaiting Project Approver
-                        </div>
+                        <div style={{ fontSize: 10, color: '#b45309' }}>{UI_STRINGS.appAppBudgetTransactionsPage.awaitingProjectApprover}</div>
                       )}
                       {(tx.status === 'PENDING_FINANCE_APPROVAL' || tx.status === 'UNDER_FINANCE_APPROVAL') && (
-                        <div style={{ fontSize: 10, color: '#1d4ed8' }}>
-                          ⏳ Awaiting Finance Approver
-                        </div>
+                        <div style={{ fontSize: 10, color: '#1d4ed8' }}>{UI_STRINGS.appAppBudgetTransactionsPage.awaitingFinanceApprover}</div>
                       )}
                     </td>
                     <td style={{ padding: '0 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -483,8 +468,7 @@ function BudgetTransactionsContent() {
                             setReverseModalOpen(true);
                           }}
                         >
-                          <RotateCcw size={11} /> Reverse
-                        </button>
+                          <RotateCcw size={11} />{UI_STRINGS.appAppBudgetTransactionsPage.reverse}</button>
                       )}
                     </td>
                   </tr>
@@ -501,9 +485,7 @@ function BudgetTransactionsContent() {
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <RotateCcw size={18} color="#dc2626" />
-                Reverse Budget Transaction
-              </h3>
+                <RotateCcw size={18} color="#dc2626" />{UI_STRINGS.appAppBudgetTransactionsPage.reverseBudgetTransaction}</h3>
               <button
                 type="button"
                 onClick={() => setReverseModalOpen(false)}
@@ -520,22 +502,20 @@ function BudgetTransactionsContent() {
             )}
 
             <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 13 }}>
-              <div><strong>Code:</strong> {targetTx.transactionCode}</div>
-              <div><strong>Cost Centre:</strong> {targetTx.costCentreCode} — {targetTx.costCentreName}</div>
-              <div><strong>Category:</strong> {targetTx.category}</div>
-              <div><strong>Amount:</strong> ₹ {targetTx.amount?.toLocaleString('en-IN')}</div>
+              <div><strong>{UI_STRINGS.common.code2}</strong> {targetTx.transactionCode}</div>
+              <div><strong>{UI_STRINGS.common.costCentre3}</strong> {targetTx.costCentreCode}{UI_STRINGS.common.copyq9aflv}{targetTx.costCentreName}</div>
+              <div><strong>{UI_STRINGS.common.category3}</strong> {targetTx.category}</div>
+              <div><strong>{UI_STRINGS.appAppBudgetTransactionsPage.amount}</strong>{UI_STRINGS.common.copy1qkmf2u}{targetTx.amount?.toLocaleString(I18N_CONFIG.defaultLocale)}</div>
             </div>
 
             <form onSubmit={handleReverse}>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Reversal Reason (Mandatory for audit trail)
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>{UI_STRINGS.appAppBudgetTransactionsPage.reversalReasonMandatoryForAuditTrail}</label>
                 <textarea
                   required
                   value={reversalReason}
                   onChange={e => setReversalReason(e.target.value)}
-                  placeholder="e.g., BOQ revision scope correction, de-scoped item..."
+                  placeholder={UI_STRINGS.appAppBudgetTransactionsPage.eGBOQRevisionScopeCorrectionDeScopedItem}
                   className="input-field"
                   style={{ width: '100%', height: 80, fontSize: 13, padding: 8 }}
                 />
@@ -547,16 +527,14 @@ function BudgetTransactionsContent() {
                   className="btn btn-outline"
                   onClick={() => setReverseModalOpen(false)}
                   disabled={reversing}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   className="btn btn-primary"
                   style={{ background: '#dc2626', borderColor: '#dc2626' }}
                   disabled={reversing || !reversalReason.trim()}
                 >
-                  {reversing ? 'Reversing...' : 'Confirm Reversal'}
+                  {reversing ? UI_STRINGS.appAppBudgetTransactionsPage.reversing : UI_STRINGS.appAppBudgetTransactionsPage.confirmReversal}
                 </button>
               </div>
             </form>
@@ -569,7 +547,7 @@ function BudgetTransactionsContent() {
 
 export default function BudgetTransactionsPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>Loading Ledger...</div>}>
+    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppBudgetTransactionsPage.loadingLedger}</div>}>
       <BudgetTransactionsContent />
     </Suspense>
   );

@@ -1,7 +1,10 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
 import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import VendorPortalDashboardPage from '../src/app/(app)/vendor-portal/dashboard/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/components/VendorSourcingDashboard', () => ({
   __esModule: true,
@@ -25,7 +28,7 @@ describe('vendor portal dashboard page', () => {
     let resolveFetch!: (value: unknown) => void;
     (global.fetch as jest.Mock).mockReturnValue(new Promise(resolve => { resolveFetch = resolve; }));
     render(<VendorPortalDashboardPage />);
-    expect(screen.getByText('Loading Vendor Portal Dashboard...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalDashboardPage.loadingVendorPortalDashboard))).toBeInTheDocument();
 
     await act(async () => resolveFetch({ ok: true, json: async () => ({ vendor: { id: 'vendor-1', name: 'Acme', code: 'AC' } }) }));
     expect(screen.getByTestId('vendor-dashboard')).toHaveTextContent('vendor-1:Acme:AC');
@@ -39,13 +42,13 @@ describe('vendor portal dashboard page', () => {
     });
     render(<VendorPortalDashboardPage />);
     expect(await screen.findByText('Vendor account is disabled')).toBeInTheDocument();
-    expect(screen.getByText('Vendor Access Restricted')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalDashboardPage.vendorAccessRestricted))).toBeInTheDocument();
   });
 
   it('uses the generic HTTP failure message if an error response has no JSON body', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({ ok: false, json: async () => { throw new Error('invalid JSON'); } });
     render(<VendorPortalDashboardPage />);
-    expect(await screen.findByText('Failed to load vendor portal')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadVendorPortal))).toBeInTheDocument();
   });
 
   it('shows a contact message when the API returns no active vendor', async () => {

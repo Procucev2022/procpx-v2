@@ -3,6 +3,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import bcrypt from 'bcryptjs';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('USER_VIEW');
@@ -39,13 +41,13 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { email, name, role, password } = body;
 
-  if (!email?.trim()) return apiError('Email is required.');
-  if (!name?.trim()) return apiError('Name is required.');
-  if (!role) return apiError('Role is required.');
-  if (!password || password.length < 8) return apiError('Password must be at least 8 characters.');
+  if (!email?.trim()) return apiError(UI_STRINGS.appApiAdminUsersRoute.emailIsRequired);
+  if (!name?.trim()) return apiError(UI_STRINGS.appApiAdminUsersRoute.nameIsRequired);
+  if (!role) return apiError(UI_STRINGS.appApiAdminUsersRoute.roleIsRequired);
+  if (!password || password.length < 8) return apiError(UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters);
 
   const existing = await prisma.user.findFirst({ where: { tenantId: ctx.tenantId, email: email.trim() } });
-  if (existing) return apiError('A user with this email already exists.');
+  if (existing) return apiError(UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists);
 
   const user = await prisma.user.create({
     data: {

@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/procurement/ppos/page.tsx
 // Enterprise Procurement Purchase Orders (PPO) & Vendor Performance Rating Register
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -38,6 +39,9 @@ import Card from '@/components/ui/Card';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function getPpoStatusBadgeStyle(status: string): { bg: string; color: string; border: string } {
   switch (status) {
@@ -58,15 +62,15 @@ function getPpoStatusBadgeStyle(status: string): { bg: string; color: string; bo
 function getRatingBadgeStyle(status?: string | null): { bg: string; color: string; border: string; label: string } {
   switch (status) {
     case 'APPROVED':
-      return { bg: '#ECFDF5', color: '#047857', border: '#A7F3D0', label: 'Approved' };
+      return { bg: '#ECFDF5', color: '#047857', border: '#A7F3D0', label: UI_STRINGS.common.approved };
     case 'SUBMITTED':
-      return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE', label: 'Under Review' };
+      return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE', label: UI_STRINGS.common.underReview };
     case 'RETURNED_FOR_CORRECTION':
-      return { bg: '#FAF5FF', color: '#7E22CE', border: '#E9D5FF', label: 'Returned for Correction' };
+      return { bg: '#FAF5FF', color: '#7E22CE', border: '#E9D5FF', label: UI_STRINGS.common.returnedForCorrection };
     case 'DRAFT':
-      return { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A', label: 'Draft' };
+      return { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A', label: UI_STRINGS.common.draft };
     default:
-      return { bg: '#F8FAFC', color: '#64748B', border: '#E2E8F0', label: 'Unrated' };
+      return { bg: '#F8FAFC', color: '#64748B', border: '#E2E8F0', label: UI_STRINGS.appAppProcurementPposPage.unrated };
   }
 }
 
@@ -179,7 +183,7 @@ export default function PposDeskPage() {
     if (!selectedPpoForRating) return;
     const vendorId = selectedPpoForRating.vendorId || selectedPpoForRating.vendor?.id;
     if (!vendorId) {
-      setRatingError('Target vendor ID not found for this PPO.');
+      setRatingError(UI_STRINGS.appAppProcurementPposPage.targetVendorIDNotFoundForThisPPO);
       return;
     }
 
@@ -189,7 +193,7 @@ export default function PposDeskPage() {
         !ratingForm.qualityComments.trim() &&
         !ratingForm.deliveryComments.trim()
       ) {
-        setRatingError('Please provide feedback or areas for improvement before submitting for Project Approval.');
+        setRatingError(UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval);
         return;
       }
     }
@@ -222,21 +226,21 @@ export default function PposDeskPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setRatingError(data.error || 'Failed to record performance assessment.');
+        setRatingError(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToRecordPerformanceAssessment }));
         return;
       }
 
       toast.success(
         action === 'DRAFT'
-          ? `Performance rating draft saved for ${selectedPpoForRating.ppoNumber}.`
-          : `Assessment submitted for Project Approval for ${selectedPpoForRating.ppoNumber}!`
+          ? interpolateUiString(UI_STRINGS.common.userMessages.performanceRatingDraftSavedFor, { "ppoNumber": selectedPpoForRating.ppoNumber })
+          : interpolateUiString(UI_STRINGS.common.userMessages.assessmentSubmittedForProjectApprovalFor, { "ppoNumber": selectedPpoForRating.ppoNumber })
       );
 
       setSelectedPpoForRating(null);
       await fetchPpos();
     } catch (err: any) {
       console.error(err);
-      setRatingError(err.message || 'Network error submitting rating.');
+      setRatingError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.networkErrorSubmittingRating }));
     } finally {
       setSubmittingRating(false);
     }
@@ -300,30 +304,26 @@ export default function PposDeskPage() {
         breadcrumbs={
           isProjectUser
             ? [
-                { label: 'Vendor Performance' },
-                { label: 'PPO Performance' },
+                { label: UI_STRINGS.appAppProcurementPposPage.vendorPerformance },
+                { label: UI_STRINGS.common.pPOPerformance },
               ]
             : [
-                { label: 'Procurement', href: '/procurement/rfqs' },
-                { label: 'PPOs & Orders' },
+                { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+                { label: UI_STRINGS.appAppProcurementPposPage.pPOsOrders },
               ]
         }
-        title={isProjectUser ? 'PPO Vendor Performance Rating' : 'Procurement Purchase Orders (PPO)'}
+        title={isProjectUser ? UI_STRINGS.appAppProcurementPposPage.pPOVendorPerformanceRating : UI_STRINGS.appAppProcurementPposPage.procurementPurchaseOrdersPPO}
         description={
           isProjectUser
-            ? 'Project-Level Evaluation of Commercial Orders & Execution Quality across 5 Standard Rubrics'
-            : 'Controlled Commercial Orders Inherited Directly from Approved Baselines & Negotiated Rates'
+            ? UI_STRINGS.appAppProcurementPposPage.projectLevelEvaluationOfCommercialOrdersExecutionQualityAcross5StandardRubrics
+            : UI_STRINGS.appAppProcurementPposPage.controlledCommercialOrdersInheritedDirectlyFromApprovedBaselinesNegotiatedRates
         }
         actions={
           <div style={{ display: 'flex', gap: 10 }}>
             {isProjectUser ? (
-              <Link href="/budget" className="btn btn-secondary">
-                Project Budget
-              </Link>
+              <Link href="/budget" className="btn btn-secondary">{UI_STRINGS.common.projectBudget}</Link>
             ) : (
-              <Link href="/procurement/rfqs" className="btn btn-secondary">
-                Active RFQs Register
-              </Link>
+              <Link href="/procurement/rfqs" className="btn btn-secondary">{UI_STRINGS.common.activeRFQsRegister}</Link>
             )}
           </div>
         }
@@ -334,37 +334,37 @@ export default function PposDeskPage() {
         {isProjectUser ? (
           <SummaryCardGrid columns={5}>
             <SummaryCard
-              label="Total In-Scope PPOs"
+              label={UI_STRINGS.appAppProcurementPposPage.totalInScopePPOs}
               value={metrics.total}
-              secondary="Orders in assigned projects"
+              secondary={UI_STRINGS.appAppProcurementPposPage.ordersInAssignedProjects}
               icon={<Receipt size={16} />}
               accent="default"
             />
             <SummaryCard
-              label="Needs Action"
+              label={UI_STRINGS.appAppProcurementPposPage.needsAction}
               value={metrics.needsActionCount}
-              secondary={`${metrics.unratedCount} unrated · ${metrics.returnedCount} returned`}
+              secondary={interpolateUiString(UI_STRINGS.appAppProcurementPposPage.unratedCountUnratedReturnedCountReturned, { "unratedCount": metrics.unratedCount, "returnedCount": metrics.returnedCount })}
               icon={<AlertCircle size={16} />}
               accent="amber"
             />
             <SummaryCard
-              label="Drafts Saved"
+              label={UI_STRINGS.appAppProcurementPposPage.draftsSaved}
               value={metrics.draftsCount}
-              secondary="Work in progress ratings"
+              secondary={UI_STRINGS.appAppProcurementPposPage.workInProgressRatings}
               icon={<Clock size={16} />}
               accent="blue"
             />
             <SummaryCard
-              label="Under Review"
+              label={UI_STRINGS.common.underReview}
               value={metrics.submittedCount}
-              secondary="Awaiting Project Approver"
+              secondary={UI_STRINGS.appAppProcurementPposPage.awaitingProjectApprover}
               icon={<Send size={16} />}
               accent="blue"
             />
             <SummaryCard
-              label="Approved Ratings"
+              label={UI_STRINGS.common.approvedRatings}
               value={metrics.approvedCount}
-              secondary="Published to vendor scorecard"
+              secondary={UI_STRINGS.appAppProcurementPposPage.publishedToVendorScorecard}
               icon={<CheckCircle2 size={16} />}
               accent="emerald"
             />
@@ -372,30 +372,30 @@ export default function PposDeskPage() {
         ) : (
           <SummaryCardGrid columns={4}>
             <SummaryCard
-              label="Total Issued PPOs"
+              label={UI_STRINGS.appAppProcurementPposPage.totalIssuedPPOs}
               value={ppos.length}
-              secondary="Post-award commercial purchase orders"
+              secondary={UI_STRINGS.appAppProcurementPposPage.postAwardCommercialPurchaseOrders}
               icon={<Receipt size={16} />}
               accent="default"
             />
             <SummaryCard
-              label="Total Order Value"
-              value={`₹ ${metrics.totalCommittedValue.toLocaleString('en-IN')}`}
-              secondary="Total committed capex"
+              label={UI_STRINGS.common.totalOrderValue}
+              value={`₹ ${metrics.totalCommittedValue.toLocaleString(I18N_CONFIG.defaultLocale)}`}
+              secondary={UI_STRINGS.appAppProcurementPposPage.totalCommittedCapex}
               icon={<IndianRupee size={16} />}
               accent="emerald"
             />
             <SummaryCard
-              label="Confirmed by Vendors"
+              label={UI_STRINGS.appAppProcurementPposPage.confirmedByVendors}
               value={ppos.filter((p) => p.status === 'CONFIRMED' || p.status === 'COMPLETED').length}
-              secondary="Supplier acknowledged & scheduled"
+              secondary={UI_STRINGS.appAppProcurementPposPage.supplierAcknowledgedScheduled}
               icon={<CheckCircle2 size={16} />}
               accent="blue"
             />
             <SummaryCard
-              label="Awaiting Confirmation"
+              label={UI_STRINGS.appAppProcurementPposPage.awaitingConfirmation}
               value={ppos.filter((p) => p.status === 'ISSUED' || p.status === 'DRAFT').length}
-              secondary="Awaiting vendor acceptance"
+              secondary={UI_STRINGS.appAppProcurementPposPage.awaitingVendorAcceptance}
               icon={<Clock size={16} />}
               accent="amber"
             />
@@ -413,52 +413,42 @@ export default function PposDeskPage() {
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 activeTab === 'ALL' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              All Orders ({metrics.total})
-            </button>
+            >{UI_STRINGS.appAppProcurementPposPage.allOrders}{metrics.total}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               type="button"
               onClick={() => setActiveTab('NEEDS_ACTION')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 activeTab === 'NEEDS_ACTION' ? 'bg-white text-amber-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Action Required ({metrics.needsActionCount})
-            </button>
+            >{UI_STRINGS.appAppProcurementPposPage.actionRequired}{metrics.needsActionCount}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               type="button"
               onClick={() => setActiveTab('DRAFT')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 activeTab === 'DRAFT' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Drafts ({metrics.draftsCount})
-            </button>
+            >{UI_STRINGS.appAppProcurementPposPage.drafts}{metrics.draftsCount}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               type="button"
               onClick={() => setActiveTab('SUBMITTED')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 activeTab === 'SUBMITTED' ? 'bg-white text-indigo-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Under Review ({metrics.submittedCount})
-            </button>
+            >{UI_STRINGS.appAppProcurementPposPage.underReview}{metrics.submittedCount}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               type="button"
               onClick={() => setActiveTab('APPROVED')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                 activeTab === 'APPROVED' ? 'bg-white text-emerald-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Approved ({metrics.approvedCount})
-            </button>
+            >{UI_STRINGS.common.approved2}{metrics.approvedCount}{UI_STRINGS.common.copyc7zu6c}</button>
           </div>
 
           <div className="relative w-full sm:w-72">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search PPO, Vendor, or Project..."
+              placeholder={UI_STRINGS.appAppProcurementPposPage.searchPPOVendorOrProject}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -471,32 +461,32 @@ export default function PposDeskPage() {
       <Card
         title={
           isProjectUser
-            ? `PPO Vendor Performance Register (${filteredPpos.length})`
-            : `Issued Procurement Orders (${ppos.length})`
+            ? interpolateUiString(UI_STRINGS.appAppProcurementPposPage.pPOVendorPerformanceRegisterLength, { "length": filteredPpos.length })
+            : interpolateUiString(UI_STRINGS.appAppProcurementPposPage.issuedProcurementOrdersLength, { "length": ppos.length })
         }
         subtitle={
           isProjectUser
-            ? 'Execution ratings evaluate delivery adherence, commercial compliance, and quality on a 1–5 scale.'
-            : 'Commercial purchase orders generated from approved L1 awards and validated vendor negotiations'
+            ? UI_STRINGS.appAppProcurementPposPage.executionRatingsEvaluateDeliveryAdherenceCommercialComplianceAndQualityOnA15Scale
+            : UI_STRINGS.appAppProcurementPposPage.commercialPurchaseOrdersGeneratedFromApprovedL1AwardsAndValidatedVendorNegotiations
         }
         noPadding
       >
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
             <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13 }}>Loading PPOs...</div>
+            <div style={{ fontSize: 13 }}>{UI_STRINGS.appAppProcurementPposPage.loadingPPOs}</div>
           </div>
         ) : filteredPpos.length === 0 ? (
           <div style={{ padding: 32 }}>
             <EmptyState
               icon={<FileCheck size={36} strokeWidth={1.5} color="#94a3b8" />}
-              title="No PPO records matching this filter."
+              title={UI_STRINGS.appAppProcurementPposPage.noPPORecordsMatchingThisFilter}
               description={
                 isProjectUser
-                  ? 'All purchase orders in your assigned projects are accounted for.'
-                  : 'Once an award recommendation is approved, a PPO can be generated and issued.'
+                  ? UI_STRINGS.appAppProcurementPposPage.allPurchaseOrdersInYourAssignedProjectsAreAccountedFor
+                  : UI_STRINGS.appAppProcurementPposPage.onceAnAwardRecommendationIsApprovedAPPOCanBeGeneratedAndIssued
               }
-              actionText={isProjectUser ? 'Reset Filters' : 'View Active RFQs'}
+              actionText={isProjectUser ? UI_STRINGS.appAppProcurementPposPage.resetFilters : UI_STRINGS.common.viewActiveRFQs}
               actionHref={isProjectUser ? undefined : '/procurement/rfqs'}
               onAction={isProjectUser ? () => { setActiveTab('ALL'); setSearchQuery(''); } : undefined}
             />
@@ -506,20 +496,16 @@ export default function PposDeskPage() {
             <table className="table enterprise-table" style={{ fontSize: 12, minWidth: 1540 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>1. PPO No.</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>2. Reference RFQ</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, whiteSpace: 'nowrap' }}>3. BOQ No.</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 170, whiteSpace: 'nowrap' }}>4. Project</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 170, whiteSpace: 'nowrap' }}>5. Vendor</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 150, whiteSpace: 'nowrap' }}>6. Package / Trade</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'right', whiteSpace: 'nowrap' }}>7. Awarded Value</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 120, textAlign: 'center', whiteSpace: 'nowrap' }}>8. PPO Status</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 180, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                    9. Performance Rating
-                  </th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 180, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    10. Actions
-                  </th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copy1yra1o}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copyazegob}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copy1hf47eh}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 170, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copyugnnm6}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 170, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copy19pmbz0}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 150, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copynz3uf2}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'right', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copy1buoj01}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 120, textAlign: 'center', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copy93dyo8}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 180, textAlign: 'center', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copy9xneg1}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 180, textAlign: 'right', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementPposPage.copye4im6p}</th>
                 </tr>
               </thead>
               <tbody>
@@ -582,8 +568,7 @@ export default function PposDeskPage() {
                       </td>
 
                       {/* 7. Awarded Value */}
-                      <td style={{ padding: '9px 12px', fontWeight: 700, textAlign: 'right', color: '#059669', whiteSpace: 'nowrap' }}>
-                        ₹ {awardedValue.toLocaleString()}
+                      <td style={{ padding: '9px 12px', fontWeight: 700, textAlign: 'right', color: '#059669', whiteSpace: 'nowrap' }}>{UI_STRINGS.common.copy1g8b5tg}{awardedValue.toLocaleString()}
                       </td>
 
                       {/* 8. PPO Status */}
@@ -627,9 +612,7 @@ export default function PposDeskPage() {
                             {ratingBadge.label}
                           </span>
                           {rating?.overallScore && (
-                            <span className="font-mono font-bold text-slate-800 text-xs">
-                              ({rating.overallScore}/5)
-                            </span>
+                            <span className="font-mono font-bold text-slate-800 text-xs">{UI_STRINGS.common.copychzfvb}{rating.overallScore}{UI_STRINGS.appAppProcurementPposPage.copyfaz6h4}</span>
                           )}
                         </div>
                       </td>
@@ -646,8 +629,7 @@ export default function PposDeskPage() {
                                   className="btn btn-primary btn-sm"
                                   style={{ fontSize: 11, padding: '4px 9px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                 >
-                                  <Star size={11} /> Rate PPO
-                                </button>
+                                  <Star size={11} />{UI_STRINGS.appAppProcurementPposPage.ratePPO}</button>
                               )}
 
                               {rating?.status === 'DRAFT' && (
@@ -667,8 +649,7 @@ export default function PposDeskPage() {
                                     fontWeight: 700,
                                   }}
                                 >
-                                  <Clock size={11} /> Resume Draft
-                                </button>
+                                  <Clock size={11} />{UI_STRINGS.appAppProcurementPposPage.resumeDraft}</button>
                               )}
 
                               {rating?.status === 'RETURNED_FOR_CORRECTION' && (
@@ -688,8 +669,7 @@ export default function PposDeskPage() {
                                     fontWeight: 700,
                                   }}
                                 >
-                                  <RotateCcw size={11} /> Revise Rating
-                                </button>
+                                  <RotateCcw size={11} />{UI_STRINGS.appAppProcurementPposPage.reviseRating}</button>
                               )}
 
                               {(rating?.status === 'SUBMITTED' || rating?.status === 'APPROVED') && (
@@ -699,8 +679,7 @@ export default function PposDeskPage() {
                                   className="btn btn-secondary btn-sm"
                                   style={{ fontSize: 11, padding: '4px 9px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                 >
-                                  <Eye size={11} /> View Rating
-                                </button>
+                                  <Eye size={11} />{UI_STRINGS.appAppProcurementPposPage.viewRating}</button>
                               )}
                             </>
                           )}
@@ -712,16 +691,14 @@ export default function PposDeskPage() {
                               className="btn btn-secondary btn-sm"
                               style={{ fontSize: 11, padding: '4px 9px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             >
-                              <Eye size={11} /> View Rating
-                            </button>
+                              <Eye size={11} />{UI_STRINGS.appAppProcurementPposPage.viewRating}</button>
                           )}
 
                           <Link
                             href={p.rfqId ? `/procurement/rfqs/${p.rfqId}?tab=awarding` : '/vendor-portal/ppos'}
                             className="btn btn-secondary btn-sm"
                             style={{ fontSize: 11, padding: '4px 9px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          >
-                            Order <ArrowRight size={11} />
+                          >{UI_STRINGS.appAppProcurementPposPage.order}<ArrowRight size={11} />
                           </Link>
                         </div>
                       </td>
@@ -741,18 +718,14 @@ export default function PposDeskPage() {
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-start justify-between shrink-0">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight">
-                  Rate PPO Performance
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  5-criteria weighted order execution evaluation (Quality 30%, Delivery 25%, Commercial 20%, Responsiveness 15%, Documentation 10%).
-                </p>
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">{UI_STRINGS.appAppProcurementPposPage.ratePPOPerformance}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{UI_STRINGS.common.copyjcbnww}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedPpoForRating(null)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
-                aria-label="Close"
+                aria-label={UI_STRINGS.common.close}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -765,9 +738,9 @@ export default function PposDeskPage() {
                 <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 flex items-start gap-2.5 shadow-sm">
                   <RotateCcw className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-bold text-purple-950">Returned by Project Approver for Correction</div>
+                    <div className="font-bold text-purple-950">{UI_STRINGS.appAppProcurementPposPage.returnedByProjectApproverForCorrection}</div>
                     <div className="mt-1 text-purple-800">
-                      <strong>Approver Feedback:</strong> {selectedPpoForRating.vendorRating?.returnReason || 'Please review scores and category comments and resubmit.'}
+                      <strong>{UI_STRINGS.appAppProcurementPposPage.approverFeedback}</strong> {selectedPpoForRating.vendorRating?.returnReason || UI_STRINGS.appAppProcurementPposPage.pleaseReviewScoresAndCategoryCommentsAndResubmit}
                     </div>
                   </div>
                 </div>
@@ -781,7 +754,7 @@ export default function PposDeskPage() {
                       <FileText className="w-5 h-5 text-slate-600" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[11px] font-medium text-slate-500">PPO Number</div>
+                      <div className="text-[11px] font-medium text-slate-500">{UI_STRINGS.common.pPONumber}</div>
                       <div className="text-sm font-bold text-slate-900 font-mono truncate">{selectedPpoForRating.ppoNumber}</div>
                     </div>
                   </div>
@@ -791,7 +764,7 @@ export default function PposDeskPage() {
                       <Building2 className="w-5 h-5 text-slate-600" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[11px] font-medium text-slate-500">Vendor</div>
+                      <div className="text-[11px] font-medium text-slate-500">{UI_STRINGS.common.vendor}</div>
                       <div className="text-sm font-bold text-slate-900 truncate" title={selectedPpoForRating.vendor?.name}>
                         {selectedPpoForRating.vendor?.name}
                       </div>
@@ -803,7 +776,7 @@ export default function PposDeskPage() {
                       <Landmark className="w-5 h-5 text-slate-600" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[11px] font-medium text-slate-500">Project</div>
+                      <div className="text-[11px] font-medium text-slate-500">{UI_STRINGS.common.project}</div>
                       <div className="text-sm font-bold text-slate-900 truncate" title={selectedPpoForRating.project?.name}>
                         {selectedPpoForRating.project?.name}
                       </div>
@@ -815,9 +788,8 @@ export default function PposDeskPage() {
                       <Database className="w-5 h-5 text-slate-600" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[11px] font-medium text-slate-500">Order Value</div>
-                      <div className="text-sm font-bold text-emerald-600 font-mono">
-                        ₹ {(selectedPpoForRating.totalValue || selectedPpoForRating.totalAmount || 0).toLocaleString('en-IN')}
+                      <div className="text-[11px] font-medium text-slate-500">{UI_STRINGS.common.orderValue}</div>
+                      <div className="text-sm font-bold text-emerald-600 font-mono">{UI_STRINGS.common.copy1g8b5tg}{(selectedPpoForRating.totalValue || selectedPpoForRating.totalAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                       </div>
                     </div>
                   </div>
@@ -831,14 +803,14 @@ export default function PposDeskPage() {
                     <BarChart3 className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">Computed Overall Performance Rating</h4>
-                    <p className="text-xs text-slate-500 mt-0.5">Weighted according to approved company policy (1.0 to 5.0)</p>
+                    <h4 className="text-sm font-bold text-slate-900">{UI_STRINGS.appAppProcurementPposPage.computedOverallPerformanceRating}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">{UI_STRINGS.appAppProcurementPposPage.weightedAccordingToApprovedCompanyPolicy10To50}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Star className="w-7 h-7 text-amber-400 fill-amber-400 shrink-0" />
                   <span className="text-3xl font-extrabold text-[#1e3a8a] tracking-tight">{Number(calculatedOverallScore).toFixed(1)}</span>
-                  <span className="text-base font-semibold text-slate-500">/ 5.0</span>
+                  <span className="text-base font-semibold text-slate-500">{UI_STRINGS.common.copybqfq57}</span>
                 </div>
               </div>
 
@@ -852,10 +824,10 @@ export default function PposDeskPage() {
               {/* Performance Evaluation Criteria Table */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
                 <div className="px-5 py-3 border-b border-slate-200 bg-white flex items-center justify-between flex-wrap gap-2">
-                  <h4 className="text-sm font-bold text-slate-900">Performance Evaluation (1 to 5 stars)</h4>
+                  <h4 className="text-sm font-bold text-slate-900">{UI_STRINGS.appAppProcurementPposPage.performanceEvaluation1To5Stars}</h4>
                   <div className="text-xs text-slate-500 flex items-center gap-1.5">
                     <Info className="w-4 h-4 text-blue-500 shrink-0" />
-                    <span>Please rate each criterion based on actual execution performance of this PPO.</span>
+                    <span>{UI_STRINGS.appAppProcurementPposPage.pleaseRateEachCriterionBasedOnActualExecutionPerformanceOfThisPPO}</span>
                   </div>
                 </div>
 
@@ -863,25 +835,23 @@ export default function PposDeskPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-700 tracking-wider">
-                        <th className="py-3 px-3 text-center border-r border-slate-200 w-12">#</th>
-                        <th className="py-3 px-4 border-r border-slate-200 min-w-[280px]">Evaluation Criteria</th>
-                        <th className="py-3 px-3 text-center border-r border-slate-200 w-24">Weight</th>
-                        <th className="py-3 px-3 text-center border-r border-slate-200 w-36">Your Rating (1 to 5)</th>
-                        <th className="py-3 px-4 min-w-[340px]">Observations / Comments</th>
+                        <th className="py-3 px-3 text-center border-r border-slate-200 w-12">{UI_STRINGS.common.copyak280i}</th>
+                        <th className="py-3 px-4 border-r border-slate-200 min-w-[280px]">{UI_STRINGS.appAppProcurementPposPage.evaluationCriteria}</th>
+                        <th className="py-3 px-3 text-center border-r border-slate-200 w-24">{UI_STRINGS.appAppProcurementPposPage.weight}</th>
+                        <th className="py-3 px-3 text-center border-r border-slate-200 w-36">{UI_STRINGS.appAppProcurementPposPage.yourRating1To5}</th>
+                        <th className="py-3 px-4 min-w-[340px]">{UI_STRINGS.appAppProcurementPposPage.observationsComments}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-xs">
                       {/* Row 1: Quality */}
                       <tr>
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">1</td>
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">{UI_STRINGS.common.copyefwnq4}</td>
                         <td className="py-3.5 px-4 border-r border-slate-200 align-middle">
-                          <div className="font-bold text-slate-900 text-xs">Quality of Goods & Workmanship</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">Material quality, workmanship, specifications, defects and test certificates.</div>
+                          <div className="font-bold text-slate-900 text-xs">{UI_STRINGS.appAppProcurementPposPage.qualityOfGoodsWorkmanship}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{UI_STRINGS.appAppProcurementPposPage.materialQualityWorkmanshipSpecificationsDefectsAndTestCertificates}</div>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">
-                            30%
-                          </span>
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">{UI_STRINGS.appAppProcurementPposPage.copymu73xl}</span>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
                           <div className="relative inline-block w-28">
@@ -891,11 +861,11 @@ export default function PposDeskPage() {
                               onChange={(e) => setRatingForm({ ...ratingForm, qualityScore: Number(e.target.value) })}
                               className="w-full appearance-none pl-8 pr-7 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-center cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
                             >
-                              <option value={5}>5 / 5</option>
-                              <option value={4}>4 / 5</option>
-                              <option value={3}>3 / 5</option>
-                              <option value={2}>2 / 5</option>
-                              <option value={1}>1 / 5</option>
+                              <option value={5}>{UI_STRINGS.appAppProcurementPposPage.copy131sox2}</option>
+                              <option value={4}>{UI_STRINGS.appAppProcurementPposPage.copy1ii4svd}</option>
+                              <option value={3}>{UI_STRINGS.appAppProcurementPposPage.copy1k6d3bg}</option>
+                              <option value={2}>{UI_STRINGS.appAppProcurementPposPage.copy3o2tsf}</option>
+                              <option value={1}>{UI_STRINGS.appAppProcurementPposPage.copyz9fvn6}</option>
                             </select>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -903,7 +873,7 @@ export default function PposDeskPage() {
                         <td className="py-3.5 px-4 align-middle">
                           <textarea
                             rows={2}
-                            placeholder="Observations on materials, finishes, defects and test certificates..."
+                            placeholder={UI_STRINGS.appAppProcurementPposPage.observationsOnMaterialsFinishesDefectsAndTestCertificates}
                             value={ratingForm.qualityComments}
                             onChange={(e) => setRatingForm({ ...ratingForm, qualityComments: e.target.value })}
                             className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
@@ -913,15 +883,13 @@ export default function PposDeskPage() {
 
                       {/* Row 2: Delivery */}
                       <tr>
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">2</td>
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">{UI_STRINGS.common.copyf9vgt1}</td>
                         <td className="py-3.5 px-4 border-r border-slate-200 align-middle">
-                          <div className="font-bold text-slate-900 text-xs">Delivery & Schedule Adherence</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">Delivery milestone compliance, lead time management, delays or expedite responsiveness.</div>
+                          <div className="font-bold text-slate-900 text-xs">{UI_STRINGS.appAppProcurementPposPage.deliveryScheduleAdherence}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{UI_STRINGS.appAppProcurementPposPage.deliveryMilestoneComplianceLeadTimeManagementDelaysOrExpediteResponsiveness}</div>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">
-                            25%
-                          </span>
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">{UI_STRINGS.appAppProcurementPposPage.copy7g96cf}</span>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
                           <div className="relative inline-block w-28">
@@ -931,11 +899,11 @@ export default function PposDeskPage() {
                               onChange={(e) => setRatingForm({ ...ratingForm, deliveryScore: Number(e.target.value) })}
                               className="w-full appearance-none pl-8 pr-7 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-center cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
                             >
-                              <option value={5}>5 / 5</option>
-                              <option value={4}>4 / 5</option>
-                              <option value={3}>3 / 5</option>
-                              <option value={2}>2 / 5</option>
-                              <option value={1}>1 / 5</option>
+                              <option value={5}>{UI_STRINGS.appAppProcurementPposPage.copy131sox2}</option>
+                              <option value={4}>{UI_STRINGS.appAppProcurementPposPage.copy1ii4svd}</option>
+                              <option value={3}>{UI_STRINGS.appAppProcurementPposPage.copy1k6d3bg}</option>
+                              <option value={2}>{UI_STRINGS.appAppProcurementPposPage.copy3o2tsf}</option>
+                              <option value={1}>{UI_STRINGS.appAppProcurementPposPage.copyz9fvn6}</option>
                             </select>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -943,7 +911,7 @@ export default function PposDeskPage() {
                         <td className="py-3.5 px-4 align-middle">
                           <textarea
                             rows={2}
-                            placeholder="Observations on milestone compliance, lead times and delays..."
+                            placeholder={UI_STRINGS.appAppProcurementPposPage.observationsOnMilestoneComplianceLeadTimesAndDelays}
                             value={ratingForm.deliveryComments}
                             onChange={(e) => setRatingForm({ ...ratingForm, deliveryComments: e.target.value })}
                             className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
@@ -953,15 +921,13 @@ export default function PposDeskPage() {
 
                       {/* Row 3: Cost & Commercial */}
                       <tr>
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">3</td>
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">{UI_STRINGS.common.copyezvv42}</td>
                         <td className="py-3.5 px-4 border-r border-slate-200 align-middle">
-                          <div className="font-bold text-slate-900 text-xs">Cost & Commercial Compliance</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">Billing accuracy, invoice submission timeliness, absence of disputed variation claims.</div>
+                          <div className="font-bold text-slate-900 text-xs">{UI_STRINGS.appAppProcurementPposPage.costCommercialCompliance}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{UI_STRINGS.appAppProcurementPposPage.billingAccuracyInvoiceSubmissionTimelinessAbsenceOfDisputedVariationClaims}</div>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">
-                            20%
-                          </span>
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">{UI_STRINGS.appAppProcurementPposPage.copy1lepepa}</span>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
                           <div className="relative inline-block w-28">
@@ -971,11 +937,11 @@ export default function PposDeskPage() {
                               onChange={(e) => setRatingForm({ ...ratingForm, commercialComplianceScore: Number(e.target.value) })}
                               className="w-full appearance-none pl-8 pr-7 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-center cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
                             >
-                              <option value={5}>5 / 5</option>
-                              <option value={4}>4 / 5</option>
-                              <option value={3}>3 / 5</option>
-                              <option value={2}>2 / 5</option>
-                              <option value={1}>1 / 5</option>
+                              <option value={5}>{UI_STRINGS.appAppProcurementPposPage.copy131sox2}</option>
+                              <option value={4}>{UI_STRINGS.appAppProcurementPposPage.copy1ii4svd}</option>
+                              <option value={3}>{UI_STRINGS.appAppProcurementPposPage.copy1k6d3bg}</option>
+                              <option value={2}>{UI_STRINGS.appAppProcurementPposPage.copy3o2tsf}</option>
+                              <option value={1}>{UI_STRINGS.appAppProcurementPposPage.copyz9fvn6}</option>
                             </select>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -983,7 +949,7 @@ export default function PposDeskPage() {
                         <td className="py-3.5 px-4 align-middle">
                           <textarea
                             rows={2}
-                            placeholder="Observations on billing accuracy, invoices and variation claims..."
+                            placeholder={UI_STRINGS.appAppProcurementPposPage.observationsOnBillingAccuracyInvoicesAndVariationClaims}
                             value={ratingForm.commercialComments}
                             onChange={(e) => setRatingForm({ ...ratingForm, commercialComments: e.target.value })}
                             className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
@@ -993,15 +959,13 @@ export default function PposDeskPage() {
 
                       {/* Row 4: Responsiveness */}
                       <tr>
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">4</td>
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">{UI_STRINGS.common.copydlxun7}</td>
                         <td className="py-3.5 px-4 border-r border-slate-200 align-middle">
-                          <div className="font-bold text-slate-900 text-xs">Responsiveness & Site Coordination</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">Supervision on site, issue resolution agility, proactive communication and coordination.</div>
+                          <div className="font-bold text-slate-900 text-xs">{UI_STRINGS.appAppProcurementPposPage.responsivenessSiteCoordination}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{UI_STRINGS.appAppProcurementPposPage.supervisionOnSiteIssueResolutionAgilityProactiveCommunicationAndCoordination}</div>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">
-                            15%
-                          </span>
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">{UI_STRINGS.appAppProcurementPposPage.copy1sf41re}</span>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
                           <div className="relative inline-block w-28">
@@ -1011,11 +975,11 @@ export default function PposDeskPage() {
                               onChange={(e) => setRatingForm({ ...ratingForm, responsivenessScore: Number(e.target.value) })}
                               className="w-full appearance-none pl-8 pr-7 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-center cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
                             >
-                              <option value={5}>5 / 5</option>
-                              <option value={4}>4 / 5</option>
-                              <option value={3}>3 / 5</option>
-                              <option value={2}>2 / 5</option>
-                              <option value={1}>1 / 5</option>
+                              <option value={5}>{UI_STRINGS.appAppProcurementPposPage.copy131sox2}</option>
+                              <option value={4}>{UI_STRINGS.appAppProcurementPposPage.copy1ii4svd}</option>
+                              <option value={3}>{UI_STRINGS.appAppProcurementPposPage.copy1k6d3bg}</option>
+                              <option value={2}>{UI_STRINGS.appAppProcurementPposPage.copy3o2tsf}</option>
+                              <option value={1}>{UI_STRINGS.appAppProcurementPposPage.copyz9fvn6}</option>
                             </select>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -1023,7 +987,7 @@ export default function PposDeskPage() {
                         <td className="py-3.5 px-4 align-middle">
                           <textarea
                             rows={2}
-                            placeholder="Observations on supervision, issue resolution and communication..."
+                            placeholder={UI_STRINGS.appAppProcurementPposPage.observationsOnSupervisionIssueResolutionAndCommunication}
                             value={ratingForm.responsivenessComments}
                             onChange={(e) => setRatingForm({ ...ratingForm, responsivenessComments: e.target.value })}
                             className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
@@ -1033,15 +997,13 @@ export default function PposDeskPage() {
 
                       {/* Row 5: Documentation */}
                       <tr>
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">5</td>
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 border-r border-slate-200 align-middle">{UI_STRINGS.common.copydby8y8}</td>
                         <td className="py-3.5 px-4 border-r border-slate-200 align-middle">
-                          <div className="font-bold text-slate-900 text-xs">Documentation & Commercial Closure</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">Handover certificates, warranty cards, as-built drawings, statutory clearance submission.</div>
+                          <div className="font-bold text-slate-900 text-xs">{UI_STRINGS.appAppProcurementPposPage.documentationCommercialClosure}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{UI_STRINGS.appAppProcurementPposPage.handoverCertificatesWarrantyCardsAsBuiltDrawingsStatutoryClearanceSubmission}</div>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
-                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">
-                            10%
-                          </span>
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200/60 rounded">{UI_STRINGS.appAppProcurementPposPage.copynd2j77}</span>
                         </td>
                         <td className="py-3.5 px-3 text-center border-r border-slate-200 align-middle">
                           <div className="relative inline-block w-28">
@@ -1051,11 +1013,11 @@ export default function PposDeskPage() {
                               onChange={(e) => setRatingForm({ ...ratingForm, documentationClosureScore: Number(e.target.value) })}
                               className="w-full appearance-none pl-8 pr-7 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 text-center cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm"
                             >
-                              <option value={5}>5 / 5</option>
-                              <option value={4}>4 / 5</option>
-                              <option value={3}>3 / 5</option>
-                              <option value={2}>2 / 5</option>
-                              <option value={1}>1 / 5</option>
+                              <option value={5}>{UI_STRINGS.appAppProcurementPposPage.copy131sox2}</option>
+                              <option value={4}>{UI_STRINGS.appAppProcurementPposPage.copy1ii4svd}</option>
+                              <option value={3}>{UI_STRINGS.appAppProcurementPposPage.copy1k6d3bg}</option>
+                              <option value={2}>{UI_STRINGS.appAppProcurementPposPage.copy3o2tsf}</option>
+                              <option value={1}>{UI_STRINGS.appAppProcurementPposPage.copyz9fvn6}</option>
                             </select>
                             <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -1063,7 +1025,7 @@ export default function PposDeskPage() {
                         <td className="py-3.5 px-4 align-middle">
                           <textarea
                             rows={2}
-                            placeholder="Observations on handover certificates, warranties and as-built documents..."
+                            placeholder={UI_STRINGS.appAppProcurementPposPage.observationsOnHandoverCertificatesWarrantiesAndAsBuiltDocuments}
                             value={ratingForm.documentationComments}
                             onChange={(e) => setRatingForm({ ...ratingForm, documentationComments: e.target.value })}
                             className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
@@ -1080,15 +1042,13 @@ export default function PposDeskPage() {
                 <div className="flex items-start gap-2.5">
                   <SquarePen className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">Overall Areas for Improvement & Recommendations</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Summarize key strengths, recurring bottlenecks, specific corrective actions expected from the vendor, and recommendations for future orders.
-                    </p>
+                    <h4 className="text-xs font-bold text-slate-900">{UI_STRINGS.common.overallAreasForImprovementRecommendations}</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{UI_STRINGS.appAppProcurementPposPage.summarizeKeyStrengthsRecurringBottlenecksSpecificCorrectiveActionsExpectedFromTheVendorAndRecommendationsForFutureOrders}</p>
                   </div>
                 </div>
                 <textarea
                   rows={3}
-                  placeholder="Summarize recurring issues, corrective actions, and recommendations for future orders..."
+                  placeholder={UI_STRINGS.appAppProcurementPposPage.summarizeRecurringIssuesCorrectiveActionsAndRecommendationsForFutureOrders}
                   value={ratingForm.overallImprovement}
                   onChange={(e) => setRatingForm({ ...ratingForm, overallImprovement: e.target.value })}
                   className="w-full text-xs p-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none transition-colors"
@@ -1102,9 +1062,7 @@ export default function PposDeskPage() {
                 type="button"
                 onClick={() => setSelectedPpoForRating(null)}
                 className="px-5 py-2 border border-slate-300 text-slate-700 font-semibold text-xs rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
 
               <div className="flex items-center gap-3">
                 <button
@@ -1114,7 +1072,7 @@ export default function PposDeskPage() {
                   className="px-4 py-2 border border-slate-300 text-slate-700 font-semibold text-xs rounded-lg hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 transition-colors disabled:opacity-50"
                 >
                   <Save className="w-4 h-4 text-slate-600" />
-                  <span>{submittingRating ? 'Saving...' : 'Save Draft'}</span>
+                  <span>{submittingRating ? UI_STRINGS.common.saving : UI_STRINGS.common.saveDraft}</span>
                 </button>
 
                 <button
@@ -1124,7 +1082,7 @@ export default function PposDeskPage() {
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
-                  <span>{submittingRating ? 'Submitting...' : 'Submit for Project Approval'}</span>
+                  <span>{submittingRating ? UI_STRINGS.common.submitting : UI_STRINGS.common.submitForProjectApproval}</span>
                 </button>
               </div>
             </div>
@@ -1140,11 +1098,8 @@ export default function PposDeskPage() {
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Award className="w-4 h-4 text-blue-600" />
-                  PPO Performance Assessment Detail
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Order: {viewRatingPpo.ppoNumber} · Vendor: {viewRatingPpo.vendor?.name}
+                  <Award className="w-4 h-4 text-blue-600" />{UI_STRINGS.common.pPOPerformanceAssessmentDetail}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{UI_STRINGS.appAppProcurementPposPage.order2}{viewRatingPpo.ppoNumber}{UI_STRINGS.appAppProcurementPposPage.vendor}{viewRatingPpo.vendor?.name}
                 </p>
               </div>
               <button
@@ -1161,13 +1116,13 @@ export default function PposDeskPage() {
               {/* Score card */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
                 <div>
-                  <div className="text-xs text-slate-500">Overall Rating Score</div>
+                  <div className="text-xs text-slate-500">{UI_STRINGS.appAppProcurementPposPage.overallRatingScore}</div>
                   <div className="text-2xl font-black text-slate-900 font-mono mt-0.5">
-                    {viewRatingPpo.vendorRating?.overallScore || '—'} <span className="text-xs font-normal text-slate-500">/ 5.0</span>
+                    {viewRatingPpo.vendorRating?.overallScore || UI_STRINGS.common.copy4s9bsz} <span className="text-xs font-normal text-slate-500">{UI_STRINGS.common.copybqfq57}</span>
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 mb-1">Status</div>
+                  <div className="text-xs text-slate-500 mb-1">{UI_STRINGS.common.status}</div>
                   <span
                     style={{
                       display: 'inline-flex',
@@ -1187,29 +1142,27 @@ export default function PposDeskPage() {
 
               {/* Rubric Breakdown */}
               <div className="space-y-2 border border-slate-200 rounded-lg p-3 bg-white text-xs">
-                <div className="font-bold text-slate-800 pb-1 border-b border-slate-100">
-                  Criteria Score Breakdown
-                </div>
+                <div className="font-bold text-slate-800 pb-1 border-b border-slate-100">{UI_STRINGS.appAppProcurementPposPage.criteriaScoreBreakdown}</div>
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
-                    <span className="text-slate-500">Quality (30%):</span>{' '}
-                    <strong className="font-mono">{viewRatingPpo.vendorRating?.qualityScore} / 5</strong>
+                    <span className="text-slate-500">{UI_STRINGS.appAppProcurementPposPage.quality30}</span>{' '}
+                    <strong className="font-mono">{viewRatingPpo.vendorRating?.qualityScore}{UI_STRINGS.common.copy1oc1xgf}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">Delivery (25%):</span>{' '}
-                    <strong className="font-mono">{viewRatingPpo.vendorRating?.deliveryScore} / 5</strong>
+                    <span className="text-slate-500">{UI_STRINGS.appAppProcurementPposPage.delivery25}</span>{' '}
+                    <strong className="font-mono">{viewRatingPpo.vendorRating?.deliveryScore}{UI_STRINGS.common.copy1oc1xgf}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">Commercial (20%):</span>{' '}
-                    <strong className="font-mono">{viewRatingPpo.vendorRating?.commercialComplianceScore} / 5</strong>
+                    <span className="text-slate-500">{UI_STRINGS.appAppProcurementPposPage.commercial20}</span>{' '}
+                    <strong className="font-mono">{viewRatingPpo.vendorRating?.commercialComplianceScore}{UI_STRINGS.common.copy1oc1xgf}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">Responsiveness (15%):</span>{' '}
-                    <strong className="font-mono">{viewRatingPpo.vendorRating?.responsivenessScore} / 5</strong>
+                    <span className="text-slate-500">{UI_STRINGS.appAppProcurementPposPage.responsiveness15}</span>{' '}
+                    <strong className="font-mono">{viewRatingPpo.vendorRating?.responsivenessScore}{UI_STRINGS.common.copy1oc1xgf}</strong>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-slate-500">Documentation (10%):</span>{' '}
-                    <strong className="font-mono">{viewRatingPpo.vendorRating?.documentationClosureScore} / 5</strong>
+                    <span className="text-slate-500">{UI_STRINGS.appAppProcurementPposPage.documentation10}</span>{' '}
+                    <strong className="font-mono">{viewRatingPpo.vendorRating?.documentationClosureScore}{UI_STRINGS.common.copy1oc1xgf}</strong>
                   </div>
                 </div>
               </div>
@@ -1217,7 +1170,7 @@ export default function PposDeskPage() {
               {/* Comments & Improvement */}
               {viewRatingPpo.vendorRating?.overallImprovement && (
                 <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-lg text-xs space-y-1">
-                  <div className="font-bold text-blue-950">Overall Areas for Improvement & Recommendations:</div>
+                  <div className="font-bold text-blue-950">{UI_STRINGS.appAppProcurementPposPage.overallAreasForImprovementRecommendations}</div>
                   <div className="text-slate-700">{viewRatingPpo.vendorRating.overallImprovement}</div>
                 </div>
               )}
@@ -1225,11 +1178,13 @@ export default function PposDeskPage() {
               {/* Approver comments if approved or returned */}
               {viewRatingPpo.vendorRating?.approverComments && (
                 <div className="p-3 bg-slate-100 border border-slate-200 rounded-lg text-xs space-y-1">
-                  <div className="font-bold text-slate-900">Project Approver Comments:</div>
+                  <div className="font-bold text-slate-900">{UI_STRINGS.appAppProcurementPposPage.projectApproverComments}</div>
                   <div className="text-slate-700">{viewRatingPpo.vendorRating.approverComments}</div>
                   {viewRatingPpo.vendorRating.approvedByName && (
-                    <div className="text-[11px] text-slate-500 pt-1">
-                      Approved by {viewRatingPpo.vendorRating.approvedByName} on {new Date(viewRatingPpo.vendorRating.approvedAt).toLocaleDateString()}
+                    <div className="text-[11px] text-slate-500 pt-1">{interpolateUiString(UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedByNameOnDate, {
+                      name: viewRatingPpo.vendorRating.approvedByName,
+                      date: new Date(viewRatingPpo.vendorRating.approvedAt).toLocaleDateString(),
+                    })}
                     </div>
                   )}
                 </div>
@@ -1242,9 +1197,7 @@ export default function PposDeskPage() {
                 type="button"
                 onClick={() => setViewRatingPpo(null)}
                 className="btn btn-secondary text-xs"
-              >
-                Close
-              </button>
+              >{UI_STRINGS.common.close}</button>
             </div>
           </div>
         </div>

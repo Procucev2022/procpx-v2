@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('COST_CENTRE_VIEW');
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
     const { projectId, code, name, description, areaSqFt, location, floorZone } = body;
 
     if (!projectId || !code || !name) {
-      return apiError('Project ID, Cost Centre Code, and Name are mandatory.', 400);
+      return apiError(UI_STRINGS.appApiCostCentresRoute.projectIDCostCentreCodeAndNameAreMandatory, 400);
     }
 
     // Verify project belongs to tenant
@@ -93,7 +96,7 @@ export async function POST(req: NextRequest) {
       where: { id: projectId, tenantId: ctx.tenantId },
     });
     if (!project) {
-      return apiError('Project not found or inaccessible.', 404);
+      return apiError(UI_STRINGS.appApiCostCentresRoute.projectNotFoundOrInaccessible, 404);
     }
 
     // Check duplicate code within project
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
       },
     });
     if (existing) {
-      return apiError(`Cost Centre Code ${code} already exists for this project.`, 409);
+      return apiError(interpolateUiString(UI_STRINGS.appApiCostCentresRoute.costCentreCodeCodeAlreadyExistsForThisProject, { "code": code }), 409);
     }
 
     const costCentre = await prisma.costCentre.create({
@@ -133,13 +136,13 @@ export async function POST(req: NextRequest) {
         entityType: 'COST_CENTRE',
         entityId: costCentre.id,
         action: 'COST_CENTRE_CREATED',
-        description: `Cost Centre created: ${costCentre.code} - ${costCentre.name} (${costCentre.areaSqFt || 0} sqft)`,
+        description: interpolateUiString(UI_STRINGS.appApiCostCentresRoute.costCentreCreatedCodeNameValue3Sqft, { "code": costCentre.code, "name": costCentre.name, "value3": costCentre.areaSqFt || 0 }),
         newValue: JSON.stringify(costCentre),
       },
     });
 
     return apiSuccess(costCentre, 201);
   } catch (err: any) {
-    return apiError(err.message || 'Failed to create cost centre.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateCostCentre2 }), 500);
   }
 }

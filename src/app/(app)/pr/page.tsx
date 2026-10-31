@@ -1,5 +1,6 @@
 'use client';
 // src/app/(app)/pr/page.tsx - Procurement Requests (My PRs) Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -22,6 +23,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function MyPrsPage() {
   const toast = useToast();
@@ -57,14 +61,14 @@ export default function MyPrsPage() {
       const res = await fetch(`/api/pr/${prId}/submit`, { method: 'POST' });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to submit PR');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSubmitPr }));
       }
-      toast.success('PR submitted successfully.', prId, 'Awaiting Project Approver');
-      setStatusMessage('PR submitted successfully.');
+      toast.success(UI_STRINGS.appAppPrPage.pRSubmittedSuccessfully, prId, UI_STRINGS.appAppProcurementPposPage.awaitingProjectApprover);
+      setStatusMessage(UI_STRINGS.appAppPrPage.pRSubmittedSuccessfully);
       loadPrs();
     } catch (err: any) {
-      toast.error(err.message || 'Error submitting PR');
-      setStatusMessage(`Error: ${err.message}`);
+      toast.error(err.message || UI_STRINGS.common.userMessages.errorSubmittingPr);
+      setStatusMessage(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": err.message }));
     }
   };
 
@@ -93,16 +97,13 @@ export default function MyPrsPage() {
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
       {/* Header */}
       <PageHeader
-        title="Procurement Requests"
-        subtitle="Commercial PRs and project BOQs submitted for validation and released to sourcing"
+        title={UI_STRINGS.appAppPrPage.procurementRequests}
+        subtitle={UI_STRINGS.appAppPrPage.commercialPRsAndProjectBOQsSubmittedForValidationAndReleasedToSourcing}
         actions={
           <div className="flex gap-2">
-            <Link href="/pr/new" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              + Create PR
-            </Link>
+            <Link href="/pr/new" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{UI_STRINGS.appAppPrPage.createPR}</Link>
             <Link href="/boq/studio" className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Plus size={14} /> BOQ Studio
-            </Link>
+              <Plus size={14} />{UI_STRINGS.common.bOQStudio}</Link>
           </div>
         }
       />
@@ -113,9 +114,7 @@ export default function MyPrsPage() {
             <CheckCircle2 size={16} />
             <span>{statusMessage}</span>
           </div>
-          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>
-            ✕
-          </button>
+          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -123,30 +122,30 @@ export default function MyPrsPage() {
       <div className="mb-6">
         <SummaryCardGrid columns={4}>
           <SummaryCard
-            label="Total PRs"
+            label={UI_STRINGS.appAppPrPage.totalPRs}
             value={totalCount}
-            secondary="All procurement requests"
+            secondary={UI_STRINGS.appAppPrPage.allProcurementRequests}
             icon={<FileSpreadsheet size={16} />}
             accent="default"
           />
           <SummaryCard
-            label="Released to Sourcing"
+            label={UI_STRINGS.appAppPrPage.releasedToSourcing}
             value={releasedCount}
-            secondary="Available for RFQs"
+            secondary={UI_STRINGS.appAppPrPage.availableForRFQs}
             icon={<CheckCircle2 size={16} />}
             accent="emerald"
           />
           <SummaryCard
-            label="Pending Approval"
+            label={UI_STRINGS.common.pendingApproval}
             value={pendingCount}
-            secondary="With Project Approver"
+            secondary={UI_STRINGS.appAppPrPage.withProjectApprover}
             icon={<Clock size={16} />}
             accent="amber"
           />
           <SummaryCard
-            label="Draft / Corrections"
+            label={UI_STRINGS.appAppPrPage.draftCorrections}
             value={draftOrReturnedCount}
-            secondary="Requires action"
+            secondary={UI_STRINGS.appAppPrPage.requiresAction}
             icon={<RotateCcw size={16} />}
             accent="slate"
           />
@@ -160,7 +159,7 @@ export default function MyPrsPage() {
           <input
             type="text"
             className="form-control"
-            placeholder="Search PR Number, title, project or cost centre..."
+            placeholder={UI_STRINGS.appAppPrPage.searchPRNumberTitleProjectOrCostCentre}
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ paddingLeft: 38, height: 40, width: '100%' }}
@@ -173,13 +172,13 @@ export default function MyPrsPage() {
           onChange={e => setStatusFilter(e.target.value)}
           style={{ height: 40, width: 220 }}
         >
-          <option value="">All Statuses</option>
-          <option value="PR_DRAFT">Draft</option>
-          <option value="PR_PENDING_PROJECT_APPROVAL">Pending Approval</option>
-          <option value="PR_RETURNED_FOR_CORRECTION">Returned for Correction</option>
-          <option value="PR_APPROVED">Project Approved</option>
-          <option value="PR_RELEASED_TO_PROCUREMENT">Released to Procurement</option>
-          <option value="PR_REJECTED">Rejected</option>
+          <option value="">{UI_STRINGS.common.allStatuses}</option>
+          <option value="PR_DRAFT">{UI_STRINGS.common.draft}</option>
+          <option value="PR_PENDING_PROJECT_APPROVAL">{UI_STRINGS.common.pendingApproval}</option>
+          <option value="PR_RETURNED_FOR_CORRECTION">{UI_STRINGS.common.returnedForCorrection}</option>
+          <option value="PR_APPROVED">{UI_STRINGS.appAppPrPage.projectApproved}</option>
+          <option value="PR_RELEASED_TO_PROCUREMENT">{UI_STRINGS.common.releasedToProcurement}</option>
+          <option value="PR_REJECTED">{UI_STRINGS.common.rejected}</option>
         </select>
       </div>
 
@@ -189,30 +188,28 @@ export default function MyPrsPage() {
           <table className="data-table enterprise-table" style={{ width: '100%', fontSize: 13, minWidth: 1000 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569', height: 42 }}>
-                <th style={{ padding: '0 16px', fontWeight: 600, width: 140 }}>PR Number</th>
-                <th style={{ padding: '0 16px', fontWeight: 600, minWidth: 220 }}>Package / Description</th>
-                <th style={{ padding: '0 16px', fontWeight: 600, minWidth: 160 }}>Project & Cost Centre</th>
-                <th style={{ padding: '0 16px', fontWeight: 600, width: 90, textAlign: 'center' }}>Items</th>
-                <th style={{ padding: '0 16px', fontWeight: 600, width: 140, textAlign: 'right' }}>PR Amount</th>
-                <th style={{ padding: '0 16px', fontWeight: 600, width: 150, textAlign: 'center' }}>Approval Status</th>
-                <th style={{ padding: '0 16px', fontWeight: 600, width: 180, textAlign: 'right' }}>Actions</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, width: 140 }}>{UI_STRINGS.common.pRNumber}</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, minWidth: 220 }}>{UI_STRINGS.appAppPrPage.packageDescription}</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, minWidth: 160 }}>{UI_STRINGS.common.projectCostCentre}</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, width: 90, textAlign: 'center' }}>{UI_STRINGS.common.items4}</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, width: 140, textAlign: 'right' }}>{UI_STRINGS.common.pRAmount}</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, width: 150, textAlign: 'center' }}>{UI_STRINGS.common.approvalStatus}</th>
+                <th style={{ padding: '0 16px', fontWeight: 600, width: 180, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
                   <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-                    <div className="spinner" style={{ margin: '0 auto 12px' }} />
-                    Loading Procurement Requests...
-                  </td>
+                    <div className="spinner" style={{ margin: '0 auto 12px' }} />{UI_STRINGS.appAppPrPage.loadingProcurementRequests}</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding: 40, textAlign: 'center' }}>
                     <EmptyState
                       icon={<FileSpreadsheet size={36} />}
-                      title="No PRs found"
-                      description={search || statusFilter ? 'Try clearing filters to find more records.' : 'Create a PR or derive one from a BOQ in BOQ Studio.'}
+                      title={UI_STRINGS.appAppPrPage.noPRsFound}
+                      description={search || statusFilter ? UI_STRINGS.appAppPrPage.tryClearingFiltersToFindMoreRecords : UI_STRINGS.appAppPrPage.createAPROrDeriveOneFromABOQInBOQStudio}
                     />
                   </td>
                 </tr>
@@ -223,8 +220,7 @@ export default function MyPrsPage() {
                       <td style={{ padding: '0 16px', fontWeight: 700, color: '#1e40af' }}>
                         <div className="font-mono text-sm">{pr.prNumber}</div>
                         {pr.boq?.boqCode && (
-                          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                            BOQ: {pr.boq.boqCode}
+                          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.common.bOQ2}{pr.boq.boqCode}
                           </div>
                         )}
                       </td>
@@ -233,11 +229,11 @@ export default function MyPrsPage() {
                           {pr.title}
                         </div>
                         <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
-                          {(pr.categories || []).join(', ') || 'General Capex'}
+                          {(pr.categories || []).join(', ') || UI_STRINGS.appAppPrPage.generalCapex}
                         </div>
                       </td>
                       <td style={{ padding: '0 16px', color: '#334155' }}>
-                        <div style={{ fontWeight: 500 }}>{pr.project?.name || '—'}</div>
+                        <div style={{ fontWeight: 500 }}>{pr.project?.name || UI_STRINGS.common.copy4s9bsz}</div>
                         <div style={{ fontSize: 11, color: '#64748b' }}>
                           {pr.costCentre?.code || pr.project?.projectCode || ''}
                         </div>
@@ -247,14 +243,13 @@ export default function MyPrsPage() {
                           {pr.totalLines || 0}
                         </span>
                       </td>
-                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857', fontSize: 13 }}>
-                        ₹ {(pr.totalEstimatedValue || 0).toLocaleString('en-IN')}
+                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857', fontSize: 13 }}>{UI_STRINGS.common.copy1g8b5tg}{(pr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                       </td>
                       <td style={{ padding: '0 16px', textAlign: 'center' }}>
                         <StatusBadge status={pr.status} />
                         {pr.rejectionReason && (pr.status === 'PR_RETURNED_FOR_CORRECTION' || pr.status === 'PR_REJECTED') && (
                           <div style={{ marginTop: 4, fontSize: 10, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 4px' }}>
-                            <strong>Note:</strong> {pr.rejectionReason}
+                            <strong>{UI_STRINGS.common.note}</strong> {pr.rejectionReason}
                           </div>
                         )}
                       </td>
@@ -266,9 +261,9 @@ export default function MyPrsPage() {
                               className="btn btn-primary btn-sm"
                               style={{ height: 32, padding: '0 10px', fontSize: 12 }}
                               onClick={() => handleSubmit(pr.id)}
-                              title={pr.status === 'PR_RETURNED_FOR_CORRECTION' ? 'Resubmit corrected PR for approval' : 'Submit PR for Project Approver review'}
+                              title={pr.status === 'PR_RETURNED_FOR_CORRECTION' ? UI_STRINGS.appAppPrPage.resubmitCorrectedPRForApproval : UI_STRINGS.appAppPrPage.submitPRForProjectApproverReview}
                             >
-                              <Send size={12} /> {pr.status === 'PR_RETURNED_FOR_CORRECTION' ? 'Resubmit' : 'Submit'}
+                              <Send size={12} /> {pr.status === 'PR_RETURNED_FOR_CORRECTION' ? UI_STRINGS.appAppPrPage.resubmit : UI_STRINGS.common.submit}
                             </button>
                           )}
                           <button
@@ -279,17 +274,14 @@ export default function MyPrsPage() {
                               setChatPr(pr);
                               setChatDrawerOpen(true);
                             }}
-                            title="Open messages and communication history with approver"
+                            title={UI_STRINGS.appAppPrPage.openMessagesAndCommunicationHistoryWithApprover}
                           >
-                            <MessageSquare size={12} /> Chat
-                          </button>
+                            <MessageSquare size={12} />{UI_STRINGS.common.chat}</button>
                           <Link
                             href={`/boq/studio?boqId=${pr.boqId}&projectId=${pr.projectId}&costCentreId=${pr.costCentreId}`}
                             className="btn btn-secondary btn-sm"
                             style={{ height: 32, padding: '0 10px', fontSize: 12 }}
-                          >
-                            Details →
-                          </Link>
+                          >{UI_STRINGS.appAppPrPage.details}</Link>
                         </div>
                       </td>
                     </tr>

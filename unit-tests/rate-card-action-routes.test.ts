@@ -5,6 +5,8 @@ import { createAuditLog } from '../src/lib/audit';
 import { POST as submitRateCard } from '../src/app/api/procurement/rate-cards/[id]/submit/route';
 import { POST as rejectRateCard } from '../src/app/api/procurement/rate-cards/[id]/reject/route';
 import { POST as revertRateCard } from '../src/app/api/procurement/rate-cards/[id]/revert/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -58,11 +60,11 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(submitRateCard(request({ remarks: 'Reviewed' }), params())).resolves.toBe(denied);
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
-    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ items: [] }));
-    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: 'Cannot submit rate card with no items', status: 400 });
+    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.cannotSubmitRateCardWithNoItems, status: 400 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED' }));
     await expect(submitRateCard(request(), params())).resolves.toMatchObject({ ok: false, error: expect.stringContaining('APPROVED'), status: 400 });
 
@@ -70,12 +72,12 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'RETURNED_FOR_CORRECTION' }));
     db.vendorRateCard.update.mockResolvedValueOnce(updated);
     await expect(submitRateCard(request({ remarks: '  Re-submitted with changes  ' }), params())).resolves.toEqual({
-      ok: true, data: { rateCard: updated, message: 'Rate Card submitted for Project Approval' }, status: 200,
+      ok: true, data: { rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardSubmittedForProjectApproval }, status: 200,
     });
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { id: 'card-1' },
       data: expect.objectContaining({
-        status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', submittedBy: 'Approver One', submittedAt: expect.any(Date),
+        status: 'PENDING_PROJECT_APPROVAL', approvalLevel: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, submittedBy: 'Approver One', submittedAt: expect.any(Date),
         rejectionReason: null, revertReason: null,
         approvals: { create: expect.objectContaining({ approverName: 'Approver One', approverEmail: 'approver@example.test', remarks: '  Re-submitted with changes  ' }) },
       }),
@@ -90,7 +92,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
       data: expect.objectContaining({
         submittedBy: 'fallback@example.test',
         approvals: { create: expect.objectContaining({
-          approverName: 'Category Manager', approverEmail: 'fallback@example.test', remarks: 'Submitted for Level 1 Project Approval',
+          approverName: UI_STRINGS.common.categoryManager, approverEmail: 'fallback@example.test', remarks: 'Submitted for Level 1 Project Approval',
         }) },
       }),
     }));
@@ -106,12 +108,12 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(rejectRateCard(request({ reason: 'Incomplete quote' }), params())).resolves.toBe(denied);
-    await expect(rejectRateCard(request({ reason: ' ' }), params())).resolves.toEqual({ ok: false, error: 'Rejection reason / remarks is mandatory', status: 400 });
+    await expect(rejectRateCard(request({ reason: ' ' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rejectionReasonRemarksIsMandatory, status: 400 });
     await expect(rejectRateCard(request(), params())).resolves.toMatchObject({ ok: false, status: 500 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(rejectRateCard(request({ reason: 'Incomplete quote' }), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(rejectRateCard(request({ reason: 'Incomplete quote' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
-    await expect(rejectRateCard(request({ reason: 'Incomplete quote' }), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(rejectRateCard(request({ reason: 'Incomplete quote' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'DRAFT' }));
     await expect(rejectRateCard(request({ reason: 'Incomplete quote' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
 
@@ -119,12 +121,12 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'PENDING_PROJECT_APPROVAL' }));
     db.vendorRateCard.update.mockResolvedValueOnce(updated);
     await expect(rejectRateCard(request({ remarks: '  Pricing needs correction  ' }), params())).resolves.toEqual({
-      ok: true, data: { rateCard: updated, message: 'Rate Card rejected with reason recorded' }, status: 200,
+      ok: true, data: { rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdRejectRoute.rateCardRejectedWithReasonRecorded }, status: 200,
     });
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: 'REJECTED', rejectionReason: 'Pricing needs correction',
-        approvals: { create: expect.objectContaining({ level: 'LEVEL_1_PROJECT', action: 'REJECTED', remarks: 'Pricing needs correction' }) },
+        approvals: { create: expect.objectContaining({ level: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, action: 'REJECTED', remarks: 'Pricing needs correction' }) },
       }),
     }));
 
@@ -150,13 +152,13 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(revertRateCard(request({ reason: 'Update documents' }), params())).resolves.toBe(denied);
     await expect(revertRateCard(request({ reason: '   ' }), params())).resolves.toEqual({
-      ok: false, error: 'Remarks / reason for returning for correction is mandatory', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.remarksReasonForReturningForCorrectionIsMandatory, status: 400,
     });
     await expect(revertRateCard(request(), params())).resolves.toMatchObject({ ok: false, status: 500 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(revertRateCard(request({ reason: 'Update documents' }), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(revertRateCard(request({ reason: 'Update documents' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
-    await expect(revertRateCard(request({ reason: 'Update documents' }), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(revertRateCard(request({ reason: 'Update documents' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'DRAFT' }));
     await expect(revertRateCard(request({ reason: 'Update documents' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
 
@@ -164,7 +166,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'PENDING_FINANCE_APPROVAL' }));
     db.vendorRateCard.update.mockResolvedValueOnce(updated);
     await expect(revertRateCard(request({ remarks: '  Attach current tax certificate  ' }), params())).resolves.toEqual({
-      ok: true, data: { rateCard: updated, message: 'Rate Card returned for correction with remarks recorded' }, status: 200,
+      ok: true, data: { rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.rateCardReturnedForCorrectionWithRemarksRecorded }, status: 200,
     });
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -181,7 +183,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         revertReason: 'Update insurance certificate',
-        approvals: { create: expect.objectContaining({ level: 'LEVEL_1_PROJECT', approverName: 'PROJECT_APPROVER', approverEmail: null }) },
+        approvals: { create: expect.objectContaining({ level: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, approverName: 'PROJECT_APPROVER', approverEmail: null }) },
       }),
     }));
 

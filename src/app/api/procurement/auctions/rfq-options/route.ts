@@ -3,6 +3,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('AUCTION_VIEW');
@@ -141,7 +144,7 @@ export async function GET(req: NextRequest) {
           id: l.id,
           lineNumber: l.lineNumber,
           itemCode: l.boqLine?.itemCode || `ITEM-${l.lineNumber}`,
-          description: l.description || l.prLine?.itemDescription || 'Scope Line Item',
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": l.description || l.prLine?.itemDescription || 'Scope Line Item' }),
           boqDescription: l.specification || l.prLine?.itemDescription || '',
           category: l.category || 'General',
           subCategory: l.subcategory || '',
@@ -159,6 +162,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching auction RFQ options:', error);
-    return apiError(error.message || 'Failed to fetch RFQ options', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqOptions }), 500);
   }
 }

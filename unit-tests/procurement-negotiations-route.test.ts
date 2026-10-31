@@ -4,6 +4,8 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const transaction = {
   negotiationRound: { create: jest.fn(), update: jest.fn() },
@@ -95,15 +97,15 @@ describe('procurement negotiations API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({}))).resolves.toBe(denied);
-    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: 'RFQ ID is required', status: 400 });
+    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, status: 400 });
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ rfqId: 'missing' }))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(POST(postRequest({ rfqId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'DRAFT' }));
     await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, error: expect.stringContaining('does not permit'), status: 400 });
     for (const invalid of [0, -1, 'abc']) {
       await expect(POST(postRequest({ rfqId: 'rfq-1', counterOfferAmount: invalid }))).resolves.toEqual({
-        ok: false, error: 'Counteroffer amount must be a positive number', status: 400,
+        ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.counterofferAmountMustBeAPositiveNumber, status: 400,
       });
     }
     db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ status: 'CONCLUDED' }));
@@ -129,15 +131,15 @@ describe('procurement negotiations API', () => {
       dispatched: [{ vendorId: 'v1', status: 'DISPATCHED', roundNumber: 1, counterOfferAmount: 800 }],
       failed: [{ vendorId: 'v2', status: 'FAILED', reason: expect.stringContaining('has not submitted') }],
     } });
-    expect(db.negotiation.create).toHaveBeenCalledWith(expect.objectContaining({ data: { tenantId: 'tenant-1', rfqId: 'rfq-1', currentRound: 1, status: 'ACTIVE' } }));
+    expect(db.negotiation.create).toHaveBeenCalledWith(expect.objectContaining({ data: { tenantId: 'tenant-1', rfqId: 'rfq-1', currentRound: 1, status: UI_STRINGS.common.aCTIVE } }));
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'NEGOTIATION_CREATED' }));
     expect(transaction.negotiationRound.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       vendorId: 'v1', roundNumber: 1, deadline: new Date('2026-12-01'), targetPrice: 850, previousQuoteAmount: 1000,
       counterOfferAmount: 800, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', notes: 'Reduce the price',
-      lineItemsJson: JSON.stringify([{ id: 'line-1', counterRate: 80 }]), nextResponsibleParty: 'VENDOR',
+      lineItemsJson: JSON.stringify([{ id: 'line-1', counterRate: 80 }]), nextResponsibleParty: UI_STRINGS.common.vENDOR,
     }), include: { vendor: true } });
     expect(transaction.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'NEGOTIATION' } });
-    expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderName: 'Category Manager', isVendorSent: false }) });
+    expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderName: UI_STRINGS.common.categoryManager, isVendorSent: false }) });
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'COUNTER_OFFER_SENT', details: { vendorName: 'Vendor v1', amount: 800, roundNumber: 1 } }));
   });
 
@@ -168,7 +170,7 @@ describe('procurement negotiations API', () => {
     const superseded = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', counterOfferAmount: 700, allowSupersede: true }));
     expect(superseded).toMatchObject({ ok: true, status: 201, data: { message: expect.stringContaining('Superseding Buyer Offer') } });
     expect(transaction.negotiationRound.update).toHaveBeenCalledWith({ where: { id: 'old-round' }, data: {
-      status: 'SUPERSEDED', notes: 'Waiting [Superseded by Buyer Offer Round 2]',
+      status: UI_STRINGS.componentsProcurementCommercialWorkspace.sUPERSEDED, notes: 'Waiting [Superseded by Buyer Offer Round 2]',
     } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'SUPERSEDING_COUNTEROFFER_ISSUED' }));
 
@@ -185,13 +187,13 @@ describe('procurement negotiations API', () => {
     const targetOnly = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', targetPrice: 750 }));
     expect(targetOnly).toMatchObject({ ok: true, status: 201, data: { message: 'Buyer Offer Submitted Successfully (Round 1)' } });
     expect(transaction.negotiationRound.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
-      targetPrice: 750, counterOfferAmount: null, savingsAmount: 0, notes: null, nextResponsibleParty: 'VENDOR', lineItemsJson: null,
+      targetPrice: 750, counterOfferAmount: null, savingsAmount: 0, notes: null, nextResponsibleParty: UI_STRINGS.common.vENDOR, lineItemsJson: null,
     }), include: { vendor: true } });
     expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ event: 'COUNTER_OFFER_SENT', details: { vendorName: 'Vendor v1', amount: undefined, roundNumber: 1 } }));
   });
 
   it('returns single-vendor failures and maps provider or request errors', async () => {
-    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'Vendor ID is required for single counteroffer dispatch', status: 400 });
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, status: 400 });
     db.vendor.findFirst.mockResolvedValueOnce(null);
     const missing = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'missing' }));
     expect(missing.status).toBe(400);

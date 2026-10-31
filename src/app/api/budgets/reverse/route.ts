@@ -1,7 +1,11 @@
 // src/app/api/budgets/reverse/route.ts - Budget Transaction Reversal API
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_REVERSE');
@@ -11,21 +15,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { transactionId, reversalReason } = body;
 
-    if (!transactionId) return apiError('Transaction ID is required.', 400);
+    if (!transactionId) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.transactionIDIsRequired, 400);
     if (!reversalReason || !reversalReason.trim()) {
-      return apiError('Mandatory reversal reason must be provided.', 400);
+      return apiError(UI_STRINGS.appApiBudgetsReverseRoute.mandatoryReversalReasonMustBeProvided, 400);
     }
 
     const tx = await prisma.budgetTransaction.findFirst({
       where: { id: transactionId, tenantId: ctx.tenantId },
     });
 
-    if (!tx) return apiError('Budget transaction not found.', 404);
+    if (!tx) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.budgetTransactionNotFound, 404);
     if (tx.isReversal) {
-      return apiError('Cannot reverse a transaction that is already a reversal.', 400);
+      return apiError(UI_STRINGS.appApiBudgetsReverseRoute.cannotReverseATransactionThatIsAlreadyAReversal, 400);
     }
     if (tx.status !== 'APPROVED') {
-      return apiError('Only approved budget transactions can be reversed.', 400);
+      return apiError(UI_STRINGS.appApiBudgetsReverseRoute.onlyApprovedBudgetTransactionsCanBeReversed, 400);
     }
 
     // Generate reversal code
@@ -81,7 +85,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BUDGET_TRANSACTION',
         entityId: reversalTx.id,
         action: 'BUDGET_TRANSACTION_REVERSED',
-        description: `Budget transaction ${tx.transactionCode} reversed with ${reversalTxCode} (-₹ ${Math.abs(tx.amount).toLocaleString('en-IN')}). Reason: ${reversalReason.trim()}`,
+        description: interpolateUiString(UI_STRINGS.appApiBudgetsReverseRoute.budgetTransactionTransactionCodeReversedWithReversalTxCodeToLocaleStringReasonTrim, { "transactionCode": tx.transactionCode, "reversalTxCode": reversalTxCode, "toLocaleString": Math.abs(tx.amount).toLocaleString(I18N_CONFIG.defaultLocale), "trim": reversalReason.trim() }),
       },
     });
 
@@ -91,6 +95,6 @@ export async function POST(req: NextRequest) {
       reversedAmount: -Math.abs(tx.amount),
     }, 201);
   } catch (err: any) {
-    return apiError(err.message || 'Transaction reversal failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.transactionReversalFailed }), 500);
   }
 }

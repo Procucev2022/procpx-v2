@@ -4,6 +4,8 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -75,15 +77,15 @@ describe('vendor portal RFQ detail and quote API', () => {
     await expect(GET(getRequest(), params())).resolves.toBe(denied);
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER', vendorId: undefined });
     await expect(GET(getRequest(), params())).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: undefined });
     await expect(POST(postRequest({ lines: [] }), params())).resolves.toEqual({
-      ok: false, error: 'Vendor record not associated with this user account', status: 404,
+      ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404,
     });
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER', vendorId: undefined });
     await expect(POST(postRequest({ lines: [] }), params())).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
   });
 
@@ -109,7 +111,7 @@ describe('vendor portal RFQ detail and quote API', () => {
 
   it('returns RFQ detail not-found and lookup errors', async () => {
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockRejectedValueOnce(new Error('RFQ store offline'));
     await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'RFQ store offline', status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
@@ -123,7 +125,7 @@ describe('vendor portal RFQ detail and quote API', () => {
     await expect(POST(postRequest({ lines: [] }), params())).resolves.toBe(denied);
     db.rfq.findFirst.mockResolvedValueOnce(null);
     await expect(POST(postRequest({ lines: [{ rfqLineId: 'line-1', unitRate: 10 }] }), params())).resolves.toEqual({
-      ok: false, error: 'RFQ not found or vendor not invited', status: 404,
+      ok: false, error: UI_STRINGS.appApiVendorPortalRfqsIdRoute.rFQNotFoundOrVendorNotInvited, status: 404,
     });
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'DRAFT' }));
     await expect(POST(postRequest({ lines: [{ rfqLineId: 'line-1', unitRate: 10 }] }), params())).resolves.toEqual({
@@ -131,16 +133,16 @@ describe('vendor portal RFQ detail and quote API', () => {
     });
     db.quote.findMany.mockResolvedValueOnce([{ quoteVersion: 20 }]);
     await expect(POST(postRequest({ lines: [{ rfqLineId: 'line-1', unitRate: 10 }] }), params())).resolves.toEqual({
-      ok: false, error: 'Maximum limit of 20 quote versions reached per vendor for this RFQ.', status: 400,
+      ok: false, error: UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, status: 400,
     });
 
     db.quote.findMany.mockResolvedValueOnce([]);
     await expect(POST(postRequest({ lines: [] }), params())).resolves.toEqual({
-      ok: false, error: 'Line-item quotation rates are mandatory before submitting.', status: 400,
+      ok: false, error: UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemQuotationRatesAreMandatoryBeforeSubmitting, status: 400,
     });
     db.quote.findMany.mockResolvedValueOnce([]);
     await expect(POST(postRequest({ lines: 'bad' }), params())).resolves.toEqual({
-      ok: false, error: 'Line-item quotation rates are mandatory before submitting.', status: 400,
+      ok: false, error: UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemQuotationRatesAreMandatoryBeforeSubmitting, status: 400,
     });
     db.quote.findMany.mockResolvedValueOnce([]);
     await expect(POST(postRequest({ lines: [{ rfqLineId: 'line-1', unitRate: 10 }] }), params())).resolves.toEqual({
@@ -177,7 +179,7 @@ describe('vendor portal RFQ detail and quote API', () => {
     expect(result).toMatchObject({ ok: true, status: 201, data: { quote: { id: 'quote-new' }, message: '1st Quote Submitted Successfully', version: 1 } });
     expect(tx.quote.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       quoteNumber: 'QT-RFQ-001-01', quoteVersion: 1, totalBaseAmount: 120, taxAmount: expect.any(Number), totalQuoteAmount: 123.6,
-      status: 'SUBMITTED', validUntil: new Date('2027-01-01'), commercialTerms: 'Valid for 30 days',
+      status: UI_STRINGS.common.sUBMITTED, validUntil: new Date('2027-01-01'), commercialTerms: 'Valid for 30 days',
       deliveryLeadTimeDays: 12, submittedBy: 'Vendor Rep', lines: { create: [
         expect.objectContaining({ rfqLineId: 'line-1', unitRate: 10, taxPercent: 18, lineTotal: 23.6, remarks: 'Copper grade' }),
         expect.objectContaining({ rfqLineId: 'line-2', unitRate: 25, taxPercent: 0, lineTotal: 100, remarks: null }),
@@ -185,7 +187,7 @@ describe('vendor portal RFQ detail and quote API', () => {
     }), include: { lines: true } });
     expect(tx.quote.create.mock.calls[0][0].data.taxAmount).toBeCloseTo(3.6);
     expect(tx.rfqVendor.updateMany).toHaveBeenCalledWith({ where: { rfqId: 'rfq-1', vendorId: 'vendor-1' }, data: {
-      invitationStatus: 'SUBMITTED', submissionStatus: 'SUBMITTED',
+      invitationStatus: UI_STRINGS.common.sUBMITTED, submissionStatus: UI_STRINGS.common.sUBMITTED,
     } });
     expect(tx.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'VENDOR_RESPONSE_OPEN' } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'VENDOR_QUOTE_SUBMITTED', entityId: 'quote-new' }));
@@ -213,13 +215,13 @@ describe('vendor portal RFQ detail and quote API', () => {
     expect(tx.negotiationRound.update).toHaveBeenCalledWith({ where: { id: 'round-1' }, data: expect.objectContaining({
       status: 'REVISED_SUBMITTED', nextResponsibleParty: 'BUYER', lineItemsJson: JSON.stringify([
         { rfqLineId: 'line-1', description: 'Cable', uom: 'M', quantity: 2, counterRate: 8, revisedRate: 11, lineTotal: 22 },
-        { rfqLineId: 'line-2', description: 'Item', uom: 'Unit', quantity: 5, counterRate: 0, revisedRate: 22, lineTotal: 110 },
-        { rfqLineId: 'extra', description: 'Item', uom: 'Unit', quantity: 1, counterRate: null, revisedRate: 3, lineTotal: 3 },
+        { rfqLineId: 'line-2', description: UI_STRINGS.appAppBoqStudioPage.item, uom: UI_STRINGS.common.unit, quantity: 5, counterRate: 0, revisedRate: 22, lineTotal: 110 },
+        { rfqLineId: 'extra', description: UI_STRINGS.appAppBoqStudioPage.item, uom: UI_STRINGS.common.unit, quantity: 1, counterRate: null, revisedRate: 3, lineTotal: 3 },
       ]),
     }) });
     expect(tx.negotiation.update).toHaveBeenCalledWith({ where: { id: 'neg-1' }, data: { bestQuoteAmount: expect.any(Number) } });
     expect(tx.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      senderName: 'Vendor Rep', senderRole: 'VENDOR', isVendorSent: true, message: expect.stringContaining('Quote v2'),
+      senderName: 'Vendor Rep', senderRole: UI_STRINGS.common.vENDOR, isVendorSent: true, message: expect.stringContaining('Quote v2'),
     }) });
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED', details: expect.objectContaining({ roundNumber: 2 }) }));
   });

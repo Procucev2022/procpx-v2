@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
     const { boqRevisionId, lineIds, acceptConfidenceThreshold } = body;
 
     if (!boqRevisionId) {
-      return apiError('BOQ Revision ID is required.', 400);
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.bOQRevisionIDIsRequired, 400);
     }
 
     const revision = await prisma.boqRevision.findFirst({
@@ -23,9 +26,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!revision) return apiError('BOQ Revision not found.', 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
     if (revision.status === 'APPROVED') {
-      return apiError('Approved BOQ revisions cannot be refined. Branch a new revision first.', 403);
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.approvedBOQRevisionsCannotBeRefinedBranchANewRevisionFirst, 403);
     }
 
     const refinedLines: any[] = [];
@@ -144,7 +147,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BOQ_REVISION',
         entityId: revision.id,
         action: 'AI_REFINEMENT_REQUESTED',
-        description: `AI refinement executed on ${refinedLines.length} lines of BOQ ${revision.boq.boqCode} R${revision.revisionNumber}`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqRefineAiRoute.aIRefinementExecutedOnLengthLinesOfBOQBoqCodeRRevisionNumber, { "length": refinedLines.length, "boqCode": revision.boq.boqCode, "revisionNumber": revision.revisionNumber }),
       },
     });
 
@@ -154,6 +157,6 @@ export async function POST(req: NextRequest) {
       lines: refinedLines,
     });
   } catch (err: any) {
-    return apiError(err.message || 'AI refinement failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiRefinementFailed }), 500);
   }
 }

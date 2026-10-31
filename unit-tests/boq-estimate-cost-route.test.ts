@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/estimate-cost/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -73,11 +75,11 @@ describe('BOQ estimate cost API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(request({}),)).resolves.toBe(denied);
-    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: 'BOQ Revision ID or BOQ ID is required.', status: 400 });
+    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, status: 400 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-missing-revision', revisions: [] });
-    await expect(POST(request({ boqId: 'boq-missing-revision' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(POST(request({ boqId: 'boq-missing-revision' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({

@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -29,7 +32,7 @@ export async function POST(
         },
       });
       if (!vendorRecord) {
-        return apiError('Vendor record not found for this user', 404);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorRecordNotFoundForThisUser, 404);
       }
       vendorId = vendorRecord.id;
     } else {
@@ -38,7 +41,7 @@ export async function POST(
     }
 
     if (!vendorId) {
-      return apiError('Vendor ID is required to accept terms', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIDIsRequiredToAcceptTerms, 400);
     }
 
     const auction = await prisma.auction.findFirst({
@@ -47,7 +50,7 @@ export async function POST(
     });
 
     if (!auction) {
-      return apiError('Auction not found', 404);
+      return apiError(UI_STRINGS.common.auctionNotFound, 404);
     }
 
     const participant = await prisma.auctionVendor.findFirst({
@@ -60,7 +63,7 @@ export async function POST(
     });
 
     if (!participant) {
-      return apiError('Vendor is not invited to this auction event', 403);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIsNotInvitedToThisAuctionEvent, 403);
     }
 
     const now = new Date();
@@ -79,7 +82,7 @@ export async function POST(
       entityType: 'AUCTION',
       entityId: auction.id,
       action: 'AUCTION_TERMS_ACCEPTED',
-      description: `${participant.vendor.name} accepted Terms & Conditions for auction ${auction.auctionNumber}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.nameAcceptedTermsConditionsForAuctionAuctionNumber, { "name": participant.vendor.name, "auctionNumber": auction.auctionNumber }),
       newValue: {
         vendorId,
         termsAcceptedAt: now.toISOString(),
@@ -87,11 +90,11 @@ export async function POST(
     });
 
     return apiSuccess({
-      message: 'Terms & Conditions accepted. You are now eligible to place bids in this auction.',
+      message: UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.termsConditionsAcceptedYouAreNowEligibleToPlaceBidsInThisAuction,
       termsAcceptedAt: now.toISOString(),
     });
   } catch (error: any) {
     console.error('Error accepting auction terms:', error);
-    return apiError(error.message || 'Failed to accept auction terms', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToAcceptAuctionTerms }), 500);
   }
 }

@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useSearchParams } from 'next/navigation';
@@ -93,11 +97,11 @@ function renderPage(params = new URLSearchParams()) {
 }
 
 function wizard() {
-  return screen.getByText('Configure & Schedule E-Auction Event').closest('div[style*="max-width: 1060px"]') as HTMLElement;
+  return screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"}))).closest('div[style*="max-width: 1060px"]') as HTMLElement;
 }
 
 function nextStep() {
-  fireEvent.click(screen.getByRole('button', { name: /Next Step/ }));
+  fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.nextStep, "", false) }));
 }
 
 describe('procurement auctions workspace', () => {
@@ -123,15 +127,15 @@ describe('procurement auctions workspace', () => {
     expect(screen.getByText('Leading: INR 12,500')).toBeInTheDocument();
     expect(screen.getByText('Ceiling: USD 0')).toBeInTheDocument();
     expect(screen.getByText('Extended (2x)')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Monitor Live/ })).toHaveAttribute('href', '/procurement/auctions/live-1');
-    expect(screen.getByRole('link', { name: 'Edit Draft' })).toHaveAttribute('href', '/procurement/auctions/draft-1');
-    expect(screen.getByRole('link', { name: 'View Details' })).toHaveAttribute('href', '/procurement/auctions/sealed-1');
-    expect(screen.getByText('Live Auctions')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.monitorLive, "", false) })).toHaveAttribute('href', '/procurement/auctions/live-1');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.editDraft) })).toHaveAttribute('href', '/procurement/auctions/draft-1');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.viewDetails) })).toHaveAttribute('href', '/procurement/auctions/sealed-1');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.liveAuctions))).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Search by Auction #, Title, RFQ, PR...'), { target: { value: 'pr-100' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.searchByAuctionTitleRFQPR)), { target: { value: 'pr-100' } });
     expect(screen.getByText('AUC-001')).toBeInTheDocument();
     expect(screen.queryByText('AUC-002')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Search by Auction #, Title, RFQ, PR...'), { target: { value: '  ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.searchByAuctionTitleRFQPR)), { target: { value: '  ' } });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'ITEM_WISE' } });
     expect(screen.getByText('AUC-001')).toBeInTheDocument();
     expect(screen.queryByText('AUC-002')).not.toBeInTheDocument();
@@ -139,11 +143,11 @@ describe('procurement auctions workspace', () => {
     expect(screen.queryByText('AUC-001')).not.toBeInTheDocument();
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'ALL' } });
     expect(screen.getByText('AUC-003')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Search by Auction #, Title, RFQ, PR...'), { target: { value: 'no match' } });
-    expect(screen.getByText('No Auctions Matching Filters')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Live Bidding/ }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.searchByAuctionTitleRFQPR)), { target: { value: 'no match' } });
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.noAuctionsMatchingFilters))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.liveBidding, "", false) }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/procurement/auctions?tab=LIVE'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/procurement/auctions?tab=LIVE'));
   });
 
@@ -157,10 +161,10 @@ describe('procurement auctions workspace', () => {
     });
     const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const first = renderPage();
-    await screen.findByText('No Auctions Matching Filters');
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: 'Error', message: 'Failed to load auction events' }));
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.noAuctionsMatchingFilters));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: UI_STRINGS.appAppProcurementAuctionsPage.failedToLoadAuctionEvents }));
     expect(error).toHaveBeenCalledWith(expect.any(Error));
-    expect(screen.queryByText(/Observer Access/)).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.observerAccess, "", false))).not.toBeInTheDocument();
     first.unmount();
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -171,26 +175,26 @@ describe('procurement auctions workspace', () => {
     });
     renderPage();
     expect(await screen.findByText(/Observer Access \(PROJECT_MANAGER\)/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Create E-Auction/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Schedule a new Reverse Auction, Forward Auction, or Sealed Bid from any active RFQ package.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.createEAuction, "", false) })).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.scheduleANewReverseAuctionForwardAuctionOrSealedBidFromAnyActiveRFQPackage))).toBeInTheDocument();
   });
 
   it('opens from the create query, validates required fields, saves a draft, and handles failed JSON responses', async () => {
     renderPage(new URLSearchParams('create=true'));
-    const panel = await screen.findByText('Configure & Schedule E-Auction Event');
+    const panel = await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
     expect(panel).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
-    expect(mockToastError).toHaveBeenCalledWith({ title: 'Validation', message: 'Please select an RFQ package.' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
+    expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppProcurementAuctionsPage.pleaseSelectAnRFQPackage });
 
     await screen.findByRole('option', { name: /RFQ-100/ });
-    fireEvent.change(screen.getByDisplayValue('-- Choose Approved RFQ --'), { target: { value: 'rfq-1' } });
-    fireEvent.change(screen.getByPlaceholderText(/Reverse Auction/), { target: { value: '  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: '  ' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     expect(mockToastError).toHaveBeenLastCalledWith({ title: 'Validation', message: 'Please enter an Auction Name.' });
 
-    fireEvent.change(screen.getByPlaceholderText(/Reverse Auction/), { target: { value: 'Cable supply auction' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith({ title: 'Draft Saved', message: 'Saved' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Cable supply auction' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith({ title: UI_STRINGS.common.userMessages.draftSaved, message: 'Saved' }));
     const createCall = fetchMock.mock.calls.find(([url, init]) => String(url) === '/api/procurement/auctions' && (init as RequestInit)?.method === 'POST');
     expect(JSON.parse((createCall?.[1] as RequestInit).body as string)).toEqual(expect.objectContaining({
       rfqId: 'rfq-1', title: 'Cable supply auction', isDraft: true, startingPrice: 25000,
@@ -204,36 +208,36 @@ describe('procurement auctions workspace', () => {
       if (String(input) === '/api/procurement/auctions' && init?.method === 'POST') return { ok: true, json: jest.fn().mockRejectedValue(new Error('bad response')) };
       return response({});
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create E-Auction' }));
-    await screen.findByText('Configure & Schedule E-Auction Event');
-    fireEvent.change(screen.getByDisplayValue('-- Choose Approved RFQ --'), { target: { value: 'rfq-1' } });
-    fireEvent.change(screen.getByPlaceholderText(/Reverse Auction/), { target: { value: 'Second auction' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"E-Auction"})) }));
+    await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
+    fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Second auction' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     await waitFor(() => expect(mockToastError).toHaveBeenLastCalledWith({ title: 'Auction Creation Failed', message: 'bad response' }));
   });
 
   it('supports RFQ deep links, all six wizard steps, schedule presets, rules, vendor compliance, item review, and sealed-bid scheduling', async () => {
     renderPage(new URLSearchParams('rfqId=rfq-1'));
-    const dialogTitle = await screen.findByText('Configure & Schedule E-Auction Event');
+    const dialogTitle = await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
     const modal = wizard();
     expect(dialogTitle).toBeInTheDocument();
     await waitFor(() => expect(within(modal).getByText(/PR-100/)).toBeInTheDocument());
-    fireEvent.change(within(modal).getByPlaceholderText(/Reverse Auction/), { target: { value: 'Sealed cable event' } });
-    fireEvent.click(within(modal).getByText('Item Wise'));
-    fireEvent.click(within(modal).getByText('Sealed Bid'));
+    fireEvent.change(within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Sealed cable event' } });
+    fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.common.itemWise)));
+    fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.common.sealedBid)));
     const modalSelects = modal.querySelectorAll('select');
     expect(modalSelects[1]).toHaveValue('INR');
     fireEvent.change(modalSelects[1], { target: { value: 'USD' } });
 
     nextStep();
     expect(within(modal).getByText(/Time Zone Authority/)).toBeInTheDocument();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Next 1 Hour' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.next1Hour) }));
     expect(modal.querySelector<HTMLInputElement>('input[type="date"]')?.value).toBeTruthy();
     fireEvent.click(within(modal).getByRole('button', { name: /Tomorrow 10:00 AM/ }));
     nextStep();
 
-    expect(within(modal).getByText('Confidential (Disabled)')).toBeInTheDocument();
-    fireEvent.click(within(modal).getByLabelText('Single Unit Rate'));
+    expect(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.confidentialDisabled))).toBeInTheDocument();
+    fireEvent.click(within(modal).getByLabelText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.singleUnitRate)));
     const radio = (name: string, index: number) => modal.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)[index];
     fireEvent.click(radio('hasStartPrice', 1));
     fireEvent.click(radio('hasMinBidReduction', 1));
@@ -247,17 +251,17 @@ describe('procurement auctions workspace', () => {
     expect(within(modal).getByText('Asha (PROJECT_MANAGER)')).toBeInTheDocument();
     nextStep();
 
-    expect(within(modal).getByText(/Invite Eligible Quoted Vendors/)).toBeInTheDocument();
+    expect(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.inviteEligibleQuotedVendors, "", false))).toBeInTheDocument();
     fireEvent.click(within(modal).getAllByText('Vendor One')[0]);
     expect(within(modal).getByPlaceholderText(/State technical/)).toBeInTheDocument();
     nextStep();
     expect(within(modal).getByText('RFQ Scope Items (1)')).toBeInTheDocument();
     expect(within(modal).getByText('Copper cable')).toBeInTheDocument();
     nextStep();
-    expect(within(modal).getByText('Executive Summary & Pre-Schedule Verification')).toBeInTheDocument();
+    expect(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.executiveSummaryPreScheduleVerification))).toBeInTheDocument();
     expect(within(modal).getByText(/Sealed cable event/)).toBeInTheDocument();
     fireEvent.change(modal.querySelector('textarea')!, { target: { value: 'Reviewed by buyer' } });
-    fireEvent.click(within(modal).getByRole('button', { name: 'Confirm & Schedule Auction' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.confirmScheduleAuction) }));
     expect(mockToastError).toHaveBeenLastCalledWith({
       title: 'Mandatory Policy Requirement',
       message: 'Please provide justification comments for excluding quoted vendors.',
@@ -266,7 +270,7 @@ describe('procurement auctions workspace', () => {
     fireEvent.change(within(modal).getByPlaceholderText(/State technical/), { target: { value: 'Vendor did not meet compliance.' } });
     nextStep();
     nextStep();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Confirm & Schedule Auction' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.confirmScheduleAuction) }));
     await waitFor(() => expect(mockToastSuccess).toHaveBeenLastCalledWith({ title: 'Auction Scheduled', message: 'Saved' }));
     const calls = fetchMock.mock.calls.filter(([url, init]) => String(url) === '/api/procurement/auctions' && (init as RequestInit)?.method === 'POST');
     const payload = JSON.parse((calls[calls.length - 1][1] as RequestInit).body as string);
@@ -282,38 +286,38 @@ describe('procurement auctions workspace', () => {
   it('requires invitees and valid scheduling for published events and supports cancellation and wizard reset', async () => {
     renderPage(new URLSearchParams('create=true'));
     const modal = wizard();
-    await screen.findByText('Configure & Schedule E-Auction Event');
+    await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
     await screen.findByRole('option', { name: /RFQ-100/ });
-    fireEvent.change(within(modal).getByDisplayValue('-- Choose Approved RFQ --'), { target: { value: 'rfq-1' } });
-    await waitFor(() => expect((within(modal).getByPlaceholderText(/Reverse Auction/) as HTMLInputElement).value).toContain('Cable Package'));
-    fireEvent.change(within(modal).getByPlaceholderText(/Reverse Auction/), { target: { value: 'Validation auction' } });
+    fireEvent.change(within(modal).getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    await waitFor(() => expect((within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)) as HTMLInputElement).value).toContain('Cable Package'));
+    fireEvent.change(within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Validation auction' } });
     for (let i = 0; i < 3; i++) nextStep();
     expect(await within(modal).findAllByText('Vendor One')).toHaveLength(2);
-    fireEvent.click(within(modal).getByRole('button', { name: 'Clear Selection' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.clearSelection) }));
     for (let i = 0; i < 2; i++) nextStep();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Confirm & Schedule Auction' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.confirmScheduleAuction) }));
     expect(mockToastError).toHaveBeenLastCalledWith({ title: 'Validation', message: 'Please invite at least one vendor.' });
     expect(within(modal).getByText(/Step 4 of 6/)).toBeInTheDocument();
 
-    fireEvent.click(within(modal).getByRole('button', { name: 'Invite All' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.inviteAll) }));
     fireEvent.click(within(modal).getByRole('button', { name: /Scheduling & IST/ }));
     fireEvent.change(modal.querySelectorAll<HTMLInputElement>('input[type="time"]')[1], { target: { value: '09:00' } });
-    fireEvent.click(within(modal).getByRole('button', { name: '6. Review & Schedule' }));
-    fireEvent.click(within(modal).getByRole('button', { name: 'Confirm & Schedule Auction' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.copyt8xw82) }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.confirmScheduleAuction) }));
     expect(mockToastError).toHaveBeenLastCalledWith({ title: 'Invalid Schedule', message: 'Auction End Time must be later than Start Time.' });
     expect(within(modal).getByText(/Step 2 of 6/)).toBeInTheDocument();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Configure & Schedule E-Auction Event')).not.toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})))).not.toBeInTheDocument();
   });
 
   it('covers editable auction rules, both schedule modes, vendor shuttle controls, review navigation, and modal close', async () => {
     renderPage(new URLSearchParams('create=true'));
     const modal = wizard();
     await screen.findByRole('option', { name: /RFQ-100/ });
-    fireEvent.change(within(modal).getByDisplayValue('-- Choose Approved RFQ --'), { target: { value: 'rfq-1' } });
-    fireEvent.click(within(modal).getByText('RFQ Total Wise'));
-    fireEvent.click(within(modal).getByText('Reverse Auction'));
-    fireEvent.click(within(modal).getByText('Forward Auction'));
+    fireEvent.change(within(modal).getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.common.rFQTotalWise)));
+    fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction)));
+    fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.forwardAuction)));
     fireEvent.change(modal.querySelector('input[type="number"]')!, { target: { value: '30' } });
     fireEvent.change(within(modal).getByPlaceholderText(/Critical:/), { target: { value: 'Buyer notice' } });
     nextStep();
@@ -324,7 +328,7 @@ describe('procurement auctions workspace', () => {
     fireEvent.change(times[0], { target: { value: '10:15' } });
     fireEvent.change(dates[1], { target: { value: '2027-01-01' } });
     fireEvent.change(times[1], { target: { value: '12:00' } });
-    fireEvent.click(within(modal).getByRole('button', { name: 'Next 2 Hours' }));
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.next2Hours) }));
     nextStep();
 
     const group = (name: string) => modal.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`);
@@ -339,7 +343,7 @@ describe('procurement auctions workspace', () => {
     fireEvent.click(group('hasLeadingPrice')[0]);
     fireEvent.click(group('hasMinBidReduction')[1]);
     fireEvent.click(group('hasMinBidReduction')[0]);
-    const minDelta = within(modal).getByPlaceholderText('e.g. 5000');
+    const minDelta = within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.eG5000));
     fireEvent.change(minDelta, { target: { value: '' } });
     fireEvent.change(minDelta, { target: { value: '2500' } });
     fireEvent.click(group('hasAutoExtension')[1]);
@@ -358,27 +362,27 @@ describe('procurement auctions workspace', () => {
 
     fireEvent.click(within(modal).getAllByText('Vendor One')[0]);
     fireEvent.click(within(modal).getAllByText('Vendor Two')[0]);
-    expect(within(modal).getByText('No vendors invited yet. Please select at least one vendor.')).toBeInTheDocument();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Invite All' }));
-    fireEvent.click(within(modal).getAllByRole('button', { name: 'Remove' })[0]);
-    fireEvent.click(within(modal).getByRole('button', { name: 'Invite All' }));
+    expect(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.noVendorsInvitedYetPleaseSelectAtLeastOneVendor))).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.inviteAll) }));
+    fireEvent.click(within(modal).getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.remove) })[0]);
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.inviteAll) }));
     nextStep();
-    const itemPrice = within(modal).getByPlaceholderText('0.00');
+    const itemPrice = within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor));
     fireEvent.change(itemPrice, { target: { value: '1100' } });
     fireEvent.change(itemPrice, { target: { value: '' } });
     nextStep();
-    expect(within(modal).getByText('Executive Summary & Pre-Schedule Verification')).toBeInTheDocument();
-    fireEvent.click(within(modal).getByRole('button', { name: 'Back' }));
+    expect(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.executiveSummaryPreScheduleVerification))).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Back"})) }));
     expect(within(modal).getByText('RFQ Scope Items (1)')).toBeInTheDocument();
     fireEvent.click(within(modal).getAllByRole('button')[0]);
-    expect(screen.queryByText('Configure & Schedule E-Auction Event')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})))).not.toBeInTheDocument();
   });
 
   it('offers the create action from an empty manager register', async () => {
     configureFetch({ auctionRows: [] });
     renderPage();
-    await screen.findByText('No Auctions Matching Filters');
-    fireEvent.click(screen.getByRole('button', { name: 'Create New E-Auction' }));
-    expect(await screen.findByText('Configure & Schedule E-Auction Event')).toBeInTheDocument();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.noAuctionsMatchingFilters));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.createNewEAuction) }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})))).toBeInTheDocument();
   });
 });

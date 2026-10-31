@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 // Generate next project code strictly matching CPX-P-XXXXXX format
 async function nextProjectCode(tenantId: string): Promise<string> {
@@ -90,9 +93,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, description, sector, projectType, location, address, city, state, country, areaSqFt, costCentre, projectOwner, budget, currency, businessUnit, numberOfFloors, numberOfUnits, startDate, targetCompletion } = body;
 
-    if (!name?.trim()) return apiError('Project name is required.');
-    if (!sector) return apiError('Sector is required.');
-    if (!projectType) return apiError('Project type is required.');
+    if (!name?.trim()) return apiError(UI_STRINGS.common.projectNameIsRequired);
+    if (!sector) return apiError(UI_STRINGS.common.sectorIsRequired);
+    if (!projectType) return apiError(UI_STRINGS.common.projectTypeIsRequired);
 
     let projectCode = await nextProjectCode(ctx.tenantId);
 
@@ -145,7 +148,7 @@ export async function POST(req: NextRequest) {
       entityType: 'PROJECT',
       entityId: project.id,
       action: 'CREATE',
-      description: `Project ${projectCode} created: ${name.trim()}`,
+      description: interpolateUiString(UI_STRINGS.appApiProjectsRoute.projectProjectCodeCreatedTrim, { "projectCode": projectCode, "trim": name.trim() }),
       newValue: { projectCode, name: name.trim(), sector, projectType },
     });
 
@@ -153,8 +156,8 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('[POST /api/projects error]:', error);
     if (error?.code === 'P2002') {
-      return apiError('A project with this project code already exists. Please retry.', 409);
+      return apiError(UI_STRINGS.appApiProjectsRoute.aProjectWithThisProjectCodeAlreadyExistsPleaseRetry, 409);
     }
-    return apiError(error?.message || 'Failed to create project.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error?.message || UI_STRINGS.common.userMessages.failedToCreateProject }), 500);
   }
 }

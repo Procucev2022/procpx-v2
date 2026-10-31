@@ -1,3 +1,4 @@
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation((options) => ({ options, id: Symbol('client') })),
 }));
@@ -36,7 +37,7 @@ describe('Prisma client singleton', () => {
     const second = loadPrismaModule();
 
     expect(PrismaClientMock).toHaveBeenCalledTimes(1);
-    expect(PrismaClientMock).toHaveBeenCalledWith({ log: ['error'] });
+    expect(PrismaClientMock).toHaveBeenCalledWith({ log: [UI_STRINGS.common.error2] });
     expect(first.default).toBe(firstClient);
     expect(second.prisma).toBe(firstClient);
     expect(prismaGlobal.prisma).toBe(firstClient);
@@ -45,14 +46,14 @@ describe('Prisma client singleton', () => {
   it('enables warning logs in development', () => {
     Reflect.set(process.env, 'NODE_ENV', 'development');
     loadPrismaModule();
-    expect(PrismaClientMock).toHaveBeenCalledWith({ log: ['error', 'warn'] });
+    expect(PrismaClientMock).toHaveBeenCalledWith({ log: [UI_STRINGS.common.error2, 'warn'] });
   });
 
   it('does not store a newly-created client on the global in production', () => {
     Reflect.set(process.env, 'NODE_ENV', 'production');
     const loaded = loadPrismaModule();
 
-    expect(PrismaClientMock).toHaveBeenCalledWith({ log: ['error'] });
+    expect(PrismaClientMock).toHaveBeenCalledWith({ log: [UI_STRINGS.common.error2] });
     expect(prismaGlobal.prisma).toBeUndefined();
     expect(loaded.prisma).toBe(loaded.default);
   });

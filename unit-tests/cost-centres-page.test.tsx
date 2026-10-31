@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import CostCentresPage from '../src/app/(app)/cost-centres/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => {
   const React = require('react');
@@ -68,15 +72,15 @@ describe('cost centres page', () => {
     });
 
     render(<CostCentresPage />);
-    expect(screen.getByText('Loading cost centres...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadingCostCentres))).toBeInTheDocument();
     await act(async () => resolveCentres(apiResponse(centres)));
     expect(await screen.findByText('North Electrical')).toBeInTheDocument();
     expect(screen.getByText('Storage')).toBeInTheDocument();
     expect(screen.getByText(/6\.00 Lakhs/)).toBeInTheDocument();
-    expect(screen.getAllByText('₹ 500 / sqft')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Create Cost Centre' })).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.ratePerSqFtSqft))).toHaveLength(2);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) })).toBeInTheDocument();
 
-    const search = screen.getByPlaceholderText('Search Cost Centre code, name, zone or location...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation));
     fireEvent.change(search, { target: { value: 'cc-north' } });
     expect(screen.getByText('North Electrical')).toBeInTheDocument();
     expect(screen.queryByText('Storage')).not.toBeInTheDocument();
@@ -87,11 +91,11 @@ describe('cost centres page', () => {
     fireEvent.change(search, { target: { value: 'south hub' } });
     expect(screen.getByText('Other area')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'missing' } });
-    expect(screen.getByText('No cost centres found matching criteria.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.noCostCentresFoundMatchingCriteria))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
 
     directProjectResponse = true;
-    fireEvent.change(screen.getByDisplayValue('All Projects'), { target: { value: 'project-1' } });
+    fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.common.allProjects)), { target: { value: 'project-1' } });
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/cost-centres?projectId=project-1'));
     expect(screen.getByRole('option', { name: /North Mall/ })).toBeInTheDocument();
   });
@@ -105,40 +109,40 @@ describe('cost centres page', () => {
       return Promise.resolve(apiResponse({}));
     });
     render(<CostCentresPage />);
-    expect(await screen.findByText('No cost centres found matching criteria.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Create Cost Centre' })).not.toBeInTheDocument();
-    expect(screen.getByText('0 Sqft')).toBeInTheDocument();
-    expect(screen.getByText('₹ 0.00 Lakhs')).toBeInTheDocument();
-    expect(screen.getByText('₹ 0 / Sqft')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.noCostCentresFoundMatchingCriteria))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) })).not.toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.toLocaleStringSqft)).length).toBeGreaterThan(0);
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: `${UI_STRINGS.common.indianRupeeSymbol} `, amount: '0.00 Lakhs' }))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.toLocaleStringSqft)).length).toBeGreaterThan(0);
 
     mockFetch.mockImplementation((url: string) => url === '/api/auth/me'
       ? Promise.reject(new Error('auth offline'))
       : Promise.reject(new Error('list offline')));
-    fireEvent.change(screen.getByDisplayValue('All Projects'), { target: { value: 'project-2' } });
+    fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.common.allProjects)), { target: { value: 'project-2' } });
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
     consoleError.mockRestore();
   });
 
   it('validates and creates a cost centre with optional numeric and text details', async () => {
     render(<CostCentresPage />);
-    await screen.findByRole('button', { name: 'Create Cost Centre' });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Cost Centre' }));
-    const save = screen.getByRole('button', { name: 'Save Cost Centre' });
+    await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) }));
+    const save = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.saveCostCentre) });
     fireEvent.submit(save.closest('form')!);
-    expect(await screen.findByText('Project, Code, and Name are mandatory.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.projectCodeAndNameAreMandatory))).toBeInTheDocument();
 
-    const modal = screen.getByText('Create New Cost Centre').closest('.card') as HTMLElement;
+    const modal = screen.getByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.createNewCostCentre)).closest('.card') as HTMLElement;
     fireEvent.click(within(modal).getAllByRole('button')[0]);
-    expect(screen.queryByText('Create New Cost Centre')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Create Cost Centre' }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.createNewCostCentre))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) }));
 
     fireEvent.change(document.querySelector('.select-field')!, { target: { value: 'project-2' } });
-    fireEvent.change(screen.getByPlaceholderText('CC-006'), { target: { value: 'CC-007' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.cC006)), { target: { value: 'CC-007' } });
     fireEvent.change(screen.getByPlaceholderText(/Signage/), { target: { value: 'Signage' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 8500'), { target: { value: '8500' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Ground Floor'), { target: { value: 'West Wing' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.eG8500)), { target: { value: '8500' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.eGGroundFloor)), { target: { value: 'West Wing' } });
     fireEvent.change(screen.getByPlaceholderText(/Zone A - Customer Retail Hall/), { target: { value: 'Level 1' } });
-    fireEvent.change(screen.getByPlaceholderText('Scope description for this cost centre...'), { target: { value: 'Store entrance works' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.scopeDescriptionForThisCostCentre)), { target: { value: 'Store entrance works' } });
     mockFetch.mockImplementation((url: string, init?: RequestInit) => url === '/api/auth/me'
       ? Promise.resolve(apiResponse({ data: { user: { role: 'PROJECT_USER' } } }))
       : url.startsWith('/api/cost-centres') && init?.method === 'POST'
@@ -146,18 +150,18 @@ describe('cost centres page', () => {
         : url.startsWith('/api/cost-centres')
           ? Promise.resolve(apiResponse(centres))
           : Promise.resolve(apiResponse({ data: projects })));
-    fireEvent.submit(screen.getByRole('button', { name: 'Save Cost Centre' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.saveCostCentre) }).closest('form')!);
     expect(await screen.findByText('Cost centre code already exists')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Create New Cost Centre')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Create Cost Centre' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.createNewCostCentre))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) }));
     fireEvent.change(document.querySelector('.select-field')!, { target: { value: 'project-2' } });
-    fireEvent.change(screen.getByPlaceholderText('CC-006'), { target: { value: 'CC-007' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.cC006)), { target: { value: 'CC-007' } });
     fireEvent.change(screen.getByPlaceholderText(/Signage/), { target: { value: 'Signage' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 8500'), { target: { value: '8500' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Ground Floor'), { target: { value: 'West Wing' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.eG8500)), { target: { value: '8500' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.eGGroundFloor)), { target: { value: 'West Wing' } });
     fireEvent.change(screen.getByPlaceholderText(/Zone A - Customer Retail Hall/), { target: { value: 'Level 1' } });
-    fireEvent.change(screen.getByPlaceholderText('Scope description for this cost centre...'), { target: { value: 'Store entrance works' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.scopeDescriptionForThisCostCentre)), { target: { value: 'Store entrance works' } });
 
     mockFetch.mockImplementation((url: string, init?: RequestInit) => url === '/api/auth/me'
       ? Promise.resolve(apiResponse({ data: { user: { role: 'PROJECT_USER' } } }))
@@ -166,17 +170,17 @@ describe('cost centres page', () => {
         : url.startsWith('/api/cost-centres')
           ? Promise.resolve(apiResponse(centres))
           : Promise.resolve(apiResponse({ data: projects })));
-    fireEvent.submit(screen.getByRole('button', { name: 'Save Cost Centre' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.saveCostCentre) }).closest('form')!);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/cost-centres', expect.objectContaining({ method: 'POST' })));
     const createCall = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').pop();
     expect(JSON.parse(createCall![1].body)).toMatchObject({
       projectId: 'project-2', code: 'CC-007', name: 'Signage', areaSqFt: 8_500,
       location: 'West Wing', floorZone: 'Level 1', description: 'Store entrance works',
     });
-    await waitFor(() => expect(screen.queryByText('Create New Cost Centre')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.createNewCostCentre))).not.toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create Cost Centre' }));
-    fireEvent.change(screen.getByPlaceholderText('CC-006'), { target: { value: 'CC-008' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.createCostCentre) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.cC006)), { target: { value: 'CC-008' } });
     fireEvent.change(screen.getByPlaceholderText(/Signage/), { target: { value: 'Facade' } });
     mockFetch.mockImplementation((url: string, init?: RequestInit) => url === '/api/auth/me'
       ? Promise.resolve(apiResponse({ user: { role: 'PROJECT_USER' } }))
@@ -185,7 +189,7 @@ describe('cost centres page', () => {
         : url.startsWith('/api/cost-centres')
           ? Promise.resolve(apiResponse(centres))
           : Promise.resolve(apiResponse(projects)));
-    fireEvent.submit(screen.getByRole('button', { name: 'Save Cost Centre' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.saveCostCentre) }).closest('form')!);
     const secondCreate = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').pop();
     await waitFor(() => expect(secondCreate).toBeDefined());
     expect(JSON.parse(secondCreate![1].body)).toMatchObject({ code: 'CC-008', name: 'Facade', areaSqFt: null, location: '' });

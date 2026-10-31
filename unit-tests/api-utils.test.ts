@@ -9,6 +9,8 @@ import {
   requireAuth,
   setTestAuthContext,
 } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/auth', () => ({ auth: jest.fn() }));
 jest.mock('../src/lib/prisma', () => ({
@@ -116,24 +118,24 @@ describe('requireAuth', () => {
     setTestAuthContext({ userId: 'missing-user' });
     userModel.findFirst.mockResolvedValueOnce(null);
     await expect(responseJson(await requireAuth())).resolves.toEqual({
-      status: 401, body: { error: 'Unauthenticated' },
+      status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
     });
 
     setTestAuthContext({ userId: 'user-1' });
     userModel.findFirst.mockResolvedValueOnce({ ...dbUser, role: 'VIEWER' });
     await expect(responseJson(await requireAuth('PROJECT_CREATE'))).resolves.toEqual({
-      status: 403, body: { error: 'Forbidden: insufficient permissions' },
+      status: 403, body: { error: UI_STRINGS.common.forbiddenInsufficientPermissions },
     });
   });
 
   it('returns unauthenticated when auth and request headers have no identity', async () => {
     await expect(responseJson(await requireAuth())).resolves.toEqual({
-      status: 401, body: { error: 'Unauthenticated' },
+      status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
     });
 
     authMock.mockRejectedValueOnce(new Error('no request context'));
     await expect(responseJson(await requireAuth())).resolves.toEqual({
-      status: 401, body: { error: 'Unauthenticated' },
+      status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
     });
   });
 
@@ -149,13 +151,13 @@ describe('requireAuth', () => {
 
     userModel.findFirst.mockResolvedValueOnce({ ...dbUser, role: 'VIEWER' });
     await expect(responseJson(await requireAuth('PROJECT_CREATE'))).resolves.toEqual({
-      status: 403, body: { error: 'Forbidden: insufficient permissions' },
+      status: 403, body: { error: UI_STRINGS.common.forbiddenInsufficientPermissions },
     });
 
     headersMock.mockResolvedValueOnce({ get: (name: string) => name === 'x-test-tenant-id' ? 'header-tenant' : null });
     userModel.findFirst.mockResolvedValueOnce(null);
     await expect(responseJson(await requireAuth())).resolves.toEqual({
-      status: 401, body: { error: 'Unauthenticated' },
+      status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
     });
   });
 
@@ -165,7 +167,7 @@ describe('requireAuth', () => {
     } });
 
     await expect(requireAuth()).resolves.toEqual({
-      userId: 'session-user', tenantId: 'tenant-2', tenantName: 'Session Tenant', role: 'VENDOR',
+      userId: 'session-user', tenantId: 'tenant-2', tenantName: 'Session Tenant', role: UI_STRINGS.common.vENDOR,
       userName: 'vendor@example.test', userEmail: 'vendor@example.test', vendorId: 'vendor-1',
     });
     expect(userModel.findUnique).toHaveBeenCalledWith({ where: { id: 'session-user' }, select: { vendorId: true } });
@@ -177,7 +179,7 @@ describe('requireAuth', () => {
   it('denies session permissions and tolerates vendor lookup failures', async () => {
     authMock.mockResolvedValueOnce({ user: { id: 'viewer', tenantId: 'tenant-1', role: 'VIEWER' } });
     await expect(responseJson(await requireAuth('PROJECT_CREATE'))).resolves.toEqual({
-      status: 403, body: { error: 'Forbidden: insufficient permissions' },
+      status: 403, body: { error: UI_STRINGS.common.forbiddenInsufficientPermissions },
     });
 
     userModel.findUnique.mockRejectedValueOnce(new Error('lookup failed'));
@@ -192,7 +194,7 @@ describe('requireAuth', () => {
   it('does not read development headers in production', async () => {
     Reflect.set(process.env, 'NODE_ENV', 'production');
     await expect(responseJson(await requireAuth())).resolves.toEqual({
-      status: 401, body: { error: 'Unauthenticated' },
+      status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
     });
     expect(headersMock).not.toHaveBeenCalled();
   });

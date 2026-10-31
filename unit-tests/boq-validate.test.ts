@@ -1,4 +1,6 @@
 import { computeQualityScore, summarizeIssues, validateBoqLine } from '../src/lib/boq-validate';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 describe('validateBoqLine', () => {
   it('accepts a complete line with a normalized description', () => {
@@ -9,7 +11,7 @@ describe('validateBoqLine', () => {
       uomId: 'uom-1',
       quantity: 12,
       categoryId: 'category-1',
-    })).toEqual({ status: 'VALID', messages: [] });
+    })).toEqual({ status: UI_STRINGS.appAppBoqStudioPage.vALID, messages: [] });
   });
 
   it('reports all required-field errors and optional warnings', () => {

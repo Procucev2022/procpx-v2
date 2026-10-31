@@ -1,5 +1,6 @@
 'use client';
 // app/(app)/projects/[id]/page.tsx - Standardised Project Detail Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -18,15 +19,18 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function QualityScore({ score }: { score?: number | null }) {
-  if (score == null) return <span className="text-muted">—</span>;
+  if (score == null) return <span className="text-muted">{UI_STRINGS.common.copy4s9bsz}</span>;
   const cls = score >= 80 ? 'high' : score >= 50 ? 'medium' : 'low';
   const color = score >= 80 ? '#059669' : score >= 50 ? '#d97706' : '#dc2626';
   return (
     <div className="quality-score">
       <div className="quality-bar"><div className="quality-fill" style={{ width: `${score}%`, background: color }} /></div>
-      <span className="quality-label" style={{ color }}>{score}%</span>
+      <span className="quality-label" style={{ color }}>{score}{UI_STRINGS.common.copy8w4luo}</span>
     </div>
   );
 }
@@ -46,14 +50,12 @@ export default function ProjectDetailPage() {
   if (loading) return (
     <div className="py-20 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
       <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      <span className="text-sm">Loading project...</span>
+      <span className="text-sm">{UI_STRINGS.appAppProjectsIdPage.loadingProject}</span>
     </div>
   );
 
   if (!project || project.error) return (
-    <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">
-      Project not found or access denied.
-    </div>
+    <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">{UI_STRINGS.appAppProjectsIdPage.projectNotFoundOrAccessDenied}</div>
   );
 
   const latestBoq = project.boqs?.[0];
@@ -63,7 +65,7 @@ export default function ProjectDetailPage() {
     <div className="w-full">
       <PageHeader
         title={project.name}
-        subtitle={`${project.projectCode} • Sector: ${project.sector}${project.city ? ` • ${project.city}` : ''}`}
+        subtitle={interpolateUiString(UI_STRINGS.appAppProjectsIdPage.projectCodeSectorSectorValue3, { "projectCode": project.projectCode, "sector": project.sector, "value3": project.city ? ` • ${project.city}` : '' })}
         backHref="/projects"
         backLabel="Back to Projects"
         badge={<StatusBadge status={project.status} />}
@@ -73,22 +75,19 @@ export default function ProjectDetailPage() {
               href={`/projects/${id}/edit`}
               className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
             >
-              <Pencil size={14} /> Edit Project
-            </Link>
+              <Pencil size={14} />{UI_STRINGS.appAppProjectsIdPage.editProject}</Link>
             {latestBoq ? (
               <Link
                 href={`/boq/${latestRevision?.id || latestBoq.id}`}
                 className="btn btn-primary h-[40px] px-4 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
               >
-                <ClipboardCheck size={14} /> Open BOQ
-              </Link>
+                <ClipboardCheck size={14} />{UI_STRINGS.appAppProjectsIdPage.openBOQ}</Link>
             ) : (
               <Link
                 href={`/boq/upload?projectId=${id}`}
                 className="btn btn-primary h-[40px] px-4 text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
               >
-                <Upload size={14} /> Upload BOQ
-              </Link>
+                <Upload size={14} />{UI_STRINGS.common.uploadBOQ}</Link>
             )}
           </div>
         }
@@ -107,13 +106,13 @@ export default function ProjectDetailPage() {
         {project.city && (
           <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium">
             <MapPin size={14} className="text-slate-400" />
-            <span>{project.city}{project.state ? `, ${project.state}` : ''}</span>
+            <span>{project.city}{project.state ? interpolateUiString(UI_STRINGS.appAppProjectsIdPage.state, { "state": project.state }) : ''}</span>
           </span>
         )}
         {project.areaSqFt && (
           <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium font-mono">
             <Maximize2 size={14} className="text-slate-400" />
-            <span>{project.areaSqFt.toLocaleString('en-IN')} Sq Ft</span>
+            <span>{project.areaSqFt.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.appAppProjectsIdPage.sqFt}</span>
           </span>
         )}
         {project.costCentre && (
@@ -143,7 +142,7 @@ export default function ProjectDetailPage() {
         {['benchmark', 'rfqs', 'quotes', 'ppo'].map(tab => (
           <div key={tab} className="px-4 py-2.5 text-sm font-medium text-slate-400 cursor-not-allowed opacity-50 flex items-center gap-1.5 whitespace-nowrap">
             <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
-            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded font-mono">Soon</span>
+            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded font-mono">{UI_STRINGS.appAppProjectsIdPage.soon}</span>
           </div>
         ))}
       </div>
@@ -152,7 +151,7 @@ export default function ProjectDetailPage() {
       {activeTab === 'overview' && (
         <div className="form-grid">
           <div className="card">
-            <div className="card-header"><span className="card-title">Project Details</span></div>
+            <div className="card-header"><span className="card-title">{UI_STRINGS.appAppProjectsIdPage.projectDetails}</span></div>
             <div className="card-body">
               {[
                 ['Project Code', project.projectCode],
@@ -179,8 +178,8 @@ export default function ProjectDetailPage() {
             {/* BOQ Summary */}
             <div className="card mb-4">
               <div className="card-header">
-                <span className="card-title">BOQ Summary</span>
-                {latestRevision && <Link href={`/boq/${latestRevision.id}`} className="btn btn-sm btn-secondary">Open BOQ</Link>}
+                <span className="card-title">{UI_STRINGS.appAppProjectsIdPage.bOQSummary}</span>
+                {latestRevision && <Link href={`/boq/${latestRevision.id}`} className="btn btn-sm btn-secondary">{UI_STRINGS.appAppProjectsIdPage.openBOQ2}</Link>}
               </div>
               <div className="card-body">
                 {!latestBoq ? (
@@ -188,25 +187,25 @@ export default function ProjectDetailPage() {
                     <div className="empty-state-icon">
                       <ClipboardCheck size={36} color="#94a3b8" strokeWidth={1.5} />
                     </div>
-                    <div className="empty-title">No BOQ yet</div>
-                    <Link href={`/boq/upload?projectId=${id}`} className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>Upload BOQ</Link>
+                    <div className="empty-title">{UI_STRINGS.appAppProjectsIdPage.noBOQYet}</div>
+                    <Link href={`/boq/upload?projectId=${id}`} className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>{UI_STRINGS.common.uploadBOQ2}</Link>
                   </div>
                 ) : (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className="text-muted">Status</span>
+                      <span className="text-muted">{UI_STRINGS.common.status}</span>
                       <StatusBadge status={latestBoq.status} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className="text-muted">Revision</span>
-                      <span className="font-mono">{latestRevision?.revisionCode || '—'}</span>
+                      <span className="text-muted">{UI_STRINGS.common.revision}</span>
+                      <span className="font-mono">{latestRevision?.revisionCode || UI_STRINGS.common.copy4s9bsz}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className="text-muted">Total Lines</span>
+                      <span className="text-muted">{UI_STRINGS.common.totalLines}</span>
                       <span style={{ fontWeight: 600 }}>{latestRevision?.totalLines || 0}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span className="text-muted">Quality Score</span>
+                      <span className="text-muted">{UI_STRINGS.common.qualityScore}</span>
                       <div style={{ width: 150 }}><QualityScore score={latestRevision?.qualityScore} /></div>
                     </div>
                   </>
@@ -217,10 +216,10 @@ export default function ProjectDetailPage() {
             {/* Revisions */}
             {latestBoq?.revisions?.length > 0 && (
               <div className="card">
-                <div className="card-header"><span className="card-title">BOQ Revisions</span></div>
+                <div className="card-header"><span className="card-title">{UI_STRINGS.appAppProjectsIdPage.bOQRevisions}</span></div>
                 <div className="table-wrapper">
                   <table className="data-table">
-                    <thead><tr><th>Rev</th><th>Status</th><th>Lines</th><th>Score</th><th></th></tr></thead>
+                    <thead><tr><th>{UI_STRINGS.common.rev}</th><th>{UI_STRINGS.common.status}</th><th>{UI_STRINGS.common.lines3}</th><th>{UI_STRINGS.common.score}</th><th></th></tr></thead>
                     <tbody>
                       {latestBoq.revisions.map((rev: any) => (
                         <tr key={rev.id}>
@@ -228,7 +227,7 @@ export default function ProjectDetailPage() {
                           <td><StatusBadge status={rev.status} /></td>
                           <td>{rev.totalLines}</td>
                           <td><QualityScore score={rev.qualityScore} /></td>
-                          <td><Link href={`/boq/${rev.id}`} className="btn btn-sm btn-ghost">Open →</Link></td>
+                          <td><Link href={`/boq/${rev.id}`} className="btn btn-sm btn-ghost">{UI_STRINGS.appAppProjectsIdPage.open}</Link></td>
                         </tr>
                       ))}
                     </tbody>
@@ -249,18 +248,16 @@ export default function ProjectDetailPage() {
                 <div className="empty-state-icon">
                   <ClipboardCheck size={36} color="#94a3b8" strokeWidth={1.5} />
                 </div>
-                <div className="empty-title">No BOQ uploaded yet</div>
+                <div className="empty-title">{UI_STRINGS.appAppProjectsIdPage.noBOQUploadedYet}</div>
                 <Link href={`/boq/upload?projectId=${id}`} className="btn btn-primary" style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Upload size={14} /> Upload BOQ
-                </Link>
+                  <Upload size={14} />{UI_STRINGS.common.uploadBOQ}</Link>
               </div>
             </div>
           ) : (
             <div className="flex gap-3" style={{ justifyContent: 'flex-end', marginBottom: 16 }}>
-              <Link href={`/boq/${latestRevision.id}`} className="btn btn-primary">Open BOQ Workspace →</Link>
+              <Link href={`/boq/${latestRevision.id}`} className="btn btn-primary">{UI_STRINGS.common.openBOQWorkspace}</Link>
               <Link href={`/boq/upload?projectId=${id}&boqId=${latestBoq.id}`} className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Upload size={14} /> Upload New Revision
-              </Link>
+                <Upload size={14} />{UI_STRINGS.appAppProjectsIdPage.uploadNewRevision}</Link>
             </div>
           )}
         </div>
@@ -269,18 +266,18 @@ export default function ProjectDetailPage() {
       {/* Team Tab */}
       {activeTab === 'team' && (
         <div className="card">
-          <div className="card-header"><span className="card-title">Project Team</span></div>
+          <div className="card-header"><span className="card-title">{UI_STRINGS.appAppProjectsIdPage.projectTeam}</span></div>
           {!project.team?.length ? (
             <div className="empty-state">
               <div className="empty-state-icon">
                 <Users size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No team members assigned</div>
+              <div className="empty-title">{UI_STRINGS.appAppProjectsIdPage.noTeamMembersAssigned}</div>
             </div>
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Name</th><th>Email</th><th>System Role</th><th>Project Role</th><th>Assigned</th></tr></thead>
+                <thead><tr><th>{UI_STRINGS.common.name}</th><th>{UI_STRINGS.common.email}</th><th>{UI_STRINGS.appAppProjectsIdPage.systemRole}</th><th>{UI_STRINGS.appAppProjectsIdPage.projectRole}</th><th>{UI_STRINGS.appAppProjectsIdPage.assigned}</th></tr></thead>
                 <tbody>
                   {project.team?.map((t: any) => (
                     <tr key={t.id}>
@@ -303,14 +300,13 @@ export default function ProjectDetailPage() {
         <div className="card">
           <div className="card-header flex justify-between items-center">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <FileText size={18} /> Project Document Repository ({project.documents?.length || 0})
-            </span>
+              <FileText size={18} />{UI_STRINGS.appAppProjectsIdPage.projectDocumentRepository}{project.documents?.length || 0}{UI_STRINGS.common.copyc7zu6c}</span>
             <button
               className="btn btn-sm btn-primary"
               onClick={() => {
-                const name = prompt('Enter document name:');
+                const name = prompt(UI_STRINGS.appAppProjectsIdPage.enterDocumentName);
                 if (!name) return;
-                const category = prompt('Category (ORIGINAL_BOQ, DRAWING, SPECIFICATION, OTHER):', 'SPECIFICATION') || 'OTHER';
+                const category = prompt(UI_STRINGS.appAppProjectsIdPage.categoryORIGINALBOQDRAWINGSPECIFICATIONOTHER, 'SPECIFICATION') || 'OTHER';
                 fetch(`/api/projects/${id}/documents`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -319,30 +315,28 @@ export default function ProjectDetailPage() {
                   fetch(`/api/projects/${id}`).then(r => r.json()).then(d => setProject(d));
                 });
               }}
-            >
-              + Upload Document
-            </button>
+            >{UI_STRINGS.appAppProjectsIdPage.uploadDocument}</button>
           </div>
           {!project.documents?.length ? (
             <div className="empty-state">
               <div className="empty-state-icon">
                 <Folder size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No documents uploaded yet</div>
-              <div className="empty-desc">Upload architectural drawings, specifications, or original BOQ spreadsheets.</div>
+              <div className="empty-title">{UI_STRINGS.appAppProjectsIdPage.noDocumentsUploadedYet}</div>
+              <div className="empty-desc">{UI_STRINGS.appAppProjectsIdPage.uploadArchitecturalDrawingsSpecificationsOrOriginalBOQSpreadsheets}</div>
             </div>
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Document Name</th>
-                    <th>Category</th>
-                    <th>Type</th>
-                    <th>File Size</th>
-                    <th>Uploaded By</th>
-                    <th>Uploaded Date</th>
-                    <th>Action</th>
+                    <th>{UI_STRINGS.appAppProjectsIdPage.documentName}</th>
+                    <th>{UI_STRINGS.common.category2}</th>
+                    <th>{UI_STRINGS.common.type}</th>
+                    <th>{UI_STRINGS.appAppProjectsIdPage.fileSize}</th>
+                    <th>{UI_STRINGS.appAppProjectsIdPage.uploadedBy}</th>
+                    <th>{UI_STRINGS.appAppProjectsIdPage.uploadedDate}</th>
+                    <th>{UI_STRINGS.common.action}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -356,19 +350,17 @@ export default function ProjectDetailPage() {
                       </td>
                       <td>
                         <span className={`badge ${doc.category === 'ORIGINAL_BOQ' ? 'badge-submitted' : doc.category === 'DRAWING' ? 'badge-info' : 'badge-draft'}`}>
-                          {doc.category || 'OTHER'}
+                          {doc.category || UI_STRINGS.appAppProjectsIdPage.oTHER}
                         </span>
                       </td>
                       <td className="text-muted text-sm">{doc.fileType?.split('/').pop() || doc.fileType}</td>
                       <td>
-                        {doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : '—'}
+                        {doc.fileSize ? interpolateUiString(UI_STRINGS.appAppProjectsIdPage.roundKB, { "round": Math.round(doc.fileSize / 1024) }) : UI_STRINGS.common.copy4s9bsz}
                       </td>
-                      <td className="text-muted">{doc.uploadedBy?.slice(0, 8) || 'System'}</td>
+                      <td className="text-muted">{doc.uploadedBy?.slice(0, 8) || UI_STRINGS.common.system}</td>
                       <td className="text-muted">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
                       <td>
-                        <span className="btn btn-sm btn-ghost" style={{ cursor: 'pointer' }} onClick={() => alert(`Document file stored at: ${doc.filePath}`)}>
-                          View Path ↗
-                        </span>
+                        <span className="btn btn-sm btn-ghost" style={{ cursor: 'pointer' }} onClick={() => alert(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.documentFileStoredAtFilePath, { "filePath": doc.filePath }))}>{UI_STRINGS.appAppProjectsIdPage.viewPath}</span>
                       </td>
                     </tr>
                   ))}
@@ -384,26 +376,25 @@ export default function ProjectDetailPage() {
         <div className="card">
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <Activity size={18} /> Audit Activity
-            </span>
+              <Activity size={18} />{UI_STRINGS.appAppProjectsIdPage.auditActivity}</span>
           </div>
           {!project.auditLogs?.length ? (
             <div className="empty-state">
               <div className="empty-state-icon">
                 <Activity size={36} color="#94a3b8" strokeWidth={1.5} />
               </div>
-              <div className="empty-title">No activity yet</div>
+              <div className="empty-title">{UI_STRINGS.appAppProjectsIdPage.noActivityYet}</div>
             </div>
           ) : (
             <div className="table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Action</th><th>Description</th><th>User</th><th>Time</th></tr></thead>
+                <thead><tr><th>{UI_STRINGS.common.action}</th><th>{UI_STRINGS.common.description}</th><th>{UI_STRINGS.common.user}</th><th>{UI_STRINGS.common.time}</th></tr></thead>
                 <tbody>
                   {project.auditLogs?.map((log: any) => (
                     <tr key={log.id}>
                       <td><span className="badge badge-info">{log.action}</span></td>
                       <td>{log.description}</td>
-                      <td>{log.user?.name || log.user?.email || '—'}</td>
+                      <td>{log.user?.name || log.user?.email || UI_STRINGS.common.copy4s9bsz}</td>
                       <td className="text-muted">{new Date(log.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}

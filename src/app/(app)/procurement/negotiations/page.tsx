@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/procurement/negotiations/page.tsx
 // Negotiations Hub
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Handshake, Clock, CheckCircle2, TrendingDown } from 'lucide-react';
@@ -8,6 +9,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export default function NegotiationsHubPage() {
   const [negotiations, setNegotiations] = useState<any[]>([]);
@@ -36,16 +39,14 @@ export default function NegotiationsHubPage() {
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
       <PageHeader
-        title="Commercial Negotiations Hub"
-        subtitle="Counter-offers, negotiation rounds, target prices, and commercial savings realisation"
+        title={UI_STRINGS.appAppProcurementNegotiationsPage.commercialNegotiationsHub}
+        subtitle={UI_STRINGS.appAppProcurementNegotiationsPage.counterOffersNegotiationRoundsTargetPricesAndCommercialSavingsRealisation}
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'Negotiations' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.appAppProcurementNegotiationsPage.negotiations },
         ]}
         actions={
-          <Link href="/procurement/rfqs" className="btn btn-secondary btn-sm">
-            Active RFQs Register
-          </Link>
+          <Link href="/procurement/rfqs" className="btn btn-secondary btn-sm">{UI_STRINGS.common.activeRFQsRegister}</Link>
         }
       />
 
@@ -53,23 +54,23 @@ export default function NegotiationsHubPage() {
       <div className="mb-6">
         <SummaryCardGrid columns={3}>
           <SummaryCard
-            label="Total Negotiations"
+            label={UI_STRINGS.appAppProcurementNegotiationsPage.totalNegotiations}
             value={negotiations.length}
-            secondary="All initiated negotiation tracks"
+            secondary={UI_STRINGS.appAppProcurementNegotiationsPage.allInitiatedNegotiationTracks}
             icon={<Handshake size={16} />}
             accent="default"
           />
           <SummaryCard
-            label="In Active Rounds"
+            label={UI_STRINGS.appAppProcurementNegotiationsPage.inActiveRounds}
             value={activeCount}
-            secondary="Counter-offers open with vendors"
+            secondary={UI_STRINGS.appAppProcurementNegotiationsPage.counterOffersOpenWithVendors}
             icon={<Clock size={16} />}
             accent="amber"
           />
           <SummaryCard
-            label="Rates Concluded / Locked"
+            label={UI_STRINGS.appAppProcurementNegotiationsPage.ratesConcludedLocked}
             value={lockedCount}
-            secondary="Ready for award recommendation"
+            secondary={UI_STRINGS.appAppProcurementNegotiationsPage.readyForAwardRecommendation}
             icon={<CheckCircle2 size={16} />}
             accent="emerald"
           />
@@ -78,23 +79,19 @@ export default function NegotiationsHubPage() {
 
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-            Ongoing & Concluded Negotiations ({negotiations.length})
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementNegotiationsPage.ongoingConcludedNegotiations}{negotiations.length}{UI_STRINGS.common.copyc7zu6c}</span>
         </div>
 
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-            <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            Loading negotiations...
-          </div>
+            <div className="spinner" style={{ margin: '0 auto 12px' }} />{UI_STRINGS.appAppProcurementNegotiationsPage.loadingNegotiations}</div>
         ) : negotiations.length === 0 ? (
           <div style={{ padding: 32 }}>
             <EmptyState
               icon={<Handshake size={36} strokeWidth={1.5} color="#94a3b8" />}
-              title="No Negotiations Active"
-              description="Initiate a negotiation round inside an RFQ after reviewing quote comparisons."
-              actionText="View Active RFQs"
+              title={UI_STRINGS.appAppProcurementNegotiationsPage.noNegotiationsActive}
+              description={UI_STRINGS.appAppProcurementNegotiationsPage.initiateANegotiationRoundInsideAnRFQAfterReviewingQuoteComparisons}
+              actionText={UI_STRINGS.common.viewActiveRFQs}
               actionHref="/procurement/rfqs"
             />
           </div>
@@ -103,14 +100,14 @@ export default function NegotiationsHubPage() {
             <table className="data-table enterprise-table" style={{ width: '100%', fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 150 }}>RFQ Number</th>
-                  <th>Project</th>
-                  <th style={{ width: 130, textAlign: 'center' }}>Current Round</th>
-                  <th style={{ width: 130, textAlign: 'center' }}>Rounds Logged</th>
-                  <th style={{ width: 180, textAlign: 'right' }}>Best Commercial Value</th>
-                  <th style={{ width: 150, textAlign: 'center' }}>Status</th>
-                  <th style={{ width: 130 }}>Last Updated</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>Actions</th>
+                  <th style={{ width: 150 }}>{UI_STRINGS.common.rFQNumber}</th>
+                  <th>{UI_STRINGS.common.project}</th>
+                  <th style={{ width: 130, textAlign: 'center' }}>{UI_STRINGS.appAppProcurementNegotiationsPage.currentRound}</th>
+                  <th style={{ width: 130, textAlign: 'center' }}>{UI_STRINGS.appAppProcurementNegotiationsPage.roundsLogged}</th>
+                  <th style={{ width: 180, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementNegotiationsPage.bestCommercialValue}</th>
+                  <th style={{ width: 150, textAlign: 'center' }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ width: 130 }}>{UI_STRINGS.common.lastUpdated}</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -126,25 +123,22 @@ export default function NegotiationsHubPage() {
                     </td>
                     <td>{neg.rfq?.project?.name}</td>
                     <td style={{ textAlign: 'center' }}>
-                      <span className="badge badge-info font-mono">Round {neg.currentRound}</span>
+                      <span className="badge badge-info font-mono">{UI_STRINGS.appAppProcurementNegotiationsPage.round}{neg.currentRound}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <strong>{neg.rounds?.length || 0} rounds</strong>
+                      <strong>{neg.rounds?.length || 0}{UI_STRINGS.appAppProcurementNegotiationsPage.rounds}</strong>
                     </td>
-                    <td style={{ fontWeight: 700, color: '#059669', textAlign: 'right' }}>
-                      ₹ {neg.bestQuoteAmount?.toLocaleString('en-IN') || '—'}
+                    <td style={{ fontWeight: 700, color: '#059669', textAlign: 'right' }}>{UI_STRINGS.common.copy1g8b5tg}{neg.bestQuoteAmount?.toLocaleString(I18N_CONFIG.defaultLocale) || UI_STRINGS.common.copy4s9bsz}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <StatusBadge status={neg.status} />
                     </td>
-                    <td className="text-muted text-xs">{new Date(neg.updatedAt).toLocaleDateString('en-IN')}</td>
+                    <td className="text-muted text-xs">{new Date(neg.updatedAt).toLocaleDateString(I18N_CONFIG.defaultLocale)}</td>
                     <td style={{ textAlign: 'right' }}>
                       <Link
                         href={`/procurement/rfqs/${neg.rfqId}?tab=negotiation`}
                         className="btn btn-sm btn-primary"
-                      >
-                        Negotiate →
-                      </Link>
+                      >{UI_STRINGS.appAppProcurementNegotiationsPage.negotiate}</Link>
                     </td>
                   </tr>
                 ))}

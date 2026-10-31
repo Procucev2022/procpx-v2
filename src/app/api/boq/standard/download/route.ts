@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -211,6 +214,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error downloading standard BOQ:', err);
-    return apiError(err.message || 'Failed to generate standard BOQ download.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateStandardBoqDownload }), 500);
   }
 }

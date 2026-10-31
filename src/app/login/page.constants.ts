@@ -1,29 +1,31 @@
 /* Application constants extracted from app/login/page.tsx. */
 
 import type { Persona } from "@app-types/app/login/page.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export const BUYER_PERSONAS: Persona[] = [
-  { role: 'Category Manager', email: 'category.manager@procucev-demo.local', desc: 'Taxonomy, Sourcing, RFQ Negotiations & Awards', badge: 'Buyer' },
-  { role: 'Procurement User', email: 'procurement.user@procucev-demo.local', desc: 'RFQs, Sourcing & Quotations', badge: 'Buyer' },
-  { role: 'Project Approver', email: 'project.approver@procucev-demo.local', desc: 'BOQ Approval & Baselines', badge: 'Approver' },
-  { role: 'Project User', email: 'project.user@procucev-demo.local', desc: 'BOQ Upload, Drafting & PR Creation', badge: 'Project' },
-  { role: 'Finance User', email: 'finance.user@procucev-demo.local', desc: 'Award Approvals & PPO Tracking', badge: 'Finance' },
-  { role: 'Client Admin', email: 'client.admin@procucev-demo.local', desc: 'Tenant Governance, Users & Roles', badge: 'Admin' },
-  { role: 'Super Admin', email: 'super.admin@procucev-demo.local', desc: 'Platform Infrastructure', badge: 'Super Admin' },
-  { role: 'Viewer (Read-Only)', email: 'viewer@procucev-demo.local', desc: 'Read-Only Project & Audit View', badge: 'Auditor' },
+  { role: UI_STRINGS.common.categoryManager, email: 'category.manager@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.taxonomySourcingRFQNegotiationsAwards, badge: UI_STRINGS.appLoginPageConstants.buyer },
+  { role: UI_STRINGS.common.procurementUser, email: 'procurement.user@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.rFQsSourcingQuotations, badge: UI_STRINGS.appLoginPageConstants.buyer },
+  { role: UI_STRINGS.common.projectApprover, email: 'project.approver@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.bOQApprovalBaselines, badge: UI_STRINGS.common.approver },
+  { role: UI_STRINGS.common.projectUser, email: 'project.user@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.bOQUploadDraftingPRCreation, badge: UI_STRINGS.common.project },
+  { role: UI_STRINGS.appLoginPageConstants.financeUser, email: 'finance.user@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.awardApprovalsPPOTracking, badge: UI_STRINGS.appLoginPageConstants.finance },
+  { role: UI_STRINGS.appLoginPageConstants.clientAdmin, email: 'client.admin@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.tenantGovernanceUsersRoles, badge: UI_STRINGS.appLoginPageConstants.admin },
+  { role: UI_STRINGS.appLoginPageConstants.superAdmin, email: 'super.admin@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.platformInfrastructure, badge: UI_STRINGS.appLoginPageConstants.superAdmin },
+  { role: UI_STRINGS.appLoginPageConstants.viewerReadOnly, email: 'viewer@procucev-demo.local', desc: UI_STRINGS.appLoginPageConstants.readOnlyProjectAuditView, badge: UI_STRINGS.appLoginPageConstants.auditor },
 ];
 
 export const VENDOR_PERSONAS: Persona[] = [
-  { role: 'Apex Infrastructure', email: 'vendor.apex@apex-infra.com', password: 'Demo@1234', desc: 'Civil & Contracting (Redirects to Vendor Portal)', badge: 'Vendor' },
-  { role: 'BluePeak Engineering', email: 'bluepeak.engineering@vendor.procpx.local', password: 'welcome', desc: 'MEP Solutions (Redirects to Vendor Portal)', badge: 'Vendor' },
-  { role: 'CraftLine Interior', email: 'craftline.interior@vendor.procpx.local', password: 'welcome', desc: 'Retail Fixtures (Redirects to Vendor Portal)', badge: 'Vendor' },
-  { role: 'Ramakrishna Interiors', email: 'ramakrishna.interiors@vendor.procpx.local', password: 'welcome', desc: 'Commercial Fitouts (Redirects to Vendor Portal)', badge: 'Vendor' },
-  { role: 'Srinidhi Interiors', email: 'srinidhi.interiors@vendor.procpx.local', password: 'welcome', desc: 'Retail Millwork (Redirects to Vendor Portal)', badge: 'Vendor' },
-  { role: 'Zenith Retail Systems', email: 'zenith.retail@vendor.procpx.local', password: 'welcome', desc: 'Electrical & Display (Redirects to Vendor Portal)', badge: 'Vendor' },
+  { role: UI_STRINGS.appLoginPageConstants.apexInfrastructure, email: 'vendor.apex@apex-infra.com', password: 'Demo@1234', desc: UI_STRINGS.appLoginPageConstants.civilContractingRedirectsToVendorPortal, badge: UI_STRINGS.common.vendor },
+  { role: UI_STRINGS.appLoginPageConstants.bluePeakEngineering, email: 'bluepeak.engineering@vendor.procpx.local', password: 'welcome', desc: UI_STRINGS.appLoginPageConstants.mEPSolutionsRedirectsToVendorPortal, badge: UI_STRINGS.common.vendor },
+  { role: UI_STRINGS.appLoginPageConstants.craftLineInterior, email: 'craftline.interior@vendor.procpx.local', password: 'welcome', desc: UI_STRINGS.appLoginPageConstants.retailFixturesRedirectsToVendorPortal, badge: UI_STRINGS.common.vendor },
+  { role: UI_STRINGS.appLoginPageConstants.ramakrishnaInteriors, email: 'ramakrishna.interiors@vendor.procpx.local', password: 'welcome', desc: UI_STRINGS.appLoginPageConstants.commercialFitoutsRedirectsToVendorPortal, badge: UI_STRINGS.common.vendor },
+  { role: UI_STRINGS.appLoginPageConstants.srinidhiInteriors, email: 'srinidhi.interiors@vendor.procpx.local', password: 'welcome', desc: UI_STRINGS.appLoginPageConstants.retailMillworkRedirectsToVendorPortal, badge: UI_STRINGS.common.vendor },
+  { role: UI_STRINGS.appLoginPageConstants.zenithRetailSystems, email: 'zenith.retail@vendor.procpx.local', password: 'welcome', desc: UI_STRINGS.appLoginPageConstants.electricalDisplayRedirectsToVendorPortal, badge: UI_STRINGS.common.vendor },
 ];
 
 export const TENANT_B_PERSONAS: Persona[] = [
-  { role: 'Hospitality Project User', email: 'hospitality.user@procucev-demo.local', password: 'Demo@1234', desc: 'Multi-Tenant Isolation Boundary', badge: 'Tenant B' },
-  { role: 'Hospitality Approver', email: 'hospitality.approver@procucev-demo.local', password: 'Demo@1234', desc: 'Tenant B Project Approver', badge: 'Tenant B' },
-  { role: 'Hospitality Admin', email: 'hospitality.admin@procucev-demo.local', password: 'Demo@1234', desc: 'Tenant B Organization Administrator', badge: 'Tenant B' },
+  { role: UI_STRINGS.appLoginPageConstants.hospitalityProjectUser, email: 'hospitality.user@procucev-demo.local', password: 'Demo@1234', desc: UI_STRINGS.appLoginPageConstants.multiTenantIsolationBoundary, badge: UI_STRINGS.common.tenantB },
+  { role: UI_STRINGS.appLoginPageConstants.hospitalityApprover, email: 'hospitality.approver@procucev-demo.local', password: 'Demo@1234', desc: UI_STRINGS.appLoginPageConstants.tenantBProjectApprover, badge: UI_STRINGS.common.tenantB },
+  { role: UI_STRINGS.appLoginPageConstants.hospitalityAdmin, email: 'hospitality.admin@procucev-demo.local', password: 'Demo@1234', desc: UI_STRINGS.appLoginPageConstants.tenantBOrganizationAdministrator, badge: UI_STRINGS.common.tenantB },
 ];

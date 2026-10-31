@@ -2,6 +2,8 @@ import NextAuth from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
 import { handlers, signIn, signOut, auth } from '../src/lib/auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next-auth', () => ({
   __esModule: true,
@@ -61,7 +63,7 @@ describe('NextAuth credentials provider', () => {
     expect(signOut).toBeDefined();
     expect(authOptions.trustHost).toBe(true);
     expect(authOptions.session).toEqual({ strategy: 'jwt' });
-    expect(authOptions.pages).toEqual({ signIn: '/login', error: '/login' });
+    expect(authOptions.pages).toEqual({ signIn: UI_STRINGS.libAuth.login, error: UI_STRINGS.libAuth.login });
   });
 
   it.each([
@@ -87,7 +89,7 @@ describe('NextAuth credentials provider', () => {
       vendorId: null,
     });
     expect(userModel.findFirst).toHaveBeenCalledWith({
-      where: { email: 'user@example.test', status: 'ACTIVE' }, include: { tenant: true },
+      where: { email: 'user@example.test', status: UI_STRINGS.common.aCTIVE }, include: { tenant: true },
     });
     expect(compare).toHaveBeenCalledWith('secret', 'hashed-password');
     expect(userModel.update).toHaveBeenCalledWith({
@@ -116,7 +118,7 @@ describe('NextAuth credentials provider', () => {
       id: 'user-1', role: 'VENDOR', vendorId: 'vendor-1',
     });
     expect(userModel.findMany).toHaveBeenCalledWith({
-      where: { role: 'VENDOR', status: 'ACTIVE', vendorId: { not: null } },
+      where: { role: UI_STRINGS.common.vENDOR, status: UI_STRINGS.common.aCTIVE, vendorId: { not: null } },
       include: { tenant: true, vendor: true },
     });
   });
@@ -162,7 +164,7 @@ describe('NextAuth callbacks', () => {
         tenantSlug: 'tenant-one', vendorId: 'vendor-1',
       },
     })).resolves.toEqual({
-      subject: 'token-subject', id: 'user-1', role: 'VENDOR', tenantId: 'tenant-1',
+      subject: 'token-subject', id: 'user-1', role: UI_STRINGS.common.vENDOR, tenantId: 'tenant-1',
       tenantName: 'Tenant One', tenantSlug: 'tenant-one', vendorId: 'vendor-1',
     });
   });

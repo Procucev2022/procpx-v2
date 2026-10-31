@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useSearchParams } from 'next/navigation';
 import BudgetVsActualPage from '../src/app/(app)/budget/vs-actual/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => {
   const React = require('react');
@@ -68,16 +72,16 @@ describe('budget versus actual page', () => {
   it('loads filtered budget reports and covers category, line and summary variations', async () => {
     render(<BudgetVsActualPage />);
     expect(await screen.findByText('Power conduit')).toBeInTheDocument();
-    expect(screen.getByText('100 Sqft')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.toLocaleStringSqft))).toBeInTheDocument();
     expect(screen.getByText('60%')).toBeInTheDocument();
     expect(screen.getAllByText('Electrical & Controls').length).toBeGreaterThan(0);
     expect(screen.getByText('Pump bearing')).toBeInTheDocument();
     expect(screen.getByText(/L-02/)).toBeInTheDocument();
-    expect(screen.getAllByText(/CC-1/).length).toBeGreaterThan(0);
-    expect(screen.queryByText('No budget or actual spend records found for selected filter.')).not.toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cC)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.noBudgetOrActualSpendRecordsFoundForSelectedFilter))).not.toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/financial/budget-vs-actual?projectId=project-1&costCentreId=cc-1');
 
-    const search = screen.getByPlaceholderText('Search description, item code...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.searchDescriptionItemCode));
     fireEvent.change(search, { target: { value: 'conduit' } });
     expect(screen.getByText('Power conduit')).toBeInTheDocument();
     expect(screen.queryByText('Pump bearing')).not.toBeInTheDocument();
@@ -86,11 +90,11 @@ describe('budget versus actual page', () => {
     fireEvent.change(search, { target: { value: 'mechanical' } });
     expect(screen.getByText('Pump bearing')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'brg-02' } });
-    expect(screen.getByText('No traceable items found for this selection.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.noTraceableItemsFoundForThisSelection))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'con-1' } });
     expect(screen.getByText('Power conduit')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'nothing' } });
-    expect(screen.getByText('No traceable items found for this selection.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.noTraceableItemsFoundForThisSelection))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
 
     const selectors = screen.getAllByRole('combobox');
@@ -100,7 +104,7 @@ describe('budget versus actual page', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/financial/budget-vs-actual?projectId=project-1&costCentreId=cc-2&category=Electrical%20%26%20Controls'));
     fireEvent.change(selectors[0], { target: { value: 'project-2' } });
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/financial/budget-vs-actual?projectId=project-2&category=Electrical%20%26%20Controls'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/financial/budget-vs-actual?projectId=project-2&category=Electrical%20%26%20Controls'));
   });
 
@@ -111,10 +115,10 @@ describe('budget versus actual page', () => {
       : Promise.resolve(response({ data: { costCentresSummary: [], categoriesSummary: [], lineReports: [] } })));
     render(<BudgetVsActualPage />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/financial/budget-vs-actual?projectId=project-1&costCentreId=cc-missing'));
-    expect(await screen.findByText('No budget or actual spend records found for selected filter.')).toBeInTheDocument();
-    expect(screen.getByText('No traceable items found for this selection.')).toBeInTheDocument();
-    expect(screen.getAllByText('Not specified')).toHaveLength(1);
-    expect(screen.getAllByText('Area missing')).toHaveLength(2);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.noBudgetOrActualSpendRecordsFoundForSelectedFilter))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.noTraceableItemsFoundForThisSelection))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notSpecified))).toHaveLength(1);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.areaMissing))).toHaveLength(2);
     expect(mockFetch).toHaveBeenCalledWith('/api/financial/budget-vs-actual?projectId=project-1&costCentreId=cc-missing');
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -131,7 +135,7 @@ describe('budget versus actual page', () => {
     mockFetch.mockRejectedValue(new Error('projects offline'));
     render(<BudgetVsActualPage />);
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
-    expect(screen.getByText('TOTAL BUDGET')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.tOTALBUDGET))).toBeInTheDocument();
     expect(screen.getAllByRole('combobox')).toHaveLength(3);
     consoleError.mockRestore();
   });

@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorProfilePage from '../src/app/(app)/procurement/vendors/[id]/page';
@@ -205,24 +209,24 @@ describe('procurement vendor profile', () => {
 
   it('renders vendor identity, switches tabs, and shows audit events and sourcing orders', async () => {
     renderProfile();
-    expect(await screen.findByRole('heading', { name: 'Apex Infrastructure' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.apexInfrastructure) })).toBeInTheDocument();
     expect(screen.getAllByText('VND-001')).toHaveLength(2);
-    expect(screen.getByText('Legal Identity')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.legalIdentity))).toBeInTheDocument();
     expect(screen.getByText('12 Market Road, Pune')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Documents & Audit/ }));
-    expect(await screen.findByText('Statutory Documents & Certifications')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.documentsAudit, "", false) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.statutoryDocumentsCertifications))).toBeInTheDocument();
     expect(screen.getByText('27ABCDE1234F1Z5')).toBeInTheDocument();
     expect(screen.getByText('PROFILE UPDATED')).toBeInTheDocument();
     expect(screen.getByText('Taylor Admin (CATEGORY_MANAGER)')).toBeInTheDocument();
     expect(mockReplace).toHaveBeenCalledWith('/procurement/vendors/vendor-1?tab=documents', { scroll: false });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sourcing & Orders (Preview)' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.sourcingOrdersPreview) }));
     expect(screen.getByText('Orders for Apex Infrastructure')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /PPO Performance/ }));
-    expect(screen.getByText('Aggregated Performance Scorecard')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
-    expect(screen.getByText('Business Profile')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.pPOPerformance, "", false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.overview) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.businessProfile))).toBeInTheDocument();
   });
 
   it('shows error and empty states when the profile cannot be loaded', async () => {
@@ -230,36 +234,36 @@ describe('procurement vendor profile', () => {
     profileBody = { error: 'Vendor access denied' };
     setupFetch();
     renderProfile();
-    expect(await screen.findByRole('heading', { name: 'Unable to load vendor profile' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.unableToLoadVendorProfile) })).toBeInTheDocument();
     expect(screen.getByText('Vendor access denied')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Return to Vendor Directory' })).toHaveAttribute('href', '/procurement/vendors');
+    expect(screen.getByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Return","toLocaleString":"to Vendor Directory"})) })).toHaveAttribute('href', '/procurement/vendors');
 
     cleanup();
     profileOk = true;
     profileBody = { vendor: null };
     setupFetch();
     renderProfile();
-    expect(await screen.findByRole('heading', { name: 'Unable to load vendor profile' })).toBeInTheDocument();
-    expect(screen.getByText('Vendor record not found or access denied.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.unableToLoadVendorProfile) })).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.vendorRecordNotFoundOrAccessDenied))).toBeInTheDocument();
   });
 
   it('runs AI evaluation, applies the returned rubric and commits a qualification decision', async () => {
     renderProfile('evaluation-ai');
-    expect(await screen.findByText('Standard 6-Rubric Vendor Evaluation Framework')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Run AI-Assisted Evaluation' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.standard6RubricVendorEvaluationFramework))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.runAIAssistedEvaluation) }));
     expect(await screen.findByText(/AI evaluation completed. Suggested Score: 86%/)).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors/vendor-1/evaluate-ai', { method: 'POST' });
 
     screen.getAllByRole('spinbutton').forEach((input, index) => {
       fireEvent.change(input, { target: { value: String(80 + index) } });
     });
-    const outcomeLabel = screen.getByText('Evaluation Outcome Classification');
+    const outcomeLabel = screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.evaluationOutcomeClassification));
     fireEvent.change(outcomeLabel.parentElement!.querySelector('select')!, { target: { value: 'NOT_RECOMMENDED' } });
 
-    fireEvent.change(screen.getByPlaceholderText('Enter formal justification, verification notes, or conditional stipulations...'), { target: { value: 'Conditional due to final compliance check' } });
-    const qualificationLabel = screen.getByText('Formal Qualification Status *');
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.enterFormalJustificationVerificationNotesOrConditionalStipulations)), { target: { value: 'Conditional due to final compliance check' } });
+    const qualificationLabel = screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.formalQualificationStatus));
     fireEvent.change(qualificationLabel.parentElement!.querySelector('select')!, { target: { value: 'CONDITIONALLY_QUALIFIED' } });
-    fireEvent.click(screen.getByRole('button', { name: /Commit Qualification Decision/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.commitQualificationDecision, "", false) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors/vendor-1/evaluation', expect.objectContaining({ method: 'POST' })));
     const evaluationCall = mockFetch.mock.calls.find(([url, init]) => String(url).endsWith('/evaluation') && init?.method === 'POST');
     expect(JSON.parse(evaluationCall[1].body as string)).toMatchObject({
@@ -267,7 +271,7 @@ describe('procurement vendor profile', () => {
       qualificationDecision: 'NOT_RECOMMENDED',
       decisionRemarks: 'Conditional due to final compliance check',
     });
-    expect(mockToast.success).toHaveBeenCalledWith('Vendor details submitted successfully.', 'VND-001', 'CONDITIONALLY_QUALIFIED');
+    expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, 'VND-001', 'CONDITIONALLY_QUALIFIED');
   });
 
   it('handles AI and qualification submission errors', async () => {
@@ -276,11 +280,11 @@ describe('procurement vendor profile', () => {
     evaluationOk = false;
     setupFetch();
     renderProfile('evaluation');
-    expect(await screen.findByText('Category Manager Qualification Decision & Governance')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Run AI-Assisted Evaluation' }));
-    expect(await screen.findByText('Error: Evaluation service unavailable')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Commit Qualification Decision/ }));
-    expect(await screen.findByText('Error: Evaluation could not be saved')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.categoryManagerQualificationDecisionGovernance))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.runAIAssistedEvaluation) }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, {"message":"Evaluation service unavailable"})))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.commitQualificationDecision, "", false) }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, {"message":"Evaluation could not be saved"})))).toBeInTheDocument();
   });
 
   it('accepts alternate AI response shapes, fallback evidence, and all rubric thresholds', async () => {
@@ -303,21 +307,21 @@ describe('procurement vendor profile', () => {
     };
     setupFetch();
     renderProfile('evaluation');
-    expect(await screen.findByText('Standard 6-Rubric Vendor Evaluation Framework')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Run AI-Assisted Evaluation' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.standard6RubricVendorEvaluationFramework))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.runAIAssistedEvaluation) }));
     expect(await screen.findByText('Strong balance sheet')).toBeInTheDocument();
     expect(screen.getByText('Provide a current insurance certificate')).toBeInTheDocument();
     expect(screen.getByText('Insurance expiry is near')).toBeInTheDocument();
-    expect(screen.getAllByText('Source: AI Verification Evidence')).toHaveLength(5);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.sourceAIVerificationEvidence))).toHaveLength(5);
 
     const rubricScores = [0, 40, 54, 68, 80, 90];
     screen.getAllByRole('spinbutton').forEach((input, index) => {
       fireEvent.change(input, { target: { value: String(rubricScores[index]) } });
     });
     fireEvent.change(screen.getByPlaceholderText(/Enter formal justification/), { target: { value: '' } });
-    expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getAllByText('Review Required').length).toBeGreaterThan(1);
-    fireEvent.click(screen.getByRole('button', { name: /Commit Qualification Decision/ }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pending, '', true))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.reviewRequired)).length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.commitQualificationDecision, "", false) }));
     const evaluationCall = mockFetch.mock.calls.find(([url, init]) => String(url).endsWith('/evaluation') && init?.method === 'POST');
     expect(JSON.parse(evaluationCall[1].body as string)).toMatchObject({
       qualificationDecision: 'RECOMMENDED',
@@ -326,7 +330,7 @@ describe('procurement vendor profile', () => {
 
     aiBody = { data: { aiEvaluation: { overallWeightedScore: 0 } } };
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Run AI Evaluation' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.runAIEvaluation) }));
     expect(await screen.findByText(/AI evaluation completed. Suggested Score: 0% \(REVIEW\)/)).toBeInTheDocument();
 
     aiBody = {
@@ -342,7 +346,7 @@ describe('procurement vendor profile', () => {
       },
     };
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Run AI-Assisted Evaluation' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.runAIAssistedEvaluation) }));
     expect(await screen.findByText('Profile rationale evidence')).toBeInTheDocument();
     expect(screen.getByText('Compliance rationale evidence')).toBeInTheDocument();
 
@@ -359,32 +363,32 @@ describe('procurement vendor profile', () => {
       },
     };
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Run AI-Assisted Evaluation' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.runAIAssistedEvaluation) }));
     expect(await screen.findByText('Incorporation evidence')).toBeInTheDocument();
     expect(screen.getByText('Registry evidence')).toBeInTheDocument();
   });
 
   it('saves PPO rating drafts, validates submission comments, and submits a completed assessment', async () => {
     renderProfile('performance');
-    expect(await screen.findByText('Aggregated Performance Scorecard')).toBeInTheDocument();
-    expect(screen.getByText('Approved')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Rate Completed Order/ }));
-    expect(screen.getByText('Rate Completed Purchase Order Performance')).toBeInTheDocument();
-    const rateHeader = screen.getByText('Rate Completed Purchase Order Performance').parentElement!.parentElement!;
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.approved))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder, "", false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedPurchaseOrderPerformance))).toBeInTheDocument();
+    const rateHeader = screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedPurchaseOrderPerformance)).parentElement!.parentElement!;
     fireEvent.click(within(rateHeader).getByRole('button'));
-    fireEvent.click(screen.getByRole('button', { name: /Rate Completed Order/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder, "", false) }));
     const ppoSelect = screen.getByText(/Select Completed Purchase Order/).parentElement!.querySelector('select')!;
     fireEvent.change(ppoSelect, { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
     expect(screen.getByText('Please select a completed PPO to evaluate.')).toBeInTheDocument();
     fireEvent.change(ppoSelect, { target: { value: 'eligible-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors/vendor-1/ppo-ratings', expect.objectContaining({ method: 'POST' })));
     const draftCall = mockFetch.mock.calls.find(([url, init]) => String(url).endsWith('/ppo-ratings') && init?.method === 'POST');
     expect(JSON.parse(draftCall[1].body as string)).toMatchObject({ ppoId: 'eligible-1', action: 'SAVE_DRAFT' });
 
-    fireEvent.click(screen.getByRole('button', { name: /Rate Completed Order/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Project Approval' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder, "", false) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitForProjectApproval) }));
     expect(await screen.findByText(/Please provide specific comments for each of the 5 assessment areas/)).toBeInTheDocument();
 
     const fields = [
@@ -398,23 +402,23 @@ describe('procurement vendor profile', () => {
     fields.forEach(([placeholder, value]) => fireEvent.change(screen.getByPlaceholderText(placeholder), { target: { value } }));
     ratingOk = false;
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Project Approval' }));
-    expect(await screen.findByText('Error: Rating could not be saved')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitForProjectApproval) }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, {"message":"Rating could not be saved"})))).toBeInTheDocument();
     ratingOk = true;
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Project Approval' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitForProjectApproval) }));
     await waitFor(() => expect(mockFetch.mock.calls.filter(([url, init]) => String(url).endsWith('/ppo-ratings') && init?.method === 'POST')).toHaveLength(3));
     const submitCall = mockFetch.mock.calls.filter(([url, init]) => String(url).endsWith('/ppo-ratings') && init?.method === 'POST').at(-1);
     expect(JSON.parse(submitCall[1].body as string)).toMatchObject({ action: 'SUBMIT', qualityComments: 'Quality observed', overallImprovement: 'Continue monthly reviews' });
-    expect(mockToast.success).toHaveBeenCalledWith('Performance assessment submitted for Project Approval.', 'VND-001');
+    expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.performanceAssessmentSubmittedForProjectApproval, 'VND-001');
   });
 
   it('defaults unsupported tab queries to overview and tolerates an auth lookup failure', async () => {
     authThrows = true;
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     renderProfile('unsupported-tab');
-    expect(await screen.findByRole('heading', { name: 'Apex Infrastructure' })).toBeInTheDocument();
-    expect(screen.getByText('Legal Identity')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.apexInfrastructure) })).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.legalIdentity))).toBeInTheDocument();
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith('Failed to get auth role', expect.any(Error)));
   });
 
@@ -428,11 +432,11 @@ describe('procurement vendor profile', () => {
     vendorRecord.ppoRatings.push(malformed);
     setupFetch();
     renderProfile('performance');
-    expect(await screen.findByText('Aggregated Performance Scorecard')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
 
     const draftRow = screen.getByText('PPO-r1').closest('tr')!;
-    fireEvent.click(within(draftRow).getByRole('button', { name: 'Edit / Resubmit' }));
-    expect(screen.getByText('Edit & Resubmit Performance Assessment')).toBeInTheDocument();
+    fireEvent.click(within(draftRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Edit","toLocaleString":"/ Resubmit"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editResubmitPerformanceAssessment))).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/workmanship, material quality, specifications compliance/)).toHaveValue('Stored as JSON');
     const scoreLabels = [
       /Quality of Goods \/ Work \(30%\)/,
@@ -446,28 +450,28 @@ describe('procurement vendor profile', () => {
       fireEvent.change(labelNode.parentElement!.querySelector('select')!, { target: { value: String(index + 1) } });
     });
     fireEvent.change(screen.getByPlaceholderText(/workmanship, material quality, specifications compliance/), { target: { value: 'Edited quality note' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
     await waitFor(() => expect(mockFetch.mock.calls.some(([url, init]) => String(url).endsWith('/ppo-ratings') && init?.method === 'POST')).toBe(true));
     const editDraftCall = mockFetch.mock.calls.filter(([url, init]) => String(url).endsWith('/ppo-ratings') && init?.method === 'POST').at(-1);
     expect(JSON.parse(editDraftCall[1].body as string)).toMatchObject({ ratingId: 'r1', ppoId: 'ppo-r1', action: 'SAVE_DRAFT', qualityScore: 1 });
 
     const returnedRow = screen.getByText('PPO-r3').closest('tr')!;
-    fireEvent.click(within(returnedRow).getByRole('button', { name: 'Edit / Resubmit' }));
-    expect(screen.getByText('Returned for Correction by Project Approver')).toBeInTheDocument();
+    fireEvent.click(within(returnedRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Edit","toLocaleString":"/ Resubmit"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.returnedForCorrectionByProjectApprover))).toBeInTheDocument();
     expect(screen.getByText(/Approved after review/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/delivery timelines, schedule adherence/)).toHaveValue('Object detail');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
     const malformedRow = screen.getByText('PPO-r6').closest('tr')!;
-    fireEvent.click(within(malformedRow).getByRole('button', { name: 'Edit / Resubmit' }));
+    fireEvent.click(within(malformedRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Edit","toLocaleString":"/ Resubmit"})) }));
     expect(screen.getByPlaceholderText(/delivery timelines, schedule adherence/)).toHaveValue('Delivered on time');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
     const detailRow = screen.getByText('PPO-r1').closest('tr')!;
-    fireEvent.click(within(detailRow).getByRole('button', { name: 'View Assessment' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Assessment' }));
-    expect(screen.getByText('Edit & Resubmit Performance Assessment')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(detailRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.viewAssessment) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editAssessment) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editResubmitPerformanceAssessment))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
   });
 
   it('supports approver return validation, acceptance confirmation, and decision errors', async () => {
@@ -475,71 +479,71 @@ describe('procurement vendor profile', () => {
     authBody = { user: { role: currentRole } };
     setupFetch();
     renderProfile('performance');
-    expect(await screen.findByText('Aggregated Performance Scorecard')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
     const row = screen.getByText('PPO-r2').closest('tr')!;
-    fireEvent.click(within(row).getByRole('button', { name: 'Review & Decide' }));
-    expect(screen.getByText('PPO Performance Assessment Detail')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Reject / Return for Correction' }));
-    expect(screen.getByText('Please provide review comments explaining the reason for return/rejection.')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"& Decide"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pPOPerformanceAssessmentDetail))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rejectReturnForCorrection) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.pleaseProvideReviewCommentsExplainingTheReasonForReturnRejection))).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Record reason for accepting the assessment/), { target: { value: 'Please attach the signed test report.' } });
     decisionOk = false;
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rating' }));
-    expect(screen.getByRole('heading', { name: 'Confirm Vendor Rating Acceptance' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Acceptance' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.acceptRating) }));
+    expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.confirmVendorRatingAcceptance) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.confirmAcceptance) }));
     expect(await screen.findByText('Decision could not be saved')).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/approvals/vendor-ratings', expect.objectContaining({ method: 'POST' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
     decisionOk = true;
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rating' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Acceptance' }));
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Performance assessment accepted and published successfully.', 'PPO-r2'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.acceptRating) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.confirmAcceptance) }));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.performanceAssessmentAcceptedAndPublishedSuccessfully, 'PPO-r2'));
 
     const returnedRow = screen.getByText('PPO-r2').closest('tr')!;
-    fireEvent.click(within(returnedRow).getByRole('button', { name: 'Review & Decide' }));
+    fireEvent.click(within(returnedRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"& Decide"})) }));
     fireEvent.change(screen.getByPlaceholderText(/Record reason for accepting the assessment/), { target: { value: 'Please provide the missing supporting document.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Reject / Return for Correction' }));
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Performance assessment returned for correction.', 'PPO-r2'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rejectReturnForCorrection) }));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.performanceAssessmentReturnedForCorrection, 'PPO-r2'));
   });
 
   it('edits vendor details and reports failed updates', async () => {
     const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
     renderProfile();
-    expect(await screen.findByRole('heading', { name: 'Apex Infrastructure' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Profile' }));
-    expect(screen.getByRole('heading', { name: 'Edit Vendor Profile' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Profile' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Profile' }));
-    fireEvent.change(screen.getByPlaceholderText('e.g. Apex Infrastructure & Contracting Pvt Ltd'), { target: { value: 'Apex Infra Updated' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Rajesh Sharma'), { target: { value: 'Morgan Lee' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. contact@apexinfra.com'), { target: { value: 'morgan@example.test' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. +91 98765 43210'), { target: { value: '+91 90000 11111' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Civil & Interior, Structural Steel'), { target: { value: 'Electrical' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Hyderabad, Telangana'), { target: { value: 'Hyderabad' } });
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.apexInfrastructure) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editProfile) }));
+    expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editVendorProfile) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editProfile) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editProfile) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGApexInfrastructureContractingPvtLtd)), { target: { value: 'Apex Infra Updated' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGRajeshSharma)), { target: { value: 'Morgan Lee' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.eGContactApexinfraCom)), { target: { value: 'morgan@example.test' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.eG919876543210)), { target: { value: '+91 90000 11111' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.eGCivilInteriorStructuralSteel)), { target: { value: 'Electrical' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGHyderabadTelangana)), { target: { value: 'Hyderabad' } });
     const modalCombos = screen.getAllByRole('combobox');
     fireEvent.change(modalCombos[0], { target: { value: 'PROCUCEV_VENDOR' } });
     fireEvent.change(modalCombos[1], { target: { value: 'Pan-India' } });
     fireEvent.change(modalCombos[2], { target: { value: 'LLP' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 36AABCA1234F1Z5'), { target: { value: 'abcde' } });
-    expect(screen.getByPlaceholderText('e.g. 36AABCA1234F1Z5')).toHaveValue('ABCDE');
-    fireEvent.change(screen.getByPlaceholderText('e.g. AABCA1234F'), { target: { value: 'zyxwv9876p' } });
-    fireEvent.change(screen.getByPlaceholderText('https://company.com'), { target: { value: 'https://updated.example.test' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 10'), { target: { value: '16' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 25.5'), { target: { value: '31.5' } });
-    fireEvent.change(screen.getByPlaceholderText('Complete registered corporate office address with PIN code'), { target: { value: '99 Harbor Road, Pune' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eG36AABCA1234F1Z5)), { target: { value: 'abcde' } });
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eG36AABCA1234F1Z5))).toHaveValue('ABCDE');
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eGAABCA1234F)), { target: { value: 'zyxwv9876p' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.httpsCompanyCom)), { target: { value: 'https://updated.example.test' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.eG10)), { target: { value: '16' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.eG255)), { target: { value: '31.5' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.completeRegisteredCorporateOfficeAddressWithPINCode)), { target: { value: '99 Harbor Road, Pune' } });
     fireEvent.change(screen.getByPlaceholderText(/General civil contracting, interior fitouts/), { target: { value: 'Power systems' } });
 
     updateOk = false;
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges) }));
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Error updating profile: Update failed'));
     updateOk = true;
     setupFetch();
-    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Vendor details submitted successfully.', 'VND-001'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges) }));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, 'VND-001'));
     const updateCall = mockFetch.mock.calls.find(([url, init]) => String(url).endsWith('/vendor-1') && init?.method === 'PUT');
     expect(JSON.parse(updateCall[1].body as string)).toMatchObject({ name: 'Apex Infra Updated', gstin: 'ABCDE', vendorType: 'PROCUCEV_VENDOR', serviceCoverage: 'Pan-India', legalStructure: 'LLP', capabilities: 'Power systems' });
   });
@@ -555,20 +559,20 @@ describe('procurement vendor profile', () => {
     profileBody = { data: { vendor: vendorRecord, performanceSummary: null, eligiblePposToRate: [], auditLogs: [] } };
     setupFetch();
     render(<VendorProfilePage />);
-    expect(await screen.findByText('Statutory Documents & Certifications')).toBeInTheDocument();
-    expect(screen.getAllByText('Not Provided')).toHaveLength(3);
-    expect(screen.getByText('No audit trail records found.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
-    expect(screen.getAllByText('Not provided').length).toBeGreaterThan(4);
-    expect(screen.getByText('No customer references declared on file.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /PPO Performance/ }));
-    expect(screen.getByText('No PPO Performance Ratings Recorded')).toBeInTheDocument();
-    expect(screen.getByText('No orders rated')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Profile' }));
-    expect(screen.getByPlaceholderText('e.g. contact@apexinfra.com')).toHaveValue('');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.statutoryDocumentsCertifications))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.notProvided))).toHaveLength(3);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noAuditTrailRecordsFound))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.overview) }));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2)).length).toBeGreaterThan(4);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noCustomerReferencesDeclaredOnFile))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.pPOPerformance, "", false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noPPOPerformanceRatingsRecorded))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noOrdersRated))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.editProfile) }));
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.eGContactApexinfraCom))).toHaveValue('');
     fireEvent.click(document.querySelector('.app-content-modal-backdrop')!);
-    fireEvent.click(screen.getByRole('button', { name: 'Evaluation & AI' }));
-    expect(screen.getByText('Category Manager Qualification Decision & Governance')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.evaluationAI) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.categoryManagerQualificationDecisionGovernance))).toBeInTheDocument();
 
     cleanup();
     vendorRecord.qualificationStatus = 'CONDITIONALLY_QUALIFIED';
@@ -579,7 +583,7 @@ describe('procurement vendor profile', () => {
     renderProfile('ppo-performance');
     expect(await screen.findAllByText('CONDITIONALLY QUALIFIED')).toHaveLength(2);
     expect(screen.getByText('70%')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Rate Completed Order/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder, "", false) })).toBeInTheDocument();
 
     cleanup();
     const sparseEdit = rating('sparse-edit', 'DRAFT');
@@ -604,12 +608,12 @@ describe('procurement vendor profile', () => {
     authBody = { data: { user: { role: currentRole } } };
     setupFetch();
     renderProfile('performance');
-    expect(await screen.findByText('Aggregated Performance Scorecard')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
     const sparseEditRow = screen.getByText('PPO-SPARSE').closest('tr')!;
-    fireEvent.click(within(sparseEditRow).getByRole('button', { name: 'Edit / Resubmit' }));
+    fireEvent.click(within(sparseEditRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Edit","toLocaleString":"/ Resubmit"})) }));
     expect(screen.getByPlaceholderText(/workmanship, material quality, specifications compliance/)).toHaveValue('Parsed quality');
     expect(screen.getByPlaceholderText(/delivery timelines, schedule adherence/)).toHaveValue('Parsed delivery');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
     cleanup();
     currentRole = 'PROCUREMENT_USER';
@@ -621,18 +625,18 @@ describe('procurement vendor profile', () => {
     setupFetch();
     renderProfile('performance');
     expect(await screen.findAllByText('NOT QUALIFIED')).toHaveLength(2);
-    expect(screen.getByText('Review Required')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Rate Completed Order/ })).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.reviewRequired))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder, "", false) })).not.toBeInTheDocument();
     const sparseRow = screen.getByText('2.2 / 5.0').closest('tr')!;
-    fireEvent.click(within(sparseRow).getByRole('button', { name: 'View Assessment' }));
-    expect(screen.getAllByText('General Project').length).toBeGreaterThan(1);
-    expect(screen.getByText('No specific quality feedback recorded.')).toBeInTheDocument();
-    expect(screen.getByText('No overall improvement remarks provided.')).toBeInTheDocument();
-    expect(screen.getByText(/Approved on .* by Casey Approver/)).toBeInTheDocument();
-    const detailModal = screen.getByText('PPO Performance Assessment Detail').closest<HTMLDivElement>('div.fixed')!;
+    fireEvent.click(within(sparseRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.viewAssessment) }));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.generalProject)).length).toBeGreaterThan(1);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noSpecificQualityFeedbackRecorded))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noOverallImprovementRemarksProvided))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.approvedOnDateByName))).toBeInTheDocument();
+    const detailModal = screen.getByText(uiStringPattern(UI_STRINGS.common.pPOPerformanceAssessmentDetail)).closest<HTMLDivElement>('div.fixed')!;
     fireEvent.click(within(detailModal).getAllByRole('button')[0]);
-    fireEvent.click(within(sparseRow).getByRole('button', { name: 'View Assessment' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(within(sparseRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.viewAssessment) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
   });
 
   it('shows empty performance summary values when the aggregates are null', async () => {
@@ -648,8 +652,8 @@ describe('procurement vendor profile', () => {
     };
     setupFetch();
     renderProfile('performance');
-    expect(await screen.findByText('Aggregated Performance Scorecard')).toBeInTheDocument();
-    expect(screen.getByText('No orders rated')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noOrdersRated))).toBeInTheDocument();
   });
 });
 

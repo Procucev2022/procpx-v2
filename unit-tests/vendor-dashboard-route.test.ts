@@ -3,6 +3,8 @@ import { GET } from '../src/app/api/procurement/vendors/[id]/dashboard/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { hasPermission } from '../src/lib/permissions';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -69,19 +71,19 @@ describe('vendor dashboard API', () => {
     await expect(GET(request(), params())).resolves.toBe(denied);
 
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: null });
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'Forbidden: you can only access your own vendor dashboard', status: 403 });
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementVendorsIdDashboardRoute.forbiddenYouCanOnlyAccessYourOwnVendorDashboard, status: 403 });
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: 'vendor-other' });
     await expect(GET(request(), params())).resolves.toMatchObject({ status: 403 });
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: 'vendor-1' });
     await expect(GET(request(), params('vendor-other'))).resolves.toMatchObject({ status: 403 });
 
     permission.mockReturnValue(false);
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
     expect(permission).toHaveBeenCalledWith('PROCUREMENT_USER', 'VENDOR_VIEW');
 
     permission.mockReturnValue(true);
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied', status: 404 });
+    await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied, status: 404 });
     expect(db.vendor.findFirst).toHaveBeenCalledWith({ where: { id: 'missing', tenantId: 'tenant-1' } });
   });
 
@@ -157,7 +159,7 @@ describe('vendor dashboard API', () => {
       availableActions: expect.arrayContaining(['ACCEPT_PPO']),
     });
     expect(byId.confirmed.nextAction).toBe('Order Execution & Delivery Fulfilment');
-    expect(byId['round-fallback'].negotiationStatus).toBe('PENDING');
+    expect(byId['round-fallback'].negotiationStatus).toBe(UI_STRINGS.common.pENDING);
   });
 
   it('returns role errors and handles errors from each related data source', async () => {

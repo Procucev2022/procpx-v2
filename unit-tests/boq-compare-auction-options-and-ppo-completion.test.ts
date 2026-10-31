@@ -5,6 +5,8 @@ import { createAuditLog } from '../src/lib/audit';
 import { GET as compareBoq } from '../src/app/api/boq/[revisionId]/compare/route';
 import { GET as getAuctionRfqOptions } from '../src/app/api/procurement/auctions/rfq-options/route';
 import { POST as completePpo } from '../src/app/api/procurement/ppos/[id]/complete/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -50,10 +52,10 @@ describe('BOQ revision comparison', () => {
     isContext.mockReturnValueOnce(false);
     await expect(compareBoq(request('http://localhost/api/boq/compare'), params)).resolves.toBe(denied);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(compareBoq(request('http://localhost/api/boq/compare'), params)).resolves.toEqual({ ok: false, error: 'Current revision not found', status: 404 });
+    await expect(compareBoq(request('http://localhost/api/boq/compare'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdCompareRoute.currentRevisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-current', revisionNumber: 2, boq: { revisions: [] }, lines: [] });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(compareBoq(request('http://localhost/api/boq/compare'), params)).resolves.toEqual({ ok: false, error: 'Compare target revision not found', status: 404 });
+    await expect(compareBoq(request('http://localhost/api/boq/compare'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdCompareRoute.compareTargetRevisionNotFound, status: 404 });
     expect(db.boqRevision.findFirst.mock.calls[2][0].where.id).toBe('revision-current');
   });
 
@@ -82,22 +84,22 @@ describe('BOQ revision comparison', () => {
       ok: true,
       data: {
         currentRevision: { id: 'revision-current', revisionCode: 'R2', status: 'DRAFT', qualityScore: 85, totalLines: 4 },
-        compareRevision: { id: 'revision-old', revisionCode: 'R1', status: 'APPROVED', qualityScore: 70, totalLines: 3 },
+        compareRevision: { id: 'revision-old', revisionCode: 'R1', status: UI_STRINGS.common.aPPROVED, qualityScore: 70, totalLines: 3 },
         availableRevisions: current.boq.revisions,
         summary: { addedCount: 2, removedCount: 2, modifiedCount: 1, unchangedCount: 1 },
         added: [
-          { lineNumber: '3', description: 'New item', quantity: 2, uom: 'BOX', category: undefined },
-          { lineNumber: '5', description: 'New lamp', quantity: 1, uom: 'EA', category: 'Lighting' },
+          { lineNumber: UI_STRINGS.common.copyezvv42, description: 'New item', quantity: 2, uom: 'BOX', category: undefined },
+          { lineNumber: UI_STRINGS.common.copydby8y8, description: 'New lamp', quantity: 1, uom: 'EA', category: 'Lighting' },
         ],
         removed: [
-          { lineNumber: '4', description: 'Removed item', quantity: 9, uom: 'PACK' },
-          { lineNumber: '6', description: 'Removed cable', quantity: 1, uom: 'MTR' },
+          { lineNumber: UI_STRINGS.common.copydlxun7, description: 'Removed item', quantity: 9, uom: 'PACK' },
+          { lineNumber: UI_STRINGS.componentsRateCardsSection6ApproverView.copye5x215, description: 'Removed cable', quantity: 1, uom: 'MTR' },
         ],
-        modified: [{ lineNumber: '1', description: 'Changed cable', diffs: [
+        modified: [{ lineNumber: UI_STRINGS.common.copyefwnq4, description: 'Changed cable', diffs: [
           { field: 'standardDescription', oldVal: 'Old cable', newVal: 'Changed cable' },
           { field: 'quantity', oldVal: 3, newVal: 5 },
           { field: 'uom', oldVal: 'M', newVal: 'MTR' },
-          { field: 'category', oldVal: 'Civil', newVal: 'Electrical' },
+          { field: 'category', oldVal: 'Civil', newVal: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical },
         ] }],
       },
       status: 200,
@@ -191,9 +193,9 @@ describe('PPO completion and actual-cost lineage', () => {
     isContext.mockReturnValueOnce(false);
     await expect(completePpo(request('http://localhost/api/ppos/ppo-1', {}), ppoParams)).resolves.toBe(denied);
     db.ppo.findFirst.mockResolvedValueOnce(null);
-    await expect(completePpo(request('http://localhost/api/ppos/ppo-1', {}), ppoParams)).resolves.toEqual({ ok: false, error: 'PPO / PO not found', status: 404 });
+    await expect(completePpo(request('http://localhost/api/ppos/ppo-1', {}), ppoParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, status: 404 });
     db.ppo.findFirst.mockResolvedValueOnce({ status: 'CANCELLED' });
-    await expect(completePpo(request('http://localhost/api/ppos/ppo-1', {}), ppoParams)).resolves.toEqual({ ok: false, error: 'Cannot complete a cancelled order', status: 400 });
+    await expect(completePpo(request('http://localhost/api/ppos/ppo-1', {}), ppoParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, status: 400 });
   });
 
   it('records explicit line completions, updates line and PPO statuses, and preserves source IDs', async () => {
@@ -217,11 +219,11 @@ describe('PPO completion and actual-cost lineage', () => {
       ok: true, data: { message: 'PPO completion recorded successfully. Generated 1 Actual Cost transaction(s).', ppo: updatedPpo, actualTransactions: [actualTx] }, status: 200,
     });
     expect(db.actualCostTransaction.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      transactionCode: expect.stringMatching(/^ACT-\d{4}-000009$/), projectId: 'project-1', costCentreId: 'cc-ppo', category: 'General',
+      transactionCode: expect.stringMatching(/^ACT-\d{4}-000009$/), projectId: 'project-1', costCentreId: 'cc-ppo', category: UI_STRINGS.common.general,
       boqId: 'boq-ppo', boqRevisionId: 'revision-ppo', boqLineId: null, prId: null, prLineId: null, rfqId: 'rfq-1', rfqLineId: null,
       ppoId: 'ppo-1', ppoLineId: 'ppo-line-1', vendorId: 'vendor-1', actualQuantity: 2, actualUnitRate: 25, actualAmount: 50,
-      taxAmount: 0, totalActualAmount: 50, actualDate: new Date('2025-08-01T00:00:00.000Z'), source: 'PPO_COMPLETION', status: 'APPROVED',
-      completionReference: 'WCC-1', documents: JSON.stringify([{ name: 'signoff.pdf' }]), remarks: 'Verified', createdBy: 'Reviewer',
+      taxAmount: 0, totalActualAmount: 50, actualDate: new Date('2025-08-01T00:00:00.000Z'), source: 'PPO_COMPLETION', status: UI_STRINGS.common.aPPROVED,
+      completionReference: 'WCC-1', documents: JSON.stringify([{ name: 'signoff.pdf' }]), remarks: UI_STRINGS.common.verified, createdBy: 'Reviewer',
     }) });
     expect(db.ppoLine.update).toHaveBeenCalledWith({ where: { id: 'ppo-line-1' }, data: { completedQuantity: 3, completedAmount: 75, status: 'COMPLETED' } });
     expect(db.ppo.update).toHaveBeenCalledWith({ where: { id: 'ppo-1' }, data: expect.objectContaining({ status: 'COMPLETED', completedAt: expect.any(Date) }), include: { lines: true, actualCosts: true } });

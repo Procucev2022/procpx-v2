@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('USER_EDIT');
@@ -12,7 +15,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const existing = await prisma.user.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!existing) return apiError('User not found', 404);
+  if (!existing) return apiError(UI_STRINGS.appApiAdminUsersIdRoute.userNotFound, 404);
 
   const body = await req.json();
   const { name, role, status } = body;
@@ -34,7 +37,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     entityType: 'USER',
     entityId: id,
     action: 'UPDATE',
-    description: `User ${existing.email} updated (Role: ${updated.role}, Status: ${updated.status})`,
+    description: interpolateUiString(UI_STRINGS.appApiAdminUsersIdRoute.userEmailUpdatedRoleRoleStatusStatus, { "email": existing.email, "role": updated.role, "status": updated.status }),
     oldValue: { role: existing.role, status: existing.status },
     newValue: { role: updated.role, status: updated.status },
   });

@@ -9,6 +9,8 @@ import { GET as getBoqTemplate } from '../src/app/api/boq/simple-template/downlo
 import { GET as getApprovedPrs } from '../src/app/api/procurement/approved-prs/route';
 import { POST as releasePr } from '../src/app/api/pr/[id]/release-to-procurement/route';
 import { GET as getBoqLine } from '../src/app/api/boq/lines/[id]/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -56,13 +58,13 @@ describe('spreadsheet and procurement API routes', () => {
     await expect(makeErrorReport(makeRequest('/api/boq/standard/error-report', { issues: [] }))).resolves.toBe(denied);
 
     await expect(makeErrorReport(makeRequest('/api/boq/standard/error-report', {}))).resolves.toEqual({
-      ok: false, error: 'No issues to generate error report for.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqStandardErrorReportRoute.noIssuesToGenerateErrorReportFor, status: 400,
     });
     await expect(makeErrorReport(makeRequest('/api/boq/standard/error-report', { issues: 'invalid' }))).resolves.toEqual({
-      ok: false, error: 'No issues to generate error report for.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqStandardErrorReportRoute.noIssuesToGenerateErrorReportFor, status: 400,
     });
     await expect(makeErrorReport(makeRequest('/api/boq/standard/error-report', { issues: [] }))).resolves.toEqual({
-      ok: false, error: 'No issues to generate error report for.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqStandardErrorReportRoute.noIssuesToGenerateErrorReportFor, status: 400,
     });
 
     const req = makeRequest('/api/boq/standard/error-report', {
@@ -98,7 +100,7 @@ describe('spreadsheet and procurement API routes', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="proCPX_Simple_BOQ_Template.xlsx"');
     const workbook = XLSX.read(Buffer.from(await response.arrayBuffer()), { type: 'buffer' });
-    expect(workbook.SheetNames).toEqual(['BOQ']);
+    expect(workbook.SheetNames).toEqual([UI_STRINGS.common.bOQ]);
     expect(XLSX.utils.sheet_to_json(workbook.Sheets.BOQ as XLSX.WorkSheet)).toHaveLength(5);
   });
 
@@ -137,11 +139,11 @@ describe('spreadsheet and procurement API routes', () => {
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(releasePr(makeRequest('/api/pr/missing'), routeParams('missing'))).resolves.toEqual({
-      ok: false, error: 'Procurement Request not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
     db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-2', status: 'DRAFT' });
     await expect(releasePr(makeRequest('/api/pr/pr-2'), routeParams('pr-2'))).resolves.toEqual({
-      ok: false, error: 'PR must be approved before releasing to procurement.', status: 400,
+      ok: false, error: UI_STRINGS.appApiPrIdReleaseToProcurementRoute.pRMustBeApprovedBeforeReleasingToProcurement, status: 400,
     });
 
     const pr = { id: 'pr-1', prNumber: 'PR-001', status: 'PR_APPROVED', projectId: 'project-1' };
@@ -154,7 +156,7 @@ describe('spreadsheet and procurement API routes', () => {
       where: { id: 'pr-1' }, data: expect.objectContaining({ status: 'PR_RELEASED_TO_PROCUREMENT', releasedBy: 'user-1', releasedAt: expect.any(Date) }),
     }));
     expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityId: 'pr-1', action: 'PR_RELEASED_TO_PROCUREMENT' }) });
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'PR_RELEASED', recordNumber: 'PR-001', actorName: 'Buyer' }));
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'PR_RELEASED', recordNumber: 'PR-001', actorName: UI_STRINGS.appLoginPageConstants.buyer }));
 
     db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, status: 'PR_RELEASED_TO_PROCUREMENT' });
     await releasePr(makeRequest('/api/pr/pr-1'), routeParams('pr-1'));
@@ -166,10 +168,10 @@ describe('spreadsheet and procurement API routes', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(getBoqLine(makeRequest('/api/boq/lines/x'), routeParams('x'))).resolves.toBe(denied);
-    await expect(getBoqLine(makeRequest('/api/boq/lines/'), routeParams(''))).resolves.toEqual({ ok: false, error: 'Line ID is required', status: 400 });
+    await expect(getBoqLine(makeRequest('/api/boq/lines/'), routeParams(''))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqLinesIdRoute.lineIDIsRequired, status: 400 });
     db.boqLine.findFirst.mockResolvedValueOnce(null);
     await expect(getBoqLine(makeRequest('/api/boq/lines/missing'), routeParams('missing'))).resolves.toEqual({
-      ok: false, error: 'BOQ line item not found', status: 404,
+      ok: false, error: UI_STRINGS.appApiBoqLinesIdRoute.bOQLineItemNotFound, status: 404,
     });
 
     const line = { id: 'line-1', tenantId: 'tenant-1', quantity: 4 };

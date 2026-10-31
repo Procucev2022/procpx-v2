@@ -1,7 +1,11 @@
 // src/app/api/pr/[id]/approve/route.ts - Project Approver PR Approval API
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_APPROVE');
@@ -18,9 +22,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { costCentre: true },
     });
 
-    if (!pr) return apiError('Procurement Request not found.', 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
     if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
-      return apiError(`Cannot approve PR in status ${pr.status}. Expected PR_PENDING_PROJECT_APPROVAL.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.cannotApprovePRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400);
     }
 
     // Record PR approval log
@@ -61,16 +65,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         entityType: 'PR',
         entityId: pr.id,
         action: 'PR_APPROVED',
-        description: `Procurement Request ${pr.prNumber} approved by Project Approver and RELEASED to Procurement User (₹ ${pr.totalEstimatedValue.toLocaleString('en-IN')})`,
+        description: interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.procurementRequestPrNumberApprovedByProjectApproverAndRELEASEDToProcurementUserToLocaleString, { "prNumber": pr.prNumber, "toLocaleString": pr.totalEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
       },
     });
 
     return apiSuccess({
       pr: updated,
       status: 'PR_RELEASED_TO_PROCUREMENT',
-      message: 'PR approved and released to Procurement User for sourcing.',
+      message: UI_STRINGS.appApiPrIdApproveRoute.pRApprovedAndReleasedToProcurementUserForSourcing,
     });
   } catch (err: any) {
-    return apiError(err.message || 'PR approval failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prApprovalFailed }), 500);
   }
 }

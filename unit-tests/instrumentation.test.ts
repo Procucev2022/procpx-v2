@@ -1,5 +1,7 @@
 import { onRequestError, register } from '../src/instrumentation';
 import { initializeLogging, installConsoleCapture, writeStructuredLog } from '../src/lib/observability/server-logger';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/observability/server-logger', () => ({
   initializeLogging: jest.fn().mockResolvedValue(undefined),
@@ -29,7 +31,7 @@ describe('Next.js logging instrumentation', () => {
     await register();
     expect(initializeLogging).toHaveBeenCalledTimes(1);
     expect(installConsoleCapture).toHaveBeenCalledTimes(1);
-    expect(writeStructuredLog).toHaveBeenCalledWith('info', 'application.server_started', expect.any(Object), 'next');
+    expect(writeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.componentsUiToast.info, 'application.server_started', expect.any(Object), 'next');
   });
 
   it('records request errors with sanitized path and route context only in Node runtime', async () => {
@@ -49,7 +51,7 @@ describe('Next.js logging instrumentation', () => {
       routePath: '/api/pr/[id]', routeType: 'route', routerKind: 'App Router',
       renderSource: 'server-rendering', revalidateReason: 'stale',
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'http.request_failed', expect.objectContaining({
+    expect(writeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.common.error2, 'http.request_failed', expect.objectContaining({
       method: 'POST',
       path: '/api/pr?id=%5BREDACTED%5D',
       route: '/api/pr/[id]',

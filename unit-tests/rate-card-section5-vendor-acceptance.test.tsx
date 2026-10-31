@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Section5VendorAcceptance from '../src/components/rate-cards/Section5VendorAcceptance';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/components/rate-cards/AgreementPreviewModal', () => ({
   __esModule: true,
@@ -16,29 +20,29 @@ describe('rate card Section 5 vendor acceptance', () => {
     const onReject = jest.fn();
     render(<Section5VendorAcceptance onAccept={onAccept} onReject={onReject} />);
 
-    expect(screen.getByText('Vendor Acceptance (Vendor Portal View)')).toBeInTheDocument();
-    expect(screen.getByText('Gypsum False Ceiling')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.vendorAcceptanceVendorPortalView))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).toBeInTheDocument();
     expect(document.body).toHaveTextContent((469750).toLocaleString());
-    expect(screen.getByText('Authorized Vendor Digital Signature Execution')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /I confirm that I am authorized to bind/ })).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Accept Terms & Digitally Sign Agreement' })).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.authorizedVendorDigitalSignatureExecution))).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.iConfirmThatIAmAuthorizedToBind) })).toBeChecked();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptTermsDigitallySignAgreement) })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review Agreement Document' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.reviewAgreementDocument) }));
     expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close agreement' }));
     expect(screen.queryByRole('dialog', { name: 'Agreement preview' })).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Full Name of Authorized Representative'), { target: { value: '  Priya Signatory  ' } });
-    fireEvent.change(screen.getByPlaceholderText('Managing Partner, Director, or Power of Attorney'), { target: { value: '  Director  ' } });
-    fireEvent.change(screen.getByPlaceholderText('Add any formal remarks, acknowledgments, or exceptions here...'), { target: { value: 'Terms accepted' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Terms & Digitally Sign Agreement' }));
-    expect(onAccept).toHaveBeenCalledWith('Terms accepted', expect.objectContaining({
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.fullNameOfAuthorizedRepresentative)), { target: { value: '  Priya Signatory  ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.managingPartnerDirectorOrPowerOfAttorney)), { target: { value: '  Director  ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.addAnyFormalRemarksAcknowledgmentsOrExceptionsHere)), { target: { value: 'Terms accepted' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptTermsDigitallySignAgreement) }));
+    expect(onAccept).toHaveBeenCalledWith(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.termsAccepted, expect.objectContaining({
       signedBy: 'Priya Signatory', designation: 'Director', signatureType: 'DIGITAL_VERIFIED', verified: true,
       signedAt: expect.any(String), signatureEvidenceId: expect.stringMatching(/^DSC-2026-VND-0006-\d{4}$/),
     }));
-    expect(screen.getByRole('button', { name: /Rate Card Accepted & Routed to Project Approver/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Reject with Comments' }));
-    expect(onReject).toHaveBeenCalledWith('Terms accepted');
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.projectApprover) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.rejectWithComments) }));
+    expect(onReject).toHaveBeenCalledWith(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.termsAccepted);
   });
 
   it('allows acceptance without signature when consent or signatory details are missing', () => {
@@ -47,16 +51,16 @@ describe('rate card Section 5 vendor acceptance', () => {
       required: true, type: 'UPLOAD', signatureRequired: true, documentTitle: '', documentNumber: '', signature: null,
     }} />);
 
-    expect(screen.getByText('Master Rate Card Agreement')).toBeInTheDocument();
-    expect(screen.getByText('MRA-RC-2026-0006')).toBeInTheDocument();
-    expect(document.body).toHaveTextContent(/Uploaded Bilateral Document/);
-    expect(screen.getByRole('button', { name: 'Accept Terms & Digitally Sign Agreement' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('checkbox', { name: /I confirm that I am authorized to bind/ }));
-    expect(screen.getByRole('button', { name: 'Accept Rate Card Schedule' })).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Full Name of Authorized Representative'), { target: { value: '   ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rate Card Schedule' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.masterRateCardAgreement))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.mRARateCardId))).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.uploadedBilateralDocument));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptTermsDigitallySignAgreement) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.iConfirmThatIAmAuthorizedToBind) }));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptRateCardSchedule) })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.fullNameOfAuthorizedRepresentative)), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptRateCardSchedule) }));
     expect(onAccept).toHaveBeenCalledWith('', null);
-    expect(screen.getByRole('button', { name: /Rate Card Accepted & Routed to Project Approver/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.projectApprover) })).toBeInTheDocument();
   });
 
   it('renders a direct schedule without agreement or signature and handles missing callbacks', () => {
@@ -67,18 +71,18 @@ describe('rate card Section 5 vendor acceptance', () => {
     ]} onAccept={onAccept} onReject={onReject} />);
     expect(screen.getAllByText('Bare line')).toHaveLength(2);
     expect(screen.getByText('Review the buyer-accepted rates and formalise your acceptance to route to Level 1 Project Approver.')).toBeInTheDocument();
-    expect(screen.queryByText('Authorized Vendor Digital Signature Execution')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Review Agreement Document' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept Rate Card Schedule' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Reject with Comments' }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.authorizedVendorDigitalSignatureExecution))).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.reviewAgreementDocument) })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptRateCardSchedule) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.rejectWithComments) }));
     expect(onReject).toHaveBeenCalledWith('');
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rate Card Schedule' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptRateCardSchedule) }));
     expect(onAccept).toHaveBeenCalledWith('', null);
 
     cleanup();
     const view = render(<Section5VendorAcceptance agreement={null} items={[]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Reject with Comments' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Rate Card Schedule' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.rejectWithComments) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptRateCardSchedule) }));
     expect(view.container).toBeInTheDocument();
   });
 });

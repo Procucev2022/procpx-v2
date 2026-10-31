@@ -5,6 +5,8 @@ import { POST } from '../src/app/api/boq/upload-template/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createNextBoqRevision } from '../src/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -103,17 +105,17 @@ describe('fixed template BOQ upload API', () => {
     const noFile = new FormData();
     noFile.set('projectId', 'project-1');
     await expect(POST(new NextRequest('http://localhost/api/upload', { method: 'POST', body: noFile }))).resolves.toEqual({
-      ok: false, error: 'Spreadsheet file and Project ID are required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqUploadTemplateRoute.spreadsheetFileAndProjectIDAreRequired, status: 400,
     });
     await expect(POST(makeRequest([validRow()]))).resolves.toEqual({
-      ok: false, error: 'Spreadsheet file and Project ID are required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqUploadTemplateRoute.spreadsheetFileAndProjectIDAreRequired, status: 400,
     });
 
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(makeRequest([validRow()], { projectId: 'missing' }))).resolves.toEqual({ ok: false, error: 'Project not found.', status: 404 });
+    await expect(POST(makeRequest([validRow()], { projectId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404 });
 
     await expect(POST(makeRequest([], { projectId: 'project-1' }))).resolves.toEqual({
-      ok: false, error: 'Uploaded spreadsheet is empty or has no recognizable rows.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqUploadTemplateRoute.uploadedSpreadsheetIsEmptyOrHasNoRecognizableRows, status: 400,
     });
     expect(writeSpy).toHaveBeenCalled();
   });
@@ -140,29 +142,29 @@ describe('fixed template BOQ upload API', () => {
     } });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-1', costCentreId: 'cc-2', boqCode: 'BOQ-000001',
-      title: 'Electrical Scope', description: 'Imported package', category: 'Electrical', purpose: 'BUDGET', status: 'DRAFT', createdBy: 'user-1',
+      title: 'Electrical Scope', description: 'Imported package', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, purpose: UI_STRINGS.componentsSidebar.bUDGET, status: 'DRAFT', createdBy: 'user-1',
     }) });
     expect(createRevision).toHaveBeenCalledWith(expect.objectContaining({
       tenantId: 'tenant-1', boqId: 'boq-new', costCentreId: 'cc-2', status: 'DRAFT', sourceType: 'FIXED_TEMPLATE',
       sourceFile: 'vendor-template.xlsx', sourceReference: 'BOQ Data', originalFileName: 'vendor-template.xlsx', createdById: 'user-1',
     }));
     expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      lineNumber: '1', originalDescription: 'Cable', specification: 'Copper cable', categoryId: 'cat-electrical',
-      uomId: 'uom-nos', uomRaw: 'NOS', quantity: 1200, brand: 'Acme', location: 'Block A', remarks: 'Urgent',
-      drawingReference: 'DWG-01', validationStatus: 'VALID', benchmarkEligible: true,
+      lineNumber: UI_STRINGS.common.copyefwnq4, originalDescription: 'Cable', specification: 'Copper cable', categoryId: 'cat-electrical',
+      uomId: 'uom-nos', uomRaw: UI_STRINGS.common.nOS, quantity: 1200, brand: 'Acme', location: 'Block A', remarks: 'Urgent',
+      drawingReference: 'DWG-01', validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID, benchmarkEligible: true,
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      lineNumber: '2', quantity: null, categoryId: null, uomId: null, validationStatus: 'WARNING',
+      lineNumber: UI_STRINGS.common.copyf9vgt1, quantity: null, categoryId: null, uomId: null, validationStatus: 'WARNING',
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(3, { data: expect.objectContaining({
-      lineNumber: '3', quantity: 0, validationStatus: 'WARNING',
+      lineNumber: UI_STRINGS.common.copyezvv42, quantity: 0, validationStatus: 'WARNING',
       validationMessages: expect.stringContaining('QTY_ZERO'),
     }) });
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-new' }, data: {
       totalLines: 5, validLines: 1, warningLines: 2, errorLines: 2, qualityScore: 40, preparationStatus: 'VALIDATION_REQUIRED',
     } });
     expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      entityType: 'BOQ', entityId: 'boq-new', action: 'BOQ_UPLOADED', description: expect.stringContaining('5 lines'),
+      entityType: UI_STRINGS.common.bOQ, entityId: 'boq-new', action: 'BOQ_UPLOADED', description: expect.stringContaining('5 lines'),
     }) });
     expect(existsSpy).toHaveBeenCalled();
     expect(mkdirSpy).toHaveBeenCalledWith(expect.stringContaining('uploads'), { recursive: true });
@@ -183,7 +185,7 @@ describe('fixed template BOQ upload API', () => {
     expect(result).toMatchObject({ ok: true, data: { boqId: 'boq-existing', totalLines: 1, validLines: 1 } });
     expect(db.boqLine.deleteMany).toHaveBeenCalledWith({ where: { boqRevisionId: 'revision-draft' } });
     expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-existing' }, data: {
-      description: null, purpose: 'PR', category: 'Electrical',
+      description: null, purpose: 'PR', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
     } });
     expect(createRevision).not.toHaveBeenCalled();
     expect(db.boqLine.create).toHaveBeenCalledWith({ data: expect.objectContaining({
@@ -202,7 +204,7 @@ describe('fixed template BOQ upload API', () => {
       projectId: 'project-1', boqId: 'boq-existing', purpose: '', title: ' Revised ', description: 'Description',
     }));
     expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-existing' }, data: {
-      title: 'Revised', description: 'Description',
+      title: 'Revised', description: UI_STRINGS.common.description,
     } });
     expect(createRevision).toHaveBeenCalledWith(expect.objectContaining({ costCentreId: 'cc-1', sourceType: 'FIXED_TEMPLATE' }));
   });
@@ -213,13 +215,13 @@ describe('fixed template BOQ upload API', () => {
     expect(result).toMatchObject({ ok: true, data: { totalLines: 1, validLines: 1, warningLines: 0, errorLines: 0, qualityScore: 100 } });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       costCentreId: null, boqCode: 'BOQ-000001', title: 'West Campus BOQ', description: null, category: null,
-      purpose: 'BUDGET',
+      purpose: UI_STRINGS.componentsSidebar.bUDGET,
     }) });
-    expect(createRevision).toHaveBeenCalledWith(expect.objectContaining({ costCentreId: null, sourceReference: 'Items' }));
+    expect(createRevision).toHaveBeenCalledWith(expect.objectContaining({ costCentreId: null, sourceReference: UI_STRINGS.common.items4 }));
     expect(db.boqLine.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      lineNumber: '1', originalDescription: 'Spare pump', standardDescription: 'Spare pump', specification: null,
-      categoryId: null, uomId: null, uomRaw: 'NOS', quantity: 4, itemCode: null,
-      brand: null, location: null, remarks: null, drawingReference: null, validationStatus: 'VALID',
+      lineNumber: UI_STRINGS.common.copyefwnq4, originalDescription: 'Spare pump', standardDescription: 'Spare pump', specification: null,
+      categoryId: null, uomId: null, uomRaw: UI_STRINGS.common.nOS, quantity: 4, itemCode: null,
+      brand: null, location: null, remarks: null, drawingReference: null, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
     }) });
   });
 

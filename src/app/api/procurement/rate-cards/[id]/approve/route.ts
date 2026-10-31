@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -20,7 +23,7 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError('Rate Card not found', 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
     let remarks = '';
@@ -39,7 +42,7 @@ export async function POST(
       // Level 1: Project Approver
       const allowedRoles = ['PROJECT_APPROVER', 'SUPER_ADMIN', 'CLIENT_ADMIN'];
       if (!allowedRoles.includes(ctx.role)) {
-        return apiError('Forbidden: Only Project Approvers or Admins can perform Level 1 approval', 403);
+        return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyProjectApproversOrAdminsCanPerformLevel1Approval, 403);
       }
 
       const updated = await prisma.vendorRateCard.update({
@@ -77,19 +80,19 @@ export async function POST(
         entityType: 'VENDOR',
         entityId: rateCard.vendorId,
         action: 'RATE_CARD_LEVEL1_APPROVED',
-        description: `Rate Card ${rateCard.rateCardNumber} approved by Project Approver ${approverName} and routed to Finance`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.rateCardRateCardNumberApprovedByProjectApproverApproverNameAndRoutedToFinance, { "rateCardNumber": rateCard.rateCardNumber, "approverName": approverName }),
         newValue: { status: 'PENDING_FINANCE_APPROVAL', level: 'LEVEL_2_FINANCE' },
       });
 
       return apiSuccess({
         rateCard: updated,
-        message: 'Level 1 Project Approval completed. Request forwarded to Finance Approver.',
+        message: UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.level1ProjectApprovalCompletedRequestForwardedToFinanceApprover,
       });
     } else if (rateCard.status === 'PENDING_FINANCE_APPROVAL' || rateCard.approvalLevel === 'LEVEL_2_FINANCE') {
       // Level 2: Finance Approver
       const allowedRoles = ['FINANCE_APPROVER', 'FINANCE_USER', 'SUPER_ADMIN', 'CLIENT_ADMIN'];
       if (!allowedRoles.includes(ctx.role)) {
-        return apiError('Forbidden: Only Finance Approvers or Admins can perform Level 2 approval', 403);
+        return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyFinanceApproversOrAdminsCanPerformLevel2Approval, 403);
       }
 
       // Requirement 5: Enforce that an agreement awaiting mandatory signatures cannot be activated
@@ -101,7 +104,7 @@ export async function POST(
       if (notesObj.agreement && notesObj.agreement.required && notesObj.agreement.signatureRequired) {
         const isSigned = !!(notesObj.agreement.signature && notesObj.agreement.signature.verified);
         if (!isSigned) {
-          return apiError('Activation Blocked: This Rate Card requires an executed bilateral agreement with valid digital signature evidence. Unsigned agreements cannot be activated without verified signature evidence.', 400);
+          return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.activationBlockedThisRateCardRequiresAnExecutedBilateralAgreementWithValidDigitalSignatureEvidenceUnsignedAgreementsCannotBeActivatedWithoutVerifiedSignatureEvidence, 400);
         }
       }
 
@@ -142,19 +145,19 @@ export async function POST(
         entityType: 'VENDOR',
         entityId: rateCard.vendorId,
         action: 'RATE_CARD_LEVEL2_APPROVED',
-        description: `Rate Card ${rateCard.rateCardNumber} approved by Finance Approver ${approverName}. Rate Card is now Active.`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.rateCardRateCardNumberApprovedByFinanceApproverApproverNameRateCardIsNowActive, { "rateCardNumber": rateCard.rateCardNumber, "approverName": approverName }),
         newValue: { status: 'APPROVED', level: 'COMPLETED' },
       });
 
       return apiSuccess({
         rateCard: updated,
-        message: 'Level 2 Finance Approval completed. Rate Card is now Active and Approved.',
+        message: UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.level2FinanceApprovalCompletedRateCardIsNowActiveAndApproved,
       });
     } else {
-      return apiError(`Rate Card is not in a pending approval state (Current status: ${rateCard.status})`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.rateCardIsNotInAPendingApprovalStateCurrentStatusStatus, { "status": rateCard.status }), 400);
     }
   } catch (error: any) {
     console.error('Error approving rate card:', error);
-    return apiError(error.message || 'Failed to approve rate card', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToApproveRateCard }), 500);
   }
 }

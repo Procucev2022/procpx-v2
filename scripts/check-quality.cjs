@@ -73,6 +73,7 @@ for (const project of projects) {
 const stages = [
   { name: 'build', stage: 'build' },
   { name: 'unit-test coverage', stage: 'test:coverage', requireForTestProjects: true },
+  { name: 'i18n string policy', stage: 'check:i18n' },
   { name: 'typecheck', stage: 'typecheck' },
   { name: 'lint', stage: 'lint' },
   { name: 'safe pending migrations', stage: 'db:migrate:safe' },

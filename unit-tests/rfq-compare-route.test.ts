@@ -3,6 +3,8 @@ import { GET } from '../src/app/api/procurement/rfqs/[id]/compare/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -110,7 +112,7 @@ describe('RFQ quote comparison API', () => {
     await expect(GET(request(), params())).resolves.toBe(denied);
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockRejectedValueOnce(new Error('comparison lookup failed'));
     await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'comparison lookup failed', status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});

@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('NEGOTIATION_VIEW');
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ negotiations, total: negotiations.length });
   } catch (error: any) {
     console.error('Error fetching negotiations:', error);
-    return apiError(error.message || 'Failed to fetch negotiations', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchNegotiations }), 500);
   }
 }
 
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId) {
-      return apiError('RFQ ID is required', 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -85,18 +88,18 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     const permittedStatuses = ['RELEASED', 'VENDOR_RESPONSE_OPEN', 'RESPONSE_CLOSED', 'COMPARISON', 'NEGOTIATION'];
     if (!permittedStatuses.includes(rfq.status)) {
-      return apiError(`RFQ is in '${rfq.status}' status and does not permit commercial negotiation offers`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIsInStatusStatusAndDoesNotPermitCommercialNegotiationOffers, { "status": rfq.status }), 400);
     }
 
     if (counterOfferAmount !== undefined && counterOfferAmount !== null) {
       const numAmt = Number(counterOfferAmount);
       if (isNaN(numAmt) || numAmt <= 0) {
-        return apiError('Counteroffer amount must be a positive number', 400);
+        return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.counterofferAmountMustBeAPositiveNumber, 400);
       }
     }
 
@@ -112,7 +115,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (negotiation && (negotiation.status === 'CONCLUDED' || negotiation.status === 'CANCELLED')) {
-      return apiError(`Negotiation for RFQ ${rfq.rfqNumber} is already ${negotiation.status.toLowerCase()} and locked against further offers`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.negotiationForRFQRfqNumberIsAlreadyToLowerCaseAndLockedAgainstFurtherOffers, { "rfqNumber": rfq.rfqNumber, "toLowerCase": negotiation.status.toLowerCase() }), 400);
     }
 
     if (!negotiation) {
@@ -138,7 +141,7 @@ export async function POST(req: NextRequest) {
         entityType: 'NEGOTIATION',
         entityId: negotiation.id,
         action: 'NEGOTIATION_CREATED',
-        description: `Started negotiation process for RFQ ${rfq.rfqNumber}`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.startedNegotiationProcessForRFQRfqNumber, { "rfqNumber": rfq.rfqNumber }),
       });
     }
 
@@ -418,7 +421,7 @@ export async function POST(req: NextRequest) {
 
       return apiSuccess(
         {
-          message: `Bulk offer processed: ${dispatched.length} dispatched, ${failed.length} failed`,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.bulkOfferProcessedLengthDispatchedLength2Failed, { "length": dispatched.length, "length2": failed.length }),
           summary: {
             totalSelected: targetList.length,
             dispatchedCount: dispatched.length,
@@ -434,7 +437,7 @@ export async function POST(req: NextRequest) {
 
     // SINGLE VENDOR DISPATCH
     if (!vendorId) {
-      return apiError('Vendor ID is required for single counteroffer dispatch', 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400);
     }
 
     const singleResult = await dispatchToVendor(vendorId);
@@ -442,7 +445,7 @@ export async function POST(req: NextRequest) {
       const { NextResponse } = await import('next/server');
       return NextResponse.json(
         {
-          error: singleResult.reason || 'Failed to dispatch counteroffer',
+          error: interpolateUiString(UI_STRINGS.common.value1, { "value1": singleResult.reason || 'Failed to dispatch counteroffer' }),
           requiresSupersedeConfirm: singleResult.requiresSupersedeConfirm,
           pendingRoundNumber: singleResult.pendingRoundNumber,
           pendingAmount: singleResult.pendingAmount,
@@ -465,6 +468,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error logging negotiation round:', error);
-    return apiError(error.message || 'Failed to create negotiation round', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateNegotiationRound }), 500);
   }
 }

@@ -4,6 +4,7 @@
 import { useEffect, useState, useMemo, use, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Card from '@/components/ui/Card';
@@ -52,6 +53,9 @@ import {
 } from '@/lib/procurement-demo-data';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import ProcurementCommercialWorkspace from '@/components/ProcurementCommercialWorkspace';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -210,12 +214,12 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     };
     setRfq(updated);
     setComparison(getDemoComparison(updated));
-    setMsg({ text: 'Quotation successfully recorded. (Demonstration Mode)', type: 'success' });
+    setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecordedDemonstrationMode, type: 'success' });
     toast.success({
-      title: '[DEMO] Vendor Quotations Recorded',
-      message: 'Quotation successfully recorded for all 3 eligible vendors.',
+      title: UI_STRINGS.appAppProcurementRfqsIdPage.dEMOVendorQuotationsRecorded,
+      message: UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecordedForAll3EligibleVendors,
       recordNumber: 'QTE-ACME-001',
-      nextStage: 'Quotation Comparison & AI Benchmark',
+      nextStage: UI_STRINGS.common.userMessages.quotationComparisonAiBenchmark,
     });
   };
 
@@ -282,11 +286,11 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         })),
       };
       setRfq(updated);
-      setMsg({ text: 'RFQ issued successfully. (Demonstration Mode)', type: 'success' });
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfullyDemonstrationMode, type: 'success' });
       toast.success(
-        'RFQ issued successfully.',
+        UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully,
         rfq.rfqNumber,
-        'Awaiting Quotations'
+        UI_STRINGS.common.userMessages.awaitingQuotations
       );
       setActionLoading(false);
       return;
@@ -300,20 +304,20 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         body: JSON.stringify({ action: 'RELEASE' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to release RFQ');
-      setMsg({ text: 'RFQ issued successfully.', type: 'success' });
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToReleaseRfq }));
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully, type: 'success' });
       toast.success(
-        'RFQ issued successfully.',
+        UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully,
         rfq.rfqNumber,
-        'Awaiting Quotations'
+        UI_STRINGS.common.userMessages.awaitingQuotations
       );
       fetchRfq();
       fetchComparison();
     } catch (err: any) {
       setMsg({ text: err.message, type: 'error' });
       toast.error({
-        title: 'Failed to Release RFQ',
-        message: err.message || 'An error occurred while releasing the RFQ.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.failedToReleaseRFQ,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredWhileReleasingTheRfq }),
         recordNumber: rfq?.rfqNumber,
       });
     } finally {
@@ -326,7 +330,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   // Capture / Record Vendor Quote Submission
   const handleRecordQuoteSubmit = async () => {
     if (!quoteVendorId) {
-      toast.error({ title: 'Validation Error', message: 'Please select a vendor.' });
+      toast.error({ title: UI_STRINGS.appAppProcurementRfqsIdPage.validationError, message: UI_STRINGS.appAppProcurementRfqsIdPage.pleaseSelectAVendor });
       return;
     }
     const vendorName = rfq.invitedVendors?.find((iv: any) => iv.vendorId === quoteVendorId)?.vendor?.name || 'Supplier';
@@ -385,13 +389,13 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setComparison(getDemoComparison(updatedRfq));
       setShowRecordQuoteModal(false);
       setActionLoading(false);
-      setMsg({ text: 'Quotation successfully recorded. (Demonstration Mode)', type: 'success' });
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecordedDemonstrationMode, type: 'success' });
       toast.success({
-        title: '[DEMO] Quotation Recorded',
-        message: 'Quotation successfully recorded.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.dEMOQuotationRecorded,
+        message: UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecorded,
         recordNumber: quoteNumber,
         vendorName,
-        nextStage: 'Quotation Comparison & AI Benchmark',
+        nextStage: UI_STRINGS.common.userMessages.quotationComparisonAiBenchmark,
       });
       return;
     }
@@ -417,23 +421,23 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to capture vendor quote');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToCaptureVendorQuote }));
       setShowRecordQuoteModal(false);
-      setMsg({ text: `Quotation successfully recorded. (${data.quote.quoteNumber})`, type: 'success' });
+      setMsg({ text: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecordedQuoteNumber, { "quoteNumber": data.quote.quoteNumber }), type: 'success' });
       toast.success({
-        title: 'Vendor Quotation Recorded',
-        message: `Quotation successfully recorded. Quotation ${data.quote.quoteNumber} recorded for ${vendorName}. Total: ₹${(data.quote.totalQuoteAmount || 0).toLocaleString()}.`,
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.vendorQuotationRecorded,
+        message: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecordedQuotationQuoteNumberRecordedForVendorNameTotalToLocaleString, { "quoteNumber": data.quote.quoteNumber, "vendorName": vendorName, "toLocaleString": (data.quote.totalQuoteAmount || 0).toLocaleString() }),
         recordNumber: data.quote.quoteNumber,
         vendorName,
-        nextStage: 'Quote Comparison & AI Benchmark',
+        nextStage: UI_STRINGS.common.userMessages.quoteComparisonAiBenchmark,
       });
       fetchRfq();
       fetchComparison();
     } catch (err: any) {
       setMsg({ text: err.message, type: 'error' });
       toast.error({
-        title: 'Quotation Recording Failed',
-        message: err.message || 'Failed to record vendor quotation.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.quotationRecordingFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToRecordVendorQuotation }),
         recordNumber: rfq?.rfqNumber,
         vendorName,
       });
@@ -445,13 +449,13 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   // Award Recommendation Submission
   const handleAwardSubmit = async () => {
     if (!awardVendorId) {
-      toast.error({ title: 'Validation Error', message: 'Please select a vendor.' });
+      toast.error({ title: UI_STRINGS.appAppProcurementRfqsIdPage.validationError, message: UI_STRINGS.appAppProcurementRfqsIdPage.pleaseSelectAVendor });
       return;
     }
 
     const isL1 = comparison?.summary?.lowestVendorId === awardVendorId;
     if (!isL1 && !awardJustification.trim()) {
-      toast.error({ title: 'Justification Required', message: 'Documented justification is mandatory when recommending a non-L1 vendor.' });
+      toast.error({ title: UI_STRINGS.appAppProcurementRfqsIdPage.justificationRequired, message: UI_STRINGS.appAppProcurementRfqsIdPage.documentedJustificationIsMandatoryWhenRecommendingANonL1Vendor });
       return;
     }
 
@@ -483,11 +487,11 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setRfq(updatedRfq);
       setShowAwardModal(false);
       setActionLoading(false);
-      setMsg({ text: 'PPO submitted successfully for approval. (Demonstration Mode)', type: 'success' });
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSubmittedSuccessfullyForApprovalDemonstrationMode, type: 'success' });
       toast.success(
-        'PPO submitted successfully for approval.',
+        UI_STRINGS.appAppProcurementRfqsIdPage.pPOSubmittedSuccessfullyForApproval,
         rfq.rfqNumber,
-        'Pending Finance Sign-off'
+        UI_STRINGS.common.userMessages.pendingFinanceSignOff
       );
       return;
     }
@@ -511,20 +515,20 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit award recommendation');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSubmitAwardRecommendation }));
       setShowAwardModal(false);
-      setMsg({ text: 'PPO submitted successfully for approval.', type: 'success' });
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSubmittedSuccessfullyForApproval, type: 'success' });
       toast.success(
-        'PPO submitted successfully for approval.',
+        UI_STRINGS.appAppProcurementRfqsIdPage.pPOSubmittedSuccessfullyForApproval,
         rfq.rfqNumber,
-        'Pending Finance Sign-off'
+        UI_STRINGS.common.userMessages.pendingFinanceSignOff
       );
       fetchRfq();
     } catch (err: any) {
       setMsg({ text: err.message, type: 'error' });
       toast.error({
-        title: 'Award Submission Failed',
-        message: err.message || 'An error occurred while submitting the award recommendation.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.awardSubmissionFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredWhileSubmittingTheAwardRecommendation }),
         recordNumber: rfq?.rfqNumber,
         vendorName,
       });
@@ -539,7 +543,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     const isApproved = awardApprovalAction === 'APPROVE';
     const vendorName = rfq.awards[0]?.recommendedVendor?.name || 'Vendor';
     const isFinance = currentUserRole === 'FINANCE_APPROVER' || currentUserRole === 'FINANCE_USER';
-    const successApprovalMsg = isFinance ? 'PPO approved successfully by Finance.' : 'PPO approved successfully.';
+    const successApprovalMsg = isFinance
+      ? UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfullyByFinance
+      : UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfully;
 
     if (isDemoMode) {
       setActionLoading(true);
@@ -563,9 +569,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       const textMsg = isApproved ? `${successApprovalMsg} (Demonstration Mode)` : 'Award recommendation rejected.';
       setMsg({ text: textMsg, type: isApproved ? 'success' : 'error' });
       toast.success(
-        isApproved ? successApprovalMsg : 'Award recommendation rejected.',
+        isApproved ? successApprovalMsg : UI_STRINGS.common.userMessages.awardRecommendationRejected,
         rfq.rfqNumber,
-        isApproved ? 'Ready for PPO Issuance' : 'Commercial Review'
+        isApproved ? UI_STRINGS.common.userMessages.readyForPpoIssuance : UI_STRINGS.common.userMessages.commercialReview
       );
       return;
     }
@@ -583,21 +589,21 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to review award recommendation');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation }));
       setShowApproveAwardModal(false);
       const successText = isApproved ? successApprovalMsg : 'Award recommendation rejected.';
       setMsg({ text: successText, type: isApproved ? 'success' : 'error' });
       toast.success(
-        isApproved ? successApprovalMsg : 'Award recommendation rejected.',
+        isApproved ? successApprovalMsg : UI_STRINGS.common.userMessages.awardRecommendationRejected,
         rfq.rfqNumber,
-        isApproved ? 'Ready for PPO Issuance' : 'Commercial Review'
+        isApproved ? UI_STRINGS.common.userMessages.readyForPpoIssuance : UI_STRINGS.common.userMessages.commercialReview
       );
       fetchRfq();
     } catch (err: any) {
       setMsg({ text: err.message, type: 'error' });
       toast.error({
-        title: 'Approval Review Failed',
-        message: err.message || 'An error occurred while reviewing the award.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.approvalReviewFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredWhileReviewingTheAward }),
         recordNumber: rfq?.rfqNumber,
         vendorName,
       });
@@ -633,8 +639,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     const existingPpo = (rfq.ppos || []).find((p: any) => p.vendorId === targetVendorId);
     if (existingPpo) {
       toast.warning({
-        title: 'Duplicate Prevented',
-        message: `Purchase Order ${existingPpo.ppoNumber} already exists for ${vendorName} on this RFQ.`,
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.duplicatePrevented,
+        message: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.purchaseOrderPpoNumberAlreadyExistsForVendorNameOnThisRFQ, { "ppoNumber": existingPpo.ppoNumber, "vendorName": vendorName }),
         recordNumber: existingPpo.ppoNumber,
       });
       return;
@@ -643,8 +649,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     // Enforce justification if vendor is not L1
     if (!isL1 && (!ppoJustification || !ppoJustification.trim())) {
       toast.error({
-        title: 'Justification Required',
-        message: 'Documented justification is mandatory when raising PPO for a non-L1 vendor.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.justificationRequired,
+        message: UI_STRINGS.appAppProcurementRfqsIdPage.documentedJustificationIsMandatoryWhenRaisingPPOForANonL1Vendor,
       });
       return;
     }
@@ -676,13 +682,13 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setRfq(updatedRfq);
       setShowPpoModal(false);
       setActionLoading(false);
-      setMsg({ text: `PPO successfully created (${ppoNumber}). (Demonstration Mode)`, type: 'success' });
+      setMsg({ text: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreatedPpoNumberDemonstrationMode, { "ppoNumber": ppoNumber }), type: 'success' });
       toast.success({
-        title: '[DEMO] Purchase Order Issued',
-        message: 'PPO successfully created.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.dEMOPurchaseOrderIssued,
+        message: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreated,
         recordNumber: ppoNumber,
         vendorName,
-        nextStage: 'PPO Issued / Contract Active',
+        nextStage: UI_STRINGS.common.userMessages.ppoIssuedContractActive,
       });
       return;
     }
@@ -702,15 +708,15 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to generate PPO');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToGeneratePpo }));
       setShowPpoModal(false);
-      setMsg({ text: `PPO successfully created (${data.ppo.ppoNumber}).`, type: 'success' });
+      setMsg({ text: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreatedPpoNumber, { "ppoNumber": data.ppo.ppoNumber }), type: 'success' });
       toast.success({
-        title: 'Purchase Order (PPO) Issued',
-        message: `PPO successfully created. Purchase Order ${data.ppo.ppoNumber} generated for ${vendorName}. Contract active.`,
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.purchaseOrderPPOIssued,
+        message: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreatedPurchaseOrderPpoNumberGeneratedForVendorNameContractActive, { "ppoNumber": data.ppo.ppoNumber, "vendorName": vendorName }),
         recordNumber: data.ppo.ppoNumber,
         vendorName,
-        nextStage: 'PPO Issued / Contract Active',
+        nextStage: UI_STRINGS.common.userMessages.ppoIssuedContractActive,
         link: '/procurement/ppos',
       });
       fetchRfq();
@@ -718,8 +724,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     } catch (err: any) {
       setMsg({ text: err.message, type: 'error' });
       toast.error({
-        title: 'PPO Generation Failed',
-        message: err.message || 'An error occurred while issuing the Purchase Order.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.pPOGenerationFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredWhileIssuingThePurchaseOrder }),
         recordNumber: rfq?.rfqNumber,
         vendorName,
       });
@@ -730,7 +736,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
   // Direct PPO from Rate Card
   const handleDirectRateCardPpo = async (rateCardId: string) => {
-    if (!confirm('Create direct Purchase Order (PPO) from this approved rate card?')) return;
+    if (!confirm(UI_STRINGS.appAppProcurementRfqsIdPage.createDirectPurchaseOrderPPOFromThisApprovedRateCard)) return;
 
     if (isDemoMode) {
       setActionLoading(true);
@@ -757,13 +763,13 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setRfq(updatedRfq);
       setShowRateCardModal(false);
       setActionLoading(false);
-      setMsg({ text: 'PPO successfully created. (Demonstration Mode - Rate Card Sourcing)', type: 'success' });
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreatedDemonstrationModeRateCardSourcing, type: 'success' });
       toast.success({
-        title: '[DEMO] Direct PPO Issued',
-        message: 'PPO successfully created.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.dEMODirectPPOIssued,
+        message: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreated,
         recordNumber: ppoNumber,
         vendorName: 'Acme Infra Solutions Pvt Ltd',
-        nextStage: 'PPO Issued / Contract Active',
+        nextStage: UI_STRINGS.common.userMessages.ppoIssuedContractActive,
       });
       return;
     }
@@ -779,22 +785,22 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to issue direct PPO from rate card');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToIssueDirectPpoFromRateCard }));
       setShowRateCardModal(false);
-      setMsg({ text: 'PPO successfully created.', type: 'success' });
+      setMsg({ text: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreated, type: 'success' });
       toast.success({
-        title: 'Direct PPO Created from Rate Card',
-        message: `PPO successfully created. Purchase Order ${data.ppo.ppoNumber} issued via pre-approved rate card.`,
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.directPPOCreatedFromRateCard,
+        message: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreatedPurchaseOrderPpoNumberIssuedViaPreApprovedRateCard, { "ppoNumber": data.ppo.ppoNumber }),
         recordNumber: data.ppo.ppoNumber,
-        nextStage: 'PPO Issued / Contract Active',
+        nextStage: UI_STRINGS.common.userMessages.ppoIssuedContractActive,
         link: '/procurement/ppos',
       });
       fetchRfq();
     } catch (err: any) {
       setMsg({ text: err.message, type: 'error' });
       toast.error({
-        title: 'Direct PPO Failed',
-        message: err.message || 'An error occurred while creating direct PPO from rate card.',
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.directPPOFailed,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredWhileCreatingDirectPpoFromRateCard }),
         recordNumber: rfq?.rfqNumber,
       });
     } finally {
@@ -825,8 +831,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     return (
       <div className="page-content">
         <div className="loading-overlay">
-          <div className="spinner" /> Loading Procurement Workspace...
-        </div>
+          <div className="spinner" />{UI_STRINGS.appAppProcurementRfqsIdPage.loadingProcurementWorkspace}</div>
       </div>
     );
   }
@@ -834,10 +839,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   if (!rfq) {
     return (
       <div className="page-content">
-        <div className="alert alert-error">RFQ not found or access denied.</div>
-        <Link href="/procurement/rfqs" className="btn btn-secondary mt-4">
-          ← Back to RFQs Register
-        </Link>
+        <div className="alert alert-error">{UI_STRINGS.appAppProcurementRfqsIdPage.rFQNotFoundOrAccessDenied}</div>
+        <Link href="/procurement/rfqs" className="btn btn-secondary mt-4">{UI_STRINGS.appAppProcurementRfqsIdPage.backToRFQsRegister}</Link>
       </div>
     );
   }
@@ -900,18 +903,16 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 className="btn btn-primary btn-sm"
                 style={{ fontSize: 12 }}
               >
-                <Send size={13} style={{ marginRight: 5 }} /> Release RFQ
-              </button>
+                <Send size={13} style={{ marginRight: 5 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.releaseRFQ}</button>
             )}
             <button
               type="button"
               onClick={() => setRfqChatDrawerOpen(true)}
               className="btn btn-secondary btn-sm"
               style={{ fontSize: 12 }}
-              title="Open persistent RFQ message and query drawer"
+              title={UI_STRINGS.appAppProcurementRfqsIdPage.openPersistentRFQMessageAndQueryDrawer}
             >
-              <MessageSquare size={13} style={{ marginRight: 5 }} /> Clarifications / Chat
-            </button>
+              <MessageSquare size={13} style={{ marginRight: 5 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.clarificationsChat}</button>
           </div>
         </div>
 
@@ -929,9 +930,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #2563eb', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <FileText size={18} color="#2563eb" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Project</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.common.project}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }} title={rfq.project?.name}>
-                {rfq.project?.name || 'Project'}
+                {rfq.project?.name || UI_STRINGS.common.project}
               </div>
             </div>
           </div>
@@ -940,9 +941,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #0d9488', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <Layers size={18} color="#0d9488" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Category</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }} title={rfq.category?.name || rfq.packageName}>
-                {rfq.category?.name || rfq.categoryName || rfq.packageName || 'Civil & Commercial'}
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.common.category2}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }} title={interpolateUiString(UI_STRINGS.common.value1, { "value1": rfq.category?.name || rfq.packageName })}>
+                {rfq.category?.name || rfq.categoryName || rfq.packageName || UI_STRINGS.appAppProcurementRfqsIdPage.civilCommercial}
               </div>
             </div>
           </div>
@@ -951,11 +952,11 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #ea580c', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <Calendar size={18} color="#ea580c" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>RFQ Date</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.rFQDate}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
                 {rfq.createdAt && !isNaN(new Date(rfq.createdAt).getTime())
-                  ? new Date(rfq.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                  : '13 Oct 2026'}
+                  ? new Date(rfq.createdAt).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
+                  : UI_STRINGS.appAppProcurementRfqsIdPage.copyqwrkgb}
               </div>
             </div>
           </div>
@@ -964,7 +965,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #123B7A', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <FileSpreadsheet size={18} color="#123B7A" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Total Line Items</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.common.totalLineItems}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', marginTop: 2 }}>
                 {rfq.lines?.length || 0}
               </div>
@@ -975,7 +976,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #2563eb', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <Users size={18} color="#2563eb" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Vendors Invited</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.vendorsInvited}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', marginTop: 2 }}>
                 {rfq.invitedVendors?.length || 0}
               </div>
@@ -986,7 +987,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #0d9488', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <FileCheck size={18} color="#0d9488" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Quotes Received</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quotesReceived}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0d9488', fontFamily: 'monospace', marginTop: 2 }}>
                 {submittedQuotes.length}
               </div>
@@ -997,9 +998,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #ea580c', display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
             <MessageSquare size={18} color="#ea580c" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>Negotiation Round</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.negotiationRound}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
-                {rfq.negotiations?.[0]?.currentRound ? `Round ${rfq.negotiations[0].currentRound}` : 'Round 1'}
+                {rfq.negotiations?.[0]?.currentRound ? interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.roundCurrentRound, { "currentRound": rfq.negotiations[0].currentRound }) : UI_STRINGS.appAppProcurementRfqsIdPage.round1}
               </div>
             </div>
           </div>
@@ -1048,7 +1049,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           }}
         >
           <FileText size={15} color={activeTab === 'quotes' ? '#2563eb' : '#64748b'} />
-          <span>1. Quotations Received</span>
+          <span>{UI_STRINGS.appAppProcurementRfqsIdPage.copy1v8aisw}</span>
           <span
             style={{
               fontSize: 11,
@@ -1059,8 +1060,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
               color: activeTab === 'quotes' ? '#1e40af' : '#475569',
             }}
           >
-            {submittedQuotes.length} Quotes
-          </span>
+            {submittedQuotes.length}{UI_STRINGS.appAppProcurementRfqsIdPage.quotes}</span>
         </button>
 
         <button
@@ -1083,7 +1083,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           }}
         >
           <MessageSquare size={15} color={activeTab === 'negotiation' ? '#2563eb' : '#64748b'} />
-          <span>2. Negotiation</span>
+          <span>{UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk}</span>
           {rfq.negotiations?.length > 0 && (
             <span
               style={{
@@ -1094,8 +1094,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 background: activeTab === 'negotiation' ? '#dbeafe' : '#f1f5f9',
                 color: activeTab === 'negotiation' ? '#1e40af' : '#475569',
               }}
-            >
-              Round {rfq.negotiations[0]?.currentRound || 1}
+            >{UI_STRINGS.common.round}{rfq.negotiations[0]?.currentRound || 1}
             </span>
           )}
         </button>
@@ -1120,19 +1119,13 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           }}
         >
           <Award size={15} color={activeTab === 'awarding' ? '#2563eb' : '#64748b'} />
-          <span>3. Awarding & PPO</span>
+          <span>{UI_STRINGS.appAppProcurementRfqsIdPage.copyfg2yyg}</span>
           {hasPpo ? (
-            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#dcfce7', color: '#166534', fontWeight: 700 }}>
-              PPO Issued
-            </span>
+            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#dcfce7', color: '#166534', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.pPOIssued}</span>
           ) : hasApprovedAward ? (
-            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#dcfce7', color: '#166534', fontWeight: 700 }}>
-              Award Approved
-            </span>
+            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#dcfce7', color: '#166534', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.awardApproved}</span>
           ) : rfq.awards?.length > 0 ? (
-            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>
-              Pending Approval
-            </span>
+            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 10, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>{UI_STRINGS.common.pendingApproval}</span>
           ) : null}
         </button>
       </div>
@@ -1144,15 +1137,15 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {submittedQuotes.length === 0 ? (
             <Card
-              title="Quotation Register"
-              subtitle="Enterprise log of all vendor quotation submissions and baseline compliance parameters"
+              title={UI_STRINGS.appAppProcurementRfqsIdPage.quotationRegister}
+              subtitle={UI_STRINGS.appAppProcurementRfqsIdPage.enterpriseLogOfAllVendorQuotationSubmissionsAndBaselineComplianceParameters}
             >
               <div style={{ padding: 40, textAlign: 'center' }}>
                 <EmptyState
                   icon={<FileText size={40} color="#94a3b8" />}
-                  title="No Quotations Received Yet"
-                  description="Awaiting submissions from invited vendors for this RFQ package."
-                  actionText={isDemoMode ? "Simulate 3 Received Quotes" : "Record Vendor Quote"}
+                  title={UI_STRINGS.appAppProcurementRfqsIdPage.noQuotationsReceivedYet}
+                  description={UI_STRINGS.appAppProcurementRfqsIdPage.awaitingSubmissionsFromInvitedVendorsForThisRFQPackage}
+                  actionText={isDemoMode ? UI_STRINGS.appAppProcurementRfqsIdPage.simulate3ReceivedQuotes : UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuote}
                   onAction={() => {
                     if (isDemoMode) {
                       handleSimulateReceiveAllQuotes();
@@ -1171,8 +1164,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     }}
                     className="btn btn-secondary btn-sm mt-3"
                   >
-                    <Plus size={13} style={{ marginRight: 5 }} /> Record Individual Quote Manually
-                  </button>
+                    <Plus size={13} style={{ marginRight: 5 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.recordIndividualQuoteManually}</button>
                 )}
               </div>
             </Card>
@@ -1188,11 +1180,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     margin: 0,
                     lineHeight: 1.25,
                   }}
-                >
-                  Enterprise Quotation Register
-                </h2>
+                >{UI_STRINGS.appAppProcurementRfqsIdPage.enterpriseQuotationRegister}</h2>
               }
-              subtitle="Formal commercial register of all submitted vendor quotations and baseline compliance parameters"
+              subtitle={UI_STRINGS.appAppProcurementRfqsIdPage.formalCommercialRegisterOfAllSubmittedVendorQuotationsAndBaselineComplianceParameters}
               action={
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <button
@@ -1213,8 +1203,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       gap: 6,
                     }}
                   >
-                    <Plus size={13} /> Record New Quote
-                  </button>
+                    <Plus size={13} />{UI_STRINGS.appAppProcurementRfqsIdPage.recordNewQuote}</button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('negotiation')}
@@ -1229,8 +1218,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       alignItems: 'center',
                       gap: 6,
                     }}
-                  >
-                    Open Negotiation Workspace <ArrowRight size={13} />
+                  >{UI_STRINGS.common.openNegotiationWorkspace}<ArrowRight size={13} />
                   </button>
                   <Link
                     href={`/procurement/auctions?create=true&rfqId=${rfq.id}`}
@@ -1243,8 +1231,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       gap: 6,
                     }}
                   >
-                    <Gavel size={13} /> Initiate E-Auction
-                  </Link>
+                    <Gavel size={13} />{UI_STRINGS.appAppProcurementRfqsIdPage.initiateEAuction}</Link>
                 </div>
               }
               noPadding
@@ -1261,39 +1248,17 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 >
                   <thead>
                     <tr style={{ height: 44 }}>
-                      <th style={{ width: 220, minWidth: 200, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Vendor Name
-                      </th>
-                      <th style={{ width: 140, minWidth: 130, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Quote Reference
-                      </th>
-                      <th style={{ width: 130, minWidth: 120, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        RFQ Reference
-                      </th>
-                      <th style={{ width: 170, minWidth: 160, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Quotation Received Date and Time
-                      </th>
-                      <th style={{ width: 150, minWidth: 140, textAlign: 'right', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Quoted Total Value
-                      </th>
-                      <th style={{ width: 120, minWidth: 110, textAlign: 'center', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Number of Items Quoted
-                      </th>
-                      <th style={{ width: 120, minWidth: 110, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Quote Validity
-                      </th>
-                      <th style={{ width: 180, minWidth: 160, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Commercial Terms Status
-                      </th>
-                      <th style={{ width: 150, minWidth: 140, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Technical Compliance Status
-                      </th>
-                      <th style={{ width: 130, minWidth: 120, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Quotation Status
-                      </th>
-                      <th style={{ width: 120, minWidth: 110, textAlign: 'center', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                        Actions
-                      </th>
+                      <th style={{ width: 220, minWidth: 200, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.vendorName}</th>
+                      <th style={{ width: 140, minWidth: 130, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quoteReference}</th>
+                      <th style={{ width: 130, minWidth: 120, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.rFQReference}</th>
+                      <th style={{ width: 170, minWidth: 160, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quotationReceivedDateAndTime}</th>
+                      <th style={{ width: 150, minWidth: 140, textAlign: 'right', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quotedTotalValue}</th>
+                      <th style={{ width: 120, minWidth: 110, textAlign: 'center', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.numberOfItemsQuoted}</th>
+                      <th style={{ width: 120, minWidth: 110, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quoteValidity}</th>
+                      <th style={{ width: 180, minWidth: 160, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.commercialTermsStatus}</th>
+                      <th style={{ width: 150, minWidth: 140, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.technicalComplianceStatus}</th>
+                      <th style={{ width: 130, minWidth: 120, textAlign: 'left', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quotationStatus}</th>
+                      <th style={{ width: 120, minWidth: 110, textAlign: 'center', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.actions}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1340,7 +1305,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                           </td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
                             <span className="font-mono" style={{ fontWeight: 600, color: '#1e40af', fontSize: 13 }}>
-                              {q.quoteNumber || 'QTE-REC-001'}
+                              {q.quoteNumber || UI_STRINGS.appAppProcurementRfqsIdPage.qTEREC001}
                             </span>
                           </td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
@@ -1349,21 +1314,18 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#475569', fontSize: 12 }}>
                             {dateFormatted}
                           </td>
-                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>
-                            ₹ {(q.totalQuoteAmount || 0).toLocaleString()}
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#0f172a', fontSize: 14 }}>{UI_STRINGS.common.copy1g8b5tg}{(q.totalQuoteAmount || 0).toLocaleString()}
                           </td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'center', color: '#1e293b', fontWeight: 600, fontSize: 13 }}>
-                            {quotedLinesCount} / {totalLines}
+                            {quotedLinesCount}{UI_STRINGS.common.copy3ml01c}{totalLines}
                           </td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#334155', fontSize: 13 }}>
-                            {q.validityDays ? `${q.validityDays} Days` : '30 Days'}
+                            {q.validityDays ? interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.validityDaysDays, { "validityDays": q.validityDays }) : UI_STRINGS.appAppProcurementRfqsIdPage.copy1xeupjt}
                           </td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#0f172a', fontSize: 12 }}>
-                            {q.commercialTerms || 'FOB Site Delivery'}
+                            {q.commercialTerms || UI_STRINGS.appAppProcurementRfqsIdPage.fOBSiteDelivery}
                           </td>
-                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#0f172a', fontSize: 13, fontWeight: 500 }}>
-                            Compliant
-                          </td>
+                          <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', color: '#0f172a', fontSize: 13, fontWeight: 500 }}>{UI_STRINGS.common.compliant}</td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px' }}>
                             <span
                               style={{
@@ -1377,7 +1339,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                                 display: 'inline-block',
                               }}
                             >
-                              {q.status || 'SUBMITTED'}
+                              {q.status || UI_STRINGS.common.sUBMITTED}
                             </span>
                           </td>
                           <td style={{ border: '1px solid #e2e8f0', padding: '10px 14px', textAlign: 'center' }}>
@@ -1393,8 +1355,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                                 gap: 5,
                               }}
                             >
-                              <Eye size={13} /> View Quote
-                            </button>
+                              <Eye size={13} />{UI_STRINGS.appAppProcurementRfqsIdPage.viewQuote}</button>
                           </td>
                         </tr>
                       );
@@ -1437,25 +1398,25 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* A. Vendor Ranking Leaderboard */}
           <Card
-            title="Commercial Vendor Ranking & Evaluation"
-            subtitle="Commercial leaderboard comparing final negotiated offers against AI cost baseline and L1"
+            title={UI_STRINGS.appAppProcurementRfqsIdPage.commercialVendorRankingEvaluation}
+            subtitle={UI_STRINGS.appAppProcurementRfqsIdPage.commercialLeaderboardComparingFinalNegotiatedOffersAgainstAICostBaselineAndL1}
             noPadding
           >
             <div style={{ overflowX: 'auto', width: '100%' }}>
               <table className="table enterprise-table" style={{ fontSize: 12, minWidth: 1450, width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 70, minWidth: 70, border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Rank</th>
-                    <th style={{ minWidth: 170, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Vendor Name</th>
-                    <th style={{ minWidth: 140, textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Latest Quoted Value</th>
-                    <th style={{ minWidth: 100, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Total Versions</th>
-                    <th style={{ minWidth: 140, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Negotiation Status</th>
-                    <th style={{ minWidth: 125, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Technical Eligibility</th>
-                    <th style={{ minWidth: 140, textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Variance vs L1</th>
-                    <th style={{ minWidth: 160, maxWidth: 210, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Delivery Schedule</th>
-                    <th style={{ minWidth: 175, maxWidth: 230, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Payment Terms</th>
-                    <th style={{ minWidth: 160, maxWidth: 210, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Warranty Period</th>
-                    <th style={{ minWidth: 125, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>Action</th>
+                    <th style={{ width: 70, minWidth: 70, border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.common.rank}</th>
+                    <th style={{ minWidth: 170, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.common.vendorName}</th>
+                    <th style={{ minWidth: 140, textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.latestQuotedValue}</th>
+                    <th style={{ minWidth: 100, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.totalVersions}</th>
+                    <th style={{ minWidth: 140, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.common.negotiationStatus}</th>
+                    <th style={{ minWidth: 125, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.technicalEligibility}</th>
+                    <th style={{ minWidth: 140, textAlign: 'right', border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.varianceVsL1}</th>
+                    <th style={{ minWidth: 160, maxWidth: 210, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.common.deliverySchedule}</th>
+                    <th style={{ minWidth: 175, maxWidth: 230, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.common.paymentTerms}</th>
+                    <th style={{ minWidth: 160, maxWidth: 210, border: '1px solid #B8C9DC', padding: '8px 12px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.warrantyPeriod}</th>
+                    <th style={{ minWidth: 125, textAlign: 'center', border: '1px solid #B8C9DC', padding: '8px 10px', background: '#f8fafc', color: '#1e293b', fontWeight: 700 }}>{UI_STRINGS.common.action}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1536,39 +1497,36 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       <tr key={v.vendorId} style={{ background: '#ffffff' }}>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', background: '#ffffff' }}>
                           <span className={`badge ${isL1 ? 'badge-approved' : 'badge-draft'}`} style={{ fontWeight: 700 }}>
-                            {isL1 ? '★ L1' : `L${v.rank}`}
+                            {isL1 ? UI_STRINGS.common.l1 : interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.lRank, { "rank": v.rank })}
                           </span>
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', fontWeight: 600, color: isL1 ? '#059669' : '#0f172a', background: '#ffffff' }}>
                           {v.vendorName}
                         </td>
-                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right', fontWeight: 700, color: isL1 ? '#059669' : '#0f172a', background: '#ffffff' }}>
-                          ₹ {v.totalQuoteAmount?.toLocaleString()}
+                        <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right', fontWeight: 700, color: isL1 ? '#059669' : '#0f172a', background: '#ffffff' }}>{UI_STRINGS.common.copy1g8b5tg}{v.totalQuoteAmount?.toLocaleString()}
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', textAlign: 'center', background: '#ffffff' }}>
-                          <span className="text-muted font-medium">{quoteCount} versions</span>
+                          <span className="text-muted font-medium">{quoteCount}{UI_STRINGS.appAppProcurementRfqsIdPage.versions}</span>
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', background: '#ffffff' }}>
                           <span className="badge badge-draft">{negStatus}</span>
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', textAlign: 'center', background: '#ffffff' }}>
-                          <span className="badge badge-approved">COMPLIANT</span>
+                          <span className="badge badge-approved">{UI_STRINGS.common.cOMPLIANT}</span>
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right', background: '#ffffff' }}>
                           {isL1 ? (
-                            <span className="badge badge-approved">Lowest Offer</span>
+                            <span className="badge badge-approved">{UI_STRINGS.appAppProcurementRfqsIdPage.lowestOffer}</span>
                           ) : (
-                            <span style={{ color: '#dc2626', fontWeight: 600 }}>
-                              +₹ {diffVsL1.toLocaleString()} (+{diffPct}%)
-                            </span>
+                            <span style={{ color: '#dc2626', fontWeight: 600 }}>{UI_STRINGS.common.copy148wag9}{diffVsL1.toLocaleString()}{UI_STRINGS.appAppProcurementRfqsIdPage.copy8x1qbe}{diffPct}{UI_STRINGS.common.copy1y4e1t7}</span>
                           )}
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', verticalAlign: 'middle', maxWidth: 210, background: '#ffffff' }}>
                           <BoqDescriptionCell
                             text={deliveryScheduleVal}
-                            title="Delivery Schedule"
+                            title={UI_STRINGS.common.deliverySchedule}
                             contextLabel={v.vendorName}
-                            emptyPlaceholder="Not specified"
+                            emptyPlaceholder={UI_STRINGS.common.notSpecified}
                             maxWidth={200}
                             clampLines={2}
                           />
@@ -1576,9 +1534,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                         <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', verticalAlign: 'middle', maxWidth: 230, background: '#ffffff' }}>
                           <BoqDescriptionCell
                             text={paymentTermsVal}
-                            title="Payment Terms"
+                            title={UI_STRINGS.common.paymentTerms}
                             contextLabel={v.vendorName}
-                            emptyPlaceholder="Not specified"
+                            emptyPlaceholder={UI_STRINGS.common.notSpecified}
                             maxWidth={220}
                             clampLines={2}
                           />
@@ -1586,16 +1544,16 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                         <td style={{ border: '1px solid #B8C9DC', padding: '6px 10px', verticalAlign: 'middle', maxWidth: 210, background: '#ffffff' }}>
                           <BoqDescriptionCell
                             text={warrantyVal}
-                            title="Warranty Period"
+                            title={UI_STRINGS.appAppProcurementRfqsIdPage.warrantyPeriod}
                             contextLabel={v.vendorName}
-                            emptyPlaceholder="Not specified"
+                            emptyPlaceholder={UI_STRINGS.common.notSpecified}
                             maxWidth={200}
                             clampLines={2}
                           />
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '8px 10px', verticalAlign: 'middle', textAlign: 'center', background: '#ffffff' }}>
                           {existingPpo ? (
-                            <span className="badge badge-approved" title={`PPO ${existingPpo.ppoNumber} active`}>
+                            <span className="badge badge-approved" title={interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.pPOPpoNumberActive, { "ppoNumber": existingPpo.ppoNumber })}>
                               <CheckCircle2 size={12} style={{ display: 'inline', marginRight: 4 }} />
                               {existingPpo.ppoNumber}
                             </span>
@@ -1606,8 +1564,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                               className={`btn btn-sm ${isL1 ? 'btn-primary' : 'btn-secondary'}`}
                               style={{ fontSize: 11, padding: '4px 10px' }}
                             >
-                              <Award size={13} style={{ marginRight: 4 }} />
-                              Raise PPO {isL1 ? '(L1)' : ''}
+                              <Award size={13} style={{ marginRight: 4 }} />{isL1 ? UI_STRINGS.appAppProcurementRfqsIdPage.raisePPOL1 : UI_STRINGS.appAppProcurementRfqsIdPage.raisePPO}
                             </button>
                           )}
                         </td>
@@ -1621,8 +1578,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
           {/* B. Award Recommendation Workspace */}
           <Card
-            title="Commercial Award Recommendation"
-            subtitle="Documented recommendation for project and financial sanction"
+            title={UI_STRINGS.appAppProcurementRfqsIdPage.commercialAwardRecommendation}
+            subtitle={UI_STRINGS.appAppProcurementRfqsIdPage.documentedRecommendationForProjectAndFinancialSanction}
             action={
               !rfq.awards?.length && (
                 <button
@@ -1630,17 +1587,16 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                   onClick={() => setShowAwardModal(true)}
                   className="btn btn-primary btn-sm"
                 >
-                  <Award size={14} style={{ marginRight: 6 }} /> Prepare Award Recommendation
-                </button>
+                  <Award size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation}</button>
               )
             }
           >
             {!rfq.awards?.length ? (
               <EmptyState
                 icon={<Award size={36} color="#94a3b8" strokeWidth={1.5} />}
-                title="No Award Recommendation Created"
-                description="Recommend L1 vendor (or non-L1 vendor with required justification) to route for financial approval."
-                actionText="Prepare Award Recommendation"
+                title={UI_STRINGS.appAppProcurementRfqsIdPage.noAwardRecommendationCreated}
+                description={UI_STRINGS.appAppProcurementRfqsIdPage.recommendL1VendorOrNonL1VendorWithRequiredJustificationToRouteForFinancialApproval}
+                actionText={UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2}
                 onAction={() => setShowAwardModal(true)}
               />
             ) : (
@@ -1667,28 +1623,25 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                         }}
                       >
                         <div>
-                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Recommended Vendor</div>
+                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.recommendedVendor}</div>
                           <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2, color: '#0f172a' }}>
                             {a.recommendedVendor?.name}
                           </div>
                         </div>
 
                         <div>
-                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Final Award Amount</div>
-                          <div style={{ fontWeight: 800, fontSize: 18, color: '#059669', marginTop: 2 }}>
-                            ₹ {a.finalNegotiatedAmount?.toLocaleString()}
+                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.finalAwardAmount}</div>
+                          <div style={{ fontWeight: 800, fontSize: 18, color: '#059669', marginTop: 2 }}>{UI_STRINGS.common.copy1g8b5tg}{a.finalNegotiatedAmount?.toLocaleString()}
                           </div>
                         </div>
 
                         <div>
-                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Baseline Savings</div>
-                          <div style={{ fontWeight: 600, marginTop: 2 }}>
-                            ₹ {a.totalSavingsAmount?.toLocaleString()} ({a.savingsPercent}%)
-                          </div>
+                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.baselineSavings}</div>
+                          <div style={{ fontWeight: 600, marginTop: 2 }}>{UI_STRINGS.common.copy1g8b5tg}{a.totalSavingsAmount?.toLocaleString()}{UI_STRINGS.common.copy1b3t0c5}{a.savingsPercent}{UI_STRINGS.common.copy1y4e1t7}</div>
                         </div>
 
                         <div>
-                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Approval Status</div>
+                          <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.common.approvalStatus}</div>
                           <div style={{ marginTop: 2 }}>
                             <span className={`badge ${isApproved ? 'badge-approved' : 'badge-review'}`}>
                               {a.status}
@@ -1698,10 +1651,10 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       </div>
 
                       <div style={{ padding: '12px 14px', background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13, marginBottom: 16 }}>
-                        <strong>Documented Commercial Justification:</strong> {a.justification}
+                        <strong>{UI_STRINGS.appAppProcurementRfqsIdPage.documentedCommercialJustification}</strong> {a.justification}
                         {a.approvalRemarks && (
                           <div style={{ marginTop: 6, color: '#166534', fontWeight: 500 }}>
-                            <strong>Approver Remarks:</strong> {a.approvalRemarks}
+                            <strong>{UI_STRINGS.appAppProcurementRfqsIdPage.approverRemarks2}</strong> {a.approvalRemarks}
                           </div>
                         )}
                       </div>
@@ -1717,9 +1670,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                                 setShowApproveAwardModal(true);
                               }}
                               className="btn btn-sm btn-primary"
-                            >
-                              Approve Recommendation
-                            </button>
+                            >{UI_STRINGS.appAppProcurementRfqsIdPage.approveRecommendation}</button>
                             <button
                               type="button"
                               onClick={() => {
@@ -1728,9 +1679,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                               }}
                               className="btn btn-sm btn-secondary"
                               style={{ color: '#dc2626' }}
-                            >
-                              Reject
-                            </button>
+                            >{UI_STRINGS.common.reject2}</button>
                           </>
                         )}
 
@@ -1743,8 +1692,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                             }}
                             className="btn btn-sm btn-primary"
                           >
-                            <FileCheck size={14} style={{ marginRight: 6 }} /> Generate Purchase Order (PPO) →
-                          </button>
+                            <FileCheck size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.generatePurchaseOrderPPO}</button>
                         )}
                       </div>
                     </div>
@@ -1757,21 +1705,21 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           {/* C. PPO Creation and Record */}
           {rfq.ppos?.length > 0 && (
             <Card
-              title="Official Purchase Order (PPO)"
-              subtitle="Generated order carrying forward approved award lines, agreed rates, and terms"
+              title={UI_STRINGS.appAppProcurementRfqsIdPage.officialPurchaseOrderPPO}
+              subtitle={UI_STRINGS.appAppProcurementRfqsIdPage.generatedOrderCarryingForwardApprovedAwardLinesAgreedRatesAndTerms}
               noPadding
             >
               <div className="table-wrapper">
                 <table className="table enterprise-table" style={{ fontSize: 12 }}>
                   <thead>
                     <tr>
-                      <th>PPO Number</th>
-                      <th>Vendor</th>
-                      <th style={{ textAlign: 'right' }}>Total Order Value</th>
-                      <th>Delivery Terms</th>
-                      <th>Payment Terms</th>
-                      <th>Status</th>
-                      <th>Issued Date</th>
+                      <th>{UI_STRINGS.common.pPONumber}</th>
+                      <th>{UI_STRINGS.common.vendor}</th>
+                      <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.totalOrderValue}</th>
+                      <th>{UI_STRINGS.appAppProcurementRfqsIdPage.deliveryTerms}</th>
+                      <th>{UI_STRINGS.common.paymentTerms}</th>
+                      <th>{UI_STRINGS.common.status}</th>
+                      <th>{UI_STRINGS.appAppProcurementRfqsIdPage.issuedDate}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1779,14 +1727,13 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       <tr key={p.id}>
                         <td className="font-mono font-bold text-primary">{p.ppoNumber}</td>
                         <td style={{ fontWeight: 600 }}>{p.vendor?.name}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 800, color: '#059669' }}>
-                          ₹ {p.totalValue?.toLocaleString()}
+                        <td style={{ textAlign: 'right', fontWeight: 800, color: '#059669' }}>{UI_STRINGS.common.copy1g8b5tg}{p.totalValue?.toLocaleString()}
                         </td>
                         <td>{p.deliveryTerms}</td>
                         <td>{p.paymentTerms}</td>
                         <td><span className="badge badge-approved">{p.status}</span></td>
                         <td className="text-muted">
-                          {p.issuedAt ? new Date(p.issuedAt).toLocaleDateString() : '—'}
+                          {p.issuedAt ? new Date(p.issuedAt).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}
                         </td>
                       </tr>
                     ))}
@@ -1805,12 +1752,12 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <Modal
           isOpen={showRecordQuoteModal}
           onClose={() => setShowRecordQuoteModal(false)}
-          title="Record Vendor Quotation"
+          title={UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuotation}
           maxWidth="max-w-4xl"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label className="label">Select Vendor</label>
+              <label className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.selectVendor2}</label>
               <select
                 value={quoteVendorId}
                 onChange={(e) => {
@@ -1829,11 +1776,10 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 }}
                 className="input"
               >
-                <option value="">-- Select Vendor --</option>
+                <option value="">{UI_STRINGS.appAppProcurementRfqsIdPage.selectVendor}</option>
                 {rfq.invitedVendors?.map((iv: any) => (
                   <option key={iv.vendorId} value={iv.vendorId}>
-                    {iv.vendor?.name} ({iv.vendor?.code})
-                  </option>
+                    {iv.vendor?.name}{UI_STRINGS.common.copy1b3t0c5}{iv.vendor?.code}{UI_STRINGS.common.copyc7zu6c}</option>
                 ))}
               </select>
             </div>
@@ -1842,12 +1788,12 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
               <table className="table" style={{ fontSize: 12 }}>
                 <thead>
                   <tr>
-                    <th>S.No.</th>
-                    <th>Item Description</th>
-                    <th>Quantity</th>
-                    <th>UOM</th>
-                    <th style={{ width: 140 }}>Quoted Unit Rate (₹)</th>
-                    <th style={{ textAlign: 'right' }}>Line Total (₹)</th>
+                    <th>{UI_STRINGS.common.sNo2}</th>
+                    <th>{UI_STRINGS.common.itemDescription}</th>
+                    <th>{UI_STRINGS.common.quantity}</th>
+                    <th>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ width: 140 }}>{UI_STRINGS.common.quotedUnitRate}</th>
+                    <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.lineTotal}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1865,7 +1811,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                           <input
                             type="number"
                             min="0"
-                            placeholder="Unit rate"
+                            placeholder={UI_STRINGS.appAppProcurementRfqsIdPage.unitRate}
                             value={quoteLineRates[l.id] || ''}
                             onChange={(e) =>
                               setQuoteLineRates((prev) => ({
@@ -1877,8 +1823,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                             style={{ width: '100%' }}
                           />
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                          ₹ {total.toLocaleString()}
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{UI_STRINGS.common.copy1g8b5tg}{total.toLocaleString()}
                         </td>
                       </tr>
                     );
@@ -1889,7 +1834,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label className="label">Commercial Terms</label>
+                <label className="label">{UI_STRINGS.common.commercialTerms}</label>
                 <input
                   type="text"
                   value={quoteCommercialTerms}
@@ -1898,7 +1843,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 />
               </div>
               <div>
-                <label className="label">Delivery Lead Time (Days)</label>
+                <label className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.deliveryLeadTimeDays}</label>
                 <input
                   type="number"
                   value={quoteDeliveryDays}
@@ -1913,16 +1858,14 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 type="button"
                 onClick={() => setShowRecordQuoteModal(false)}
                 className="btn btn-secondary"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={handleRecordQuoteSubmit}
                 disabled={actionLoading}
                 className="btn btn-primary"
               >
-                {actionLoading ? 'Saving...' : 'Save & Capture Quote'}
+                {actionLoading ? UI_STRINGS.common.saving : UI_STRINGS.appAppProcurementRfqsIdPage.saveCaptureQuote}
               </button>
             </div>
           </div>
@@ -1937,12 +1880,12 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <Modal
           isOpen={showAwardModal}
           onClose={() => setShowAwardModal(false)}
-          title="Submit Commercial Award Recommendation"
+          title={UI_STRINGS.appAppProcurementRfqsIdPage.submitCommercialAwardRecommendation}
           maxWidth="max-w-2xl"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label className="label">Recommended Vendor</label>
+              <label className="label">{UI_STRINGS.common.recommendedVendor}</label>
               <select
                 value={awardVendorId}
                 onChange={(e) => setAwardVendorId(e.target.value)}
@@ -1950,8 +1893,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
               >
                 {comparison?.vendors?.map((v: any) => (
                   <option key={v.vendorId} value={v.vendorId}>
-                    {v.rank === 1 ? '★ [L1 Lowest Offer] ' : `[Rank ${v.rank}] `}
-                    {v.vendorName} — ₹ {v.totalQuoteAmount?.toLocaleString()}
+                    {v.rank === 1 ? UI_STRINGS.appAppProcurementRfqsIdPage.l1LowestOffer2 : interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.rankRank, { "rank": v.rank })}
+                    {v.vendorName}{UI_STRINGS.appAppProcurementRfqsIdPage.copyk4r9d6}{v.totalQuoteAmount?.toLocaleString()}
                   </option>
                 ))}
               </select>
@@ -1970,25 +1913,20 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-                  <ShieldAlert size={16} /> Non-L1 Vendor Selection Exception
-                </div>
-                <div style={{ marginTop: 4 }}>
-                  Selected vendor is not the lowest commercial offer (L1). A documented justification is mandatory
-                  and will be audited by Project Approver and Finance.
-                </div>
+                  <ShieldAlert size={16} />{UI_STRINGS.appAppProcurementRfqsIdPage.nonL1VendorSelectionException}</div>
+                <div style={{ marginTop: 4 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.selectedVendorIsNotTheLowestCommercialOfferL1ADocumentedJustificationIsMandatoryAndWillBeAuditedByProjectApproverAndFinance}</div>
               </div>
             )}
 
             <div>
-              <label className="label">
-                Commercial Justification {awardVendorId !== l1VendorId ? '(MANDATORY FOR NON-L1)' : ''}
+              <label className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.commercialJustification}{awardVendorId !== l1VendorId ? UI_STRINGS.appAppProcurementRfqsIdPage.mANDATORYFORNONL1 : ''}
               </label>
               <textarea
                 rows={4}
                 placeholder={
                   awardVendorId === l1VendorId
-                    ? 'Recommended L1 vendor with complete compliant technical specifications and lowest commercial total.'
-                    : 'Provide detailed justification for non-L1 selection (e.g. delivery timeline, technical superior capability, past performance).'
+                    ? UI_STRINGS.appAppProcurementRfqsIdPage.recommendedL1VendorWithCompleteCompliantTechnicalSpecificationsAndLowestCommercialTotal
+                    : UI_STRINGS.appAppProcurementRfqsIdPage.provideDetailedJustificationForNonL1SelectionEGDeliveryTimelineTechnicalSuperiorCapabilityPastPerformance
                 }
                 value={awardJustification}
                 onChange={(e) => setAwardJustification(e.target.value)}
@@ -2001,16 +1939,14 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 type="button"
                 onClick={() => setShowAwardModal(false)}
                 className="btn btn-secondary"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={handleAwardSubmit}
                 disabled={actionLoading}
                 className="btn btn-primary"
               >
-                {actionLoading ? 'Submitting...' : 'Submit Award Recommendation'}
+                {actionLoading ? UI_STRINGS.common.submitting : UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation}
               </button>
             </div>
           </div>
@@ -2024,15 +1960,15 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <Modal
           isOpen={showApproveAwardModal}
           onClose={() => setShowApproveAwardModal(false)}
-          title={`${awardApprovalAction === 'APPROVE' ? 'Approve' : 'Reject'} Commercial Award`}
+          title={interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.value1CommercialAward, { "value1": awardApprovalAction === 'APPROVE' ? 'Approve' : 'Reject' })}
           maxWidth="max-w-md"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label className="label">Approver Remarks</label>
+              <label className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.approverRemarks}</label>
               <textarea
                 rows={3}
-                placeholder="Enter approval sanction remarks or reason for rejection"
+                placeholder={UI_STRINGS.appAppProcurementRfqsIdPage.enterApprovalSanctionRemarksOrReasonForRejection}
                 value={awardApprovalRemarks}
                 onChange={(e) => setAwardApprovalRemarks(e.target.value)}
                 className="input"
@@ -2044,16 +1980,14 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 type="button"
                 onClick={() => setShowApproveAwardModal(false)}
                 className="btn btn-secondary"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={handleAwardApprovalReview}
                 disabled={actionLoading}
                 className={`btn ${awardApprovalAction === 'APPROVE' ? 'btn-primary' : 'btn-danger'}`}
               >
-                {actionLoading ? 'Processing...' : `Confirm ${awardApprovalAction === 'APPROVE' ? 'Approval' : 'Rejection'}`}
+                {actionLoading ? UI_STRINGS.appAppProcurementRfqsIdPage.processing : interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1, { "value1": awardApprovalAction === 'APPROVE' ? 'Approval' : 'Rejection' })}
               </button>
             </div>
           </div>
@@ -2067,29 +2001,28 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <Modal
           isOpen={showPpoModal}
           onClose={() => setShowPpoModal(false)}
-          title="Raise Purchase Order (PPO)"
+          title={UI_STRINGS.appAppProcurementRfqsIdPage.raisePurchaseOrderPPO}
           maxWidth="max-w-xl"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ padding: 12, background: '#f8fafc', borderRadius: 6, fontSize: 13, border: '1px solid #e2e8f0' }}>
               <div>
-                <strong>Selected Vendor:</strong> {ppoTargetVendor?.vendorName || rfq.awards?.[0]?.recommendedVendor?.name || 'Selected Vendor'}
+                <strong>{UI_STRINGS.appAppProcurementRfqsIdPage.selectedVendor2}</strong> {ppoTargetVendor?.vendorName || rfq.awards?.[0]?.recommendedVendor?.name || UI_STRINGS.appAppProcurementRfqsIdPage.selectedVendor}
               </div>
               <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <strong>Commercial Rank:</strong>
+                <strong>{UI_STRINGS.appAppProcurementRfqsIdPage.commercialRank}</strong>
                 <span className={`badge ${ppoTargetVendor?.rank === 1 ? 'badge-approved' : 'badge-draft'}`} style={{ fontWeight: 700 }}>
-                  {ppoTargetVendor?.rank === 1 ? '★ L1 Lowest Offer' : `L${ppoTargetVendor?.rank || 2} Offer`}
+                  {ppoTargetVendor?.rank === 1 ? UI_STRINGS.appAppProcurementRfqsIdPage.l1LowestOffer : interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.lValue1Offer, { "value1": ppoTargetVendor?.rank || 2 })}
                 </span>
                 {ppoTargetVendor?.latestVersion && (
-                  <span className="badge badge-submitted font-mono">Quote v{ppoTargetVendor.latestVersion}</span>
+                  <span className="badge badge-submitted font-mono">{UI_STRINGS.appAppProcurementRfqsIdPage.quoteV}{ppoTargetVendor.latestVersion}</span>
                 )}
               </div>
               <div style={{ marginTop: 4 }}>
-                <strong>Total Order Value:</strong> ₹ {(ppoTargetVendor?.totalQuoteAmount || rfq.awards?.[0]?.finalNegotiatedAmount || 0).toLocaleString()}
+                <strong>{UI_STRINGS.common.totalOrderValue2}</strong>{UI_STRINGS.common.copy1qkmf2u}{(ppoTargetVendor?.totalQuoteAmount || rfq.awards?.[0]?.finalNegotiatedAmount || 0).toLocaleString()}
               </div>
               <div style={{ marginTop: 4 }}>
-                <strong>Scope Lines:</strong> {rfq.lines?.length} line items carried forward
-              </div>
+                <strong>{UI_STRINGS.appAppProcurementRfqsIdPage.scopeLines}</strong> {rfq.lines?.length}{UI_STRINGS.appAppProcurementRfqsIdPage.lineItemsCarriedForward}</div>
             </div>
 
             {ppoTargetVendor && ppoTargetVendor.rank > 1 && (
@@ -2104,24 +2037,20 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
-                  <ShieldAlert size={15} /> Non-L1 Vendor Award Notice
-                </div>
-                <div style={{ marginTop: 3 }}>
-                  This vendor is ranked L{ppoTargetVendor.rank} (not lowest compliant offer). A documented justification is mandatory before raising the PPO.
-                </div>
+                  <ShieldAlert size={15} />{UI_STRINGS.appAppProcurementRfqsIdPage.nonL1VendorAwardNotice}</div>
+                <div style={{ marginTop: 3 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.thisVendorIsRankedL}{ppoTargetVendor.rank}{UI_STRINGS.appAppProcurementRfqsIdPage.notLowestCompliantOfferADocumentedJustificationIsMandatoryBeforeRaisingThePPO}</div>
               </div>
             )}
 
             <div>
-              <label className="label">
-                Commercial Award Justification {ppoTargetVendor?.rank > 1 ? '(MANDATORY FOR NON-L1) *' : '(Optional for L1)'}
+              <label className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.commercialAwardJustification}{ppoTargetVendor?.rank > 1 ? UI_STRINGS.appAppProcurementRfqsIdPage.mANDATORYFORNONL12 : UI_STRINGS.appAppProcurementRfqsIdPage.optionalForL1}
               </label>
               <textarea
                 rows={3}
                 placeholder={
                   ppoTargetVendor?.rank === 1
-                    ? 'Awarded to L1 lowest compliant bidder following competitive evaluation.'
-                    : 'Enter mandatory justification for awarding to non-L1 vendor (e.g. specialized technical capability, delivery timeline, superior SLA)...'
+                    ? UI_STRINGS.appAppProcurementRfqsIdPage.awardedToL1LowestCompliantBidderFollowingCompetitiveEvaluation
+                    : UI_STRINGS.appAppProcurementRfqsIdPage.enterMandatoryJustificationForAwardingToNonL1VendorEGSpecializedTechnicalCapabilityDeliveryTimelineSuperiorSLA
                 }
                 value={ppoJustification}
                 onChange={(e) => setPpoJustification(e.target.value)}
@@ -2130,7 +2059,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
 
             <div>
-              <label className="label">Delivery Terms</label>
+              <label className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.deliveryTerms}</label>
               <input
                 type="text"
                 value={ppoDeliveryTerms}
@@ -2140,7 +2069,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
 
             <div>
-              <label className="label">Payment Terms</label>
+              <label className="label">{UI_STRINGS.common.paymentTerms}</label>
               <input
                 type="text"
                 value={ppoPaymentTerms}
@@ -2154,16 +2083,14 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 type="button"
                 onClick={() => setShowPpoModal(false)}
                 className="btn btn-secondary"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={() => handleGeneratePpo(ppoAwardId)}
                 disabled={actionLoading}
                 className="btn btn-primary"
               >
-                {actionLoading ? 'Generating...' : 'Issue Purchase Order (PPO)'}
+                {actionLoading ? UI_STRINGS.appAppProcurementRfqsIdPage.generating : UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO}
               </button>
             </div>
           </div>
@@ -2177,21 +2104,17 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <Modal
           isOpen={showRateCardModal}
           onClose={() => setShowRateCardModal(false)}
-          title="Approved Vendor Rate Card Sourcing Comparison"
+          title={UI_STRINGS.appAppProcurementRfqsIdPage.approvedVendorRateCardSourcingComparison}
           maxWidth="max-w-5xl"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontSize: 13, color: '#475569' }}>
-              Compare pre-negotiated corporate rate cards against the current RFQ requirements.
-              Direct PPO creation is only permitted when the rate card is approved, currently valid,
-              and provides complete item coverage.
-            </div>
+            <div style={{ fontSize: 13, color: '#475569' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.comparePreNegotiatedCorporateRateCardsAgainstTheCurrentRFQRequirementsDirectPPOCreationIsOnlyPermittedWhenTheRateCardIsApprovedCurrentlyValidAndProvidesCompleteItemCoverage}</div>
 
             {!rateCardMatch?.matchedRateCards?.length ? (
               <EmptyState
                 icon={<Tag size={36} color="#94a3b8" strokeWidth={1.5} />}
-                title="No Applicable Rate Cards"
-                description="No approved rate cards found matching the category or line items of this RFQ package."
+                title={UI_STRINGS.appAppProcurementRfqsIdPage.noApplicableRateCards}
+                description={UI_STRINGS.appAppProcurementRfqsIdPage.noApprovedRateCardsFoundMatchingTheCategoryOrLineItemsOfThisRFQPackage}
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2211,39 +2134,34 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                           <span className="font-mono font-bold text-primary">{rc.rateCardNumber}</span>
                           <span className="badge badge-draft">{rc.category}</span>
                           <span className={`badge ${rc.directPpoEligible ? 'badge-approved' : 'badge-rejected'}`}>
-                            {rc.directPpoEligible ? 'Direct PPO Eligible' : 'Direct PPO Blocked'}
+                            {rc.directPpoEligible ? UI_STRINGS.appAppProcurementRfqsIdPage.directPPOEligible : UI_STRINGS.appAppProcurementRfqsIdPage.directPPOBlocked}
                           </span>
                         </div>
                         <div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>
-                          {rc.vendor?.name} — {rc.title}
+                          {rc.vendor?.name}{UI_STRINGS.common.copyq9aflv}{rc.title}
                         </div>
                       </div>
 
                       <div style={{ textAlign: 'right' }}>
-                        <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>Rate Card Total</div>
-                        <div style={{ fontWeight: 800, fontSize: 18, color: rc.directPpoEligible ? '#059669' : '#0f172a' }}>
-                          ₹ {rc.rateCardTotalValue?.toLocaleString()}
+                        <div className="text-muted" style={{ fontSize: 11, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.rateCardTotal}</div>
+                        <div style={{ fontWeight: 800, fontSize: 18, color: rc.directPpoEligible ? '#059669' : '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{rc.rateCardTotalValue?.toLocaleString()}
                         </div>
-                        <div style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>
-                          Savings: ₹ {rc.totalSavings?.toLocaleString()} ({rc.savingsPercent}%)
-                        </div>
+                        <div style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>{UI_STRINGS.common.savings}{rc.totalSavings?.toLocaleString()}{UI_STRINGS.common.copy1b3t0c5}{rc.savingsPercent}{UI_STRINGS.common.copy1y4e1t7}</div>
                       </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, fontSize: 12, marginBottom: 12 }}>
-                      <div>Validity: <strong>{rc.validFrom} to {rc.validTo}</strong></div>
-                      <div>Item Coverage: <strong>{rc.matchedItemsCount}/{rc.totalItemsCount} items ({rc.coveragePercent}%)</strong></div>
-                      <div>Vendor Qualification: <strong>{rc.vendor?.qualificationStatus || 'QUALIFIED'}</strong></div>
-                      <div>Performance Score: <strong>{rc.vendor?.performanceScore || 88}/100</strong></div>
+                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.validity2}<strong>{rc.validFrom}{UI_STRINGS.appAppProcurementRfqsIdPage.to}{rc.validTo}</strong></div>
+                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.itemCoverage}<strong>{rc.matchedItemsCount}{UI_STRINGS.common.copybo0mse}{rc.totalItemsCount}{UI_STRINGS.appAppProcurementRfqsIdPage.items}{rc.coveragePercent}{UI_STRINGS.common.copy1y4e1t7}</strong></div>
+                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.vendorQualification}<strong>{rc.vendor?.qualificationStatus || UI_STRINGS.common.qUALIFIED}</strong></div>
+                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.performanceScore}<strong>{rc.vendor?.performanceScore || 88}{UI_STRINGS.appAppProcurementRfqsIdPage.copy1gy72o5}</strong></div>
                     </div>
 
                     {/* Block reasons if ineligible */}
                     {!rc.directPpoEligible && rc.blockReasons?.length > 0 && (
                       <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: 10, fontSize: 12, color: '#991b1b', marginBottom: 12 }}>
-                        <strong>Blocked from Direct PPO:</strong> {rc.blockReasons[0]}
-                        <div style={{ marginTop: 2, fontSize: 11 }}>
-                          Requirement must be routed through competitive RFQ sourcing.
-                        </div>
+                        <strong>{UI_STRINGS.appAppProcurementRfqsIdPage.blockedFromDirectPPO}</strong> {rc.blockReasons[0]}
+                        <div style={{ marginTop: 2, fontSize: 11 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.requirementMustBeRoutedThroughCompetitiveRFQSourcing}</div>
                       </div>
                     )}
 
@@ -2255,8 +2173,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                           disabled={actionLoading}
                           className="btn btn-sm btn-primary"
                         >
-                          <FileCheck size={14} style={{ marginRight: 6 }} /> Create Direct PPO from Rate Card
-                        </button>
+                          <FileCheck size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.createDirectPPOFromRateCard}</button>
                       </div>
                     )}
                   </div>
@@ -2272,7 +2189,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
         <Modal
           isOpen={!!viewingQuote}
           onClose={() => setViewingQuote(null)}
-          title={`Quotation Details: ${viewingQuote.quoteNumber || 'Vendor Quote'}`}
+          title={interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.quotationDetailsValue1, { "value1": viewingQuote.quoteNumber || 'Vendor Quote' })}
           maxWidth="max-w-4xl"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2290,50 +2207,47 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
               }}
             >
               <div>
-                <span className="text-muted">Vendor:</span>{' '}
+                <span className="text-muted">{UI_STRINGS.common.vendor2}</span>{' '}
                 <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                  {rfq.invitedVendors?.find((iv: any) => iv.vendorId === viewingQuote.vendorId)?.vendor?.name || viewingQuote.vendor?.name || 'Vendor'}
+                  {rfq.invitedVendors?.find((iv: any) => iv.vendorId === viewingQuote.vendorId)?.vendor?.name || viewingQuote.vendor?.name || UI_STRINGS.common.vendor}
                 </div>
               </div>
               <div>
-                <span className="text-muted">Quote Reference:</span>{' '}
+                <span className="text-muted">{UI_STRINGS.appAppProcurementRfqsIdPage.quoteReference2}</span>{' '}
                 <div className="font-mono font-bold text-blue-700">{viewingQuote.quoteNumber}</div>
               </div>
               <div>
-                <span className="text-muted">Quoted Total:</span>{' '}
-                <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>
-                  ₹ {(viewingQuote.totalQuoteAmount || 0).toLocaleString()}
+                <span className="text-muted">{UI_STRINGS.appAppProcurementRfqsIdPage.quotedTotal}</span>{' '}
+                <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{(viewingQuote.totalQuoteAmount || 0).toLocaleString()}
                 </div>
               </div>
               <div>
-                <span className="text-muted">Validity:</span>{' '}
-                <div style={{ fontWeight: 600 }}>{viewingQuote.validityDays ? `${viewingQuote.validityDays} Days` : '30 Days'}</div>
+                <span className="text-muted">{UI_STRINGS.appAppProcurementRfqsIdPage.validity}</span>{' '}
+                <div style={{ fontWeight: 600 }}>{viewingQuote.validityDays ? interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.validityDaysDays, { "validityDays": viewingQuote.validityDays }) : UI_STRINGS.appAppProcurementRfqsIdPage.copy1xeupjt}</div>
               </div>
               <div>
-                <span className="text-muted">Delivery Lead Time:</span>{' '}
-                <div style={{ fontWeight: 600 }}>{viewingQuote.deliveryLeadTimeDays ? `${viewingQuote.deliveryLeadTimeDays} Days` : '30 Days'}</div>
+                <span className="text-muted">{UI_STRINGS.appAppProcurementRfqsIdPage.deliveryLeadTime}</span>{' '}
+                <div style={{ fontWeight: 600 }}>{viewingQuote.deliveryLeadTimeDays ? interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.deliveryLeadTimeDaysDays, { "deliveryLeadTimeDays": viewingQuote.deliveryLeadTimeDays }) : UI_STRINGS.appAppProcurementRfqsIdPage.copy1xeupjt}</div>
               </div>
               <div>
-                <span className="text-muted">Commercial Terms:</span>{' '}
-                <div style={{ fontWeight: 500 }}>{viewingQuote.commercialTerms || 'Standard FOB Site'}</div>
+                <span className="text-muted">{UI_STRINGS.appAppProcurementRfqsIdPage.commercialTerms}</span>{' '}
+                <div style={{ fontWeight: 500 }}>{viewingQuote.commercialTerms || UI_STRINGS.appAppProcurementRfqsIdPage.standardFOBSite}</div>
               </div>
             </div>
 
             {/* Line Items Table */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
-                Quoted Line-Item Breakdown
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quotedLineItemBreakdown}</div>
               <div className="table-wrapper" style={{ maxHeight: 360, overflowY: 'auto' }}>
                 <table className="table enterprise-table" style={{ fontSize: 12 }}>
                   <thead>
                     <tr>
-                      <th style={{ width: 50 }}>S.No.</th>
-                      <th>Item Description</th>
-                      <th style={{ width: 70 }}>UOM</th>
-                      <th style={{ textAlign: 'right', width: 80 }}>Quantity</th>
-                      <th style={{ textAlign: 'right', width: 120 }}>Quoted Rate (₹)</th>
-                      <th style={{ textAlign: 'right', width: 130 }}>Line Total (₹)</th>
+                      <th style={{ width: 50 }}>{UI_STRINGS.common.sNo2}</th>
+                      <th>{UI_STRINGS.common.itemDescription}</th>
+                      <th style={{ width: 70 }}>{UI_STRINGS.common.uOM}</th>
+                      <th style={{ textAlign: 'right', width: 80 }}>{UI_STRINGS.common.quantity}</th>
+                      <th style={{ textAlign: 'right', width: 120 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.quotedRate}</th>
+                      <th style={{ textAlign: 'right', width: 130 }}>{UI_STRINGS.common.lineTotal}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2354,10 +2268,10 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                           <td style={{ color: '#475569' }}>{line.uom}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600 }}>{line.quantity?.toLocaleString()}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: unitRate > 0 ? '#0f172a' : '#94a3b8' }}>
-                            {unitRate > 0 ? `₹ ${unitRate.toLocaleString()}` : '—'}
+                            {unitRate > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": unitRate.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: lineTotal > 0 ? '#0f172a' : '#94a3b8' }}>
-                            {lineTotal > 0 ? `₹ ${lineTotal.toLocaleString()}` : '—'}
+                            {lineTotal > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": lineTotal.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                           </td>
                         </tr>
                       );
@@ -2365,9 +2279,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                   </tbody>
                   <tfoot>
                     <tr style={{ background: '#f8fafc', fontWeight: 800 }}>
-                      <td colSpan={5} style={{ textAlign: 'right' }}>Total Quoted Value:</td>
-                      <td style={{ textAlign: 'right', color: '#1e40af', fontSize: 13 }}>
-                        ₹ {(viewingQuote.totalQuoteAmount || 0).toLocaleString()}
+                      <td colSpan={5} style={{ textAlign: 'right' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.totalQuotedValue}</td>
+                      <td style={{ textAlign: 'right', color: '#1e40af', fontSize: 13 }}>{UI_STRINGS.common.copy1g8b5tg}{(viewingQuote.totalQuoteAmount || 0).toLocaleString()}
                       </td>
                     </tr>
                   </tfoot>
@@ -2380,9 +2293,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 type="button"
                 onClick={() => setViewingQuote(null)}
                 className="btn btn-secondary btn-sm"
-              >
-                Close
-              </button>
+              >{UI_STRINGS.common.close}</button>
             </div>
           </div>
         </Modal>
@@ -2409,7 +2320,7 @@ export default function RfqDetailPage(props: { params: Promise<{ id: string }> }
       fallback={
         <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
           <div className="spinner" style={{ margin: '0 auto 12px' }} />
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Loading RFQ Workspace...</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.loadingRFQWorkspace}</div>
         </div>
       }
     >

@@ -1,5 +1,6 @@
 'use client';
 // src/components/ApprovalChatDrawer.tsx - Interactive Communication & Enquiry Drawer
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useRef } from 'react';
 import {
   X,
@@ -14,6 +15,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { ApprovalChatDrawerProps } from "@app-types/components/ApprovalChatDrawer.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { ApprovalChatDrawerProps };
 
 
@@ -62,10 +66,10 @@ export default function ApprovalChatDrawer({
         setMessages(data.messages || []);
       } else {
         const err = await res.json();
-        setError(err.error || 'Failed to load message history.');
+        setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory }));
       }
     } catch (e: any) {
-      setError(e.message || 'Network error fetching messages.');
+      setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
     } finally {
       setLoading(false);
     }
@@ -94,14 +98,14 @@ export default function ApprovalChatDrawer({
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to send message.');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSendMessage2 }));
       }
 
       setInputText('');
       await loadMessages();
       if (onMessageSent) onMessageSent();
     } catch (err: any) {
-      setError(err.message || 'Failed to send message.');
+      setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSendMessage2 }));
     } finally {
       setSubmitting(false);
     }
@@ -160,7 +164,7 @@ export default function ApprovalChatDrawer({
                   border: `1px solid ${entityType === 'PR' ? '#bfdbfe' : '#a7f3d0'}`,
                 }}
               >
-                {entityType === 'PR' ? 'PR Enquiry & Messages' : 'Budget Enquiry & Messages'}
+                {entityType === 'PR' ? UI_STRINGS.componentsApprovalChatDrawer.pREnquiryMessages : UI_STRINGS.componentsApprovalChatDrawer.budgetEnquiryMessages}
               </span>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                 {entityCode}
@@ -172,17 +176,17 @@ export default function ApprovalChatDrawer({
               </div>
             )}
             <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {costCentre && <span>Cost Centre: <strong>{costCentre}</strong></span>}
-              {category && <span>Category: <strong>{category}</strong></span>}
+              {costCentre && <span>{UI_STRINGS.componentsApprovalChatDrawer.costCentre}<strong>{costCentre}</strong></span>}
+              {category && <span>{UI_STRINGS.componentsApprovalChatDrawer.category}<strong>{category}</strong></span>}
               {amount !== undefined && (
-                <span>Value: <strong style={{ color: '#047857' }}>₹ {amount.toLocaleString('en-IN')}</strong></span>
+                <span>{UI_STRINGS.componentsApprovalChatDrawer.value}<strong style={{ color: '#047857' }}>{UI_STRINGS.common.copytfdhmk}{amount.toLocaleString(I18N_CONFIG.defaultLocale)}</strong></span>
               )}
             </div>
           </div>
           <button
             type="button"
-            title="Close panel"
-            aria-label="Close panel"
+            title={UI_STRINGS.componentsApprovalChatDrawer.closePanel}
+            aria-label={UI_STRINGS.componentsApprovalChatDrawer.closePanel}
             onClick={onClose}
             style={{
               background: 'none',
@@ -212,15 +216,13 @@ export default function ApprovalChatDrawer({
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', gap: 8 }}>
               <Loader2 size={20} className="spin" />
-              <span>Loading messages...</span>
+              <span>{UI_STRINGS.common.loadingMessages}</span>
             </div>
           ) : messages.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b', textAlign: 'center' }}>
               <MessageSquare size={36} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-              <div style={{ fontWeight: 600, color: '#334155', marginBottom: 4 }}>No messages or enquiries yet</div>
-              <p style={{ fontSize: 12, maxWidth: 300, margin: 0 }}>
-                Use the box below to ask the requester or submitter for clarifications, or to log communication notes.
-              </p>
+              <div style={{ fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.componentsApprovalChatDrawer.noMessagesOrEnquiriesYet}</div>
+              <p style={{ fontSize: 12, maxWidth: 300, margin: 0 }}>{UI_STRINGS.componentsApprovalChatDrawer.useTheBoxBelowToAskTheRequesterOrSubmitterForClarificationsOrToLogCommunicationNotes}</p>
             </div>
           ) : (
             messages.map((m, idx) => {
@@ -271,8 +273,7 @@ export default function ApprovalChatDrawer({
                             gap: 3,
                           }}
                         >
-                          <HelpCircle size={10} /> Clarification Enquiry
-                        </span>
+                          <HelpCircle size={10} />{UI_STRINGS.componentsApprovalChatDrawer.clarificationEnquiry}</span>
                       )}
                     </div>
                     <span style={{ fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -326,8 +327,7 @@ export default function ApprovalChatDrawer({
                   gap: 5,
                 }}
               >
-                <MessageSquare size={12} /> Message / Note
-              </button>
+                <MessageSquare size={12} />{UI_STRINGS.componentsApprovalChatDrawer.messageNote}</button>
               <button
                 type="button"
                 onClick={() => setIsEnquiry(true)}
@@ -346,8 +346,7 @@ export default function ApprovalChatDrawer({
                   gap: 5,
                 }}
               >
-                <HelpCircle size={12} /> Request Clarification (Enquiry)
-              </button>
+                <HelpCircle size={12} />{UI_STRINGS.componentsApprovalChatDrawer.requestClarificationEnquiry}</button>
             </div>
 
             <textarea
@@ -355,8 +354,8 @@ export default function ApprovalChatDrawer({
               onChange={e => setInputText(e.target.value)}
               placeholder={
                 isEnquiry
-                  ? 'Ask for clarification regarding line items, rates, specs, or documents...'
-                  : 'Type a message or note retained against this approval...'
+                  ? UI_STRINGS.componentsApprovalChatDrawer.askForClarificationRegardingLineItemsRatesSpecsOrDocuments
+                  : UI_STRINGS.componentsApprovalChatDrawer.typeAMessageOrNoteRetainedAgainstThisApproval
               }
               rows={3}
               style={{
@@ -375,7 +374,7 @@ export default function ApprovalChatDrawer({
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                {isEnquiry ? 'Flags item as Clarification Requested' : 'Retained in chronological conversation'}
+                {isEnquiry ? UI_STRINGS.componentsApprovalChatDrawer.flagsItemAsClarificationRequested : UI_STRINGS.componentsApprovalChatDrawer.retainedInChronologicalConversation}
               </span>
               <button
                 type="submit"
@@ -393,12 +392,12 @@ export default function ApprovalChatDrawer({
                 {submitting ? (
                   <>
                     <Loader2 size={13} className="spin" />
-                    <span>Sending...</span>
+                    <span>{UI_STRINGS.common.sending}</span>
                   </>
                 ) : (
                   <>
                     <Send size={13} />
-                    <span>{isEnquiry ? 'Send Enquiry' : 'Send Message'}</span>
+                    <span>{isEnquiry ? UI_STRINGS.componentsApprovalChatDrawer.sendEnquiry : UI_STRINGS.componentsApprovalChatDrawer.sendMessage}</span>
                   </>
                 )}
               </button>

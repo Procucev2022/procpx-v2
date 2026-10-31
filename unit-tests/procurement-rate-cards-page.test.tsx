@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import RateCardManagementPage from '../src/app/(app)/procurement/rate-cards/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/components/rate-cards/HomeWorkspace', () => ({
   __esModule: true,
@@ -120,7 +124,7 @@ describe('procurement rate cards page', () => {
     const cards = JSON.parse(screen.getByTestId('cards-data').textContent || '[]');
     expect(cards).toHaveLength(8);
     expect(cards.map((card: any) => card.currentStage)).toEqual([
-      'Approved', 'Round 1 Offer', 'Buyer Accepted', 'Pending Approval', 'Approved', 'UNDER REVIEW', 'In Progress', 'In Progress',
+      UI_STRINGS.common.approved, 'Round 1 Offer', 'Buyer Accepted', UI_STRINGS.common.pendingApproval, UI_STRINGS.common.approved, 'UNDER REVIEW', UI_STRINGS.common.inProgress, UI_STRINGS.common.inProgress,
     ]);
     expect(cards[0]).toMatchObject({ vendor: 'Alpha', vendorCode: 'A1', validFrom: expect.any(String), latestBuyerOffer: expect.any(String) });
     expect(cards[5].latestBuyerOffer).toMatch(/4,83,000/);
@@ -143,20 +147,20 @@ describe('procurement rate cards page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
     expect(screen.getByTestId('buyer-acceptance-workspace')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel buyer acceptance' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Home Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.homeWorkspace) }));
     fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Home Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.homeWorkspace) }));
     fireEvent.click(screen.getByRole('button', { name: 'Open details' }));
     expect(screen.getByTestId('finalised-details')).toHaveTextContent('RC-2026-0006:RC-2026-0006');
     fireEvent.click(screen.getByRole('button', { name: 'Back to Rate Cards' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Initiate Rate Card' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.initiateRateCard) }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel initiation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Item Negotiation' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.itemNegotiation) }));
     fireEvent.click(screen.getByRole('button', { name: 'Back from negotiation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Buyer Acceptance' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.buyerAcceptance) }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel buyer acceptance' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Finalised Details' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.finalisedDetails) }));
     fireEvent.click(screen.getByRole('button', { name: 'Back to Rate Cards' }));
   });
 
@@ -198,14 +202,14 @@ describe('procurement rate cards page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset offer' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save offer' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send offer' }));
-    expect(screen.getByText('Round 2 Counter Offer successfully sent to Ramakrishna Interiors!')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.round2CounterOfferSuccessfullySentToRamakrishnaInteriors))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Accept quote' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept with agreement' }));
     expect(screen.getByText(/Master Agreement.*sent to vendor/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
     fireEvent.click(screen.getByRole('button', { name: 'Accept direct schedule' }));
-    expect(screen.getByText(/No formal agreement required/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.noFormalAgreementRequired))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel buyer acceptance' }));
     expect(screen.getByTestId('negotiation-workspace')).toBeInTheDocument();
