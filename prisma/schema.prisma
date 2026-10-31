@@ -1,0 +1,1396 @@
+// proCPX Procurement - Prisma Schema
+// Phase 1 + Phase 2 Foundation: BOQ Management & Full Procurement Sourcing Workflow
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // D1 uses SQLite's schema dialect. Prisma 6 requires a URL for generation;
+  // application connections use the Cloudflare D1 adapter, never this local path.
+  url      = "file:./.wrangler/d1-schema-placeholder.db"
+}
+
+// ============================================================
+// TENANT
+// ============================================================
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED, INACTIVE
+  config      String?  // JSON config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  projects    Project[]
+  uomMasters  UomMaster[]
+  categories  Category[]
+  auditLogs   AuditLog[]
+  vendors     Vendor[]
+  rfqs        Rfq[]
+  quotes      Quote[]
+  ppos        Ppo[]
+  costCentres         CostCentre[]
+  standardBoqItems    StandardBoqItem[]
+  budgets             Budget[]
+  budgetContributions BudgetContribution[]
+  budgetTransactions  BudgetTransaction[]
+  prs                 ProcurementRequest[]
+  ppoLines            PpoLine[]
+  actualCosts         ActualCostTransaction[]
+  rateCards           VendorRateCard[]
+  notifications       Notification[]
+
+  @@map("tenants")
+}
+
+// ============================================================
+// USER & AUTH
+// ============================================================
+model User {
+  id            String    @id @default(uuid())
+  tenantId      String
+  email         String
+  name          String
+  passwordHash  String
+  role          String    // SUPER_ADMIN, CLIENT_ADMIN, PROJECT_USER, PROJECT_APPROVER, PROCUREMENT_USER, FINANCE_USER, CATEGORY_MANAGER, VIEWER
+  status        String    @default("ACTIVE") // ACTIVE, INACTIVE, LOCKED
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdBy     String?
+  updatedBy     String?
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  vendorId      String?
+  vendor        Vendor?   @relation(fields: [vendorId], references: [id])
+  projectTeams  ProjectTeam[]
+  auditLogs     AuditLog[]
+  boqRevisions  BoqRevision[] @relation("RevisionCreatedBy")
+  approvedRevs  BoqRevision[] @relation("RevisionApprovedBy")
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+// ============================================================
+// PROJECT
+// ============================================================
+model Project {
+  id              String   @id @default(uuid())
+  tenantId        String
+  projectCode     String   // CPX-P-000001
+  name            String
+  description     String?
+  sector          String   // RETAIL, HOSPITALITY, BANKING, INSURANCE, OTHER
+  projectType     String   // NEW_BUILD, RENOVATION, REFURBISHMENT, EXPANSION, REPLACEMENT, FIT_OUT, MAINTENANCE_CAPEX, OTHER
+  location        String?
+  address         String?
+  city            String?
+  state           String?
+  country         String?  @default("India")
+  areaSqFt        Float?
+  costCentre      String?
+  projectOwner    String?
+  budget          Float?
+  currency        String?  @default("INR")
+  businessUnit    String?
+  numberOfFloors  Int?
+  numberOfUnits   Int?
+  startDate       DateTime?
+  targetCompletion DateTime?
+  status          String   @default("DRAFT") // DRAFT, BOQ_PREPARATION, BOQ_REVIEW, BOQ_APPROVED, CANCELLED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String
+  updatedBy       String?
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  team            ProjectTeam[]
+  boqs            Boq[]
+  documents       ProjectDocument[]
+  auditLogs       AuditLog[]
+  rfqs            Rfq[]
+  ppos            Ppo[]
+  costCentres         CostCentre[]
+  budgets             Budget[]
+  budgetContributions BudgetContribution[]
+  budgetTransactions  BudgetTransaction[]
+  prs                 ProcurementRequest[]
+  ppoLines            PpoLine[]
+  actualCosts         ActualCostTransaction[]
+
+  @@unique([tenantId, projectCode])
+  @@map("projects")
+}
+
+model ProjectTeam {
+  id          String   @id @default(uuid())
+  projectId   String
+  userId      String
+  projectRole String   // PROJECT_MANAGER, PROJECT_USER, PROJECT_APPROVER, PROCUREMENT_USER, FINANCE_USER, CATEGORY_MANAGER
+  assignedAt  DateTime @default(now())
+  assignedBy  String
+  active      Boolean  @default(true)
+
+  project     Project  @relation(fields: [projectId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@map("project_teams")
+}
+
+model ProjectDocument {
+  id          String   @id @default(uuid())
+  projectId   String
+  tenantId    String
+  name        String
+  fileType    String
+  fileSize    Int
+  filePath    String
+  uploadedBy  String
+  uploadedAt  DateTime @default(now())
+  category    String?  // ORIGINAL_BOQ, DRAWING, SPECIFICATION, OTHER
+
+  project     Project  @relation(fields: [projectId], references: [id])
+
+  @@map("project_documents")
+}
+
+// ============================================================
+// BOQ MASTER + REVISIONS
+// ============================================================
+model Boq {
+  id          String   @id @default(uuid())
+  tenantId    String
+  projectId   String
+  costCentreId String?
+  boqCode     String   // BOQ-000001
+  title       String?  // Human-readable BOQ name (e.g. Retail Store Electrical BOQ)
+  description String?  // Purpose, scope or specific requirements of this BOQ
+  category    String?  // Primary category or comma-separated categories
+  scope       String?  // Scope of works / project requirements
+  status      String   @default("DRAFT") // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
+  purpose     String?  // BUDGET, PR, BOTH
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
+
+  project             Project  @relation(fields: [projectId], references: [id])
+  costCentre          CostCentre? @relation(fields: [costCentreId], references: [id])
+  revisions           BoqRevision[]
+  budgetContributions BudgetContribution[]
+  prs                 ProcurementRequest[]
+
+  @@unique([tenantId, boqCode])
+  @@map("boqs")
+}
+
+model BoqRevision {
+  id                String    @id @default(uuid())
+  tenantId          String
+  boqId             String
+  costCentreId      String?
+  revisionNumber    Int       // 0, 1, 2, 3...
+  revisionCode      String    // R0, R1, R2...
+  status            String    @default("DRAFT") // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
+  preparationStatus String    @default("DRAFT") // DRAFT, AI_REVIEW, STANDARDISED, VALIDATION_REQUIRED, READY_FOR_SUBMISSION
+  budgetStatus      String    @default("NOT_ADDED_TO_BUDGET") // NOT_ADDED_TO_BUDGET, BUDGET_DRAFT, BUDGET_PENDING_PROJECT_APPROVAL, BUDGET_PROJECT_APPROVED, BUDGET_PENDING_FINANCE_APPROVAL, BUDGET_APPROVED, BUDGET_REJECTED
+  prStatus          String    @default("PR_NOT_CREATED") // PR_NOT_CREATED, PR_DRAFT, PR_PENDING_PROJECT_APPROVAL, PR_APPROVED, PR_REJECTED, PR_RELEASED_TO_PROCUREMENT
+  sourceType        String    @default("MANUAL") // FIXED_TEMPLATE, STANDARD_BOQ, DRAWING_AI, MANUAL
+  sourceFile        String?
+  sourceReference   String?
+  sourceConfidence  Float?
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  qualityScore      Float?
+  totalLines        Int       @default(0)
+  validLines        Int       @default(0)
+  errorLines        Int       @default(0)
+  warningLines      Int       @default(0)
+  originalFileName  String?
+  originalFilePath  String?
+  originalFileSize  Int?
+  originalFileHash  String?
+  uploadedAt        DateTime?
+  columnMapping     String?   // JSON
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdById       String
+  approvedById      String?
+
+  boq                 Boq       @relation(fields: [boqId], references: [id])
+  costCentre          CostCentre? @relation(fields: [costCentreId], references: [id])
+  createdBy           User      @relation("RevisionCreatedBy", fields: [createdById], references: [id])
+  approvedBy          User?     @relation("RevisionApprovedBy", fields: [approvedById], references: [id])
+  lines               BoqLine[]
+  rfqs                Rfq[]
+  budgetContributions BudgetContribution[]
+  budgetTransactions  BudgetTransaction[]
+  prs                 ProcurementRequest[]
+
+  @@unique([boqId, revisionNumber])
+  @@map("boq_revisions")
+}
+
+model BoqLine {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  boqRevisionId       String
+  lineNumber          String
+  originalDescription String
+  standardDescription String?
+  specification       String?
+  categoryId          String?
+  subcategoryId       String?
+  uomId               String?
+  uomRaw              String?  // original UOM from upload
+  quantity            Float?
+  location            String?
+  drawingReference    String?
+  brand               String?
+  model               String?
+  material            String?
+  grade               String?
+  remarks             String?
+  itemCode            String?
+  sourceSheet         String?
+  sourceRow           Int?
+  sourceReference     String?
+  confidenceScore     Float?
+  benchmarkEligible   Boolean  @default(true)
+  validationStatus    String   @default("PENDING") // PENDING, VALID, WARNING, ERROR
+  validationMessages  String?  // JSON array
+  isDeleted           Boolean  @default(false)
+  deletedAt           DateTime?
+  deletedBy           String?
+  // AI Refinement and AI Cost fields
+  aiSuggestedDescription String?
+  aiSuggestedSpec        String?
+  aiReason               String?
+  aiConfidence           Float?
+  userOverride           String?
+  userApprovedValue      String?
+  aiUnitCost             Float?
+  aiTotalCost            Float?
+  costConfidence         Float?
+  costSource             String?  // Client Contract, Approved Vendor Rate Card, Standard Catalogue, Validated Vendor Catalogue, Historical Awarded Price, External Benchmark, Engineered Cost, AI Estimate, Controlled Manual Benchmark
+  costMethod             String?
+  costDate               DateTime?
+  geography              String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  revision            BoqRevision @relation(fields: [boqRevisionId], references: [id])
+  category            Category?   @relation("LineCategory", fields: [categoryId], references: [id])
+  subcategory         Category?   @relation("LineSubcategory", fields: [subcategoryId], references: [id])
+  uom                 UomMaster?  @relation(fields: [uomId], references: [id])
+  budgetTransactions  BudgetTransaction[]
+  prLines             PRLine[]
+  rfqLines            RfqLine[]
+  ppoLines            PpoLine[]
+  actualCosts         ActualCostTransaction[]
+
+  @@map("boq_lines")
+}
+
+// ============================================================
+// MASTER DATA
+// ============================================================
+model UomMaster {
+  id          String   @id @default(uuid())
+  tenantId    String
+  code        String   // NOS, SQM, RMT, etc.
+  name        String
+  aliases     String?  // JSON array of alternate names
+  category    String?  // AREA, LENGTH, VOLUME, COUNT, etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  boqLines    BoqLine[]
+
+  @@unique([tenantId, code])
+  @@map("uom_masters")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  code        String?
+  parentId    String?  // null = top-level category, non-null = subcategory
+  level       Int      @default(1)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  parent      Category? @relation("SubCategories", fields: [parentId], references: [id])
+  children    Category[] @relation("SubCategories")
+  linesAsCategory     BoqLine[] @relation("LineCategory")
+  linesAsSubcategory  BoqLine[] @relation("LineSubcategory")
+
+  @@unique([tenantId, name, parentId])
+  @@map("categories")
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      String?
+  projectId   String?
+  entityType  String   // PROJECT, BOQ, BOQ_REVISION, BOQ_LINE, USER, TENANT, RFQ, VENDOR, QUOTE, NEGOTIATION, AUCTION, AWARD, PPO
+  entityId    String
+  action      String   // CREATE, UPDATE, DELETE, SUBMIT, APPROVE, REJECT, UPLOAD, LOGIN, LOGOUT, RELEASE, INVITE, COMPARE, LOCK, RECOMMEND, ISSUE
+  description String
+  oldValue    String?  // JSON
+  newValue    String?  // JSON
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
+  project     Project? @relation(fields: [projectId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ============================================================
+// VENDOR DIRECTORY & EMPANELMENT
+// ============================================================
+model Vendor {
+  id                String   @id @default(uuid())
+  tenantId          String
+  code              String   // VND-000001
+  name              String
+  contactPerson     String?
+  email             String
+  phone             String?
+  city              String?
+  state             String?
+  country           String?  @default("India")
+  categories        String?  // JSON array
+  experienceYears   Int?     @default(5)
+  turnoverCrores    Float?   @default(15.0)
+  performanceScore  Float?   @default(88.0)
+  complianceStatus  String   @default("COMPLIANT") // COMPLIANT, NON_COMPLIANT, UNDER_REVIEW
+  empanelmentStatus String   @default("APPROVED") // APPROVED, PROVISIONAL, PENDING
+  isBlacklisted     Boolean  @default(false)
+  certifications    String?  // JSON array
+  status            String   @default("ACTIVE")
+
+  // Vendor Classification & Onboarding
+  vendorType            String   @default("CLIENT_VENDOR") // CLIENT_VENDOR, PROCUCEV_VENDOR
+  onboardingStatus      String   @default("DRAFT") // DRAFT, PROFILE_INCOMPLETE, ONBOARDED
+  qualificationStatus   String   @default("NOT_EVALUATED") // NOT_EVALUATED, EVALUATION_IN_PROGRESS, PENDING_REVIEW, QUALIFIED, CONDITIONALLY_QUALIFIED, NOT_QUALIFIED
+  qualificationScore    Float?   // 0 - 100 overall score from evaluation rubric
+  qualificationDecision String?  // RECOMMENDED, CONDITIONAL, NOT_RECOMMENDED
+  legalStructure        String?  // PRIVATE_LIMITED, PARTNERSHIP, LLP, SOLE_PROPRIETORSHIP, PUBLIC_LIMITED
+  gstin                 String?
+  pan                   String?
+  website               String?
+  address               String?
+  operatingLocation     String?
+  capabilities          String?
+  serviceCoverage       String?
+  clientReferences      String?  // JSON array
+  documents             String?  // JSON array
+  evaluationNotes       String?
+  evaluatedAt           DateTime?
+  evaluatedById         String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  rfqVendors        RfqVendor[]
+  quotes            Quote[]
+  negotiationRounds NegotiationRound[]
+  auctionBids       AuctionBid[]
+  auctionVendors    AuctionVendor[]
+  awards            AwardRecommendation[]
+  ppos              Ppo[]
+  ppoLines          PpoLine[]
+  actualCosts       ActualCostTransaction[]
+  evaluations       VendorEvaluation[]
+  ppoRatings        PpoVendorRating[]
+  rateCards         VendorRateCard[]
+  users             User[]
+
+  @@unique([tenantId, code])
+  @@map("vendors")
+}
+
+// ============================================================
+// RFQ (REQUEST FOR QUOTATION) & SOURCING PACKAGES
+// ============================================================
+model Rfq {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  projectId              String
+  boqRevisionId          String
+  rfqNumber              String    // RFQ-2026-000001
+  title                  String
+  scopeOfWork            String?
+  packageType            String    @default("SELECTED_LINES") // ENTIRE_BOQ, CATEGORY, SUBCATEGORY, SELECTED_LINES, CUSTOM_PACKAGE
+  packageName            String?
+  status                 String    @default("DRAFT") // DRAFT, UNDER_REVIEW, RELEASED, VENDOR_RESPONSE_OPEN, RESPONSE_CLOSED, COMPARISON, NEGOTIATION, FINAL_RATE_LOCKED, AWARD_RECOMMENDED, APPROVED, AWARDED, CANCELLED
+  submissionDeadline     DateTime?
+  clarificationDeadline  DateTime?
+  commercialValidityDays Int?      @default(60)
+  deliveryRequirement    String?
+  paymentTerms           String?
+  taxTerms               String?
+  requiredDocuments      String?   // JSON
+  technicalRequirements String?
+  commercialRequirements String?
+  estimatedBenchmarkValue Float?   @default(0)
+  totalLines             Int       @default(0)
+  isReRfq                Boolean   @default(false)
+  reRfqReason            String?
+  originalRfqId          String?
+  finalLockedAt          DateTime?
+  finalLockedById        String?
+  releasedAt             DateTime?
+  prId                   String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  createdById            String
+
+  tenant                 Tenant    @relation(fields: [tenantId], references: [id])
+  project                Project   @relation(fields: [projectId], references: [id])
+  boqRevision            BoqRevision @relation(fields: [boqRevisionId], references: [id])
+  pr                     ProcurementRequest? @relation(fields: [prId], references: [id])
+  lines                  RfqLine[]
+  invitedVendors         RfqVendor[]
+  quotes                 Quote[]
+  negotiations           Negotiation[]
+  auctions               Auction[]
+  awards                 AwardRecommendation[]
+  ppos                   Ppo[]
+  messages               RfqMessage[]
+
+  @@unique([tenantId, rfqNumber])
+  @@map("rfqs")
+}
+
+model RfqLine {
+  id              String   @id @default(uuid())
+  tenantId        String
+  rfqId           String
+  projectId       String?
+  costCentreId    String?
+  boqId           String?
+  boqRevisionId   String?
+  boqLineId       String?
+  prLineId        String?
+  lineNumber      String
+  description     String
+  specification   String?
+  category        String?
+  subcategory     String?
+  uom             String
+  quantity        Float
+  benchmarkRate   Float?
+  benchmarkAmount Float?
+  createdAt       DateTime @default(now())
+
+  rfq             Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  boqLine         BoqLine? @relation(fields: [boqLineId], references: [id])
+  prLine          PRLine?  @relation(fields: [prLineId], references: [id])
+  quoteLines      QuoteLine[]
+  ppoLines        PpoLine[]
+  actualCosts     ActualCostTransaction[]
+
+  @@map("rfq_lines")
+}
+
+model RfqVendor {
+  id               String   @id @default(uuid())
+  tenantId         String
+  rfqId            String
+  vendorId         String
+  invitedAt        DateTime @default(now())
+  invitationStatus String   @default("INVITED") // INVITED, ACKNOWLEDGED, DECLINED, SUBMITTED
+  submissionStatus String   @default("PENDING") // PENDING, SUBMITTED
+
+  rfq              Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendor           Vendor   @relation(fields: [vendorId], references: [id])
+
+  @@unique([rfqId, vendorId])
+  @@map("rfq_vendors")
+}
+
+// ============================================================
+// QUOTES & BIDS
+// ============================================================
+model Quote {
+  id                  String      @id @default(uuid())
+  tenantId            String
+  rfqId               String
+  vendorId            String
+  quoteNumber         String      // QTE-000001
+  quoteVersion        Int         @default(1)
+  status              String      @default("SUBMITTED") // DRAFT, SUBMITTED, UNDER_EVALUATION, REVISED, ACCEPTED, REJECTED
+  totalBaseAmount     Float       @default(0)
+  taxAmount           Float       @default(0)
+  discountAmount      Float       @default(0)
+  totalQuoteAmount    Float       @default(0)
+  commercialTerms     String?
+  paymentTermsOffered String?
+  deliveryLeadTimeDays Int?
+  validUntil          DateTime?
+  submittedAt         DateTime?   @default(now())
+  submittedBy         String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  tenant              Tenant      @relation(fields: [tenantId], references: [id])
+  rfq                 Rfq         @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendor              Vendor      @relation(fields: [vendorId], references: [id])
+  lines               QuoteLine[]
+
+  @@unique([rfqId, vendorId, quoteVersion])
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id              String   @id @default(uuid())
+  tenantId        String
+  quoteId         String
+  rfqLineId       String
+  unitRate        Float
+  taxPercent      Float    @default(18.0)
+  discountPercent Float    @default(0.0)
+  lineTotal       Float
+  remarks         String?
+
+  quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  rfqLine         RfqLine  @relation(fields: [rfqLineId], references: [id], onDelete: Cascade)
+
+  @@map("quote_lines")
+}
+
+// ============================================================
+// NEGOTIATION WORKFLOW & ROUNDS
+// ============================================================
+model Negotiation {
+  id                   String             @id @default(uuid())
+  tenantId             String
+  rfqId                String
+  status               String             @default("ACTIVE") // ACTIVE, CONCLUDED, CANCELLED
+  currentRound         Int                @default(1)
+  targetSavingsPercent Float?
+  bestQuoteAmount      Float?
+  concludedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  rfq                  Rfq                @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  rounds               NegotiationRound[]
+
+  @@map("negotiations")
+}
+
+model NegotiationRound {
+  id                  String      @id @default(uuid())
+  tenantId            String
+  negotiationId       String
+  vendorId            String
+  roundNumber         Int         @default(1)
+  deadline            DateTime?
+  targetPrice         Float?
+  previousQuoteAmount Float
+  counterOfferAmount  Float?
+  revisedQuoteAmount  Float?
+  savingsAmount       Float?      @default(0)
+  savingsPercent      Float?      @default(0)
+  status              String      @default("ROUND_ACTIVE") // ROUND_ACTIVE, REVISED_SUBMITTED, CONCLUDED, REJECTED
+  notes               String?
+  isFinalOffer        Boolean     @default(false)
+  buyerDecision       String?     // PENDING_BUYER_DECISION, FINAL_ACCEPTANCE_PENDING, ACCEPTED_PPO_AWAITED, REJECTED_NEGOTIATION_CLOSED
+  buyerDecisionDate   DateTime?
+  buyerDecisionRemarks String?
+  nextResponsibleParty String?    // BUYER, VENDOR, COMPLETED
+  lineItemsJson       String?
+  submittedByVendor   String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  negotiation         Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  vendor              Vendor      @relation(fields: [vendorId], references: [id])
+
+  @@map("negotiation_rounds")
+}
+
+// ============================================================
+// ============================================================
+// E-AUCTIONS (REVERSE, FORWARD, SEALED BIDS) & MULTI-CATEGORY
+// ============================================================
+model Auction {
+  id                      String          @id @default(uuid())
+  tenantId                String
+  rfqId                   String
+  auctionNumber           String          // AUC-2026-000001 or SLD-2026-000001
+  auctionType             String          @default("REVERSE_AUCTION") // REVERSE_AUCTION, FORWARD_AUCTION, SEALED_BID
+  auctionCategory         String          @default("RFQ_TOTAL_WISE")  // RFQ_TOTAL_WISE, ITEM_WISE
+  title                   String
+  currency                String          @default("INR")             // INR, USD, EUR, GBP, AED, SGD
+  scrollingText           String?
+  refreshIntervalSeconds  Int             @default(10)
+  quantityType            String          @default("FULL")            // FULL, SINGLE
+  hasStartPrice           Boolean         @default(true)
+  startingPrice           Float
+  hasLeadingPrice         Boolean         @default(true)
+  hasMinBidReduction      Boolean         @default(true)
+  minDecrement            Float           @default(1000)              // Minimum decrement (Reverse) or increment (Forward)
+  hasAutoExtension        Boolean         @default(true)
+  autoExtensionMinutes    Int             @default(5)
+  hasBidLimit             Boolean         @default(false)
+  maxBidsPerParticipant   Int?
+  inviteProjectUser       Boolean         @default(false)
+  projectUserId           String?
+  nonInvitedJustification String?
+  termsAndConditions      String?
+  documents               String?         // JSON array of attachments [{ name, url, size, mimeType, uploadedAt }]
+  status                  String          @default("SCHEDULED")       // DRAFT, SCHEDULED, LIVE, PAUSED, EXTENDED, CLOSED, CANCELLED
+  bidVisibility           String          @default("RANK_ONLY")       // RANK_ONLY, FULL_LEADERBOARD, BLIND
+  currentLowestBid        Float?
+  currentLeadingBid       Float?
+  currentWinningVendorId  String?
+  startTime               DateTime
+  endTime                 DateTime
+  scheduledEndTime        DateTime?
+  extensionCount          Int             @default(0)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  rfq                     Rfq             @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  bids                    AuctionBid[]
+  vendors                 AuctionVendor[]
+  items                   AuctionItem[]
+
+  @@unique([tenantId, auctionNumber])
+  @@map("auctions")
+}
+
+model AuctionVendor {
+  id              String    @id @default(uuid())
+  tenantId        String
+  auctionId       String
+  vendorId        String
+  invitedAt       DateTime  @default(now())
+  termsAccepted   Boolean   @default(false)
+  termsAcceptedAt DateTime?
+  isEligible      Boolean   @default(true)
+  bidsCount       Int       @default(0)
+  lastBidAmount   Float?
+  lastBidAt       DateTime?
+  bestBidAmount   Float?
+  bestBidRank     Int?
+
+  auction         Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  vendor          Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, vendorId])
+  @@map("auction_vendors")
+}
+
+model AuctionItem {
+  id                     String       @id @default(uuid())
+  tenantId               String
+  auctionId              String
+  rfqLineId              String?
+  itemCode               String?
+  description            String
+  category               String?
+  subcategory            String?
+  brand                  String?
+  uom                    String
+  quantity               Float
+  startPrice             Float?
+  currentLeadingBid      Float?
+  currentWinningVendorId String?
+
+  auction                Auction      @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bids                   AuctionBid[]
+
+  @@map("auction_items")
+}
+
+model AuctionBid {
+  id            String       @id @default(uuid())
+  tenantId      String
+  auctionId     String
+  vendorId      String
+  auctionItemId String?
+  bidNumber     Int
+  bidAmount     Float
+  rank          Int?
+  ipAddress     String?
+  timestamp     DateTime     @default(now())
+
+  auction       Auction      @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  vendor        Vendor       @relation(fields: [vendorId], references: [id])
+  auctionItem   AuctionItem? @relation(fields: [auctionItemId], references: [id], onDelete: Cascade)
+
+  @@map("auction_bids")
+}
+
+// ============================================================
+// COMMERCIAL AWARD RECOMMENDATION
+// ============================================================
+model AwardRecommendation {
+  id                    String    @id @default(uuid())
+  tenantId              String
+  rfqId                 String
+  recommendedVendorId   String
+  originalQuoteAmount   Float
+  finalNegotiatedAmount Float
+  benchmarkAmount       Float
+  totalSavingsAmount    Float
+  savingsPercent        Float
+  technicalStatus       String    @default("COMPLIANT")
+  commercialStatus      String    @default("BEST_VALUE")
+  justification         String
+  status                String    @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REJECTED
+  submittedById         String
+  submittedAt           DateTime  @default(now())
+  approvedById          String?
+  approvedAt            DateTime?
+  approvalRemarks       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  rfq                   Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  recommendedVendor     Vendor    @relation(fields: [recommendedVendorId], references: [id])
+  ppos                  Ppo[]
+
+  @@map("award_recommendations")
+}
+
+// ============================================================
+// PPO (PURCHASE / PROCUREMENT ORDER)
+// ============================================================
+model Ppo {
+  id                    String               @id @default(uuid())
+  tenantId              String
+  projectId             String
+  costCentreId          String?
+  boqId                 String?
+  boqRevisionId         String?
+  rfqId                 String?
+  vendorId              String
+  awardRecommendationId String?
+  prId                  String?
+  rateCardId            String?
+  sourcingType          String               @default("REGULAR_RFQ") // REGULAR_RFQ, DIRECT_RATE_CARD
+  ppoNumber             String               // PPO-2026-000001
+  title                 String
+  totalValue            Float
+  currency              String               @default("INR")
+  status                String               @default("DRAFT") // DRAFT, ISSUED, CONFIRMED, PARTIALLY_COMPLETED, COMPLETED, CANCELLED
+  deliveryTerms         String?
+  paymentTerms          String?
+  taxDetails            String?
+  issuedAt              DateTime?
+  completedAt           DateTime?
+  vendorStatus          String?              @default("PENDING_VENDOR_ACCEPTANCE") // PENDING_VENDOR_ACCEPTANCE, ACCEPTED_BY_VENDOR, ISSUE_RAISED
+  vendorAcceptedAt      DateTime?
+  vendorAcceptedBy      String?
+  vendorAcceptedVersion Int?                 @default(1)
+  vendorIssueRemarks    String?
+  vendorIssueRaisedAt   DateTime?
+  createdById           String
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  tenant                Tenant               @relation(fields: [tenantId], references: [id])
+  project               Project              @relation(fields: [projectId], references: [id])
+  costCentre            CostCentre?          @relation(fields: [costCentreId], references: [id])
+  rfq                   Rfq?                 @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  vendor                Vendor               @relation(fields: [vendorId], references: [id])
+  awardRecommendation   AwardRecommendation? @relation(fields: [awardRecommendationId], references: [id])
+  rateCard              VendorRateCard?      @relation(fields: [rateCardId], references: [id])
+  pr                    ProcurementRequest?  @relation(fields: [prId], references: [id])
+  lines                 PpoLine[]
+  actualCosts           ActualCostTransaction[]
+  vendorRating          PpoVendorRating?
+
+  @@unique([tenantId, ppoNumber])
+  @@map("ppos")
+}
+
+model PpoLine {
+  id                     String   @id @default(uuid())
+  tenantId               String
+  ppoId                  String
+  projectId              String
+  costCentreId           String?
+  boqId                  String?
+  boqRevisionId          String?
+  boqLineId              String?
+  prLineId               String?
+  rfqLineId              String?
+  vendorId               String
+  lineNumber             String   // PO-L1
+  itemDescription        String
+  specification          String?
+  category               String?
+  subcategory            String?
+  uom                    String
+  orderedQuantity        Float
+  orderedUnitRate        Float
+  orderedAmount          Float
+  taxAmount              Float    @default(0)
+  totalOrderValue        Float    @default(0)
+  orderDate              DateTime @default(now())
+  expectedCompletionDate DateTime?
+  completedQuantity      Float    @default(0)
+  completedAmount        Float    @default(0)
+  status                 String   @default("ISSUED") // ISSUED, PARTIALLY_COMPLETED, COMPLETED, CANCELLED
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  ppo                    Ppo      @relation(fields: [ppoId], references: [id], onDelete: Cascade)
+  project                Project  @relation(fields: [projectId], references: [id])
+  costCentre             CostCentre? @relation(fields: [costCentreId], references: [id])
+  boqLine                BoqLine? @relation(fields: [boqLineId], references: [id])
+  prLine                 PRLine?  @relation(fields: [prLineId], references: [id])
+  rfqLine                RfqLine? @relation(fields: [rfqLineId], references: [id])
+  vendor                 Vendor   @relation(fields: [vendorId], references: [id])
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id])
+  actualCosts            ActualCostTransaction[]
+
+  @@map("ppo_lines")
+}
+
+model ActualCostTransaction {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  transactionCode      String   // ACT-2026-000001
+  projectId            String
+  costCentreId         String?
+  category             String
+  subcategory          String?
+  boqId                String?
+  boqRevisionId        String?
+  boqLineId            String?
+  prId                 String?
+  prLineId             String?
+  rfqId                String?
+  rfqLineId            String?
+  ppoId                String?
+  ppoLineId            String?
+  vendorId             String?
+  uom                  String?
+  actualQuantity       Float
+  actualUnitRate       Float
+  actualAmount         Float
+  taxAmount            Float    @default(0)
+  totalActualAmount    Float
+  actualDate           DateTime @default(now())
+  source               String   // PO_COMPLETION, PPO_COMPLETION, GRN, INVOICE, MANUAL_ADJUSTMENT, ERP_ACTUAL
+  status               String   @default("APPROVED") // DRAFT, SUBMITTED, VERIFIED, APPROVED, REJECTED
+  completionReference  String?  // Reference/Invoice/GRN Number
+  externalReference    String?  // ERP integration ref
+  erpDocumentNumber    String?
+  erpDate              DateTime?
+  integrationTimestamp DateTime?
+  documents            String?  // JSON array of attached doc URLs
+  remarks              String?
+  createdById          String?
+  createdBy            String   @default("System User")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant               Tenant   @relation(fields: [tenantId], references: [id])
+  project              Project  @relation(fields: [projectId], references: [id])
+  costCentre           CostCentre? @relation(fields: [costCentreId], references: [id])
+  boqLine              BoqLine? @relation(fields: [boqLineId], references: [id])
+  prLine               PRLine?  @relation(fields: [prLineId], references: [id])
+  rfqLine              RfqLine? @relation(fields: [rfqLineId], references: [id])
+  ppo                  Ppo?     @relation(fields: [ppoId], references: [id])
+  ppoLine              PpoLine? @relation(fields: [ppoLineId], references: [id])
+  vendor               Vendor?  @relation(fields: [vendorId], references: [id])
+
+  @@unique([tenantId, transactionCode])
+  @@map("actual_cost_transactions")
+}
+
+// ============================================================
+// COST CENTRES
+// ============================================================
+model CostCentre {
+  id              String   @id @default(uuid())
+  tenantId        String
+  projectId       String
+  code            String   // CC-001, CC-002...
+  name            String   // Retail Store Fitout, Kitchen / F&B, etc.
+  description     String?
+  areaSqFt        Float?   // e.g. 8500
+  location        String?
+  floorZone       String?  // Ground Floor, Zone A, etc.
+  status          String   @default("ACTIVE") // ACTIVE, INACTIVE, COMPLETED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  project         Project  @relation(fields: [projectId], references: [id])
+  boqs            Boq[]
+  boqRevisions    BoqRevision[]
+  budgets         Budget[]
+  budgetContributions BudgetContribution[]
+  budgetTransactions  BudgetTransaction[]
+  prs             ProcurementRequest[]
+  ppos            Ppo[]
+  ppoLines        PpoLine[]
+  actualCosts     ActualCostTransaction[]
+
+  @@unique([tenantId, projectId, code])
+  @@map("cost_centres")
+}
+
+// ============================================================
+// STANDARD BOQ LIBRARY & TAXONOMY
+// ============================================================
+model StandardBoqItem {
+  id                      String   @id @default(uuid())
+  tenantId                String
+  itemCode                String   // STD-CIV-001
+  sector                  String   // RETAIL, HOSPITALITY, BANKING, INSURANCE, OFFICE, OTHER
+  projectType             String   // STORE_FITOUT, QSR, SUPERMARKET, HOTEL, BRANCH, etc.
+  category                String   // CIVIL & INTERIOR, ELECTRICAL, etc.
+  subcategory             String   // Flooring, False Ceiling, etc.
+  standardDescription     String
+  detailedSpecification   String
+  uom                     String   // SQFT, NOS, RMT, etc.
+  brandMake               String?
+  benchmarkRate           Float?   // e.g. 145.0
+  benchmarkEligibility    Boolean  @default(true)
+  aiRefinementEligibility Boolean  @default(true)
+  costDrivers             String?  // JSON or text
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, itemCode])
+  @@map("standard_boq_items")
+}
+
+// ============================================================
+// BUDGET WORKFLOW ENTITIES
+// ============================================================
+model Budget {
+  id              String   @id @default(uuid())
+  tenantId        String
+  projectId       String
+  costCentreId    String?
+  totalAmount     Float    @default(0)
+  approvedAmount  Float    @default(0)
+  pendingAmount   Float    @default(0)
+  status          String   @default("DRAFT") // DRAFT, PENDING_PROJECT_APPROVAL, PROJECT_APPROVED, PENDING_FINANCE_APPROVAL, APPROVED, REJECTED, REVERSED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  project         Project  @relation(fields: [projectId], references: [id])
+  costCentre      CostCentre? @relation(fields: [costCentreId], references: [id])
+
+  @@map("budgets")
+}
+
+model BudgetContribution {
+  id                     String   @id @default(uuid())
+  tenantId               String
+  projectId              String
+  costCentreId           String
+  boqId                  String
+  boqRevisionId          String
+  totalEstimatedValue    Float
+  acceptedEstimatedValue Float
+  status                 String   @default("DRAFT") // DRAFT, PENDING_PROJECT_APPROVAL, PROJECT_APPROVED, PENDING_FINANCE_APPROVAL, APPROVED, REJECTED, REVERSED
+  submittedAt            DateTime?
+  submittedBy            String?
+  projectApprovedAt      DateTime?
+  projectApprovedBy      String?
+  financeApprovedAt      DateTime?
+  financeApprovedBy      String?
+  rejectionReason        String?
+  isSuperSeded           Boolean  @default(false)
+  superSededByContributionId String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  createdBy              String
+
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id])
+  project                Project  @relation(fields: [projectId], references: [id])
+  costCentre             CostCentre @relation(fields: [costCentreId], references: [id])
+  boq                    Boq      @relation(fields: [boqId], references: [id])
+  boqRevision            BoqRevision @relation(fields: [boqRevisionId], references: [id])
+  transactions           BudgetTransaction[]
+  approvals              BudgetApproval[]
+
+  @@map("budget_contributions")
+}
+
+model BudgetTransaction {
+  id                     String   @id @default(uuid())
+  tenantId               String
+  transactionCode        String   // BTX-000001
+  projectId              String
+  costCentreId           String
+  boqId                  String?
+  boqRevisionId          String?
+  boqLineId              String?
+  contributionId         String?
+  category               String
+  subcategory            String?
+  uom                    String?  @default("NOS")
+  amount                 Float    // positive, or negative for reversal (Budget Amount)
+  quantity               Float?   // Budget Quantity
+  rate                   Float?   // Budget Rate
+  budgetDate             DateTime @default(now())
+  createdBy              String
+  status                 String   @default("DRAFT") // DRAFT, PENDING_PROJECT_APPROVAL, PROJECT_APPROVED, PENDING_FINANCE_APPROVAL, APPROVED, REJECTED, REVERSED
+  isReversal             Boolean  @default(false)
+  reversalReason         String?
+  reversedTransactionId  String?
+  reference              String?
+  createdAt              DateTime @default(now())
+
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id])
+  project                Project  @relation(fields: [projectId], references: [id])
+  costCentre             CostCentre @relation(fields: [costCentreId], references: [id])
+  boqRevision            BoqRevision? @relation(fields: [boqRevisionId], references: [id])
+  boqLine                BoqLine? @relation(fields: [boqLineId], references: [id])
+  contribution           BudgetContribution? @relation(fields: [contributionId], references: [id])
+
+  @@unique([tenantId, transactionCode])
+  @@map("budget_transactions")
+}
+
+model BudgetApproval {
+  id             String   @id @default(uuid())
+  tenantId       String
+  contributionId String
+  approvalLevel  String   // PROJECT_APPROVER, FINANCE
+  approverId     String
+  status         String   // APPROVED, REJECTED
+  reason         String?
+  timestamp      DateTime @default(now())
+
+  contribution   BudgetContribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+
+  @@map("budget_approvals")
+}
+
+// ============================================================
+// PROCUREMENT REQUEST (PR) WORKFLOW ENTITIES
+// ============================================================
+model ProcurementRequest {
+  id                     String   @id @default(uuid())
+  tenantId               String
+  prNumber               String   // PR-2026-000001
+  projectId              String
+  costCentreId           String
+  boqId                  String
+  boqRevisionId          String
+  title                  String
+  purpose                String?  @default("PROCUREMENT_SOURCING")
+  totalEstimatedValue    Float    @default(0)
+  totalLines             Int      @default(0)
+  status                 String   @default("PR_DRAFT") // PR_DRAFT, PR_PENDING_PROJECT_APPROVAL, PR_APPROVED, PR_REJECTED, PR_RELEASED_TO_PROCUREMENT
+  requestedBy            String
+  requestedDate          DateTime @default(now())
+  requiredDate           DateTime?
+  projectApprovedAt      DateTime?
+  projectApprovedBy      String?
+  rejectionReason        String?
+  releasedAt             DateTime?
+  releasedBy             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id])
+  project                Project  @relation(fields: [projectId], references: [id])
+  costCentre             CostCentre @relation(fields: [costCentreId], references: [id])
+  boq                    Boq      @relation(fields: [boqId], references: [id])
+  boqRevision            BoqRevision @relation(fields: [boqRevisionId], references: [id])
+  lines                  PRLine[]
+  approvals              PRApproval[]
+  rfqs                   Rfq[]
+  ppos                   Ppo[]
+
+  @@unique([tenantId, prNumber])
+  @@map("procurement_requests")
+}
+
+model PRLine {
+  id               String   @id @default(uuid())
+  tenantId         String
+  prId             String
+  projectId        String?
+  costCentreId     String?
+  boqId            String?
+  boqRevisionId    String?
+  boqLineId        String?
+  lineNumber       String
+  itemDescription  String
+  specification    String?
+  category         String
+  subcategory      String?
+  uom              String
+  quantity         Float
+  estimatedRate    Float?
+  estimatedValue   Float?
+  drawingReference String?
+  requiredDate     DateTime?
+  costCentre       String?
+  createdAt        DateTime @default(now())
+
+  pr               ProcurementRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  boqLine          BoqLine? @relation(fields: [boqLineId], references: [id])
+  rfqLines         RfqLine[]
+  ppoLines         PpoLine[]
+  actualCosts      ActualCostTransaction[]
+
+  @@map("pr_lines")
+}
+
+model PRApproval {
+  id         String   @id @default(uuid())
+  tenantId   String
+  prId       String
+  approverId String
+  status     String   // APPROVED, REJECTED
+  remarks    String?
+  timestamp  DateTime @default(now())
+
+  pr         ProcurementRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+
+  @@map("pr_approvals")
+}
+
+// ============================================================
+// VENDOR EVALUATION (CRITERIA & AI-ASSISTED SCORING)
+// ============================================================
+model VendorEvaluation {
+  id                       String    @id @default(uuid())
+  tenantId                 String
+  vendorId                 String
+  evaluationType           String    @default("INITIAL") // INITIAL, PERIODIC, RE_EVALUATION
+  status                   String    @default("PENDING_REVIEW") // DRAFT, AI_GENERATED, PENDING_REVIEW, QUALIFIED, CONDITIONALLY_QUALIFIED, NOT_QUALIFIED
+
+  // Six Structured Rubric Categories (0-100)
+  businessProfileScore     Float?    // Weight 15%
+  financialStrengthScore   Float?    // Weight 20%
+  previousClientsScore     Float?    // Weight 20%
+  referencesScore          Float?    // Weight 15%
+  technicalCapabilityScore  Float?    // Weight 20%
+  complianceRiskScore      Float?    // Weight 10%
+
+  overallWeightedScore     Float?    // 0-100
+  qualificationOutcome     String?   // RECOMMENDED, CONDITIONAL, NOT_RECOMMENDED
+  criteriaDetails          String?   // JSON storing per-criterion evidence, notes, AI suggested vs human score, NA flags
+  aiSummary                String?   // JSON: strengths, weaknesses, risks, verification gaps, contradictions
+  criticalRiskFlags        String?   // JSON array of risk alerts
+  evaluatedBy              String?
+  evaluatedAt              DateTime?
+  approvedBy               String?
+  approvedAt               DateTime?
+  decisionRemarks          String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  vendor                   Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_evaluations")
+}
+
+// ============================================================
+// PPO-LEVEL VENDOR PERFORMANCE RATING
+// ============================================================
+model PpoVendorRating {
+  id                         String    @id @default(uuid())
+  tenantId                   String
+  vendorId                   String
+  ppoId                      String    @unique
+  projectId                  String?
+  costCentreId               String?
+
+  // Five Performance Criteria (1 to 5)
+  qualityScore               Float     // Weight 30%
+  deliveryScore              Float     // Weight 25%
+  commercialComplianceScore  Float     // Weight 20%
+  responsivenessScore        Float     // Weight 15%
+  documentationClosureScore  Float     // Weight 10%
+
+  overallScore               Float     // 1 to 5 weighted rating
+  criteriaDetails            String?   // JSON: per-criteria notes and NA flags
+  comments                   String?
+  supportingEvidence         String?
+  status                     String    @default("SUBMITTED") // SUBMITTED, REVISED
+  ratedBy                    String
+  ratedAt                    DateTime  @default(now())
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  vendor                     Vendor    @relation(fields: [vendorId], references: [id])
+  ppo                        Ppo       @relation(fields: [ppoId], references: [id])
+
+  @@map("ppo_vendor_ratings")
+}
+
+// ============================================================
+// VENDOR RATE CARDS & APPROVED CATALOGUES
+// ============================================================
+model VendorRateCard {
+  id                String   @id @default(uuid())
+  tenantId          String
+  vendorId          String
+  rateCardNumber    String   // VRC-2026-000001
+  version           Int      @default(1)
+  title             String   // e.g. "Annual Civil & Interior Master Rate Agreement"
+  category          String   // Category or scope (e.g. "Civil & Interior", "Electrical", etc.)
+  subcategory       String?
+  scope             String?  // Scope definition (e.g. "Store Fitout Works", "Electrical Installations")
+  location          String?  // Pan-India, Regional, State, City
+  status            String   @default("APPROVED") // DRAFT, UNDER_REVIEW, NEGOTIATION, PENDING_PROJECT_APPROVAL, PENDING_FINANCE_APPROVAL, APPROVED, RETURNED_FOR_CORRECTION, REJECTED, EXPIRED, SUPERSEDED
+  approvalLevel     String?  @default("LEVEL_1_PROJECT") // LEVEL_1_PROJECT, LEVEL_2_FINANCE, COMPLETED
+  validFrom         DateTime
+  validTo           DateTime
+  currency          String   @default("INR")
+  terms             String?
+  submittedBy       String?
+  submittedAt       DateTime?
+  projectApprovedBy String?
+  projectApprovedAt DateTime?
+  financeApprovedBy String?
+  financeApprovedAt DateTime?
+  approvedBy        String?
+  approvedAt        DateTime?
+  rejectionReason   String?
+  revertReason      String?
+  justification     String?
+  comparisonNotes   String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  vendor            Vendor   @relation(fields: [vendorId], references: [id])
+  items             VendorRateCardItem[]
+  approvals         RateCardApproval[]
+  ppos              Ppo[]
+
+  @@unique([tenantId, rateCardNumber])
+  @@map("vendor_rate_cards")
+}
+
+model VendorRateCardItem {
+  id                String   @id @default(uuid())
+  tenantId          String
+  rateCardId        String
+  standardBoqItemId String?
+  itemCode          String?
+  description       String
+  specification     String?
+  category          String?
+  subcategory       String?
+  uom               String   // SQFT, NOS, RMT, etc.
+  rate              Float
+  proposedRate      Float?
+  historicalRate    Float?
+  benchmarkRate     Float?
+  comparisonRef     String?  // Reference to compared quote, PPO, or baseline
+  minQuantity       Float?   @default(1)
+  maxQuantity       Float?
+  location          String?  // Applicable city/state/all-India
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  rateCard          VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_rate_card_items")
+}
+
+model RateCardApproval {
+  id            String   @id @default(uuid())
+  tenantId      String
+  rateCardId    String
+  level         String   // LEVEL_1_PROJECT, LEVEL_2_FINANCE
+  approverId    String
+  approverName  String?
+  approverEmail String?
+  action        String   // SUBMIT, APPROVE, REVERT, REJECT, CLARIFICATION
+  remarks       String?
+  timestamp     DateTime @default(now())
+
+  rateCard      VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+
+  @@map("rate_card_approvals")
+}
+
+// ============================================================
+// NOTIFICATIONS & WORKFLOW FEEDBACK
+// ============================================================
+model Notification {
+  id           String    @id @default(uuid())
+  tenantId     String
+  userId       String?   // Target user ID or null for role broadcast
+  targetRole   String?   // Target role: e.g. PROCUREMENT_USER, FINANCE_USER, PROJECT_APPROVER
+  title        String
+  message      String
+  type         String    @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
+  entityType   String?   // PR, RFQ, QUOTE, NEGOTIATION, AWARD, PPO
+  entityId     String?
+  recordNumber String?   // e.g. RFQ-2026-000001, PPO-2026-000001
+  link         String?
+  isRead       Boolean   @default(false)
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@map("notifications")
+}
+
+model RfqMessage {
+  id           String   @id @default(uuid())
+  tenantId     String
+  rfqId        String
+  senderId     String
+  senderName   String
+  senderRole   String   // BUYER, VENDOR, CATEGORY_MANAGER, etc.
+  message      String
+  attachments  String?  // JSON
+  isVendorSent Boolean  @default(false)
+  vendorId     String?
+  createdAt    DateTime @default(now())
+
+  rfq          Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@map("rfq_messages")
+}
+
+
+

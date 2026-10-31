@@ -1,0 +1,208 @@
+name: Pull request quality
+
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Build, test, coverage, typecheck, and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: true
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-only-not-a-real-secret
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        timeout-minutes: 5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        timeout-minutes: 5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        id: install
+        run: npm ci
+        timeout-minutes: 15
+
+      - name: Build application
+        id: build
+        run: npm run build
+        timeout-minutes: 15
+        continue-on-error: true
+
+      - name: Run unit tests and enforce per-file coverage
+        id: unit_tests
+        run: npm run test:coverage -- --json --outputFile=coverage/unit/jest-results.json
+        timeout-minutes: 30
+        continue-on-error: true
+
+      - name: Enforce client performance budgets
+        id: performance
+        run: npm run check:performance
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Typecheck application
+        id: typecheck
+        run: npm run typecheck
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Lint application
+        id: lint
+        run: npm run lint
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Apply reviewed migrations to local D1
+        id: d1_migrations
+        run: npm run db:migrate:safe
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Verify local D1 schema and integrity
+        id: db_integrity
+        run: npm run db:integrity
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Prepare quality summary artifact
+        if: always()
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
+          PERFORMANCE_OUTCOME: ${{ steps.performance.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          D1_MIGRATIONS_OUTCOME: ${{ steps.d1_migrations.outcome }}
+          DB_INTEGRITY_OUTCOME: ${{ steps.db_integrity.outcome }}
+          PR_NUMBER: ${{ github.event.pull_request.number || 0 }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p ci-reports
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const summary = {
+            install: process.env.INSTALL_OUTCOME || 'not run',
+            build: process.env.BUILD_OUTCOME || 'not run',
+            unitTests: process.env.UNIT_TEST_OUTCOME || 'not run',
+            performance: process.env.PERFORMANCE_OUTCOME || 'not run',
+            typecheck: process.env.TYPECHECK_OUTCOME || 'not run',
+            lint: process.env.LINT_OUTCOME || 'not run',
+            d1Migrations: process.env.D1_MIGRATIONS_OUTCOME || 'not run',
+            databaseIntegrity: process.env.DB_INTEGRITY_OUTCOME || 'not run',
+            prNumber: Number(process.env.PR_NUMBER) || null,
+            prHeadSha: process.env.PR_HEAD_SHA || null,
+          };
+          fs.writeFileSync('ci-reports/quality-outcomes.json', JSON.stringify(summary, null, 2));
+
+          const readJson = (file) => {
+            try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+          };
+          const coverage = readJson('coverage/unit/coverage-summary.json')?.total || {};
+          const tests = readJson('coverage/unit/jest-results.json') || {};
+          const checks = [
+            ['Install', summary.install],
+            ['Build', summary.build],
+            ['Unit tests and coverage', summary.unitTests],
+            ['Client performance budgets', summary.performance],
+            ['Typecheck', summary.typecheck],
+            ['Lint', summary.lint],
+            ['Local D1 migrations', summary.d1Migrations],
+            ['D1 schema integrity', summary.databaseIntegrity],
+          ];
+          const resultLabel = (outcome) => outcome === 'success' ? 'PASS' : `FAIL (${outcome})`;
+          const percent = (metric) => Number.isFinite(metric?.pct) ? `${metric.pct}%` : 'n/a';
+          const comment = [
+            '## Automated quality summary',
+            summary.prNumber ? `PR #${summary.prNumber} · commit \`${summary.prHeadSha}\`` : `Commit \`${summary.prHeadSha}\``,
+            '',
+            '| Check | Result |',
+            '| --- | --- |',
+            ...checks.map(([name, outcome]) => `| ${name} | ${resultLabel(outcome)} |`),
+            '',
+            '### Unit test results',
+            `${tests.numPassedTests ?? 'n/a'} passed, ${tests.numFailedTests ?? 'n/a'} failed, ${tests.numPendingTests ?? 'n/a'} pending (${tests.numTotalTests ?? 'n/a'} total).`,
+            '',
+            '### Overall coverage',
+            `Statements: ${percent(coverage.statements)} · Branches: ${percent(coverage.branches)} · Functions: ${percent(coverage.functions)} · Lines: ${percent(coverage.lines)}.`,
+            `Per-file 90% gate: ${resultLabel(summary.unitTests)}.`,
+          ].join('\n');
+          fs.writeFileSync('ci-reports/pr-comment.md', `${comment}\n`);
+          if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${comment}\n`);
+
+          for (const file of [
+            'unit-test-coverage-report.md',
+            'coverage/unit/coverage-summary.json',
+            'coverage/unit/jest-results.json',
+            'coverage/unit/lcov.info',
+          ]) {
+            if (fs.existsSync(file)) {
+              fs.copyFileSync(file, path.join('ci-reports', path.basename(file)));
+            }
+          }
+          NODE
+        timeout-minutes: 2
+
+      - name: Upload unit test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: unit-test-coverage-${{ github.run_id }}
+          path: ci-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Comment quality summary on pull request
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR_NUMBER" --body-file ci-reports/pr-comment.md
+        timeout-minutes: 3
+        continue-on-error: true
+
+      - name: Enforce all quality checks
+        id: quality_gate
+        if: always()
+        env:
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
+          PERFORMANCE_OUTCOME: ${{ steps.performance.outcome }}
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          D1_MIGRATIONS_OUTCOME: ${{ steps.d1_migrations.outcome }}
+          DB_INTEGRITY_OUTCOME: ${{ steps.db_integrity.outcome }}
+        run: |
+          failed=0
+          for check in INSTALL BUILD UNIT_TEST PERFORMANCE TYPECHECK LINT D1_MIGRATIONS DB_INTEGRITY; do
+            variable="${check}_OUTCOME"
+            outcome="${!variable}"
+            if [[ "$outcome" != "success" ]]; then
+              echo "::error::${check} check ended with outcome: ${outcome}"
+              failed=1
+            fi
+          done
+          exit "$failed"
+        timeout-minutes: 2

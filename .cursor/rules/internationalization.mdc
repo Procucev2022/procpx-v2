@@ -1,0 +1,6 @@
+---
+description: Require catalog-backed, locale-ready user-facing copy and stable UI text tests.
+alwaysApply: true
+---
+
+Follow `.agents/rules/internationalization.md` on every change to UI, user-visible API messages, or tests. Keep copy in `UI_STRINGS`, use complete messages with named `{{placeholder}}` interpolation, use active-locale `Intl` formatting, and update assertions to use catalog entries. Run `npm run check:i18n` while editing and the full quality gate before handoff.
