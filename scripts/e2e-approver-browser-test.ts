@@ -1,10 +1,9 @@
 import puppeteer, { type Page } from 'puppeteer-core';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import path from 'path';
 import fs from 'fs';
 import { attachPlaywrightDebugCapture, captureDebugCheckpoint } from './observability/debug-capture';
 
-const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const PROOF_DIR = path.join(process.cwd(), 'logs', 'screenshots');

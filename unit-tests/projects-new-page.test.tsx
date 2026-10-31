@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import NewProjectPage from '../src/app/(app)/projects/new/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/navigation', () => ({ useRouter: jest.fn() }));
 jest.mock('next/link', () => {
@@ -30,7 +34,7 @@ function getControl(label: RegExp) {
 }
 
 function submitForm() {
-  fireEvent.submit(screen.getByRole('button', { name: /Create Project|Creating Project/ }).closest('form')!);
+  fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsNewPage.createProject) }).closest('form')!);
 }
 
 describe('new project page', () => {
@@ -53,12 +57,12 @@ describe('new project page', () => {
 
   it('renders all project fields and supports edits across the four sections', async () => {
     render(<NewProjectPage />);
-    expect(await screen.findByText('Basic Information')).toBeInTheDocument();
-    expect(screen.getByText('Location & Site Address')).toBeInTheDocument();
-    expect(screen.getByText('Commercial & Technical Specifications')).toBeInTheDocument();
-    expect(screen.getByText('Project Timeline')).toBeInTheDocument();
-    expect(getControl(/Country/)).toHaveValue('India');
-    expect(getControl(/Currency/)).toHaveValue('INR');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.basicInformation))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.locationSiteAddress))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.commercialTechnicalSpecifications))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.projectTimeline))).toBeInTheDocument();
+    expect(getControl(/Country/)).toHaveValue(UI_STRINGS.common.india);
+    expect(getControl(/Currency/)).toHaveValue(UI_STRINGS.common.iNR);
 
     const edits: Array<[RegExp, string]> = [
       [/Project Description/, 'Refresh and expand the store'],
@@ -88,25 +92,25 @@ describe('new project page', () => {
 
   it('validates required fields and restricts read-only roles', async () => {
     const { unmount: unmountValidation } = render(<NewProjectPage />);
-    await screen.findByText('Basic Information');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.basicInformation));
 
     submitForm();
-    expect(await screen.findByText('Project name is required.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.projectNameIsRequired))).toBeInTheDocument();
 
     fireEvent.change(getControl(/Project Name/), { target: { value: 'Project' } });
     submitForm();
-    expect(await screen.findByText('Sector is required.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.sectorIsRequired))).toBeInTheDocument();
 
     fireEvent.change(getControl(/Sector/), { target: { value: 'RETAIL' } });
     submitForm();
-    expect(await screen.findByText('Project type is required.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.projectTypeIsRequired))).toBeInTheDocument();
     unmountValidation();
 
     mockFetch.mockImplementation((url: string) => url === '/api/auth/me'
       ? Promise.resolve({ json: async () => ({ data: { user: { role: 'FINANCE_USER' } } }) })
       : Promise.resolve({ ok: true, status: 201, json: async () => ({ id: 'unused' }) }));
     const { unmount } = render(<NewProjectPage />);
-    expect(await screen.findByText(/Read-Only Notice/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.readOnlyNotice))).toBeInTheDocument();
     fillRequiredFields();
     submitForm();
     expect(await screen.findByText(/Forbidden: Your role/)).toBeInTheDocument();
@@ -116,7 +120,7 @@ describe('new project page', () => {
 
   it('submits form values and routes to the created project or register', async () => {
     const { unmount: unmountCreated } = render(<NewProjectPage />);
-    await screen.findByText('Basic Information');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.basicInformation));
     fillRequiredFields();
     fireEvent.change(getControl(/City/), { target: { value: 'Bengaluru' } });
     submitForm();
@@ -130,7 +134,7 @@ describe('new project page', () => {
       ? Promise.resolve({ json: async () => ({ user: { role: 'CLIENT_ADMIN' } }) })
       : Promise.resolve({ ok: true, status: 201, json: async () => ({}) }));
     const { unmount } = render(<NewProjectPage />);
-    await screen.findByText('Basic Information');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.basicInformation));
     fillRequiredFields();
     submitForm();
     await waitFor(() => expect(push).toHaveBeenCalledWith('/projects'));
@@ -139,14 +143,14 @@ describe('new project page', () => {
 
   it('shows API errors, handles non-JSON success and error responses, and clears loading state', async () => {
     render(<NewProjectPage />);
-    await screen.findByText('Basic Information');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.basicInformation));
     fillRequiredFields();
     mockFetch.mockImplementation((url: string) => url === '/api/auth/me'
       ? Promise.resolve({ json: async () => ({}) })
       : Promise.resolve({ ok: false, status: 409, json: async () => ({ error: 'Project code already exists' }) }));
     submitForm();
     expect(await screen.findByText('Project code already exists')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Project' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsNewPage.createProject) })).toBeEnabled();
 
     mockFetch.mockImplementation((url: string) => url === '/api/auth/me'
       ? Promise.resolve({ json: async () => ({}) })
@@ -167,7 +171,7 @@ describe('new project page', () => {
       ? Promise.reject(new Error('auth offline'))
       : Promise.reject(new Error('project service offline')));
     render(<NewProjectPage />);
-    await screen.findByText('Basic Information');
+    await screen.findByText(uiStringPattern(UI_STRINGS.common.basicInformation));
     fillRequiredFields();
     submitForm();
     expect(await screen.findByText('project service offline')).toBeInTheDocument();

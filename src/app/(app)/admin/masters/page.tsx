@@ -5,6 +5,8 @@ import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 import PageHeader from '@/components/ui/PageHeader';
 import { Plus } from 'lucide-react';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export default function MastersPage() {
   const [activeTab, setActiveTab] = useState<'uom' | 'categories'>('uom');
@@ -31,7 +33,7 @@ export default function MastersPage() {
     const res = await fetch('/api/masters/uom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(uomForm) });
     const d = await res.json();
     if (!res.ok) { setMsg({ isError: true, text: d.error }); return; }
-    setMsg({ isError: false, text: 'UOM created successfully.' }); setShowUomModal(false); setUomForm({ code: '', name: '', category: 'COUNT' }); loadData();
+    setMsg({ isError: false, text: UI_STRINGS.appAppAdminMastersPage.uOMCreatedSuccessfully }); setShowUomModal(false); setUomForm({ code: '', name: '', category: 'COUNT' }); loadData();
   }
 
   async function createCategory(e: React.FormEvent) {
@@ -39,17 +41,17 @@ export default function MastersPage() {
     const res = await fetch('/api/masters/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(catForm) });
     const d = await res.json();
     if (!res.ok) { setMsg({ isError: true, text: d.error }); return; }
-    setMsg({ isError: false, text: 'Category created successfully.' }); setShowCatModal(false); setCatForm({ name: '', parentId: '', code: '' }); loadData();
+    setMsg({ isError: false, text: UI_STRINGS.appAppAdminMastersPage.categoryCreatedSuccessfully }); setShowCatModal(false); setCatForm({ name: '', parentId: '', code: '' }); loadData();
   }
 
   return (
     <div className="w-full">
       <PageHeader
-        title="Masters Administration"
-        subtitle="Manage master unit of measure (UOM) definitions and category taxonomy"
+        title={UI_STRINGS.appAppAdminMastersPage.mastersAdministration}
+        subtitle={UI_STRINGS.appAppAdminMastersPage.manageMasterUnitOfMeasureUOMDefinitionsAndCategoryTaxonomy}
         breadcrumbs={[
-          { label: 'Administration', href: '/admin/masters' },
-          { label: 'Masters' },
+          { label: UI_STRINGS.common.administration, href: '/admin/masters' },
+          { label: UI_STRINGS.appAppAdminMastersPage.masters },
         ]}
         actions={
           activeTab === 'uom' ? (
@@ -58,16 +60,14 @@ export default function MastersPage() {
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => setShowUomModal(true)}
             >
-              <Plus size={16} /> Add UOM
-            </button>
+              <Plus size={16} />{UI_STRINGS.appAppAdminMastersPage.addUOM}</button>
           ) : (
             <button
               type="button"
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => setShowCatModal(true)}
             >
-              <Plus size={16} /> Add Category
-            </button>
+              <Plus size={16} />{UI_STRINGS.common.addCategory}</button>
           )
         }
       />
@@ -98,9 +98,7 @@ export default function MastersPage() {
               : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
           }`}
           onClick={() => setActiveTab('uom')}
-        >
-          UOM Master ({uoms.length})
-        </button>
+        >{UI_STRINGS.appAppAdminMastersPage.uOMMaster}{uoms.length}{UI_STRINGS.common.copyc7zu6c}</button>
         <button
           type="button"
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -109,15 +107,13 @@ export default function MastersPage() {
               : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
           }`}
           onClick={() => setActiveTab('categories')}
-        >
-          Categories ({categories.length})
-        </button>
+        >{UI_STRINGS.appAppAdminMastersPage.categories}{categories.length}{UI_STRINGS.common.copyc7zu6c}</button>
       </div>
 
       {loading ? (
         <div className="py-16 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading masters...</span>
+          <span className="text-sm">{UI_STRINGS.appAppAdminMastersPage.loadingMasters}</span>
         </div>
       ) : activeTab === 'uom' ? (
         <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
@@ -125,10 +121,10 @@ export default function MastersPage() {
             <table className="enterprise-table">
               <thead>
                 <tr>
-                  <th style={{ width: 140 }}>Code</th>
-                  <th style={{ minWidth: 200 }}>Name</th>
-                  <th style={{ width: 160 }}>Category</th>
-                  <th style={{ minWidth: 220 }}>Aliases</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.code}</th>
+                  <th style={{ minWidth: 200 }}>{UI_STRINGS.common.name}</th>
+                  <th style={{ width: 160 }}>{UI_STRINGS.common.category2}</th>
+                  <th style={{ minWidth: 220 }}>{UI_STRINGS.appAppAdminMastersPage.aliases}</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,7 +137,7 @@ export default function MastersPage() {
                     </td>
                     <td className="font-semibold text-slate-900">{u.name}</td>
                     <td className="text-slate-600 text-xs">{u.category}</td>
-                    <td className="text-slate-500 text-xs">{u.aliases ? JSON.parse(u.aliases).join(', ') : '—'}</td>
+                    <td className="text-slate-500 text-xs">{u.aliases ? JSON.parse(u.aliases).join(', ') : UI_STRINGS.common.copy4s9bsz}</td>
                   </tr>
                 ))}
               </tbody>
@@ -154,8 +150,8 @@ export default function MastersPage() {
             <table className="enterprise-table">
               <thead>
                 <tr>
-                  <th style={{ width: 220 }}>Category</th>
-                  <th>Subcategories</th>
+                  <th style={{ width: 220 }}>{UI_STRINGS.common.category2}</th>
+                  <th>{UI_STRINGS.common.subcategories}</th>
                 </tr>
               </thead>
               <tbody>
@@ -169,7 +165,7 @@ export default function MastersPage() {
                             {sub.name}
                           </span>
                         ))}
-                        {!cat.children?.length && <span className="text-slate-400 text-xs italic">No subcategories</span>}
+                        {!cat.children?.length && <span className="text-slate-400 text-xs italic">{UI_STRINGS.common.noSubcategories}</span>}
                       </div>
                     </td>
                   </tr>
@@ -185,22 +181,22 @@ export default function MastersPage() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowUomModal(false)}>
           <div className="modal modal-sm">
             <div className="modal-header">
-              <span className="modal-title">Add UOM</span>
+              <span className="modal-title">{UI_STRINGS.appAppAdminMastersPage.addUOM2}</span>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowUomModal(false)}>
                 <X size={16} />
               </button>
             </div>
             <form onSubmit={createUom}>
               <div className="modal-body">
-                <div className="form-group"><label className="form-label">Code <span className="required">*</span></label><input className="form-control" value={uomForm.code} onChange={e => setUomForm(f => ({ ...f, code: e.target.value }))} placeholder="NOS, SQM, RMT..." required /></div>
-                <div className="form-group"><label className="form-label">Name <span className="required">*</span></label><input className="form-control" value={uomForm.name} onChange={e => setUomForm(f => ({ ...f, name: e.target.value }))} required /></div>
-                <div className="form-group"><label className="form-label">Category</label>
+                <div className="form-group"><label className="form-label">{UI_STRINGS.appAppAdminMastersPage.code}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label><input className="form-control" value={uomForm.code} onChange={e => setUomForm(f => ({ ...f, code: e.target.value }))} placeholder={UI_STRINGS.appAppAdminMastersPage.nOSSQMRMT} required /></div>
+                <div className="form-group"><label className="form-label">{UI_STRINGS.appAppAdminMastersPage.name}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label><input className="form-control" value={uomForm.name} onChange={e => setUomForm(f => ({ ...f, name: e.target.value }))} required /></div>
+                <div className="form-group"><label className="form-label">{UI_STRINGS.common.category2}</label>
                   <select className="form-control" value={uomForm.category} onChange={e => setUomForm(f => ({ ...f, category: e.target.value }))}>
                     {['COUNT', 'AREA', 'LENGTH', 'VOLUME', 'WEIGHT', 'ELECTRICAL', 'OTHER'].map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowUomModal(false)}>Cancel</button><button type="submit" className="btn btn-primary">Create</button></div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowUomModal(false)}>{UI_STRINGS.common.cancel}</button><button type="submit" className="btn btn-primary">{UI_STRINGS.appAppAdminMastersPage.create}</button></div>
             </form>
           </div>
         </div>
@@ -211,23 +207,23 @@ export default function MastersPage() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCatModal(false)}>
           <div className="modal modal-sm">
             <div className="modal-header">
-              <span className="modal-title">Add Category</span>
+              <span className="modal-title">{UI_STRINGS.appAppAdminMastersPage.addCategory}</span>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowCatModal(false)}>
                 <X size={16} />
               </button>
             </div>
             <form onSubmit={createCategory}>
               <div className="modal-body">
-                <div className="form-group"><label className="form-label">Name <span className="required">*</span></label><input className="form-control" value={catForm.name} onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))} required /></div>
-                <div className="form-group"><label className="form-label">Parent Category (for subcategory)</label>
+                <div className="form-group"><label className="form-label">{UI_STRINGS.appAppAdminMastersPage.name}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label><input className="form-control" value={catForm.name} onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))} required /></div>
+                <div className="form-group"><label className="form-label">{UI_STRINGS.appAppAdminMastersPage.parentCategoryForSubcategory}</label>
                   <select className="form-control" value={catForm.parentId} onChange={e => setCatForm(f => ({ ...f, parentId: e.target.value }))}>
-                    <option value="">— Top Level Category —</option>
+                    <option value="">{UI_STRINGS.appAppAdminMastersPage.topLevelCategory}</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
-                <div className="form-group"><label className="form-label">Code</label><input className="form-control" value={catForm.code} onChange={e => setCatForm(f => ({ ...f, code: e.target.value }))} placeholder="Optional code" /></div>
+                <div className="form-group"><label className="form-label">{UI_STRINGS.common.code}</label><input className="form-control" value={catForm.code} onChange={e => setCatForm(f => ({ ...f, code: e.target.value }))} placeholder={UI_STRINGS.appAppAdminMastersPage.optionalCode} /></div>
               </div>
-              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowCatModal(false)}>Cancel</button><button type="submit" className="btn btn-primary">Create</button></div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowCatModal(false)}>{UI_STRINGS.common.cancel}</button><button type="submit" className="btn btn-primary">{UI_STRINGS.appAppAdminMastersPage.create}</button></div>
             </form>
           </div>
         </div>

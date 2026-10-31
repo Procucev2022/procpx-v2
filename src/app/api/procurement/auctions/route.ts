@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('AUCTION_VIEW');
@@ -265,7 +268,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching auctions:', error);
-    return apiError(error.message || 'Failed to fetch auctions', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAuctions }), 500);
   }
 }
 
@@ -306,7 +309,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId || !title?.trim()) {
-      return apiError('RFQ ID and Auction Name are mandatory fields.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.rFQIDAndAuctionNameAreMandatoryFields, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -318,7 +321,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError('Selected RFQ was not found or is inaccessible in this workspace.', 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, 404);
     }
 
     const quotedVendorIds = rfq.quotes
@@ -328,13 +331,13 @@ export async function POST(req: NextRequest) {
     const missingVendors = quotedVendorIds.filter((vid) => !invitedVendorIds.includes(vid));
     if (missingVendors.length > 0 && !nonInvitedJustification?.trim() && !isDraft) {
       return apiError(
-        'Mandatory justification is required when excluding quoted vendors from the invited list.',
+        UI_STRINGS.appApiProcurementAuctionsRoute.mandatoryJustificationIsRequiredWhenExcludingQuotedVendorsFromTheInvitedList,
         400
       );
     }
 
     if (!isDraft && invitedVendorIds.length === 0) {
-      return apiError('At least one vendor must be invited to schedule an auction.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.atLeastOneVendorMustBeInvitedToScheduleAnAuction, 400);
     }
 
     const now = new Date();
@@ -343,10 +346,10 @@ export async function POST(req: NextRequest) {
 
     if (!isDraft) {
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return apiError('Please provide valid Start and End Date & Time.', 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.pleaseProvideValidStartAndEndDateTime, 400);
       }
       if (end <= start) {
-        return apiError('Auction End Time must be later than Start Time.', 400);
+        return apiError(UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, 400);
       }
     }
 
@@ -424,7 +427,7 @@ export async function POST(req: NextRequest) {
           auctionId: auction.id,
           rfqLineId: item.rfqLineId || item.id || null,
           itemCode: item.itemCode || `ITEM-${idx + 1}`,
-          description: item.description || 'Auction Item',
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": item.description || 'Auction Item' }),
           category: item.category || 'General',
           subcategory: item.subCategory || null,
           uom: item.uom || 'EA',
@@ -442,7 +445,7 @@ export async function POST(req: NextRequest) {
       entityType: 'AUCTION',
       entityId: auction.id,
       action: isDraft ? 'AUCTION_DRAFT_CREATED' : 'AUCTION_SCHEDULED',
-      description: `${auctionType} (${auctionCategory}) ${auctionNumber} "${title}" ${isDraft ? 'saved as Draft' : 'scheduled'} for RFQ ${rfq.rfqNumber} with ${invitedVendorIds.length} invited vendors.`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsRoute.auctionTypeAuctionCategoryAuctionNumberTitleValue5ForRFQRfqNumberWithLengthInvitedVendors, { "auctionType": auctionType, "auctionCategory": auctionCategory, "auctionNumber": auctionNumber, "title": title, "value5": isDraft ? 'saved as Draft' : 'scheduled', "rfqNumber": rfq.rfqNumber, "length": invitedVendorIds.length }),
       newValue: {
         auctionNumber,
         auctionCategory,
@@ -465,6 +468,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (error: any) {
     console.error('Error creating auction:', error);
-    return apiError(error.message || 'Failed to create auction', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateAuction }), 500);
   }
 }

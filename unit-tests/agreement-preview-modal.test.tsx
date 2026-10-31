@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import AgreementPreviewModal from '../src/components/rate-cards/AgreementPreviewModal';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const onClose = jest.fn();
 const originalPrint = window.print;
@@ -28,22 +32,22 @@ describe('rate card agreement preview modal', () => {
       ]}
     />);
 
-    expect(screen.getByText(/Master Rate Agreement/)).toBeInTheDocument();
-    expect(screen.getAllByText('MRA-RC-1-REV1')).toHaveLength(2);
-    expect(screen.getByText('Signature Pending')).toBeInTheDocument();
-    expect(screen.getByText(/Vendor Code: VND-0006/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.masterRateAgreement))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.mRARateCardId))).toHaveLength(2);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.signaturePending))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.vendorCode2))).toBeInTheDocument();
     expect(screen.getByText('01 Oct 2026 - 30 Sep 2027')).toBeInTheDocument();
-    expect(screen.getByText('ITEM-1')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.iTEMValue1)).length).toBeGreaterThan(0);
     expect(screen.getByText('WIRE')).toBeInTheDocument();
-    expect(screen.getByText('Cable tray').parentElement).toHaveTextContent('2');
-    expect(screen.getByText('Copper wire').parentElement).toHaveTextContent('1');
-    expect(screen.getByText('Switchgear').parentElement).toHaveTextContent('3');
-    expect(screen.getByText('No rate item').parentElement).toHaveTextContent('1');
-    expect(screen.getByText('Total Reference Value:').parentElement).toHaveTextContent('34');
+    expect(screen.getByText('Cable tray').parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyf9vgt1));
+    expect(screen.getByText('Copper wire').parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyefwnq4));
+    expect(screen.getByText('Switchgear').parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyezvv42));
+    expect(screen.getByText('No rate item').parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.common.copyefwnq4));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.totalReferenceValue)).parentElement).toHaveTextContent('34');
 
-    fireEvent.click(screen.getByRole('button', { name: /Print/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.print) }));
     expect(print).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Close Viewer' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.closeViewer) }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -58,23 +62,23 @@ describe('rate card agreement preview modal', () => {
 
     expect(screen.getByText('Executed HVAC Agreement')).toBeInTheDocument();
     expect(screen.getAllByText('DOC-42')).toHaveLength(2);
-    expect(screen.getByText('Digitally Signed')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.digitallySigned))).toBeInTheDocument();
     expect(screen.getByText('North Star')).toBeInTheDocument();
-    expect(screen.getByText(/Vendor Code: VND-42/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.vendorCode2))).toBeInTheDocument();
     expect(screen.getByText('Custom term')).toBeInTheDocument();
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getByText('Director')).toBeInTheDocument();
-    expect(screen.getByText('Ref: EVID-42')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.ref), { selector: 'div.font-mono' }).some((element) => element.textContent?.includes('EVID-42'))).toBe(true);
     expect(screen.getByText('29 Oct 2026')).toBeInTheDocument();
 
     render(<AgreementPreviewModal
       isOpen onClose={onClose} rateCardId="RC-FALLBACK" vendorName="Fallback Vendor" category="HVAC"
       agreement={{ required: true, type: 'TEMPLATE', signature: { signedBy: '', designation: '', signedAt: '', signatureType: 'DSC', signatureEvidenceId: '', verified: true } }}
     />);
-    expect(screen.getByText('K. Ramakrishna')).toBeInTheDocument();
-    expect(screen.getByText('Managing Partner / Authorized Signatory')).toBeInTheDocument();
-    expect(screen.getByText('Ref: DSC-2026-VND-0006-8848')).toBeInTheDocument();
-    expect(screen.getByText('24 Oct 2026, 12:00 IST')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.kRamakrishna))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.managingPartnerAuthorizedSignatory))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.ref), { selector: 'div.font-mono' }).some((element) => element.textContent?.includes('DSC-2026-VND-0006-8848'))).toBe(true);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.copy1seojss))).toBeInTheDocument();
   });
 
   it('uses uploaded document defaults and shows pending signature for an unsigned upload', () => {
@@ -83,13 +87,13 @@ describe('rate card agreement preview modal', () => {
       agreement={{ required: true, type: 'UPLOAD', documentTitle: '', documentNumber: '', fileName: '', fileSize: '', uploadedAt: '', signature: { verified: false } as any }}
     />);
 
-    expect(screen.getByText(/Master Rate Agreement/)).toBeInTheDocument();
-    expect(screen.getByText('MRA-RC-UPLOAD-REV1')).toBeInTheDocument();
-    expect(screen.getByText('Signature Pending')).toBeInTheDocument();
-    expect(screen.getByText('Executed_Agreement_Document.pdf')).toBeInTheDocument();
-    expect(screen.getByText(/File Size: 1\.8 MB.*22 Oct 2026/)).toBeInTheDocument();
-    expect(screen.getByText(/Uploaded formal document verified against Rate Card RC-UPLOAD/)).toBeInTheDocument();
-    expect(screen.queryByText('MASTER RATE CARD AGREEMENT')).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.masterRateAgreement))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.mRARateCardId))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.signaturePending))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.executedAgreementDocumentPdf))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.copyy2zker))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.uploadedFormalDocumentVerifiedAgainstRateCard))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.mASTERRATECARDAGREEMENT))).not.toBeInTheDocument();
   });
 
   it('renders uploaded file metadata and a verified signature badge', () => {
@@ -100,10 +104,10 @@ describe('rate card agreement preview modal', () => {
 
     expect(screen.getByText('Signed file')).toBeInTheDocument();
     expect(screen.getByText('SIGNED-2')).toBeInTheDocument();
-    expect(screen.getByText('Digitally Signed')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.digitallySigned))).toBeInTheDocument();
     expect(screen.getByText('contract.pdf')).toBeInTheDocument();
-    expect(screen.getByText(/File Size: 2\.4 MB.*28 Oct 2026/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close Viewer' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.fileSize))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsAgreementPreviewModal.closeViewer) }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

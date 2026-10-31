@@ -27,6 +27,9 @@ import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Section6ApproverView from '@/components/rate-cards/Section6ApproverView';
 import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedDetails';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function RateCardApprovalsPage() {
   const [rateCards, setRateCards] = useState<any[]>([]);
@@ -97,9 +100,9 @@ export default function RateCardApprovalsPage() {
         body: JSON.stringify({ remarks: actionReason }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to approve Rate Card');
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.appAppApprovalsRateCardsPage.failedToApproveRateCard);
 
-      setMsg({ text: data.message || 'Rate Card approved successfully!', type: 'success' });
+      setMsg({ text: data.message || UI_STRINGS.appAppApprovalsRateCardsPage.rateCardApprovedSuccessfully, type: 'success' });
       setShowReviewModal(false);
       fetchRateCards();
     } catch (err: any) {
@@ -112,7 +115,7 @@ export default function RateCardApprovalsPage() {
   const handleReturnForCorrection = async () => {
     if (!selectedCard) return;
     if (!actionReason.trim()) {
-      setMsg({ text: 'Remarks / Reason for return is mandatory', type: 'error' });
+      setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.remarksReasonForReturnIsMandatory, type: 'error' });
       return;
     }
     setProcessing(true);
@@ -124,9 +127,9 @@ export default function RateCardApprovalsPage() {
         body: JSON.stringify({ reason: actionReason.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to return Rate Card');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToReturnRateCard }));
 
-      setMsg({ text: data.message || 'Rate Card returned for correction with remarks recorded.', type: 'success' });
+      setMsg({ text: interpolateUiString(UI_STRINGS.common.value1, { "value1": data.message || 'Rate Card returned for correction with remarks recorded.' }), type: 'success' });
       setShowReturnModal(false);
       setShowReviewModal(false);
       fetchRateCards();
@@ -140,7 +143,7 @@ export default function RateCardApprovalsPage() {
   const handleReject = async () => {
     if (!selectedCard) return;
     if (!actionReason.trim()) {
-      setMsg({ text: 'Rejection reason / remarks is mandatory', type: 'error' });
+      setMsg({ text: UI_STRINGS.common.rejectionReasonRemarksIsMandatory, type: 'error' });
       return;
     }
     setProcessing(true);
@@ -152,9 +155,9 @@ export default function RateCardApprovalsPage() {
         body: JSON.stringify({ reason: actionReason.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to reject Rate Card');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToRejectRateCard }));
 
-      setMsg({ text: data.message || 'Rate Card rejected with reason recorded.', type: 'success' });
+      setMsg({ text: interpolateUiString(UI_STRINGS.common.value1, { "value1": data.message || 'Rate Card rejected with reason recorded.' }), type: 'success' });
       setShowRejectModal(false);
       setShowReviewModal(false);
       fetchRateCards();
@@ -175,7 +178,7 @@ export default function RateCardApprovalsPage() {
         body: JSON.stringify({ message: messageText.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send message');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSendMessage }));
 
       // Update local card approvals
       const updatedApprovals = [data.approvalEntry, ...(selectedCard.approvals || [])];
@@ -212,22 +215,19 @@ export default function RateCardApprovalsPage() {
   return (
     <div className="page-container" style={{ padding: '24px 32px' }}>
       <PageHeader
-        title="Rate Card Approvals Queue"
-        subtitle="Mandatory Two-Level Governance: Level 1 (Project Approver) → Level 2 (Finance Approver) → Active Rate Card"
+        title={UI_STRINGS.appAppApprovalsRateCardsPage.rateCardApprovalsQueue}
+        subtitle={UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryTwoLevelGovernanceLevel1ProjectApproverLevel2FinanceApproverActiveRateCard}
         breadcrumbs={[
-          { label: 'Home', href: '/dashboard' },
-          { label: 'Approvals', href: '/approvals' },
-          { label: 'Rate Cards' },
+          { label: UI_STRINGS.appAppApprovalsRateCardsPage.home, href: '/dashboard' },
+          { label: UI_STRINGS.common.approvals, href: '/approvals' },
+          { label: UI_STRINGS.appAppApprovalsRateCardsPage.rateCards },
         ]}
         badge={
           <span className="badge badge-info" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Clock size={13} /> {totalPending} Pending Approval
-          </span>
+            <Clock size={13} /> {totalPending}{UI_STRINGS.appAppApprovalsRateCardsPage.pendingApproval}</span>
         }
         actions={
-          <Link href="/procurement/rate-cards" className="btn btn-secondary btn-sm">
-            ← Rate Card Register
-          </Link>
+          <Link href="/procurement/rate-cards" className="btn btn-secondary btn-sm">{UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRegister}</Link>
         }
       />
 
@@ -273,20 +273,14 @@ export default function RateCardApprovalsPage() {
                 fontWeight: 700,
                 fontSize: 14,
               }}
-            >
-              1
-            </div>
+            >{UI_STRINGS.common.copyefwnq4}</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>
-                Level 1: Project Approver Review
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>
-                Validates item descriptions, standard BOQ taxonomy, operational scope, and unit rates
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>{UI_STRINGS.common.level1ProjectApproverReview}</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.validatesItemDescriptionsStandardBOQTaxonomyOperationalScopeAndUnitRates}</div>
             </div>
           </div>
 
-          <div style={{ fontSize: 18, color: '#94a3b8' }}>→</div>
+          <div style={{ fontSize: 18, color: '#94a3b8' }}>{UI_STRINGS.common.copy15ynnjp}</div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
@@ -302,20 +296,14 @@ export default function RateCardApprovalsPage() {
                 fontWeight: 700,
                 fontSize: 14,
               }}
-            >
-              2
-            </div>
+            >{UI_STRINGS.common.copyf9vgt1}</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#5b21b6' }}>
-                Level 2: Finance Approver Review
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>
-                Verifies commercial terms, payment milestones, volume discounts, and market parity
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#5b21b6' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApproverReview}</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.verifiesCommercialTermsPaymentMilestonesVolumeDiscountsAndMarketParity}</div>
             </div>
           </div>
 
-          <div style={{ fontSize: 18, color: '#94a3b8' }}>→</div>
+          <div style={{ fontSize: 18, color: '#94a3b8' }}>{UI_STRINGS.common.copy15ynnjp}</div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div
@@ -331,16 +319,10 @@ export default function RateCardApprovalsPage() {
                 fontWeight: 700,
                 fontSize: 14,
               }}
-            >
-              ✓
-            </div>
+            >{UI_STRINGS.appAppApprovalsRateCardsPage.copy660pgi}</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#065f46' }}>
-                Active Rate Card
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>
-                Active in RFQ comparison & eligible for direct rate-card PPOs
-              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#065f46' }}>{UI_STRINGS.common.activeRateCard}</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.activeInRFQComparisonEligibleForDirectRateCardPPOs}</div>
             </div>
           </div>
         </div>
@@ -356,13 +338,13 @@ export default function RateCardApprovalsPage() {
           vendorAcceptanceDate="24 Oct 2026"
           projectApproved={userRole === 'FINANCE_APPROVER'}
           onApproveProject={(comments) => {
-            setMsg({ text: 'Level 1 Project Approval completed! Routed to Level 2 Finance Approver.', type: 'success' });
+            setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApprovalCompletedRoutedToLevel2FinanceApprover, type: 'success' });
           }}
           onApproveFinance={(comments) => {
-            setMsg({ text: 'Level 2 Finance Approval completed! Rate Card RC-2026-0006 is now Active.', type: 'success' });
+            setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApprovalCompletedRateCardRC20260006IsNowActive, type: 'success' });
           }}
           onReject={(comments) => {
-            setMsg({ text: 'Rate Card rejected with remarks.', type: 'error' });
+            setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRejectedWithRemarks, type: 'error' });
           }}
         />
       </div>
@@ -380,10 +362,10 @@ export default function RateCardApprovalsPage() {
       <Card noPadding>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 8 }}>
           {[
-            { key: 'ALL_PENDING', label: `All Pending (${totalPending})` },
-            { key: 'LEVEL_1', label: `Level 1: Project Approver Queue (${level1Count})` },
-            { key: 'LEVEL_2', label: `Level 2: Finance Approver Queue (${level2Count})` },
-            { key: 'CONCLUDED', label: 'History & Concluded' },
+            { key: 'ALL_PENDING', label: interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.allPendingTotalPending, { "totalPending": totalPending }) },
+            { key: 'LEVEL_1', label: interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApproverQueueLevel1Count, { "level1Count": level1Count }) },
+            { key: 'LEVEL_2', label: interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApproverQueueLevel2Count, { "level2Count": level2Count }) },
+            { key: 'CONCLUDED', label: UI_STRINGS.appAppApprovalsRateCardsPage.historyConcluded },
           ].map((tab: any) => (
             <button
               key={tab.key}
@@ -414,27 +396,23 @@ export default function RateCardApprovalsPage() {
             </colgroup>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                <th style={{ width: 175, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Rate Card Ref</th>
-                <th style={{ width: 180, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Vendor</th>
-                <th style={{ width: 200, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Category / Scope</th>
-                <th style={{ width: 75, textAlign: 'right', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Items</th>
-                <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Submitted By / Date</th>
-                <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Approval Stage</th>
-                <th style={{ width: 120, textAlign: 'center', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Actions</th>
+                <th style={{ width: 175, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.common.rateCardRef}</th>
+                <th style={{ width: 180, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.common.vendor}</th>
+                <th style={{ width: 200, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.categoryScope}</th>
+                <th style={{ width: 75, textAlign: 'right', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.common.items4}</th>
+                <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.submittedByDate}</th>
+                <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.approvalStage}</th>
+                <th style={{ width: 120, textAlign: 'center', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.common.actions}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>
-                    Loading Approvals Queue...
-                  </td>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.loadingApprovalsQueue}</td>
                 </tr>
               ) : filteredQueue.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>
-                    No Rate Cards currently awaiting approval in this queue.
-                  </td>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.noRateCardsCurrentlyAwaitingApprovalInThisQueue}</td>
                 </tr>
               ) : (
                 filteredQueue.map((rc) => (
@@ -443,8 +421,7 @@ export default function RateCardApprovalsPage() {
                       <div className="font-mono font-bold text-primary" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {rc.rateCardNumber}
                       </div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>
-                        Version {rc.version || 'v1.0'}
+                      <div style={{ fontSize: 10, color: '#64748b' }}>{UI_STRINGS.common.version}{rc.version || UI_STRINGS.common.v10}
                       </div>
                     </td>
 
@@ -453,7 +430,7 @@ export default function RateCardApprovalsPage() {
                         {rc.vendor?.name}
                       </div>
                       <div style={{ fontSize: 10, color: '#64748b' }}>
-                        {rc.vendor?.code} • {rc.vendor?.complianceStatus}
+                        {rc.vendor?.code}{UI_STRINGS.common.copyko5tj9}{rc.vendor?.complianceStatus}
                       </div>
                     </td>
 
@@ -462,7 +439,7 @@ export default function RateCardApprovalsPage() {
                         {rc.category}
                       </div>
                       <div style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {rc.scope || 'Supply & Install'} • {rc.location || 'All India'}
+                        {rc.scope || UI_STRINGS.appAppApprovalsRateCardsPage.supplyInstall}{UI_STRINGS.common.copyko5tj9}{rc.location || UI_STRINGS.common.allIndia}
                       </div>
                     </td>
 
@@ -472,7 +449,7 @@ export default function RateCardApprovalsPage() {
 
                     <td style={{ width: 160, overflow: 'hidden' }}>
                       <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {rc.submittedBy || 'Category Manager'}
+                        {rc.submittedBy || UI_STRINGS.common.categoryManager}
                       </div>
                       <div style={{ fontSize: 10, color: '#64748b' }}>
                         {rc.submittedAt ? new Date(rc.submittedAt).toLocaleString() : new Date(rc.createdAt).toLocaleDateString()}
@@ -483,14 +460,10 @@ export default function RateCardApprovalsPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <StatusBadge status={rc.status} />
                         {rc.status === 'PENDING_PROJECT_APPROVAL' && (
-                          <span style={{ fontSize: 10, color: '#b45309', fontWeight: 600 }}>
-                            Awaiting Level 1 Review
-                          </span>
+                          <span style={{ fontSize: 10, color: '#b45309', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.awaitingLevel1Review}</span>
                         )}
                         {rc.status === 'PENDING_FINANCE_APPROVAL' && (
-                          <span style={{ fontSize: 10, color: '#6d28d9', fontWeight: 600 }}>
-                            Project Approved → Awaiting Finance
-                          </span>
+                          <span style={{ fontSize: 10, color: '#6d28d9', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.projectApprovedAwaitingFinance}</span>
                         )}
                       </div>
                     </td>
@@ -503,7 +476,7 @@ export default function RateCardApprovalsPage() {
                         style={{ fontSize: 11, height: 32, padding: '0 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       >
                         <Eye size={13} />
-                        <span>Review</span>
+                        <span>{UI_STRINGS.common.review}</span>
                       </button>
                     </td>
                   </tr>
@@ -539,15 +512,13 @@ export default function RateCardApprovalsPage() {
                   <span className="font-mono font-bold text-primary" style={{ fontSize: 16 }}>
                     {selectedCard.rateCardNumber}
                   </span>
-                  <span className="badge badge-info">{selectedCard.version || 'v1.0'}</span>
+                  <span className="badge badge-info">{selectedCard.version || UI_STRINGS.common.v10}</span>
                   <StatusBadge status={selectedCard.status} />
                   {selectedCard.status === 'PENDING_PROJECT_APPROVAL' && (
-                    <span className="badge badge-submitted">Level 1 (Project Approver Queue)</span>
+                    <span className="badge badge-submitted">{UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApproverQueue}</span>
                   )}
                   {selectedCard.status === 'PENDING_FINANCE_APPROVAL' && (
-                    <span className="badge badge-approved" style={{ background: '#ede9fe', color: '#5b21b6' }}>
-                      Level 2 (Finance Approver Queue)
-                    </span>
+                    <span className="badge badge-approved" style={{ background: '#ede9fe', color: '#5b21b6' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApproverQueue}</span>
                   )}
                 </div>
                 <h3 style={{ fontSize: 14, fontWeight: 700, margin: '4px 0 0', color: '#0f172a' }}>
@@ -558,9 +529,7 @@ export default function RateCardApprovalsPage() {
                 type="button"
                 onClick={() => setShowReviewModal(false)}
                 style={{ background: 'none', border: 'none', fontSize: 20, color: '#64748b', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
+              >{UI_STRINGS.common.copy4i33ao}</button>
             </div>
 
             {/* Modal Body */}
@@ -568,56 +537,53 @@ export default function RateCardApprovalsPage() {
               {/* Submission & Approver Receipt Details */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, background: '#f1f5f9', padding: 14, borderRadius: 6, fontSize: 12 }}>
                 <div>
-                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Vendor Details</span>
+                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.vendorDetails}</span>
                   <div style={{ fontWeight: 700 }}>{selectedCard.vendor?.name}</div>
-                  <div style={{ fontSize: 11, color: '#475569' }}>
-                    Code: {selectedCard.vendor?.code} | {selectedCard.vendor?.complianceStatus}
+                  <div style={{ fontSize: 11, color: '#475569' }}>{UI_STRINGS.common.code2}{selectedCard.vendor?.code}{UI_STRINGS.common.copy17xhom3}{selectedCard.vendor?.complianceStatus}
                   </div>
                 </div>
 
                 <div>
-                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Submission Info</span>
-                  <div style={{ fontWeight: 600 }}>{selectedCard.submittedBy || 'Category Manager'}</div>
-                  <div style={{ fontSize: 11, color: '#475569' }}>
-                    Submitted: {selectedCard.submittedAt ? new Date(selectedCard.submittedAt).toLocaleString() : '—'}
+                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.submissionInfo}</span>
+                  <div style={{ fontWeight: 600 }}>{selectedCard.submittedBy || UI_STRINGS.common.categoryManager}</div>
+                  <div style={{ fontSize: 11, color: '#475569' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.submitted}{selectedCard.submittedAt ? new Date(selectedCard.submittedAt).toLocaleString() : UI_STRINGS.common.copy4s9bsz}
                   </div>
                 </div>
 
                 <div>
-                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Scope & Validity</span>
-                  <div style={{ fontWeight: 600 }}>{selectedCard.category} ({selectedCard.scope})</div>
-                  <div style={{ fontSize: 11, color: '#475569' }}>
-                    Valid: {new Date(selectedCard.validFrom).toLocaleDateString()} — {new Date(selectedCard.validTo).toLocaleDateString()}
+                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.scopeValidity}</span>
+                  <div style={{ fontWeight: 600 }}>{selectedCard.category}{UI_STRINGS.common.copy1b3t0c5}{selectedCard.scope}{UI_STRINGS.common.copyc7zu6c}</div>
+                  <div style={{ fontSize: 11, color: '#475569' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.valid}{new Date(selectedCard.validFrom).toLocaleDateString()}{UI_STRINGS.common.copyq9aflv}{new Date(selectedCard.validTo).toLocaleDateString()}
                   </div>
                 </div>
 
                 <div>
-                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Project Approval</span>
+                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.projectApproval}</span>
                   <div style={{ fontWeight: 600 }}>
-                    {selectedCard.projectApprovedBy ? `✓ ${selectedCard.projectApprovedBy}` : 'Pending L1 Sign-off'}
+                    {selectedCard.projectApprovedBy ? interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.projectApprovedBy, { "projectApprovedBy": selectedCard.projectApprovedBy }) : UI_STRINGS.appAppApprovalsRateCardsPage.pendingL1SignOff}
                   </div>
                   <div style={{ fontSize: 11, color: '#475569' }}>
-                    {selectedCard.projectApprovedAt ? new Date(selectedCard.projectApprovedAt).toLocaleDateString() : 'Awaiting'}
+                    {selectedCard.projectApprovedAt ? new Date(selectedCard.projectApprovedAt).toLocaleDateString() : UI_STRINGS.appAppApprovalsRateCardsPage.awaiting}
                   </div>
                 </div>
 
                 <div>
-                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Formal Agreement Status</span>
+                  <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.formalAgreementStatus}</span>
                   {selectedCard.agreement && selectedCard.agreement.type !== 'NONE' ? (
                     <div>
                       <div style={{ fontWeight: 600, color: selectedCard.agreement.signature?.verified ? '#047857' : '#b45309' }}>
                         {selectedCard.agreement.signature?.verified
-                          ? `✓ Signed by ${selectedCard.agreement.signature.signedBy}`
-                          : '⚠️ Awaiting Mandatory Signature'}
+                          ? interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.signedBySignedBy, { "signedBy": selectedCard.agreement.signature.signedBy })
+                          : UI_STRINGS.appAppApprovalsRateCardsPage.awaitingMandatorySignature}
                       </div>
                       <div style={{ fontSize: 11, color: '#475569' }}>
-                        {selectedCard.agreement.documentTitle || 'Master Rate Agreement'}
+                        {selectedCard.agreement.documentTitle || UI_STRINGS.appAppApprovalsRateCardsPage.masterRateAgreement}
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <div style={{ fontWeight: 600, color: '#475569' }}>Direct Schedule</div>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>No formal agreement required</div>
+                      <div style={{ fontWeight: 600, color: '#475569' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.directSchedule}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.noFormalAgreementRequired}</div>
                     </div>
                   )}
                 </div>
@@ -627,11 +593,8 @@ export default function RateCardApprovalsPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <h4 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Scale size={15} color="#2563eb" /> Item-wise Commercial Comparison Matrix ({selectedCard.items?.length || 0} Items)
-                  </h4>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>
-                    Rates benchmarked against Standard BOQ Library and Historical Procurement Records
-                  </span>
+                    <Scale size={15} color="#2563eb" />{UI_STRINGS.appAppApprovalsRateCardsPage.itemWiseCommercialComparisonMatrix}{selectedCard.items?.length || 0}{UI_STRINGS.common.items2}</h4>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.ratesBenchmarkedAgainstStandardBOQLibraryAndHistoricalProcurementRecords}</span>
                 </div>
 
                 <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 6 }}>
@@ -651,18 +614,14 @@ export default function RateCardApprovalsPage() {
                     </colgroup>
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
-                        <th style={{ width: 50 }}>S.No.</th>
-                        <th style={{ width: 220, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Item Description</th>
-                        <th style={{ width: 65, textAlign: 'center' }}>UOM</th>
-                        <th style={{ width: 120, textAlign: 'right', background: '#ecfdf5', color: '#166534', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
-                          Proposed Rate (₹)
-                        </th>
-                        <th style={{ width: 125, textAlign: 'right', background: '#eff6ff', color: '#1e40af', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>
-                          Benchmark Rate (₹)
-                        </th>
-                        <th style={{ width: 125, textAlign: 'right', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Historical PPO Rate</th>
-                        <th style={{ width: 100, textAlign: 'right' }}>Variance</th>
-                        <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>Comparison Reference</th>
+                        <th style={{ width: 50 }}>{UI_STRINGS.common.sNo2}</th>
+                        <th style={{ width: 220, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.common.itemDescription}</th>
+                        <th style={{ width: 65, textAlign: 'center' }}>{UI_STRINGS.common.uOM}</th>
+                        <th style={{ width: 120, textAlign: 'right', background: '#ecfdf5', color: '#166534', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.proposedRate}</th>
+                        <th style={{ width: 125, textAlign: 'right', background: '#eff6ff', color: '#1e40af', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.common.benchmarkRate}</th>
+                        <th style={{ width: 125, textAlign: 'right', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.historicalPPORate}</th>
+                        <th style={{ width: 100, textAlign: 'right' }}>{UI_STRINGS.common.variance}</th>
+                        <th style={{ width: 160, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.25 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.comparisonReference}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -676,30 +635,29 @@ export default function RateCardApprovalsPage() {
                             <td style={{ width: 220, overflow: 'hidden' }}>
                               <div style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.description}</div>
                               <div style={{ fontSize: 10, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {it.specification || 'Standard specification compliant'}
+                                {it.specification || UI_STRINGS.appAppApprovalsRateCardsPage.standardSpecificationCompliant}
                               </div>
                             </td>
                             <td style={{ width: 65, textAlign: 'center' }}><span className="badge badge-draft">{it.uom}</span></td>
-                            <td style={{ width: 120, textAlign: 'right', background: '#ecfdf5', fontWeight: 700, color: '#047857', whiteSpace: 'nowrap' }}>
-                              ₹ {it.rate?.toLocaleString()}
+                            <td style={{ width: 120, textAlign: 'right', background: '#ecfdf5', fontWeight: 700, color: '#047857', whiteSpace: 'nowrap' }}>{UI_STRINGS.common.copy1g8b5tg}{it.rate?.toLocaleString()}
                             </td>
                             <td style={{ width: 125, textAlign: 'right', background: '#eff6ff', fontWeight: 600, color: '#1e40af', whiteSpace: 'nowrap' }}>
-                              {it.benchmarkRate ? `₹ ${it.benchmarkRate?.toLocaleString()}` : '—'}
+                              {it.benchmarkRate ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.benchmarkRate?.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                             </td>
                             <td style={{ width: 125, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              {it.historicalRate ? `₹ ${it.historicalRate?.toLocaleString()}` : '—'}
+                              {it.historicalRate ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.historicalRate?.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                             </td>
                             <td style={{ width: 100, textAlign: 'right', whiteSpace: 'nowrap' }}>
                               {it.benchmarkRate ? (
                                 <span className={`badge ${diff >= 0 ? 'badge-approved' : 'badge-rejected'}`} style={{ fontSize: 10 }}>
-                                  {diff >= 0 ? `▲ ${diffPercent}%` : `▼ ${Math.abs(diffPercent)}%`}
+                                  {diff >= 0 ? interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.diffPercent, { "diffPercent": diffPercent }) : interpolateUiString(UI_STRINGS.appAppApprovalsRateCardsPage.abs, { "abs": Math.abs(diffPercent) })}
                                 </span>
                               ) : (
-                                <span className="text-muted">—</span>
+                                <span className="text-muted">{UI_STRINGS.common.copy4s9bsz}</span>
                               )}
                             </td>
                             <td style={{ width: 160, fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {it.comparisonRef || 'Category Manager baseline validation'}
+                              {it.comparisonRef || UI_STRINGS.appAppApprovalsRateCardsPage.categoryManagerBaselineValidation}
                             </td>
                           </tr>
                         );
@@ -712,20 +670,16 @@ export default function RateCardApprovalsPage() {
               {/* Commercial Terms & Justification */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Commercial Terms & Validity
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', textTransform: 'uppercase', marginBottom: 4 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.commercialTermsValidity}</div>
                   <div style={{ fontSize: 12, color: '#475569' }}>
-                    {selectedCard.terms || 'Standard 30 days payment terms from invoice certification.'}
+                    {selectedCard.terms || UI_STRINGS.appAppApprovalsRateCardsPage.standard30DaysPaymentTermsFromInvoiceCertification}
                   </div>
                 </div>
 
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Supporting Justification
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', textTransform: 'uppercase', marginBottom: 4 }}>{UI_STRINGS.appAppApprovalsRateCardsPage.supportingJustification}</div>
                   <div style={{ fontSize: 12, color: '#475569' }}>
-                    {selectedCard.justification || 'Rates negotiated based on volume commitment and category historical benchmarks.'}
+                    {selectedCard.justification || UI_STRINGS.appAppApprovalsRateCardsPage.ratesNegotiatedBasedOnVolumeCommitmentAndCategoryHistoricalBenchmarks}
                   </div>
                 </div>
               </div>
@@ -733,14 +687,13 @@ export default function RateCardApprovalsPage() {
               {/* Conversation & Clarification Thread */}
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: 14, background: '#ffffff' }}>
                 <h4 style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <MessageSquare size={14} color="#2563eb" /> Conversation & Clarification Thread
-                </h4>
+                  <MessageSquare size={14} color="#2563eb" />{UI_STRINGS.appAppApprovalsRateCardsPage.conversationClarificationThread}</h4>
 
                 {/* Message input */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                   <input
                     type="text"
-                    placeholder="Ask clarification or enter enquiry remarks..."
+                    placeholder={UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks}
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     className="input input-sm"
@@ -756,16 +709,13 @@ export default function RateCardApprovalsPage() {
                     disabled={sendingMessage || !messageText.trim()}
                     style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                   >
-                    <Send size={12} /> Post Message
-                  </button>
+                    <Send size={12} />{UI_STRINGS.appAppApprovalsRateCardsPage.postMessage}</button>
                 </div>
 
                 {/* Messages / Approvals History */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
                   {!selectedCard.approvals?.length ? (
-                    <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
-                      No messages or previous decisions recorded yet.
-                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.noMessagesOrPreviousDecisionsRecordedYet}</div>
                   ) : (
                     selectedCard.approvals.map((app: any) => (
                       <div
@@ -797,9 +747,7 @@ export default function RateCardApprovalsPage() {
 
             {/* Modal Actions Footer */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-              <div style={{ fontSize: 11, color: '#64748b' }}>
-                Requires remarks if returning for correction or rejecting
-              </div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.requiresRemarksIfReturningForCorrectionOrRejecting}</div>
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
@@ -809,8 +757,7 @@ export default function RateCardApprovalsPage() {
                   style={{ color: '#b45309', borderColor: '#fde68a', background: '#fef3c7' }}
                   disabled={processing}
                 >
-                  <RotateCcw size={13} style={{ marginRight: 4 }} /> Return for Correction
-                </button>
+                  <RotateCcw size={13} style={{ marginRight: 4 }} />{UI_STRINGS.appAppApprovalsRateCardsPage.returnForCorrection}</button>
 
                 <button
                   type="button"
@@ -819,8 +766,7 @@ export default function RateCardApprovalsPage() {
                   style={{ color: '#b91c1c', borderColor: '#fca5a5', background: '#fee2e2' }}
                   disabled={processing}
                 >
-                  <XCircle size={13} style={{ marginRight: 4 }} /> Reject Rate Card
-                </button>
+                  <XCircle size={13} style={{ marginRight: 4 }} />{UI_STRINGS.appAppApprovalsRateCardsPage.rejectRateCard}</button>
 
                 <button
                   type="button"
@@ -831,8 +777,8 @@ export default function RateCardApprovalsPage() {
                 >
                   <CheckCircle2 size={13} style={{ marginRight: 4 }} />
                   {selectedCard.status === 'PENDING_PROJECT_APPROVAL'
-                    ? 'Approve Level 1 (Forward to Finance)'
-                    : 'Approve Level 2 (Activate Rate Card)'}
+                    ? UI_STRINGS.appAppApprovalsRateCardsPage.approveLevel1ForwardToFinance
+                    : UI_STRINGS.appAppApprovalsRateCardsPage.approveLevel2ActivateRateCard}
                 </button>
               </div>
             </div>
@@ -844,15 +790,11 @@ export default function RateCardApprovalsPage() {
       {showReturnModal && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 20 }}>
           <div className="modal-content" style={{ background: '#ffffff', borderRadius: 8, width: 480, padding: 20 }}>
-            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#92400e' }}>
-              Return Rate Card for Correction
-            </h4>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 12px' }}>
-              Specify the required modifications or clarifications. The Category Manager will be notified to revise and resubmit.
-            </p>
+            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#92400e' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.returnRateCardForCorrection}</h4>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 12px' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.specifyTheRequiredModificationsOrClarificationsTheCategoryManagerWillBeNotifiedToReviseAndResubmit}</p>
             <textarea
               rows={4}
-              placeholder="Mandatory remarks for correction..."
+              placeholder={UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryRemarksForCorrection}
               value={actionReason}
               onChange={(e) => setActionReason(e.target.value)}
               className="input input-sm"
@@ -864,18 +806,14 @@ export default function RateCardApprovalsPage() {
                 onClick={() => setShowReturnModal(false)}
                 className="btn btn-secondary btn-sm"
                 disabled={processing}
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={handleReturnForCorrection}
                 className="btn btn-primary btn-sm"
                 style={{ background: '#d97706', borderColor: '#b45309' }}
                 disabled={processing || !actionReason.trim()}
-              >
-                Confirm Return for Correction
-              </button>
+              >{UI_STRINGS.appAppApprovalsRateCardsPage.confirmReturnForCorrection}</button>
             </div>
           </div>
         </div>
@@ -885,15 +823,11 @@ export default function RateCardApprovalsPage() {
       {showRejectModal && (
         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 20 }}>
           <div className="modal-content" style={{ background: '#ffffff', borderRadius: 8, width: 480, padding: 20 }}>
-            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#b91c1c' }}>
-              Reject Rate Card
-            </h4>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 12px' }}>
-              Enter the mandatory rejection reason. This decision will be logged permanently in the audit history.
-            </p>
+            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#b91c1c' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.rejectRateCard2}</h4>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 12px' }}>{UI_STRINGS.appAppApprovalsRateCardsPage.enterTheMandatoryRejectionReasonThisDecisionWillBeLoggedPermanentlyInTheAuditHistory}</p>
             <textarea
               rows={4}
-              placeholder="Mandatory rejection reason..."
+              placeholder={UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryRejectionReason}
               value={actionReason}
               onChange={(e) => setActionReason(e.target.value)}
               className="input input-sm"
@@ -905,18 +839,14 @@ export default function RateCardApprovalsPage() {
                 onClick={() => setShowRejectModal(false)}
                 className="btn btn-secondary btn-sm"
                 disabled={processing}
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 onClick={handleReject}
                 className="btn btn-primary btn-sm"
                 style={{ background: '#dc2626', borderColor: '#b91c1c' }}
                 disabled={processing || !actionReason.trim()}
-              >
-                Confirm Rejection
-              </button>
+              >{UI_STRINGS.common.confirmRejection}</button>
             </div>
           </div>
         </div>

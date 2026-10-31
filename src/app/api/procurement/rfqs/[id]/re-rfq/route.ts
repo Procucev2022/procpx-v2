@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -19,7 +22,7 @@ export async function POST(
     const { reason, vendorIds = [], submissionDeadline } = body;
 
     if (!reason || reason.trim() === '') {
-      return apiError('Mandatory justification reason is required for Re-RFQ', 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.mandatoryJustificationReasonIsRequiredForReRFQ, 400);
     }
 
     const originalRfq = await prisma.rfq.findFirst({
@@ -31,7 +34,7 @@ export async function POST(
     });
 
     if (!originalRfq) {
-      return apiError('Original RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.originalRFQNotFoundOrAccessDenied, 404);
     }
 
     // Generate new RFQ Number (Re-RFQ suffix or new sequential number)
@@ -62,7 +65,7 @@ export async function POST(
         projectId: originalRfq.projectId,
         boqRevisionId: originalRfq.boqRevisionId,
         rfqNumber,
-        title: `Re-RFQ: ${originalRfq.title}`,
+        title: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.reRFQTitle, { "title": originalRfq.title }),
         scopeOfWork: originalRfq.scopeOfWork,
         packageType: originalRfq.packageType,
         packageName: originalRfq.packageName,
@@ -105,7 +108,7 @@ export async function POST(
       entityType: 'RFQ',
       entityId: reRfq.id,
       action: 'RERFQ_CREATED',
-      description: `Re-RFQ ${rfqNumber} created from ${originalRfq.rfqNumber}. Reason: ${reason}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.reRFQRfqNumberCreatedFromRfqNumber2ReasonReason, { "rfqNumber": rfqNumber, "rfqNumber2": originalRfq.rfqNumber, "reason": reason }),
       newValue: {
         originalRfqId: originalRfq.id,
         newRfqId: reRfq.id,
@@ -114,9 +117,9 @@ export async function POST(
       },
     });
 
-    return apiSuccess({ reRfq, message: `Re-RFQ ${rfqNumber} created successfully` }, 201);
+    return apiSuccess({ reRfq, message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.reRFQRfqNumberCreatedSuccessfully, { "rfqNumber": rfqNumber }) }, 201);
   } catch (error: any) {
     console.error('Error creating Re-RFQ:', error);
-    return apiError(error.message || 'Failed to initiate Re-RFQ', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInitiateReRfq }), 500);
   }
 }

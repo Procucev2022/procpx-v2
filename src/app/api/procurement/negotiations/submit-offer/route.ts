@@ -6,6 +6,9 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { hasPermission } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth();
@@ -13,11 +16,11 @@ export async function POST(req: NextRequest) {
 
   if (ctx.role === 'VENDOR') {
     if (!hasPermission(ctx.role, 'VENDOR_NEGOTIATE')) {
-      return apiError('Forbidden: insufficient vendor negotiation permissions', 403);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenInsufficientVendorNegotiationPermissions, 403);
     }
   } else {
     if (!hasPermission(ctx.role, 'NEGOTIATION_MANAGE')) {
-      return apiError('Forbidden: insufficient permissions', 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
   }
 
@@ -38,17 +41,17 @@ export async function POST(req: NextRequest) {
     // Automatically resolve vendorId from authenticated session if VENDOR role
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId) {
-        return apiError('Forbidden: vendor record not associated with this user account', 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403);
       }
       if (!vendorId) {
         vendorId = ctx.vendorId;
       } else if (vendorId !== ctx.vendorId) {
-        return apiError('Forbidden: you can only submit offers for your own vendor account', 403);
+        return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenYouCanOnlySubmitOffersForYourOwnVendorAccount, 403);
       }
     }
 
     if (!rfqId || !vendorId) {
-      return apiError('RFQ ID and Vendor ID are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQIDAndVendorIDAreRequired, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -62,26 +65,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!rfq) return apiError('RFQ not found or access denied', 404);
+    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
 
     if (ctx.role === 'VENDOR') {
       const isInvited = await prisma.rfqVendor.findFirst({
         where: { rfqId, vendorId, tenantId: ctx.tenantId },
       });
       if (!isInvited) {
-        return apiError('Forbidden: vendor is not invited to this RFQ', 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403);
       }
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(`RFQ status (${rfq.status}) does not permit vendor quotation offers`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQStatusStatusDoesNotPermitVendorQuotationOffers, { "status": rfq.status }), 400);
     }
 
     const vendor = await prisma.vendor.findFirst({
       where: { id: vendorId, tenantId: ctx.tenantId },
     });
 
-    if (!vendor) return apiError('Vendor not found', 404);
+    if (!vendor) return apiError(UI_STRINGS.common.vendorNotFound, 404);
 
     // Find or create negotiation record
     let negotiation = await prisma.negotiation.findFirst({
@@ -125,7 +128,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (isBuyer && vendorBuyerOffers.length >= 20) {
-      return apiError('Maximum limit of 20 buyer counteroffers reached for this vendor.', 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.maximumLimitOf20BuyerCounteroffersReachedForThisVendor, 400);
     }
 
     // Check vendor quote version limit
@@ -138,7 +141,7 @@ export async function POST(req: NextRequest) {
       });
       nextQuoteVersion = existingQuotes.length > 0 ? existingQuotes[0].quoteVersion + 1 : 1;
       if (nextQuoteVersion > 20) {
-        return apiError('Maximum limit of 20 quote versions reached per vendor for this RFQ.', 400);
+        return apiError(UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, 400);
       }
     }
 
@@ -211,7 +214,7 @@ export async function POST(req: NextRequest) {
           new Date().getTime() - new Date(r.createdAt).getTime() < 4000
       );
       if (recentDuplicate) {
-        return apiSuccess({ round: recentDuplicate, message: 'Offer already recorded' });
+        return apiSuccess({ round: recentDuplicate, message: UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.offerAlreadyRecorded });
       }
 
       round = await prisma.negotiationRound.create({
@@ -369,6 +372,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (error: any) {
     console.error('Error submitting negotiation offer:', error);
-    return apiError(error.message || 'Failed to submit negotiation offer', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitNegotiationOffer }), 500);
   }
 }

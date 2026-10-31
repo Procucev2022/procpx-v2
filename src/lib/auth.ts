@@ -3,6 +3,8 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -10,8 +12,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: 'credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
+        email: { label: UI_STRINGS.common.email, type: 'email' },
+        password: { label: UI_STRINGS.common.password, type: 'password' },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -120,7 +122,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: '/login',
-    error: '/login',
+    error: UI_STRINGS.libAuth.login,
   },
   session: { strategy: 'jwt' },
   secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'procpx-super-secret-key-change-in-production-2024',

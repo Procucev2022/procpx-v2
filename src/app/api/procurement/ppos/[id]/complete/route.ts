@@ -5,6 +5,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -40,11 +43,11 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError('PPO / PO not found', 404);
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
     }
 
     if (ppo.status === 'CANCELLED') {
-      return apiError('Cannot complete a cancelled order', 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, 400);
     }
 
     // Determine lines to complete
@@ -158,7 +161,7 @@ export async function POST(
       entityType: 'PPO',
       entityId: ppo.id,
       action: 'PPO_COMPLETED',
-      description: `PPO ${ppo.ppoNumber} completion recorded. Generated ${createdActualTransactions.length} Actual Cost transactions. Status: ${newPpoStatus}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPpoNumberCompletionRecordedGeneratedLengthActualCostTransactionsStatusNewPpoStatus, { "ppoNumber": ppo.ppoNumber, "length": createdActualTransactions.length, "newPpoStatus": newPpoStatus }),
       newValue: {
         status: newPpoStatus,
         actualTransactionsCount: createdActualTransactions.length,
@@ -167,12 +170,12 @@ export async function POST(
     });
 
     return apiSuccess({
-      message: `PPO completion recorded successfully. Generated ${createdActualTransactions.length} Actual Cost transaction(s).`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOCompletionRecordedSuccessfullyGeneratedLengthActualCostTransactionS, { "length": createdActualTransactions.length }),
       ppo: updatedPpo,
       actualTransactions: createdActualTransactions,
     });
   } catch (err: any) {
     console.error('Error recording PPO completion:', err);
-    return apiError(err.message || 'Failed to complete PPO', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCompletePpo }), 500);
   }
 }

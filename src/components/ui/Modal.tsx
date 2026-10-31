@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { ModalProps } from "@app-types/components/ui/Modal.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 
 export default function Modal({
@@ -88,7 +90,7 @@ export default function Modal({
             type="button"
             className="btn-icon"
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={UI_STRINGS.common.closeDialog}
             style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             <X size={18} />

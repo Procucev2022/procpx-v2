@@ -1,3 +1,4 @@
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
 /* Application constants extracted from app/(app)/procurement/rfqs/new/page.tsx. */
 
 // Approved Five-Step Colour Palette Configuration
@@ -8,8 +9,8 @@ export const STEP_THEMES = {
     accentBorder: '#BFDBFE',
     textDark: '#1E40AF',
     badgeBg: '#DBEAFE',
-    label: 'Project & BOQ',
-    subtitle: 'Baseline Verification',
+    label: UI_STRINGS.common.projectBOQ,
+    subtitle: UI_STRINGS.common.baselineVerification,
   },
   2: {
     primary: '#0D9488',
@@ -17,8 +18,8 @@ export const STEP_THEMES = {
     accentBorder: '#99F6E4',
     textDark: '#0F766E',
     badgeBg: '#CCFBF1',
-    label: 'Scope & Package',
-    subtitle: 'Package Lines',
+    label: UI_STRINGS.common.scopePackage,
+    subtitle: UI_STRINGS.common.packageLines,
   },
   3: {
     primary: '#9333EA',
@@ -26,8 +27,8 @@ export const STEP_THEMES = {
     accentBorder: '#E9D5FF',
     textDark: '#7E22CE',
     badgeBg: '#F3E8FF',
-    label: 'Commercial & Technical',
-    subtitle: 'Conditions & Specs',
+    label: UI_STRINGS.common.commercialTechnical,
+    subtitle: UI_STRINGS.common.conditionsSpecs,
   },
   4: {
     primary: '#D97706',
@@ -35,8 +36,8 @@ export const STEP_THEMES = {
     accentBorder: '#FDE68A',
     textDark: '#B45309',
     badgeBg: '#FEF3C7',
-    label: 'Vendor Selection',
-    subtitle: 'Invite Suppliers',
+    label: UI_STRINGS.common.vendorSelection,
+    subtitle: UI_STRINGS.common.inviteSuppliers,
   },
   5: {
     primary: '#059669',
@@ -44,7 +45,7 @@ export const STEP_THEMES = {
     accentBorder: '#A7F3D0',
     textDark: '#047857',
     badgeBg: '#D1FAE5',
-    label: 'Review & Release',
-    subtitle: 'Validate & Launch',
+    label: UI_STRINGS.common.reviewRelease,
+    subtitle: UI_STRINGS.common.validateLaunch,
   },
 } as const;

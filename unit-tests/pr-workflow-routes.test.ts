@@ -6,6 +6,8 @@ import { POST as submitPr } from '../src/app/api/pr/[id]/submit/route';
 import { POST as approvePr } from '../src/app/api/pr/[id]/approve/route';
 import { POST as rejectPr } from '../src/app/api/pr/[id]/reject/route';
 import { POST as revertPr } from '../src/app/api/pr/[id]/revert/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -59,7 +61,7 @@ describe('PR workflow routes', () => {
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(submitPr(request(), params('missing'))).resolves.toEqual({
-      ok: false, error: 'Procurement Request not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
     db.procurementRequest.findFirst.mockResolvedValueOnce(prRecord({ status: 'PR_APPROVED' }));
     await expect(submitPr(request(), params())).resolves.toEqual({
@@ -99,7 +101,7 @@ describe('PR workflow routes', () => {
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(approvePr(request(), params('missing'))).resolves.toEqual({
-      ok: false, error: 'Procurement Request not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
     db.procurementRequest.findFirst.mockResolvedValueOnce(prRecord({ status: 'PR_DRAFT' }));
     await expect(approvePr(request(), params())).resolves.toMatchObject({
@@ -112,7 +114,7 @@ describe('PR workflow routes', () => {
       ok: true, data: { status: 'PR_RELEASED_TO_PROCUREMENT' },
     });
     expect(db.pRApproval.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', prId: 'pr-1', approverId: 'approver-1', status: 'APPROVED', remarks: 'Checked quantities',
+      tenantId: 'tenant-1', prId: 'pr-1', approverId: 'approver-1', status: UI_STRINGS.common.aPPROVED, remarks: 'Checked quantities',
     }) });
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { prStatus: 'PR_APPROVED' } });
 
@@ -137,13 +139,13 @@ describe('PR workflow routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(rejectPr(request({ reason: 'No longer needed' }), params())).resolves.toBe(denied);
     await expect(rejectPr(request({ reason: '  ' }), params())).resolves.toEqual({
-      ok: false, error: 'Mandatory rejection reason must be provided.', status: 400,
+      ok: false, error: UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, status: 400,
     });
     await expect(rejectPr(request(), params())).resolves.toMatchObject({ ok: false, status: 500 });
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(rejectPr(request({ reason: 'Incomplete details' }), params('missing'))).resolves.toEqual({
-      ok: false, error: 'Procurement Request not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
 
     const updated = { id: 'pr-1', status: 'PR_REJECTED' };
@@ -174,13 +176,13 @@ describe('PR workflow routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(revertPr(request({ reason: 'Fix quantities' }), params())).resolves.toBe(denied);
     await expect(revertPr(request({ reason: '  ' }), params())).resolves.toEqual({
-      ok: false, error: 'Mandatory reason for reverting for correction must be provided.', status: 400,
+      ok: false, error: UI_STRINGS.appApiPrIdRevertRoute.mandatoryReasonForRevertingForCorrectionMustBeProvided, status: 400,
     });
     await expect(revertPr(request(), params())).resolves.toMatchObject({ ok: false, status: 500 });
 
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(revertPr(request({ reason: 'Fix quantities' }), params('missing'))).resolves.toEqual({
-      ok: false, error: 'Procurement Request not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
     db.procurementRequest.findFirst.mockResolvedValueOnce(prRecord({ status: 'PR_DRAFT' }));
     await expect(revertPr(request({ reason: 'Fix quantities' }), params())).resolves.toMatchObject({
@@ -208,7 +210,7 @@ describe('PR workflow routes', () => {
     db.procurementRequest.findFirst.mockResolvedValueOnce(withoutRevision);
     db.procurementRequest.update.mockResolvedValueOnce(returned);
     await revertPr(request({ reason: 'Fix descriptions' }), params());
-    expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ userId: null, message: expect.stringContaining('Project Approver') }));
+    expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ userId: null, message: expect.stringContaining(UI_STRINGS.common.projectApprover) }));
 
     db.procurementRequest.findFirst.mockRejectedValueOnce(new Error('revert database error'));
     await expect(revertPr(request({ reason: 'Other' }), params())).resolves.toEqual({

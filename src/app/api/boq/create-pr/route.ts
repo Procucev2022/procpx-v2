@@ -1,7 +1,11 @@
 // src/app/api/boq/create-pr/route.ts - Create Procurement Request (PR) from BOQ
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('PR_CREATE');
@@ -21,7 +25,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!boqRevisionId && !boqId) {
-      return apiError('BOQ Revision ID or BOQ ID is required.', 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
     }
 
     // Resolve revision
@@ -68,21 +72,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (!revision) {
-      return apiError('BOQ Revision not found.', 404);
+      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
     }
 
     const targetProjectId = projectId || revision.boq.projectId;
     const targetCostCentreId = costCentreId || revision.costCentreId || revision.boq.costCentreId;
 
     if (!targetCostCentreId) {
-      return apiError('A valid Cost Centre is required to create a PR.', 400);
+      return apiError(UI_STRINGS.appApiBoqCreatePrRoute.aValidCostCentreIsRequiredToCreateAPR, 400);
     }
 
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: targetCostCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
     if (!costCentre) {
-      return apiError('Cost centre not found for this project.', 404);
+      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
     }
 
     // Filter lines if specific line selection was provided
@@ -91,14 +95,14 @@ export async function POST(req: NextRequest) {
       : revision.lines;
 
     if (targetLines.length === 0) {
-      return apiError('No valid BOQ lines available to generate PR.', 400);
+      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400);
     }
 
     // Section 9: Commercial PR Rule - block if any line has pending/blank/invalid quantity
     const missingQtyLines = targetLines.filter((l: any) => l.quantity === null || l.quantity === undefined || l.quantity <= 0);
     if (missingQtyLines.length > 0) {
       return apiError(
-        `Quantity required for ${missingQtyLines.length} item${missingQtyLines.length > 1 ? 's' : ''} before creating PR.`,
+        interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.quantityRequiredForLengthItemValue2BeforeCreatingPR, { "length": missingQtyLines.length, "value2": missingQtyLines.length > 1 ? 's' : '' }),
         400
       );
     }
@@ -113,7 +117,7 @@ export async function POST(req: NextRequest) {
     });
     if (existingActivePr) {
       return apiError(
-        `An active Procurement Request (${existingActivePr.prNumber}) already exists for this BOQ Revision. Duplicate PR creation is prevented.`,
+        interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.anActiveProcurementRequestPrNumberAlreadyExistsForThisBOQRevisionDuplicatePRCreationIsPrevented, { "prNumber": existingActivePr.prNumber }),
         409
       );
     }
@@ -209,7 +213,7 @@ export async function POST(req: NextRequest) {
         entityType: 'PR',
         entityId: pr.id,
         action: 'PR_CREATED_FROM_BOQ',
-        description: `Procurement Request ${prNumber} created from BOQ ${revision.boq.boqCode} (${targetLines.length} lines, Value: ₹ ${totalEstimatedPRValue.toLocaleString('en-IN')})`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.procurementRequestPrNumberCreatedFromBOQBoqCodeLengthLinesValueToLocaleString, { "prNumber": prNumber, "boqCode": revision.boq.boqCode, "length": targetLines.length, "toLocaleString": totalEstimatedPRValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
         newValue: JSON.stringify({
           prNumber,
           boqCode: revision.boq.boqCode,
@@ -228,10 +232,10 @@ export async function POST(req: NextRequest) {
       totalLines: targetLines.length,
       totalValue: totalEstimatedPRValue,
       status: initialStatus,
-      message: `Procurement Request ${prNumber} created with ${targetLines.length} items.`,
+      message: interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.procurementRequestPrNumberCreatedWithLengthItems, { "prNumber": prNumber, "length": targetLines.length }),
     }, 201);
   } catch (err: any) {
     console.error('Error creating PR from BOQ:', err);
-    return apiError(err.message || 'Failed to create Procurement Request from BOQ.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateProcurementRequestFromBoq }), 500);
   }
 }

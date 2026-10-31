@@ -4,6 +4,8 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { isUserAuthorizedForProject, getUserAuthorizedProjectIds } from '../src/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -94,7 +96,7 @@ describe('vendor rating approval queue API', () => {
       counts: { pendingCount: 1, approvedCount: 2, returnedCount: 1, totalCount: 5, totalEvaluatedValue: 2500 },
     } });
     expect(db.ppoVendorRating.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { tenantId: 'tenant-1', status: 'SUBMITTED', OR: [
+      where: { tenantId: 'tenant-1', status: UI_STRINGS.common.sUBMITTED, OR: [
         { projectId: { in: ['project-1'] } }, { projectId: null }, { ppo: { projectId: { in: ['project-1'] } } },
       ] },
     }));
@@ -127,25 +129,25 @@ describe('vendor rating approval queue API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toBe(denied);
-    await expect(POST(postRequest({ action: 'ACCEPT' }))).resolves.toEqual({ ok: false, error: 'Rating ID is required.', status: 400 });
+    await expect(POST(postRequest({ action: 'ACCEPT' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingIDIsRequired, status: 400 });
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'OTHER' }))).resolves.toEqual({
-      ok: false, error: 'Invalid decision action. Must be ACCEPT, RETURN, or REJECT.', status: 400,
+      ok: false, error: UI_STRINGS.appApiApprovalsVendorRatingsRoute.invalidDecisionActionMustBeACCEPTRETURNOrREJECT, status: 400,
     });
     db.ppoVendorRating.findFirst.mockResolvedValueOnce(null);
     await expect(POST(postRequest({ ratingId: 'missing', action: 'ACCEPT' }))).resolves.toEqual({
-      ok: false, error: 'Rating record not found or access denied.', status: 404,
+      ok: false, error: UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingRecordNotFoundOrAccessDenied, status: 404,
     });
 
     projectAuth.mockResolvedValueOnce(false);
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toEqual({
-      ok: false, error: 'Access denied: You are not authorised to review assessments for this project.', status: 403,
+      ok: false, error: UI_STRINGS.appApiApprovalsVendorRatingsRoute.accessDeniedYouAreNotAuthorisedToReviewAssessmentsForThisProject, status: 403,
     });
     db.ppoVendorRating.findFirst.mockResolvedValueOnce(rating({ status: 'APPROVED' }));
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toMatchObject({
       ok: false, error: expect.stringContaining('Only submitted assessments'), status: 400,
     });
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'RETURN', approverComments: '  ' }))).resolves.toEqual({
-      ok: false, error: 'Approver review comments are mandatory when rejecting or returning an assessment for correction.', status: 400,
+      ok: false, error: UI_STRINGS.appApiApprovalsVendorRatingsRoute.approverReviewCommentsAreMandatoryWhenRejectingOrReturningAnAssessmentForCorrection, status: 400,
     });
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'REJECT', approverComments: '' }))).resolves.toMatchObject({ ok: false, status: 400 });
   });
@@ -163,7 +165,7 @@ describe('vendor rating approval queue API', () => {
     expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       userId: 'user-1', type: 'SUCCESS', entityId: 'ppo-1', recordNumber: 'PPO-001',
     }) });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'PPO_RATING_APPROVED', newValue: expect.objectContaining({ status: 'APPROVED', approverComments: 'Approved' }) }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'PPO_RATING_APPROVED', newValue: expect.objectContaining({ status: UI_STRINGS.common.aPPROVED, approverComments: UI_STRINGS.common.approved }) }));
   });
 
   it('returns assessments for correction and rejects them with recorded decision history', async () => {

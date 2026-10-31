@@ -1,6 +1,9 @@
+import { uiStringPattern } from '@/lib/i18n';
 import { GET } from '../src/app/api/dashboard/route';
 import { prisma } from '../src/lib/prisma';
 import { apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => {
   const model = () => ({
@@ -100,7 +103,7 @@ describe('dashboard API role responses', () => {
 
     expect(success).toHaveBeenCalledWith(expect.objectContaining({
       role: 'SUPER_ADMIN', tenants: 2, users: 7, projects: 4,
-      tenantList: [{ id: 'tenant-1', name: 'Buyer', slug: 'buyer', status: 'ACTIVE', projectCount: 3, userCount: 5 }],
+      tenantList: [{ id: 'tenant-1', name: UI_STRINGS.appLoginPageConstants.buyer, slug: 'buyer', status: UI_STRINGS.common.aCTIVE, projectCount: 3, userCount: 5 }],
     }));
     expect(db.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 }));
   });
@@ -117,7 +120,7 @@ describe('dashboard API role responses', () => {
 
     expect(success).toHaveBeenCalledWith(expect.objectContaining({
       role: 'CLIENT_ADMIN', totalProjects: 5, activeProjects: 2, pendingApprovals: 3,
-      totalUsers: 8, recentActivity: [{ id: 'activity-1' }], tenant: { id: 'tenant-1', name: 'Buyer' },
+      totalUsers: 8, recentActivity: [{ id: 'activity-1' }], tenant: { id: 'tenant-1', name: UI_STRINGS.appLoginPageConstants.buyer },
     }));
     expect(db.project.count).toHaveBeenNthCalledWith(2, expect.objectContaining({
       where: { tenantId: 'tenant-1', status: { in: ['BOQ_PREPARATION', 'BOQ_REVIEW', 'DRAFT'] } },
@@ -144,7 +147,7 @@ describe('dashboard API role responses', () => {
       pending: 2, recentApproved: 4, recentRejected: 1,
       pendingPrs: [
         expect.objectContaining({ requesterName: 'Known', requesterEmail: 'known@test', categories: ['Civil'], hasEnquiry: true, latestMessage: { status: 'ENQUIRY', note: 'Clarify' } }),
-        expect.objectContaining({ requesterName: 'unknown', requesterEmail: '', categories: ['Standard'], hasEnquiry: false, latestMessage: null }),
+        expect.objectContaining({ requesterName: 'unknown', requesterEmail: '', categories: [UI_STRINGS.common.standard], hasEnquiry: false, latestMessage: null }),
       ],
     }));
   });
@@ -208,7 +211,7 @@ describe('dashboard API role responses', () => {
     expect(mapped).toEqual(expect.objectContaining({ amount: 100, itemCount: 1, hasRateCardMatch: true, procurementStage: 'PPO' }));
     expect(mapped.rfqCount).toBeGreaterThanOrEqual(13);
     expect(mapped.rfqs.map((item: any) => item.id)).toEqual(expect.arrayContaining(['draft', 'issued', 'quotes', 'negotiation', 'locked', 'pending-award', 'approved-award', 'awarded', 'ppo', 'cancelled', 'negotiation-empty-rounds', 'rejected-award', 'empty-labels']));
-    expect(mapped.rfqs.find((item: any) => item.id === 'draft')).toEqual(expect.objectContaining({ quotationStage: 'Draft', awardStatus: 'Not Prepared' }));
+    expect(mapped.rfqs.find((item: any) => item.id === 'draft')).toEqual(expect.objectContaining({ quotationStage: UI_STRINGS.common.draft, awardStatus: 'Not Prepared' }));
     expect(mapped.rfqs.find((item: any) => item.id === 'ppo')).toEqual(expect.objectContaining({ ppoStatus: 'PPO-1 (ACCEPTED)' }));
     expect(db.boqRevision.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1' }) }));
   });
@@ -345,11 +348,11 @@ describe('dashboard API role responses', () => {
       totalProposedBudget: 50, totalApprovedBudget: 90,
       recentBoqs: expect.arrayContaining([
         expect.objectContaining({ id: 'b1', estimatedValue: 30, costCentre: 'Main (CC)', latestRevisionId: 'r1' }),
-        expect.objectContaining({ id: 'b2', estimatedValue: 40, costCentre: '—', latestRevisionId: null }),
+        expect.objectContaining({ id: 'b2', estimatedValue: 40, costCentre: UI_STRINGS.common.copy4s9bsz, latestRevisionId: null }),
       ]),
       pendingActions: expect.arrayContaining([
         expect.objectContaining({ id: 'b1', actionText: 'Revise and resubmit rejected BOQ', severity: 'danger' }),
-        expect.objectContaining({ id: 'b2', title: 'Ready', actionText: 'Complete and submit draft BOQ', severity: 'warning' }),
+        expect.objectContaining({ id: 'b2', title: 'Ready', actionText: 'Complete and submit draft BOQ', severity: UI_STRINGS.componentsUiToast.warning }),
       ]),
     }));
   });

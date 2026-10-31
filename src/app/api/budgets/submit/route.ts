@@ -1,7 +1,11 @@
 // src/app/api/budgets/submit/route.ts - Submit Budget for Project Approver Review
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_SUBMIT');
@@ -11,16 +15,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { contributionId } = body;
 
-    if (!contributionId) return apiError('Contribution ID is required.', 400);
+    if (!contributionId) return apiError(UI_STRINGS.common.contributionIDIsRequired, 400);
 
     const contribution = await prisma.budgetContribution.findFirst({
       where: { id: contributionId, tenantId: ctx.tenantId },
       include: { boqRevision: true, boq: true, costCentre: true },
     });
 
-    if (!contribution) return apiError('Budget contribution not found.', 404);
+    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
     if (contribution.status !== 'DRAFT') {
-      return apiError(`Cannot submit contribution in state ${contribution.status}.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsSubmitRoute.cannotSubmitContributionInStateStatus, { "status": contribution.status }), 400);
     }
 
     const updated = await prisma.budgetContribution.update({
@@ -52,12 +56,12 @@ export async function POST(req: NextRequest) {
         entityType: 'BUDGET_CONTRIBUTION',
         entityId: contribution.id,
         action: 'BUDGET_SUBMITTED',
-        description: `Budget contribution for Cost Centre ${contribution.costCentre.code} submitted for Project Approver review (₹ ${contribution.totalEstimatedValue.toLocaleString('en-IN')})`,
+        description: interpolateUiString(UI_STRINGS.appApiBudgetsSubmitRoute.budgetContributionForCostCentreCodeSubmittedForProjectApproverReviewToLocaleString, { "code": contribution.costCentre.code, "toLocaleString": contribution.totalEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
       },
     });
 
     return apiSuccess({ contribution: updated, status: 'PENDING_PROJECT_APPROVAL' });
   } catch (err: any) {
-    return apiError(err.message || 'Failed to submit budget contribution.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSubmitBudgetContribution }), 500);
   }
 }

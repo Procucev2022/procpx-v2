@@ -3,6 +3,7 @@
 import React from 'react';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import type { SpecificationCellProps } from "@app-types/components/ui/SpecificationCell.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
 export default function SpecificationCell({
@@ -11,7 +12,7 @@ export default function SpecificationCell({
   itemDescription,
   maxWidth = 220,
   lineId,
-  emptyPlaceholder = '—',
+  emptyPlaceholder = UI_STRINGS.common.copy4s9bsz,
   clampLines = 2,
 }: SpecificationCellProps) {
   return (

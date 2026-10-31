@@ -5,6 +5,9 @@ import { createWorker } from 'tesseract.js';
 import type { ExtractedDrawingItem, DrawingParseResult } from "@app-types/lib/drawing-parser.types";
 export type { ExtractedDrawingItem, DrawingParseResult };
 import { CATEGORY_RULES, KNOWN_UOMS } from "./drawing-parser.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 function resolveCategory(text: string): string {
@@ -360,7 +363,7 @@ export function parseOcrTextToDrawingItems(
     items.push({
       lineNumber: String(lineIndex++),
       mark: 'DMB-01',
-      description: `${sizeSpec} Commercial Digital Menu Board Display Screen`,
+      description: interpolateUiString(UI_STRINGS.libDrawingParser.sizeSpecCommercialDigitalMenuBoardDisplayScreen, { "sizeSpec": sizeSpec }),
       specification: `${sizeSpec} Full HD / 4K commercial LED display panel with ultra-thin bezel${dimSpec}, mounted @ 2000mm AFFL as per drawing elevation`,
       category: 'ELV / IT',
       uom: 'NOS',
@@ -377,7 +380,7 @@ export function parseOcrTextToDrawingItems(
       items.push({
         lineNumber: String(lineIndex++),
         mark: 'E-UPS-01',
-        description: 'Dedicated 6A/16A UPS Power Socket Outlet for Menu Board',
+        description: UI_STRINGS.libDrawingParser.dedicated6A16AUPSPowerSocketOutletForMenuBoard,
         specification: `Modular 6A/16A UPS socket outlet with faceplate, metal backbox, and concealed conduit (1 point per screen x ${screenCount} boards)`,
         category: 'Electrical',
         uom: 'NOS',
@@ -399,7 +402,7 @@ export function parseOcrTextToDrawingItems(
       items.push({
         lineNumber: String(lineIndex++),
         mark: 'E-PWR-01',
-        description: 'Commercial 6A/16A Raw Power Socket Outlet',
+        description: UI_STRINGS.libDrawingParser.commercial6A16ARawPowerSocketOutlet,
         specification: `Commercial grade 6A/16A power outlet point with concealed conduit for ancillary screen power (1 point per screen x ${screenCount} boards)`,
         category: 'Electrical',
         uom: 'NOS',
@@ -417,7 +420,7 @@ export function parseOcrTextToDrawingItems(
       items.push({
         lineNumber: String(lineIndex++),
         mark: 'IT-DATA-01',
-        description: 'Cat6 Structured Cabling Data Outlet (RJ45 Point)',
+        description: UI_STRINGS.libDrawingParser.cat6StructuredCablingDataOutletRJ45Point,
         specification: `Cat6 UTP structured data cabling drop with modular RJ45 faceplate for digital media player network streaming (1 point per screen x ${screenCount} boards)`,
         category: 'ELV / IT',
         uom: 'NOS',
@@ -436,7 +439,7 @@ export function parseOcrTextToDrawingItems(
       items.push({
         lineNumber: String(lineIndex++),
         mark: 'CIV-BOX-01',
-        description: 'Plywood & MS Metal Framing Boxing Support Structure for DMB Screens',
+        description: UI_STRINGS.libDrawingParser.plywoodMSMetalFramingBoxingSupportStructureForDMBScreens,
         specification: `Commercial marine-grade plywood backing structure with MS section framework for rigid mounting of ${screenCount} screens (Approx. ${screenCount * 940}mm overall span)`,
         category: 'Civil & Interior',
         uom: 'RFT',
@@ -459,7 +462,7 @@ export function parseOcrTextToDrawingItems(
       items.push({
         lineNumber: String(lineIndex++),
         mark: 'CIV-BEAM-01',
-        description: 'Overhead Beam Structural Site Verification & Anchor Mounting',
+        description: UI_STRINGS.libDrawingParser.overheadBeamStructuralSiteVerificationAnchorMounting,
         specification: 'Field inspection of existing overhead structural beam, load verification, and fixing of heavy-duty ceiling suspension anchor brackets',
         category: 'Civil & Interior',
         uom: 'LOT',
@@ -553,7 +556,7 @@ Return STRICT JSON format adhering to this structure:
           const items: ExtractedDrawingItem[] = rawItems.map((r: any, idx: number) => ({
             lineNumber: String(idx + 1),
             mark: r.mark || undefined,
-            description: r.description || `Architectural Item ${idx + 1}`,
+            description: interpolateUiString(UI_STRINGS.common.value1, { "value1": r.description || `Architectural Item ${idx + 1}` }),
             specification: r.specification || 'As per architectural drawing',
             category: r.category || 'Civil & Interior',
             uom: r.uom || 'NOS',
@@ -606,7 +609,7 @@ Return STRICT JSON format adhering to this structure:
             {
               role: 'user',
               content: [
-                { type: 'text', text: `Extract all CaPex BOQ items from this drawing (Ref: ${drawingRef}). Never invent quantities; use null if unverified.` },
+                { type: 'text', text: interpolateUiString(UI_STRINGS.libDrawingParser.extractAllCaPexBOQItemsFromThisDrawingRefDrawingRefNeverInventQuantitiesUseNullIfUnverified, { "drawingRef": drawingRef }) },
                 { type: 'image_url', image_url: { url: dataUri } },
               ],
             },
@@ -624,7 +627,7 @@ Return STRICT JSON format adhering to this structure:
           const items: ExtractedDrawingItem[] = rawItems.map((r: any, idx: number) => ({
             lineNumber: String(idx + 1),
             mark: r.mark || undefined,
-            description: r.description || `Architectural Item ${idx + 1}`,
+            description: interpolateUiString(UI_STRINGS.common.value1, { "value1": r.description || `Architectural Item ${idx + 1}` }),
             specification: r.specification || 'As per architectural drawing',
             category: r.category || 'Civil & Interior',
             uom: r.uom || 'NOS',
@@ -697,8 +700,8 @@ export async function processDrawingFile(
     }
 
     throw new Error(
-      `No extractable text or schedule tables found in the uploaded PDF '${fileName}'. ` +
-      `If this is a scanned raster drawing, an AI Vision provider key (GEMINI_API_KEY or OPENAI_API_KEY) in .env is required to read raster pixels.`
+      interpolateUiString(UI_STRINGS.common.value1, { "value1": `No extractable text or schedule tables found in the uploaded PDF '${fileName}'. ` +
+      `If this is a scanned raster drawing, an AI Vision provider key (GEMINI_API_KEY or OPENAI_API_KEY) in .env is required to read raster pixels.` })
     );
   }
 
@@ -724,16 +727,16 @@ export async function processDrawingFile(
       const ocrText = (ocrRes.data?.text || '').trim();
       if (!ocrText || ocrText.length < 10) {
         throw new Error(
-          `Local OCR engine could not detect readable architectural text or labels in '${fileName}'. ` +
-          `Please ensure the image contains visible annotations or configure GEMINI_API_KEY in .env for advanced computer vision.`
+          interpolateUiString(UI_STRINGS.common.value1, { "value1": `Local OCR engine could not detect readable architectural text or labels in '${fileName}'. ` +
+          `Please ensure the image contains visible annotations or configure GEMINI_API_KEY in .env for advanced computer vision.` })
         );
       }
 
       const ocrResult = parseOcrTextToDrawingItems(ocrText, fileName, drawingRef);
       if (ocrResult.items.length === 0) {
         throw new Error(
-          `Local OCR engine recognized text in '${fileName}' but could not extract structured CaPex items. ` +
-          `You may configure GEMINI_API_KEY in .env for advanced vision understanding.`
+          interpolateUiString(UI_STRINGS.common.value1, { "value1": `Local OCR engine recognized text in '${fileName}' but could not extract structured CaPex items. ` +
+          `You may configure GEMINI_API_KEY in .env for advanced vision understanding.` })
         );
       }
 
@@ -752,9 +755,9 @@ export async function processDrawingFile(
         warnings: ocrResult.warnings,
       };
     } catch (err: any) {
-      throw new Error(`Drawing OCR processing failed: ${err.message}`);
+      throw new Error(interpolateUiString(UI_STRINGS.libDrawingParser.drawingOCRProcessingFailedMessage, { "message": err.message }));
     }
   }
 
-  throw new Error(`Unsupported drawing file type: .${ext}. Supported formats are .pdf, .png, .jpg, .jpeg.`);
+  throw new Error(interpolateUiString(UI_STRINGS.libDrawingParser.unsupportedDrawingFileTypeExtSupportedFormatsArePdfPngJpgJpeg, { "ext": ext }));
 }

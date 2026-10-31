@@ -7,6 +7,8 @@ import { standardiseUom } from '../src/lib/uom-standardise';
 import { validateBoqLine, computeQualityScore } from '../src/lib/boq-validate';
 import { POST as editManualBoq } from '../src/app/api/boq/manual/route';
 import { POST as importBoq } from '../src/app/api/boq/import/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -53,15 +55,15 @@ describe('manual BOQ workspace API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(editManualBoq(request({}))).resolves.toBe(denied);
-    await expect(editManualBoq(request({}))).resolves.toEqual({ ok: false, error: 'Project ID or BOQ ID is required.', status: 400 });
+    await expect(editManualBoq(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqManualRoute.projectIDOrBOQIDIsRequired, status: 400 });
     db.boq.count.mockResolvedValueOnce(0);
     db.project.findFirst.mockResolvedValueOnce(null);
     db.boq.create.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'BOQ-000001' });
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-1' });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(editManualBoq(request({ projectId: 'project-1' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(editManualBoq(request({ projectId: 'project-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'APPROVED' });
-    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: 'Approved BOQ revisions are strictly immutable. Branch a new revision to edit.', status: 403 });
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqManualRoute.approvedBOQRevisionsAreStrictlyImmutableBranchANewRevisionToEdit, status: 403 });
   });
 
   it('creates a manual draft and replaces lines with validation, category/UOM matches, and quality metrics', async () => {
@@ -87,15 +89,15 @@ describe('manual BOQ workspace API', () => {
       ok: true, data: { boqId: 'boq-1', revisionId: 'revision-1', totalLines: 2, revision: updatedRevision },
     });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      projectId: 'project-1', costCentreId: 'cc-1', boqCode: 'BOQ-000005', title: expect.stringContaining('Retail Store'), description: 'Scope', category: 'Electrical', purpose: 'PR', status: 'DRAFT',
+      projectId: 'project-1', costCentreId: 'cc-1', boqCode: 'BOQ-000005', title: expect.stringContaining('Retail Store'), description: 'Scope', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, purpose: 'PR', status: 'DRAFT',
     }) });
     expect(db.boqLine.deleteMany).toHaveBeenCalledWith({ where: { boqRevisionId: 'revision-1' } });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
       lineNumber: '10', originalDescription: 'Wire', specification: 'Copper', categoryId: 'cat-1', uomId: 'uom-1', uomRaw: 'MTR', quantity: 2,
-      validationStatus: 'VALID', aiUnitCost: 15, aiTotalCost: 30,
+      validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID, aiUnitCost: 15, aiTotalCost: 30,
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      lineNumber: '2', originalDescription: 'Untitled Item', quantity: 0, categoryId: null, uomId: null, validationStatus: 'ERROR', aiUnitCost: null, aiTotalCost: null,
+      lineNumber: UI_STRINGS.common.copyf9vgt1, originalDescription: 'Untitled Item', quantity: 0, categoryId: null, uomId: null, validationStatus: 'ERROR', aiUnitCost: null, aiTotalCost: null,
     }) });
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { totalLines: 2, validLines: 1, errorLines: 1, qualityScore: 50 } });
   });
@@ -138,24 +140,24 @@ describe('BOQ spreadsheet import', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(importBoq(request({}))).resolves.toBe(denied);
-    await expect(importBoq(request({}))).resolves.toEqual({ ok: false, error: 'Revision ID is required.', status: 400 });
-    await expect(importBoq(request({ revisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: 'Column mapping is incomplete. Please map Description, UOM and Quantity.', status: 400 });
-    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: { description: 'Description' } }))).resolves.toEqual({ ok: false, error: 'Column mapping is incomplete. Please map UOM.', status: 400 });
-    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: { description: 'Description', uom: 'UOM' } }))).resolves.toEqual({ ok: false, error: 'Column mapping is incomplete. Please map Quantity.', status: 400 });
+    await expect(importBoq(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqImportRoute.revisionIDIsRequired, status: 400 });
+    await expect(importBoq(request({ revisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.columnMappingIsIncompletePleaseMapDescriptionUOMAndQuantity, status: 400 });
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: { description: 'Description' } }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.columnMappingIsIncompletePleaseMapUOM, status: 400 });
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: { description: 'Description', uom: 'UOM' } }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.columnMappingIsIncompletePleaseMapQuantity, status: 400 });
   });
 
   it('checks revision state and sheet availability before replacing imported lines', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(importBoq(request({ revisionId: 'missing', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(importBoq(request({ revisionId: 'missing', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'APPROVED' });
-    await expect(importBoq(request({ revisionId: 'approved', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: 'Only DRAFT revisions can be imported.', status: 400 });
+    await expect(importBoq(request({ revisionId: 'approved', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqImportRoute.onlyDRAFTRevisionsCanBeImported, status: 400 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', originalFilePath: null });
-    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: 'No uploaded file found for this revision.', status: 400 });
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqImportRoute.noUploadedFileFoundForThisRevision, status: 400 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', originalFilePath: 'upload.xlsx' });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Description', 'UOM', 'Quantity']]), 'Data');
     readUploadedFile.mockResolvedValueOnce(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
-    await expect(importBoq(request({ revisionId: 'revision-1', sheetName: 'Missing', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: 'Sheet not found in uploaded file.', status: 400 });
+    await expect(importBoq(request({ revisionId: 'revision-1', sheetName: 'Missing', columnMapping: mapping }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqImportRoute.sheetNotFoundInUploadedFile, status: 400 });
   });
 
   it('imports mapped rows, skips blank descriptions, links known UOMs, and recomputes quality', async () => {
@@ -185,9 +187,9 @@ describe('BOQ spreadsheet import', () => {
     expect(db.boqLine.createMany).toHaveBeenCalledWith({ data: [
       expect.objectContaining({
         lineNumber: 'L-1', originalDescription: 'Cable', specification: 'Copper', uomRaw: 'mtr', uomId: 'uom-mtr', quantity: 2,
-        location: 'Room 1', drawingReference: 'D-1', brand: 'Acme', model: 'M1', material: 'Copper', grade: 'A', remarks: 'Check', sourceSheet: 'Items', sourceRow: 2, confidenceScore: 1, validationStatus: 'VALID',
+        location: 'Room 1', drawingReference: 'D-1', brand: 'Acme', model: 'M1', material: 'Copper', grade: 'A', remarks: 'Check', sourceSheet: UI_STRINGS.common.items4, sourceRow: 2, confidenceScore: 1, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
       }),
-      expect.objectContaining({ lineNumber: '2', originalDescription: 'Panel', uomId: undefined, quantity: Number.NaN, sourceRow: 4, confidenceScore: 0.5, validationStatus: 'ERROR' }),
+      expect.objectContaining({ lineNumber: UI_STRINGS.common.copyf9vgt1, originalDescription: 'Panel', uomId: undefined, quantity: Number.NaN, sourceRow: 4, confidenceScore: 0.5, validationStatus: 'ERROR' }),
     ] });
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: expect.objectContaining({ columnMapping: JSON.stringify(mapping), totalLines: 2, validLines: 1, errorLines: 1, warningLines: 0, qualityScore: 50 }) });
   });
@@ -209,7 +211,7 @@ describe('BOQ spreadsheet import', () => {
       ok: true, data: { imported: 1, valid: 0, warnings: 1, errors: 0, qualityScore: 80 }, status: 200,
     });
     expect(db.boqLine.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
-      lineNumber: '1', originalDescription: 'Loose item', specification: undefined, uomRaw: '', uomId: undefined, quantity: null,
+      lineNumber: UI_STRINGS.common.copyefwnq4, originalDescription: 'Loose item', specification: undefined, uomRaw: '', uomId: undefined, quantity: null,
       location: undefined, drawingReference: undefined, brand: undefined, model: undefined, material: undefined, grade: undefined,
       remarks: undefined, sourceSheet: 'Default Data', sourceRow: 2, confidenceScore: 0.5, validationStatus: 'WARNING',
     })] });

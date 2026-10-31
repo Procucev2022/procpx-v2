@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BudgetApprovalQueuePage from '../src/app/(app)/approvals/budget/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockToastSuccess = jest.fn();
 let approveResult: { ok: boolean; body: unknown } = { ok: true, body: {} };
@@ -79,21 +83,21 @@ describe('project budget approval workspace', () => {
   it('loads queue summaries, reviews BOQ details, and opens enquiry or chat drawers', async () => {
     render(<BudgetApprovalQueuePage />);
     expect(await screen.findByText('BOQ-01')).toBeInTheDocument();
-    expect(screen.getByText('Clarification Pending')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.clarificationPending))).toBeInTheDocument();
     expect(screen.getByText('Electrical package')).toBeInTheDocument();
-    expect(screen.getAllByText('Project User')).toHaveLength(2);
-    expect(screen.getAllByText('General').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.projectUser))).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
     expect(screen.getByText(/12,500/)).toBeInTheDocument();
 
-    const firstRow = screen.getByRole('row', { name: /BOQ-01/ });
-    fireEvent.click(within(firstRow).getByRole('button', { name: 'Review' }));
-    expect(screen.getByText('Budget Review: BOQ-01 (R2)')).toBeInTheDocument();
-    expect(screen.getByText('Category-wise Allocation Breakdown')).toBeInTheDocument();
+    const firstRow = screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1];
+    fireEvent.click(within(firstRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.review) }));
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppApprovalsBudgetPage.budgetReviewTitleWithCode, { boqCode: 'BOQ-01', revisionCode: 'R2' }))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.categoryWiseAllocationBreakdown))).toBeInTheDocument();
     expect(screen.getByText('Cable tray')).toBeInTheDocument();
     expect(screen.getByText('Grounding strip')).toBeInTheDocument();
-    expect(screen.getAllByText('NOS')).toHaveLength(2);
-    expect(screen.getByText('Current Approved Budget').parentElement).toHaveTextContent('5,000');
-    fireEvent.click(screen.getByRole('button', { name: 'Ask Clarification' }));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.nOS))).toHaveLength(2);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.currentApprovedBudget)).parentElement).toHaveTextContent('5,000');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.askClarification) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');
     expect(screen.getByTestId('approval-chat')).toHaveTextContent('BOQ-01');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Queue' }));
@@ -102,22 +106,22 @@ describe('project budget approval workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
     expect(screen.queryByTestId('approval-chat')).not.toBeInTheDocument();
 
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Chat with Submitter' }));
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.review) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.chatWithSubmitter) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
 
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Chat' }));
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.chat) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
 
     const sparseRow = screen.getAllByRole('row')[3];
-    fireEvent.click(within(sparseRow).getByRole('button', { name: 'Review' }));
-    expect(screen.getByText('Budget Review: (R0)')).toBeInTheDocument();
-    expect(screen.getAllByText('BOQ Fitout Scope').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('General').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(within(sparseRow).getByRole('button', { name: 'Enquire' }));
+    fireEvent.click(within(sparseRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.review) }));
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppApprovalsBudgetPage.budgetReviewTitleWithoutCode, { revisionCode: UI_STRINGS.common.r0 }))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.bOQFitoutScope)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
+    fireEvent.click(within(sparseRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.enquire) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
   });
@@ -126,62 +130,62 @@ describe('project budget approval workspace', () => {
     render(<BudgetApprovalQueuePage />);
     await screen.findByText('BOQ-01');
     approveResult = { ok: false, body: {} };
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Approve' }));
-    expect(await screen.findByText('Approval failed')).toBeInTheDocument();
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.approve) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.approvalFailed))).toBeInTheDocument();
 
     approveResult = { ok: false, body: { error: 'Budget approval is unavailable' } };
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Approve' }));
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.approve) }));
     expect(await screen.findByText('Budget approval is unavailable')).toBeInTheDocument();
 
     approveResult = { ok: true, body: {} };
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Approve' }));
-    expect(await screen.findByText('Budget approved successfully.')).toBeInTheDocument();
-    expect(mockToastSuccess).toHaveBeenCalledWith('Budget approved successfully.', undefined, 'Under Finance Approval');
-    const banner = screen.getByText('Budget approved successfully.').parentElement?.parentElement as HTMLElement;
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.approve) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.budgetApprovedSuccessfully))).toBeInTheDocument();
+    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.budgetApprovedSuccessfully, undefined, UI_STRINGS.common.underFinanceApproval);
+    const banner = screen.getByText(uiStringPattern(UI_STRINGS.common.budgetApprovedSuccessfully)).parentElement?.parentElement as HTMLElement;
     fireEvent.click(within(banner).getByRole('button'));
-    expect(screen.queryByText('Budget approved successfully.')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.budgetApprovedSuccessfully))).not.toBeInTheDocument();
 
     await screen.findByRole('row', { name: /BOQ-01/ });
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Approve & Route to Finance' }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Budget approved successfully.', 'Electrical', 'Under Finance Approval'));
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.review) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.approveRouteToFinance) }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.budgetApprovedSuccessfully, UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, UI_STRINGS.common.underFinanceApproval));
   });
 
   it('validates rejection reasons and handles rejection error, success, and cancellation', async () => {
     render(<BudgetApprovalQueuePage />);
     await screen.findByText('BOQ-01');
-    const row = screen.getByRole('row', { name: /BOQ-01/ });
-    fireEvent.click(within(row).getByRole('button', { name: 'Reject' }));
-    expect(screen.getByText('Reject Budget Contribution')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm Rejection' })).toBeDisabled();
+    const row = screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1];
+    fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.rejectBudgetContribution))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) })).toBeDisabled();
 
-    const reason = screen.getByPlaceholderText('Reason for rejection (mandatory)...');
+    const reason = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.reasonForRejectionMandatory));
     fireEvent.change(reason, { target: { value: '   ' } });
-    expect(screen.getByRole('button', { name: 'Confirm Rejection' })).toBeDisabled();
-    fireEvent.submit(screen.getByRole('button', { name: 'Confirm Rejection' }).closest('form')!);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }).closest('form')!);
     expect(mockFetch.mock.calls.some(([url]) => url === '/api/budgets/reject')).toBe(false);
     fireEvent.change(reason, { target: { value: 'Insufficient supporting documents' } });
 
     rejectResult = { ok: false, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Rejection failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.rejectionFailed))).toBeInTheDocument();
     rejectResult = { ok: false, body: { error: 'Reject service unavailable' } };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
     expect(await screen.findByText('Reject service unavailable')).toBeInTheDocument();
 
     rejectResult = { ok: true, body: {} };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Budget contribution rejected with audit notes.')).toBeInTheDocument();
-    const successBanner = screen.getByText('Budget contribution rejected with audit notes.').parentElement?.parentElement as HTMLElement;
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes))).toBeInTheDocument();
+    const successBanner = screen.getByText(uiStringPattern(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes)).parentElement?.parentElement as HTMLElement;
     fireEvent.click(within(successBanner).getByRole('button'));
-    expect(screen.queryByText('Budget contribution rejected with audit notes.')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes))).not.toBeInTheDocument();
 
     await screen.findByRole('row', { name: /BOQ-01/ });
-    fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: 'Review' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject Contribution' }));
-    expect(screen.getByText('Reject Budget Contribution')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Reject Budget Contribution')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getAllByRole('row', { name: uiStringPattern(UI_STRINGS.common.bOQ) })[1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.review) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.rejectContribution) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.rejectBudgetContribution))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.rejectBudgetContribution))).not.toBeInTheDocument();
   });
 
   it('shows empty, non-success, and failed queue states', async () => {
@@ -189,14 +193,14 @@ describe('project budget approval workspace', () => {
       ? Promise.resolve(response({}))
       : Promise.resolve(response({})));
     const { unmount } = render(<BudgetApprovalQueuePage />);
-    expect(await screen.findByText('No budget contributions currently awaiting Project Approver approval.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.noBudgetContributionsCurrentlyAwaitingProjectApproverApproval))).toBeInTheDocument();
     unmount();
 
     mockFetch.mockImplementation((url: string) => url === '/api/approvals?type=BUDGET'
       ? Promise.resolve(response({ budgetQueue: queue }, false))
       : Promise.resolve(response({})));
     render(<BudgetApprovalQueuePage />);
-    expect(await screen.findByText('No budget contributions currently awaiting Project Approver approval.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.noBudgetContributionsCurrentlyAwaitingProjectApproverApproval))).toBeInTheDocument();
     expect(screen.getByText('0 Allocations')).toBeInTheDocument();
   });
 
@@ -205,7 +209,7 @@ describe('project budget approval workspace', () => {
     mockFetch.mockRejectedValue(new Error('project approval queue unavailable'));
     render(<BudgetApprovalQueuePage />);
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
-    expect(screen.getByText('No budget contributions currently awaiting Project Approver approval.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.noBudgetContributionsCurrentlyAwaitingProjectApproverApproval))).toBeInTheDocument();
     consoleError.mockRestore();
   });
 });

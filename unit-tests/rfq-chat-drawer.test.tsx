@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RfqChatDrawer from '../src/components/RfqChatDrawer';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const onClose = jest.fn();
 const response = (body: unknown, ok = true) => ({ ok, json: jest.fn().mockResolvedValue(body) });
@@ -48,7 +52,7 @@ describe('RFQ clarification drawer', () => {
   it('supports nested API data and shows the empty conversation state', async () => {
     fetchMock.mockResolvedValueOnce(response({ data: { messages: [] } }));
     render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-2" rfqNumber="RFQ-002" />);
-    expect(await screen.findByText('No queries or clarifications yet')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.noQueriesOrClarificationsYet))).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-2/messages');
   });
 
@@ -62,7 +66,7 @@ describe('RFQ clarification drawer', () => {
     expect(await screen.findByText('Network offline')).toBeInTheDocument();
     fetchMock.mockRejectedValueOnce({});
     rerender(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-5" rfqNumber="RFQ-005" />);
-    expect(await screen.findByText('Network error fetching messages.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.networkErrorFetchingMessages))).toBeInTheDocument();
   });
 
   it('sends a trimmed vendor message, reloads history, and uses the representative fallback', async () => {
@@ -71,13 +75,13 @@ describe('RFQ clarification drawer', () => {
       .mockResolvedValueOnce(response({ ok: true }))
       .mockResolvedValueOnce(response({ messages: [{ id: 'after-send', senderName: 'Vendor Representative', senderRole: 'VENDOR', message: 'Updated message', isVendorSent: true, createdAt: '2026-10-29T09:00:00Z' }] }));
     render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-6" rfqNumber="RFQ-006" vendorId="vendor-6" isVendorUser />);
-    const input = screen.getByPlaceholderText('Type query or clarification...');
+    const input = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.typeQueryOrClarification));
     fireEvent.change(input, { target: { value: '  Clarify delivery date  ' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.send) }));
     expect(await screen.findByText('Updated message')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/procurement/rfqs/rfq-6/messages', expect.objectContaining({
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Clarify delivery date', isVendorSent: true, vendorId: 'vendor-6', senderRole: 'VENDOR', senderName: 'Vendor Representative' }),
+      body: JSON.stringify({ message: 'Clarify delivery date', isVendorSent: true, vendorId: 'vendor-6', senderRole: UI_STRINGS.common.vENDOR, senderName: 'Vendor Representative' }),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/procurement/rfqs/rfq-6/messages?vendorId=vendor-6');
     expect(input).toHaveValue('');
@@ -86,14 +90,14 @@ describe('RFQ clarification drawer', () => {
   it('sends buyer messages and ignores blank submissions', async () => {
     fetchMock.mockResolvedValueOnce(response({ messages: [] }));
     render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-7" rfqNumber="RFQ-007" />);
-    const send = screen.getByRole('button', { name: /Send/ });
+    const send = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.send) });
     expect(send).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText('Type query or clarification...'), { target: { value: '   ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.typeQueryOrClarification)), { target: { value: '   ' } });
     expect(send).toBeDisabled();
     fireEvent.submit(screen.getByRole('textbox').closest('form')!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByPlaceholderText('Type query or clarification...'), { target: { value: '  Need a revised schedule  ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.typeQueryOrClarification)), { target: { value: '  Need a revised schedule  ' } });
     fireEvent.click(send);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/procurement/rfqs/rfq-7/messages', expect.objectContaining({
@@ -104,17 +108,17 @@ describe('RFQ clarification drawer', () => {
   it('preserves input and reports failed sends and rejected network calls', async () => {
     fetchMock.mockResolvedValueOnce(response({ messages: [] })).mockResolvedValueOnce(response({ error: 'Message rejected' }, false));
     render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-8" rfqNumber="RFQ-008" vendorId="vendor-8" />);
-    const input = screen.getByPlaceholderText('Type query or clarification...');
+    const input = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.typeQueryOrClarification));
     fireEvent.change(input, { target: { value: 'Keep this text' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.send) }));
     expect(await screen.findByText('Message rejected')).toBeInTheDocument();
     expect(input).toHaveValue('Keep this text');
 
     fetchMock.mockRejectedValueOnce(new Error('Send network offline'));
-    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.send) }));
     expect(await screen.findByText('Send network offline')).toBeInTheDocument();
     fetchMock.mockRejectedValueOnce({});
-    fireEvent.click(screen.getByRole('button', { name: /Send/ }));
-    expect(await screen.findByText('Network error sending message.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.send) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.networkErrorSendingMessage))).toBeInTheDocument();
   });
 });

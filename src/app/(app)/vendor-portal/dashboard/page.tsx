@@ -4,6 +4,9 @@
 import { useState, useEffect } from 'react';
 import VendorSourcingDashboard from '@/components/VendorSourcingDashboard';
 import { Building2, AlertCircle, RefreshCw } from 'lucide-react';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function VendorPortalDashboardPage() {
   const [vendor, setVendor] = useState<any>(null);
@@ -17,7 +20,7 @@ export default function VendorPortalDashboardPage() {
       const res = await fetch('/api/vendor-portal/me');
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load vendor portal');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadVendorPortal }));
       }
       const data = await res.json();
       setVendor(data.vendor);
@@ -37,7 +40,7 @@ export default function VendorPortalDashboardPage() {
       <div style={{ padding: 32, textAlign: 'center' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)' }}>
           <RefreshCw size={20} className="animate-spin" />
-          <span>Loading Vendor Portal Dashboard...</span>
+          <span>{UI_STRINGS.appAppVendorPortalDashboardPage.loadingVendorPortalDashboard}</span>
         </div>
       </div>
     );
@@ -60,9 +63,9 @@ export default function VendorPortalDashboardPage() {
         >
           <AlertCircle size={24} />
           <div>
-            <div style={{ fontWeight: 600 }}>Vendor Access Restricted</div>
+            <div style={{ fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalDashboardPage.vendorAccessRestricted}</div>
             <div style={{ fontSize: 13, marginTop: 4 }}>
-              {error || 'No active vendor record linked to this user account. Please contact the procurement team.'}
+              {error || UI_STRINGS.appAppVendorPortalDashboardPage.noActiveVendorRecordLinkedToThisUserAccountPleaseContactTheProcurementTeam}
             </div>
           </div>
         </div>

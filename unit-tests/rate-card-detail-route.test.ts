@@ -3,6 +3,8 @@ import { DELETE, GET, PUT } from '../src/app/api/procurement/rate-cards/[id]/rou
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -64,9 +66,9 @@ describe('rate card detail API', () => {
     await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toBe(denied);
 
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
-    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
 
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED', notes: JSON.stringify({ agreement: { signature: 'signed.pdf' } }), items: [
       { id: 'i1', rate: 80, proposedRate: 90, historicalRate: 70, benchmarkRate: 100, minQuantity: 5,
@@ -110,7 +112,7 @@ describe('rate card detail API', () => {
     const savedNotes = JSON.parse(db.vendorRateCard.update.mock.calls[0][0].data.notes);
     expect(savedNotes).toMatchObject({ currentRound: 2, agreement: { signature: null, status: 'DRAFT' },
       round2: { preserved: true, buyerOffer2Actor: 'Manager', buyerOffer2Remarks: 'Best and final' } });
-    expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ targetRole: 'VENDOR', entityId: 'rc-1' }) });
+    expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ targetRole: UI_STRINGS.common.vENDOR, entityId: 'rc-1' }) });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'RATE_CARD_BUYER_OFFER_2_SUBMITTED' }));
 
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ notes: '{bad json', items: [] }));
@@ -154,7 +156,7 @@ describe('rate card detail API', () => {
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'VENDOR_ACCEPTED', notes: null }));
     await expect(PUT(request({ action: 'CATEGORY_MANAGER_SIGNOFF' }), params())).resolves.toMatchObject({ ok: true });
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', submittedBy: 'Manager', submittedAt: expect.any(Date),
+      status: 'PENDING_PROJECT_APPROVAL', approvalLevel: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, submittedBy: 'Manager', submittedAt: expect.any(Date),
     }) }));
     expect(db.notification.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ targetRole: 'PROJECT_APPROVER' }) });
   });
@@ -191,7 +193,7 @@ describe('rate card detail API', () => {
     db.vendorRateCard.update.mockResolvedValueOnce({ ...card(), version: 5 });
     await expect(PUT(request({ version: 5, items: [{ description: 'No category', rate: '', proposedRate: undefined }] }), params())).resolves.toMatchObject({ ok: true });
     expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      version: 5, items: { create: [expect.objectContaining({ category: 'Electrical', subcategory: 'Wire', rate: 0, proposedRate: 0 })] },
+      version: 5, items: { create: [expect.objectContaining({ category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'Wire', rate: 0, proposedRate: 0 })] },
     }) }));
 
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED' }));
@@ -205,11 +207,11 @@ describe('rate card detail API', () => {
     await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toBe(denied);
 
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED' }));
-    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'Only Draft Rate Cards can be deleted', status: 400 });
+    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, status: 400 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card());
-    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: true, data: { message: 'Rate Card deleted successfully' }, status: 200 });
+    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: true, data: { message: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardDeletedSuccessfully }, status: 200 });
     expect(db.vendorRateCardItem.deleteMany).toHaveBeenCalledWith({ where: { rateCardId: 'rc-1' } });
     expect(db.rateCardApproval.deleteMany).toHaveBeenCalledWith({ where: { rateCardId: 'rc-1' } });
 
@@ -230,8 +232,8 @@ describe('rate card detail API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(PUT(request({}), params())).resolves.toBe(denied);
     db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
-    await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
-    await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: 'Rate Card not found', status: 404 });
+    await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
   });
 });

@@ -5,6 +5,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('ACTUAL_COST_VIEW');
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!projectId || !category || actualQuantity === undefined || actualUnitRate === undefined) {
-      return apiError('Project, category, actualQuantity, and actualUnitRate are required', 400);
+      return apiError(UI_STRINGS.appApiActualCostsRoute.projectCategoryActualQuantityAndActualUnitRateAreRequired, 400);
     }
 
     const calculatedAmount = actualAmount !== undefined ? Number(actualAmount) : Number(actualQuantity) * Number(actualUnitRate);
@@ -137,7 +140,7 @@ export async function POST(req: NextRequest) {
       entityType: 'ACTUAL_COST',
       entityId: actualTx.id,
       action: 'ACTUAL_COST_RECORDED',
-      description: `Actual cost transaction ${transactionCode} recorded for ${category} (Amount: ₹${calculatedAmount.toLocaleString()}) via ${source}`,
+      description: interpolateUiString(UI_STRINGS.appApiActualCostsRoute.actualCostTransactionTransactionCodeRecordedForCategoryAmountToLocaleStringViaSource, { "transactionCode": transactionCode, "category": category, "toLocaleString": calculatedAmount.toLocaleString(), "source": source }),
       newValue: {
         transactionCode,
         category,
@@ -149,6 +152,6 @@ export async function POST(req: NextRequest) {
     return apiSuccess(actualTx, 201);
   } catch (err: any) {
     console.error('Error creating actual cost transaction:', err);
-    return apiError(err.message || 'Failed to create actual cost transaction', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateActualCostTransaction }), 500);
   }
 }

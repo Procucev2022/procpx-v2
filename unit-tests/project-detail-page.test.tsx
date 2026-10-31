@@ -1,8 +1,12 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProjectDetailPage from '../src/app/(app)/projects/[id]/page';
 import { useParams } from 'next/navigation';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -35,9 +39,9 @@ describe('project detail workspace', () => {
   it('shows loading and then the access-denied message for a missing project', async () => {
     fetchMock.mockResolvedValueOnce(response({ error: 'not found' }));
     render(<ProjectDetailPage />);
-    expect(screen.getByText('Loading project...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.loadingProject))).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/projects/project-1');
-    expect(await screen.findByText('Project not found or access denied.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.projectNotFoundOrAccessDenied))).toBeInTheDocument();
   });
 
   it('renders project details, latest BOQ revisions, and all information tabs', async () => {
@@ -66,23 +70,23 @@ describe('project detail workspace', () => {
     render(<ProjectDetailPage />);
 
     expect(await screen.findByText('North Retail Fitout')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Edit Project' })).toHaveAttribute('href', '/projects/project-1/edit');
-    expect(screen.getAllByRole('link', { name: 'Open BOQ' })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: 'Open BOQ' })[0]).toHaveAttribute('href', '/boq/rev-2');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.editProject) })).toHaveAttribute('href', '/projects/project-1/edit');
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.openBOQ2) })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.openBOQ2) })[0]).toHaveAttribute('href', '/boq/rev-2');
     expect(screen.getAllByText('NR-001')).toHaveLength(2);
     expect(screen.getAllByText('15,000 Sq Ft')).toHaveLength(2);
     expect(screen.getByText('RETAIL FITOUT')).toBeInTheDocument();
-    expect(screen.getByText('Budget').parentElement).toHaveTextContent(/INR.*\d/);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.budget)).parentElement).toHaveTextContent(/INR.*\d/);
     expect(screen.getAllByText('REV-2')).toHaveLength(2);
     expect(screen.getAllByText('92%')).toHaveLength(2);
     expect(screen.getByText('65%')).toBeInTheDocument();
     expect(screen.getByText('35%')).toBeInTheDocument();
-    expect(screen.getAllByText('Project Owner')).toHaveLength(2);
-    expect(screen.getByText('Benchmark').parentElement).toHaveTextContent('Soon');
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.projectOwner))).toHaveLength(2);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.benchmark)).parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.soon));
 
     fireEvent.click(screen.getByRole('button', { name: 'Boq' }));
-    expect(screen.getByRole('link', { name: /Open BOQ Workspace/ })).toHaveAttribute('href', '/boq/rev-2');
-    expect(screen.getByRole('link', { name: /Upload New Revision/ })).toHaveAttribute('href', '/boq/upload?projectId=project-1&boqId=boq-1');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.bOQWorkspace) })).toHaveAttribute('href', '/boq/rev-2');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadNewRevision) })).toHaveAttribute('href', '/boq/upload?projectId=project-1&boqId=boq-1');
     fireEvent.click(screen.getByRole('button', { name: 'Team' }));
     expect(screen.getByText('Jamie Chen')).toBeInTheDocument();
     expect(screen.getByText('PROJECT_MANAGER')).toBeInTheDocument();
@@ -90,12 +94,12 @@ describe('project detail workspace', () => {
     expect(screen.getByText('Project Document Repository (3)')).toBeInTheDocument();
     expect(screen.getByText('Original BOQ')).toBeInTheDocument();
     expect(screen.getByText('2 KB')).toBeInTheDocument();
-    expect(screen.getAllByText('System')).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.system))).toHaveLength(2);
     expect(screen.getByText('Site plan').closest('tr')).toHaveTextContent('DRAWING');
-    expect(screen.getByText('Notes').closest('tr')).toHaveTextContent('OTHER');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.notes)).closest('tr')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.oTHER));
     const alertMock = jest.fn();
     Object.defineProperty(window, 'alert', { configurable: true, value: alertMock });
-    fireEvent.click(screen.getAllByText(/View Path/)[0]);
+    fireEvent.click(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.viewPath))[0]);
     expect(alertMock).toHaveBeenCalledWith('Document file stored at: documents/original.pdf');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
     expect(screen.getByText('Project details changed')).toBeInTheDocument();
@@ -110,22 +114,22 @@ describe('project detail workspace', () => {
     };
     fetchMock.mockResolvedValueOnce(response(project));
     render(<ProjectDetailPage />);
-    expect(await screen.findByText('No BOQ yet')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Upload BOQ' })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: 'Upload BOQ' })[0]).toHaveAttribute('href', '/boq/upload?projectId=project-1');
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noBOQYet))).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.common.uploadBOQ2) })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.common.uploadBOQ2) })[0]).toHaveAttribute('href', '/boq/upload?projectId=project-1');
     fireEvent.click(screen.getByRole('button', { name: 'Boq' }));
-    expect(screen.getByText('No BOQ uploaded yet')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noBOQUploadedYet))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Team' }));
-    expect(screen.getByText('No team members assigned')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noTeamMembersAssigned))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    expect(screen.getByText('No documents uploaded yet')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noDocumentsUploadedYet))).toBeInTheDocument();
     const promptMock = jest.fn().mockReturnValueOnce(null);
     Object.defineProperty(window, 'prompt', { configurable: true, value: promptMock });
-    fireEvent.click(screen.getByRole('button', { name: '+ Upload Document' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
     expect(promptMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
-    expect(screen.getByText('No activity yet')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noActivityYet))).toBeInTheDocument();
   });
 
   it('uploads a named document, defaults an empty category, and refreshes project data', async () => {
@@ -137,14 +141,14 @@ describe('project detail workspace', () => {
     const promptMock = jest.fn().mockReturnValueOnce(' Plan.pdf ').mockReturnValueOnce('');
     Object.defineProperty(window, 'prompt', { configurable: true, value: promptMock });
     render(<ProjectDetailPage />);
-    await screen.findByText('No BOQ yet');
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noBOQYet));
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    expect(await screen.findByText('No documents uploaded yet')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '+ Upload Document' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noDocumentsUploadedYet))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/projects/project-1/documents', expect.objectContaining({
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: ' Plan.pdf ', category: 'OTHER', fileSize: 102400, fileType: 'application/pdf' }),
+      body: JSON.stringify({ name: ' Plan.pdf ', category: UI_STRINGS.appAppProjectsIdPage.oTHER, fileSize: 102400, fileType: 'application/pdf' }),
     }));
     expect(await screen.findByText('Project Document Repository (1)')).toBeInTheDocument();
     expect(screen.getByText('Plan.pdf')).toBeInTheDocument();
@@ -158,11 +162,11 @@ describe('project detail workspace', () => {
     }));
     render(<ProjectDetailPage />);
     expect(await screen.findByText('Legacy Project')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open BOQ' })).toHaveAttribute('href', '/boq/boq-legacy');
-    expect(screen.getByText('BOQ Summary')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.openBOQ2) })).toHaveAttribute('href', '/boq/boq-legacy');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.bOQSummary))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Boq' }));
-    expect(screen.getByText('No BOQ uploaded yet')).toBeInTheDocument();
-    expect(screen.queryByText(/Sq Ft/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Project Owner')).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noBOQUploadedYet))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.sqFt))).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.projectOwner))).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('COST_CENTRE_VIEW');
@@ -41,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
-  if (!cc) return apiError('Cost centre not found.', 404);
+  if (!cc) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404);
 
   const totalBudget = cc.budgets.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
   const approvedBudget = cc.budgets.reduce((sum, b) => sum + (b.approvedAmount || 0), 0);
@@ -64,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const existing = await prisma.costCentre.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!existing) return apiError('Cost centre not found.', 404);
+  if (!existing) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404);
 
   try {
     const body = await req.json();
@@ -90,7 +93,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         entityType: 'COST_CENTRE',
         entityId: id,
         action: 'UPDATE',
-        description: `Cost Centre updated: ${updated.code} - ${updated.name}`,
+        description: interpolateUiString(UI_STRINGS.appApiCostCentresIdRoute.costCentreUpdatedCodeName, { "code": updated.code, "name": updated.name }),
         oldValue: JSON.stringify(existing),
         newValue: JSON.stringify(updated),
       },
@@ -98,6 +101,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return apiSuccess(updated);
   } catch (err: any) {
-    return apiError(err.message || 'Failed to update cost centre.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateCostCentre }), 500);
   }
 }

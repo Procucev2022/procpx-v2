@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VendorSourcingDashboard from '../src/components/VendorSourcingDashboard';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/components/ui/Toast', () => ({ useToast: () => ({ success: jest.fn(), error: jest.fn() }) }));
 jest.mock('../src/components/RfqChatDrawer', () => ({
@@ -91,11 +95,11 @@ describe('vendor sourcing dashboard', () => {
 
   it('renders KPIs, RFQ states, PPO states, rate cards, decision/chat/negotiation actions', async () => {
     render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
-    expect(await screen.findByText('Vendor Sourcing & Order Fulfillment Pipeline')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline))).toBeInTheDocument();
     expect(screen.getByText('8', { selector: '.text-2xl' })).toBeInTheDocument();
-    expect(screen.queryByText('No RFQs found for this vendor.')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Pending Quote').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Awaiting Revised Quote').length).toBeGreaterThan(0);
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.noRFQsFoundForThisVendor))).not.toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.pendingQuote)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.awaitingRevisedQuote)).length).toBeGreaterThan(0);
     expect(document.body.textContent).toMatch(/Counter:.*9,000/);
     expect(screen.getByText('Order Execution')).toHaveClass('badge-approved');
     expect(screen.getByText('PPO Awaited')).toHaveClass('badge-approved');
@@ -104,13 +108,13 @@ describe('vendor sourcing dashboard', () => {
     expect(screen.getByText('Pending Vendor Acceptance')).toHaveClass('badge-submitted');
     expect(screen.getAllByText('Closed').find((element) => element.classList.contains('badge'))).toHaveClass('badge-rejected');
     expect(screen.getByText('Not Accepted')).toHaveClass('badge-rejected');
-    expect(screen.getByText('In Negotiation')).toHaveClass('badge badge-draft');
-    expect(screen.getAllByText(/PPO Accepted/).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.inNegotiation))).toHaveClass('badge badge-draft');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptedPPOAwaited))).toBeInTheDocument();
     expect(screen.getByText(/Issue Raised/)).toBeInTheDocument();
-    expect(screen.getByText(/Accepted by Vendor Signatory: Jane Vendor/)).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptedByVendorSignatory)).length).toBeGreaterThan(0);
     expect(screen.getByText(/Clarify delivery/)).toBeInTheDocument();
     expect(screen.getByText('RC-1 (v2)')).toBeInTheDocument();
-    expect(screen.getByText('Standard Scope')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.standardScope))).toBeInTheDocument();
     expect(screen.getByText('1 items')).toBeInTheDocument();
 
     const register = document.querySelector('.table-responsive') as HTMLDivElement;
@@ -118,38 +122,38 @@ describe('vendor sourcing dashboard', () => {
     expect(register.scrollLeft).toBe(30);
     fireEvent.wheel(register, { shiftKey: false, deltaY: 10 });
 
-    fireEvent.click(screen.getAllByTitle('Open RFQ Clarification Queries')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.openRFQClarificationQueries))[0]);
     expect(screen.getByTestId('vendor-chat')).toHaveTextContent('rfq-101:RFQ-101');
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
     expect(screen.queryByTestId('vendor-chat')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByTitle('View Buyer Decision Details')[0]);
-    expect(screen.getByText('Buyer Decision Record')).toBeInTheDocument();
-    expect(screen.getByText(/Approved with conditions/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.viewBuyerDecisionDetails))[0]);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.buyerDecisionRecord))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.approved))).toBeInTheDocument();
     fireEvent.click(document.querySelector('.modal-close')!);
-    fireEvent.click(screen.getAllByTitle('View Buyer Decision Details')[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.viewBuyerDecisionDetails))[0]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
 
-    fireEvent.click(screen.getAllByTitle('Review and Accept Purchase Order')[0]);
-    expect(screen.getByText('Accept Purchase Order (PPO)')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.reviewAndAcceptPurchaseOrder))[0]);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptPurchaseOrderPPO))).toBeInTheDocument();
     fireEvent.click(document.querySelector('.modal-close')!);
 
-    fireEvent.click(screen.getAllByTitle('Open Commercial Negotiation Workspace')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.openCommercialNegotiationWorkspace))[0]);
     expect(screen.getByTestId('vendor-negotiation')).toHaveAttribute('data-vendor', 'vendor-1');
     fireEvent.click(screen.getByRole('button', { name: 'Offer Success' }));
     await screen.findByTestId('vendor-negotiation');
     fireEvent.click(screen.getByRole('button', { name: 'Return to Sourcing' }));
-    expect(await screen.findByText('Vendor Sourcing & Order Fulfillment Pipeline')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline))).toBeInTheDocument();
   });
 
   it('accepts a PPO and raises a clarification issue with persisted form details', async () => {
     render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
-    await screen.findByText('Vendor Sourcing & Order Fulfillment Pipeline');
-    fireEvent.click(screen.getAllByRole('button', { name: /Accept PPO & Confirm Order/ })[0]);
-    expect(screen.getByText('Accept Purchase Order (PPO)')).toBeInTheDocument();
-    expect(screen.getByText(/Buyer \/ Client:/)).toHaveTextContent('North plant');
-    expect(screen.getByText(/Delivery Terms:/)).toHaveTextContent('Within 14 days');
-    const acceptButton = screen.getByRole('button', { name: 'Formally Accept PPO' });
+    await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptPPOConfirmOrder) })[0]);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptPurchaseOrderPPO))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.buyerClient))).toHaveTextContent('North plant');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.deliveryTerms))).toHaveTextContent('Within 14 days');
+    const acceptButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.formallyAcceptPPO) });
     expect(acceptButton).toBeDisabled();
     fireEvent.change(screen.getByDisplayValue('Vendor One Authorized Signatory'), { target: { value: 'Jane Authorized' } });
     fireEvent.change(screen.getByPlaceholderText(/Order acknowledged/), { target: { value: 'Order accepted' } });
@@ -160,12 +164,12 @@ describe('vendor sourcing dashboard', () => {
     expect(JSON.parse(acceptPayload.body)).toEqual({ acceptedBy: 'Jane Authorized', vendorComments: 'Order accepted' });
     expect(await screen.findByText(/PPO-101 formally accepted/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
     fireEvent.click(screen.getAllByRole('button', { name: /Request Clarification/ })[0]);
     fireEvent.click(document.querySelector('.modal-close')!);
     fireEvent.click(screen.getAllByRole('button', { name: /Request Clarification/ })[0]);
-    expect(screen.getByText('Report Clarification / Issue on PPO')).toBeInTheDocument();
-    const issueSubmit = screen.getByRole('button', { name: 'Submit Issue to Buyer' });
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.reportClarificationIssueOnPPO))).toBeInTheDocument();
+    const issueSubmit = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitIssueToBuyer) });
     expect(issueSubmit).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText(/Specify the discrepancy/), { target: { value: 'Confirm shipment window' } });
     expect(issueSubmit).toBeEnabled();
@@ -173,14 +177,14 @@ describe('vendor sourcing dashboard', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/ppos/ppo-pending/vendor-issue', expect.objectContaining({ method: 'POST' })));
     const issuePayload = mockFetch.mock.calls.find(([url]) => url === '/api/procurement/ppos/ppo-pending/vendor-issue')?.[1];
     expect(JSON.parse(issuePayload.body)).toEqual({ issueRemarks: 'Confirm shipment window', raisedBy: 'Jane Authorized' });
-    expect(global.alert).toHaveBeenCalledWith('Issue recorded and routed to buyer without accepting PPO.');
+    expect(global.alert).toHaveBeenCalledWith(UI_STRINGS.componentsVendorSourcingDashboard.issueRecordedAndRoutedToBuyerWithoutAcceptingPPO);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(dashboardUrl));
   });
 
   it('shows loading, error and empty dashboard states, then reports accept and issue API errors', async () => {
     mockFetch.mockImplementation((url: string) => url === dashboardUrl ? new Promise(() => undefined) : Promise.resolve(response({})));
     const pending = render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
-    expect(screen.getByText('Loading persistent Vendor Dashboard & Sourcing records...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.loadingPersistentVendorDashboardSourcingRecords))).toBeInTheDocument();
     pending.unmount();
 
     configureFetch({ error: 'Dashboard unavailable' }, false);
@@ -189,15 +193,15 @@ describe('vendor sourcing dashboard', () => {
 
     configureFetch({});
     const emptyView = render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
-    expect(await screen.findByText('No RFQs found for this vendor.')).toBeInTheDocument();
-    expect(screen.getByText('No Purchase Orders Issued Yet')).toBeInTheDocument();
-    expect(screen.getByText('No Rate Cards registered for this vendor.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.noRFQsFoundForThisVendor))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.noPurchaseOrdersIssuedYet))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.noRateCardsRegisteredForThisVendor))).toBeInTheDocument();
     emptyView.unmount();
 
     configureFetch();
     const view = render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
-    await screen.findByText('Vendor Sourcing & Order Fulfillment Pipeline');
-    const accept = screen.getAllByRole('button', { name: /Accept PPO & Confirm Order/ })[0];
+    await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline));
+    const accept = screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptPPOConfirmOrder) })[0];
     fireEvent.click(accept);
     fireEvent.click(screen.getByRole('checkbox'));
     mockFetch.mockImplementation((url: string) => {
@@ -206,12 +210,12 @@ describe('vendor sourcing dashboard', () => {
       if (url === '/api/procurement/ppos/ppo-pending/vendor-issue') return Promise.resolve(response({ error: 'Issue rejected' }, false));
       return Promise.resolve(response({}));
     });
-    fireEvent.submit(screen.getByRole('button', { name: 'Formally Accept PPO' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.formallyAcceptPPO) }).closest('form')!);
     await waitFor(() => expect(global.alert).toHaveBeenCalledWith('Error accepting PPO: Acceptance rejected'));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
     fireEvent.click(screen.getAllByRole('button', { name: /Request Clarification/ })[0]);
     fireEvent.change(screen.getByPlaceholderText(/Specify the discrepancy/), { target: { value: 'Clarify scope' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Submit Issue to Buyer' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitIssueToBuyer) }).closest('form')!);
     await waitFor(() => expect(global.alert).toHaveBeenCalledWith('Error: Issue rejected'));
     view.unmount();
   });

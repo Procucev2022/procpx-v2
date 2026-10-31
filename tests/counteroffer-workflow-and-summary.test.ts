@@ -2,12 +2,11 @@
 // proCPX — Automated Verification Suite: Counteroffer Workflow & Simplified Vendor Negotiation Summary
 // Validates all 8 required verification scenarios using isolated test records.
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { POST as negotiationsPostHandler } from '@/app/api/procurement/negotiations/route';
 import { NextRequest } from 'next/server';
 import { setTestAuthContext } from '@/lib/api-utils';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

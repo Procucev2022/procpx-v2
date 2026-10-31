@@ -2,6 +2,8 @@
 // src/app/(app)/budget/project/page.tsx - Redirect /budget/project to /budget
 import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 function BudgetProjectRedirectContent() {
   const router = useRouter();
@@ -14,15 +16,13 @@ function BudgetProjectRedirectContent() {
   }, [router, searchParams]);
 
   return (
-    <div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b', fontSize: 14 }}>
-      Loading Project Budget...
-    </div>
+    <div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b', fontSize: 14 }}>{UI_STRINGS.common.loadingProjectBudget}</div>
   );
 }
 
 export default function BudgetProjectRedirect() {
   return (
-    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>Loading...</div>}>
+    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.common.loading}</div>}>
       <BudgetProjectRedirectContent />
     </Suspense>
   );

@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('VENDOR_VIEW');
@@ -166,7 +169,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ vendors: enrichedVendors, counts, total: enrichedVendors.length });
   } catch (error: any) {
     console.error('Error fetching vendors:', error);
-    return apiError(error.message || 'Failed to fetch vendors', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendors }), 500);
   }
 }
 
@@ -203,22 +206,22 @@ export async function POST(req: NextRequest) {
 
     // Validate Step 1 Mandatory Fields
     if (!name || name.trim() === '') {
-      return apiError('Vendor Legal / Business Name is required.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorLegalBusinessNameIsRequired, 400);
     }
     if (!vendorType || !['CLIENT_VENDOR', 'PROCUCEV_VENDOR'].includes(vendorType)) {
-      return apiError('Vendor Type must be either Client Vendor or Procucev Vendor.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorTypeMustBeEitherClientVendorOrProcucevVendor, 400);
     }
     if (!contactPerson || contactPerson.trim() === '') {
-      return apiError('Primary Contact Name is required.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryContactNameIsRequired, 400);
     }
     if ((!email || email.trim() === '') && (!phone || phone.trim() === '')) {
-      return apiError('Primary Mobile Number or Email is required.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryMobileNumberOrEmailIsRequired, 400);
     }
     if (!category || category.trim() === '') {
-      return apiError('Primary Product / Service Category is required.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryProductServiceCategoryIsRequired, 400);
     }
     if (!operatingLocation && !city) {
-      return apiError('Operating Location is required.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.operatingLocationIsRequired, 400);
     }
 
     // Check if an existing vendor record was supplied to update rather than creating a duplicate
@@ -279,7 +282,7 @@ export async function POST(req: NextRequest) {
         entityType: 'VENDOR',
         entityId: updated.id,
         action: 'VENDOR_UPDATED',
-        description: `Vendor ${updated.name} (${updated.code}) onboarding updated (Status: ${onboardingStatus})`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameCodeOnboardingUpdatedStatusOnboardingStatus, { "name": updated.name, "code": updated.code, "onboardingStatus": onboardingStatus }),
         newValue: {
           name: updated.name,
           code: updated.code,
@@ -287,7 +290,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return apiSuccess({ vendor: updated, message: `Vendor ${updated.code} onboarding updated successfully.` }, 200);
+      return apiSuccess({ vendor: updated, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardingUpdatedSuccessfully, { "code": updated.code }) }, 200);
     }
 
     // Generate unique Vendor Code (VND-XXXX) with collision check
@@ -351,7 +354,7 @@ export async function POST(req: NextRequest) {
       entityType: 'VENDOR',
       entityId: vendor.id,
       action: 'VENDOR_CREATED',
-      description: `Vendor ${vendor.name} (${vendor.code}) onboarded as ${vendor.vendorType === 'CLIENT_VENDOR' ? 'Client Vendor' : 'Procucev Vendor'} (Status: ${onboardingStatus})`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameCodeOnboardedAsValue3StatusOnboardingStatus, { "name": vendor.name, "code": vendor.code, "value3": vendor.vendorType === 'CLIENT_VENDOR' ? 'Client Vendor' : 'Procucev Vendor', "onboardingStatus": onboardingStatus }),
       newValue: {
         name: vendor.name,
         code: vendor.code,
@@ -361,9 +364,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return apiSuccess({ vendor, message: `Vendor ${vendor.code} onboarded successfully.` }, 201);
+    return apiSuccess({ vendor, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardedSuccessfully, { "code": vendor.code }) }, 201);
   } catch (error: any) {
     console.error('Error creating vendor:', error);
-    return apiError(error.message || 'Failed to onboard vendor', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToOnboardVendor }), 500);
   }
 }

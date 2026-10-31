@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
 import { GET } from '../src/app/api/vendor-portal/rfqs/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { rfq: { findMany: jest.fn() } } }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -59,12 +61,12 @@ describe('vendor portal RFQ list', () => {
 
     auth.mockResolvedValueOnce({ ...context, role: 'BUYER', vendorId: null });
     await expect(GET(request())).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
 
     auth.mockResolvedValueOnce({ ...context, vendorId: null });
     await expect(GET(request())).resolves.toEqual({
-      ok: false, error: 'Vendor record not associated with this user account', status: 404,
+      ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404,
     });
 
     await expect(GET(request())).resolves.toEqual({ ok: true, data: { rfqs: [], total: 0 }, status: 200 });

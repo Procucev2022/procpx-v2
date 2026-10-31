@@ -1,9 +1,8 @@
 // tests/auction-module-e2e.test.ts
 // Comprehensive Automated Test Suite for proCPX E-Auction Module
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { hasPermission } from '../src/lib/permissions';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

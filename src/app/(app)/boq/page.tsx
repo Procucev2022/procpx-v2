@@ -1,5 +1,6 @@
 'use client';
 // app/(app)/boq/page.tsx - Standardised Enterprise BOQ Register & Hub
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Upload, ClipboardCheck, Plus, Sparkles, Search } from 'lucide-react';
@@ -9,6 +10,9 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import type { BoqSummary } from "@app-types/app/(app)/boq/page.types";
 import { STATUS_FILTERS } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function BoqListPage() {
@@ -65,11 +69,11 @@ export default function BoqListPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Bill of Quantities (BOQ)"
-        subtitle="Manage, upload, standardise, and approve project cost sheets and revisions"
+        title={UI_STRINGS.appAppBoqPage.billOfQuantitiesBOQ}
+        subtitle={UI_STRINGS.appAppBoqPage.manageUploadStandardiseAndApproveProjectCostSheetsAndRevisions}
         breadcrumbs={[
-          { label: 'BOQ', href: '/boq' },
-          { label: 'Cost Sheets Register' },
+          { label: UI_STRINGS.common.bOQ, href: '/boq' },
+          { label: UI_STRINGS.appAppBoqPage.costSheetsRegister },
         ]}
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -77,20 +81,17 @@ export default function BoqListPage() {
               href="/boq/studio?action=new"
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
             >
-              <Plus size={16} /> Create New BOQ
-            </Link>
+              <Plus size={16} />{UI_STRINGS.appAppBoqPage.createNewBOQ}</Link>
             <Link
               href="/boq/studio"
               className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
             >
-              <Sparkles size={14} /> BOQ Studio Workspace
-            </Link>
+              <Sparkles size={14} />{UI_STRINGS.appAppBoqPage.bOQStudioWorkspace}</Link>
             <Link
               href="/boq/upload"
               className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs text-blue-700 border-blue-200 hover:bg-blue-50"
             >
-              <Upload size={14} /> Upload BOQ
-            </Link>
+              <Upload size={14} />{UI_STRINGS.common.uploadBOQ}</Link>
           </div>
         }
       />
@@ -98,27 +99,27 @@ export default function BoqListPage() {
       {/* KPI Cards */}
       <SummaryCardGrid columns={4}>
         <SummaryCard
-          label="Total Cost Sheets"
+          label={UI_STRINGS.appAppBoqPage.totalCostSheets}
           value={total}
-          secondary="Active Project BOQs"
+          secondary={UI_STRINGS.appAppBoqPage.activeProjectBOQs}
           accent="default"
         />
         <SummaryCard
-          label="Pending Review"
+          label={UI_STRINGS.common.pendingReview}
           value={pendingCount}
-          secondary="Awaiting Approver Sign-off"
+          secondary={UI_STRINGS.appAppBoqPage.awaitingApproverSignOff}
           accent="amber"
         />
         <SummaryCard
-          label="Approved BOQs"
+          label={UI_STRINGS.common.approvedBOQs}
           value={approvedCount}
-          secondary="Baseline Sourcing Available"
+          secondary={UI_STRINGS.appAppBoqPage.baselineSourcingAvailable}
           accent="emerald"
         />
         <SummaryCard
-          label="Total Line Items"
-          value={totalLinesCount.toLocaleString('en-IN')}
-          secondary="Across Active Revisions"
+          label={UI_STRINGS.common.totalLineItems}
+          value={totalLinesCount.toLocaleString(I18N_CONFIG.defaultLocale)}
+          secondary={UI_STRINGS.appAppBoqPage.acrossActiveRevisions}
           accent="blue"
         />
       </SummaryCardGrid>
@@ -129,7 +130,7 @@ export default function BoqListPage() {
           <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by BOQ name, project code or project name..."
+            placeholder={UI_STRINGS.appAppBoqPage.searchByBOQNameProjectCodeOrProjectName}
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="input pl-9 h-[40px] w-full text-sm bg-white"
@@ -140,7 +141,7 @@ export default function BoqListPage() {
           onChange={e => { setStatus(e.target.value); setPage(1); }}
           className="input h-[40px] w-[180px] text-sm bg-white cursor-pointer"
         >
-          <option value="">All Statuses</option>
+          <option value="">{UI_STRINGS.common.allStatuses}</option>
           {STATUS_FILTERS.filter(Boolean).map(s => (
             <option key={s} value={s}>{s.replace('_', ' ')}</option>
           ))}
@@ -153,15 +154,15 @@ export default function BoqListPage() {
           <table className="enterprise-table">
             <thead>
               <tr>
-                <th style={{ minWidth: 200 }}>Project</th>
-                <th style={{ minWidth: 160 }}>BOQ Name</th>
-                <th style={{ width: 110 }}>Latest Rev</th>
-                <th style={{ width: 140 }}>Status</th>
-                <th style={{ width: 110, textAlign: 'right' }}>Lines</th>
-                <th style={{ width: 120 }}>Validation</th>
-                <th style={{ width: 100, textAlign: 'center' }}>Quality</th>
-                <th style={{ width: 120 }}>Last Updated</th>
-                <th style={{ width: 140, textAlign: 'center' }}>Actions</th>
+                <th style={{ minWidth: 200 }}>{UI_STRINGS.common.project}</th>
+                <th style={{ minWidth: 160 }}>{UI_STRINGS.appAppBoqPage.bOQName}</th>
+                <th style={{ width: 110 }}>{UI_STRINGS.appAppBoqPage.latestRev}</th>
+                <th style={{ width: 140 }}>{UI_STRINGS.common.status}</th>
+                <th style={{ width: 110, textAlign: 'right' }}>{UI_STRINGS.common.lines3}</th>
+                <th style={{ width: 120 }}>{UI_STRINGS.common.validation}</th>
+                <th style={{ width: 100, textAlign: 'center' }}>{UI_STRINGS.appAppBoqPage.quality}</th>
+                <th style={{ width: 120 }}>{UI_STRINGS.common.lastUpdated}</th>
+                <th style={{ width: 140, textAlign: 'center' }}>{UI_STRINGS.common.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -170,7 +171,7 @@ export default function BoqListPage() {
                   <td colSpan={9} className="py-16 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm">Loading BOQ data...</span>
+                      <span className="text-sm">{UI_STRINGS.appAppBoqPage.loadingBOQData}</span>
                     </div>
                   </td>
                 </tr>
@@ -179,9 +180,9 @@ export default function BoqListPage() {
                   <td colSpan={9} className="p-8">
                     <EmptyState
                       icon={<ClipboardCheck size={36} className="text-slate-400" />}
-                      title="No BOQs found"
-                      description="No project cost sheets match your filter criteria. Create or upload a new BOQ."
-                      actionText="Upload BOQ"
+                      title={UI_STRINGS.appAppBoqPage.noBOQsFound}
+                      description={UI_STRINGS.appAppBoqPage.noProjectCostSheetsMatchYourFilterCriteriaCreateOrUploadANewBOQ}
+                      actionText={UI_STRINGS.common.uploadBOQ2}
                       actionHref="/boq/upload"
                     />
                   </td>
@@ -208,19 +209,17 @@ export default function BoqListPage() {
                         {boq.boqCode}
                       </td>
                       <td>
-                        <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                          Rev {rev ? rev.revisionNumber : 1}
+                        <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">{UI_STRINGS.common.rev}{rev ? rev.revisionNumber : 1}
                         </span>
                       </td>
                       <td>
                         <StatusBadge status={currentStatus} />
                       </td>
                       <td className="font-mono text-xs text-right text-slate-800">
-                        {rev ? rev.totalLines : 0} items
-                      </td>
+                        {rev ? rev.totalLines : 0}{UI_STRINGS.common.items3}</td>
                       <td>
                         <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                          {rev?.validLines ? `${rev.validLines} valid` : '0 valid'}
+                          {rev?.validLines ? interpolateUiString(UI_STRINGS.appAppBoqPage.validLinesValid, { "validLines": rev.validLines }) : UI_STRINGS.appAppBoqPage.copyvxarfd}
                         </span>
                       </td>
                       <td className="text-center">
@@ -228,30 +227,25 @@ export default function BoqListPage() {
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
                             score >= 80 ? 'bg-emerald-100 text-emerald-800' : score >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
                           }`}>
-                            {score}%
-                          </span>
+                            {score}{UI_STRINGS.common.copy8w4luo}</span>
                         ) : (
-                          <span className="text-slate-400 text-xs">—</span>
+                          <span className="text-slate-400 text-xs">{UI_STRINGS.common.copy4s9bsz}</span>
                         )}
                       </td>
                       <td className="text-slate-500 text-xs whitespace-nowrap">
-                        {new Date(boq.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {new Date(boq.updatedAt).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="text-center">
                         <div className="inline-flex items-center gap-1.5 justify-center">
                           <Link
                             href={`/boq/studio?boqId=${boq.id}`}
                             className="btn btn-primary h-7 px-2.5 text-xs font-bold"
-                          >
-                            Studio
-                          </Link>
+                          >{UI_STRINGS.appAppBoqPage.studio}</Link>
                           {revId && (
                             <Link
                               href={`/boq/${revId}`}
                               className="btn btn-secondary h-7 px-2.5 text-xs font-semibold"
-                            >
-                              Grid
-                            </Link>
+                            >{UI_STRINGS.appAppBoqPage.grid}</Link>
                           )}
                         </div>
                       </td>
@@ -266,29 +260,22 @@ export default function BoqListPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50/50 text-xs text-slate-600">
-            <span>
-              Showing <strong className="font-semibold text-slate-900">{boqs.length}</strong> of <strong className="font-semibold text-slate-900">{total}</strong> records
-            </span>
+            <span>{UI_STRINGS.common.showing}<strong className="font-semibold text-slate-900">{boqs.length}</strong>{UI_STRINGS.common.of}<strong className="font-semibold text-slate-900">{total}</strong>{UI_STRINGS.common.records}</span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 className="h-8 px-2.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
-              >
-                ‹ Prev
-              </button>
-              <span className="px-2 font-medium">
-                Page {page} of {totalPages}
+              >{UI_STRINGS.common.prev}</button>
+              <span className="px-2 font-medium">{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: page, value2: totalPages })}
               </span>
               <button
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 className="h-8 px-2.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
-              >
-                Next ›
-              </button>
+              >{UI_STRINGS.common.next}</button>
             </div>
           </div>
         )}

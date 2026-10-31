@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -60,7 +63,7 @@ export async function GET(
     });
 
     if (!auction) {
-      return apiError('Auction event not found or access denied', 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionEventNotFoundOrAccessDenied, 404);
     }
 
     // Auto-update status if time has progressed
@@ -111,7 +114,7 @@ export async function GET(
       }
 
       if (!isInvitedVendor) {
-        return apiError('You are not invited to participate in this auction.', 403);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, 403);
       }
     }
 
@@ -240,7 +243,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching auction details:', error);
-    return apiError(error.message || 'Failed to fetch auction details', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAuctionDetails }), 500);
   }
 }
 
@@ -263,12 +266,12 @@ export async function PUT(
     });
 
     if (!auction) {
-      return apiError('Auction not found or access denied', 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionNotFoundOrAccessDenied, 404);
     }
 
     if (action === 'PAUSE') {
       if (auction.status !== 'LIVE' && auction.status !== 'EXTENDED') {
-        return apiError('Only live auctions can be paused.', 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyLiveAuctionsCanBePaused, 400);
       }
       await prisma.auction.update({
         where: { id },
@@ -281,14 +284,14 @@ export async function PUT(
         entityType: 'AUCTION',
         entityId: auction.id,
         action: 'AUCTION_PAUSED',
-        description: `Auction ${auction.auctionNumber} was paused by buyer.`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionAuctionNumberWasPausedByBuyer, { "auctionNumber": auction.auctionNumber }),
       });
-      return apiSuccess({ message: 'Auction paused successfully.' });
+      return apiSuccess({ message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionPausedSuccessfully });
     }
 
     if (action === 'RESUME') {
       if (auction.status !== 'PAUSED') {
-        return apiError('Only paused auctions can be resumed.', 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyPausedAuctionsCanBeResumed, 400);
       }
       await prisma.auction.update({
         where: { id },
@@ -301,9 +304,9 @@ export async function PUT(
         entityType: 'AUCTION',
         entityId: auction.id,
         action: 'AUCTION_RESUMED',
-        description: `Auction ${auction.auctionNumber} was resumed by buyer.`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionAuctionNumberWasResumedByBuyer, { "auctionNumber": auction.auctionNumber }),
       });
-      return apiSuccess({ message: 'Auction resumed successfully.' });
+      return apiSuccess({ message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionResumedSuccessfully });
     }
 
     if (action === 'EXTEND') {
@@ -328,11 +331,11 @@ export async function PUT(
         entityType: 'AUCTION',
         entityId: auction.id,
         action: 'AUCTION_EXTENDED_MANUALLY',
-        description: `Auction ${auction.auctionNumber} extended by ${minutesToAdd} minutes. New scheduled end time: ${newEnd.toISOString()}`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionAuctionNumberExtendedByMinutesToAddMinutesNewScheduledEndTimeToISOString, { "auctionNumber": auction.auctionNumber, "minutesToAdd": minutesToAdd, "toISOString": newEnd.toISOString() }),
       });
 
       return apiSuccess({
-        message: `Auction extended by ${minutesToAdd} minutes.`,
+        message: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionExtendedByMinutesToAddMinutes, { "minutesToAdd": minutesToAdd }),
         newEndTime: newEnd.toISOString(),
       });
     }
@@ -353,10 +356,10 @@ export async function PUT(
         entityType: 'AUCTION',
         entityId: auction.id,
         action: 'AUCTION_CONCLUDED',
-        description: `Auction ${auction.auctionNumber} concluded by buyer.`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionAuctionNumberConcludedByBuyer, { "auctionNumber": auction.auctionNumber }),
       });
 
-      return apiSuccess({ message: 'Auction concluded successfully.' });
+      return apiSuccess({ message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionConcludedSuccessfully });
     }
 
     if (action === 'CANCEL') {
@@ -374,20 +377,20 @@ export async function PUT(
         entityType: 'AUCTION',
         entityId: auction.id,
         action: 'AUCTION_CANCELLED',
-        description: `Auction ${auction.auctionNumber} cancelled by buyer. Reason: ${reason || 'Operational cancellation'}`,
+        description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionAuctionNumberCancelledByBuyerReasonValue2, { "auctionNumber": auction.auctionNumber, "value2": reason || 'Operational cancellation' }),
       });
 
-      return apiSuccess({ message: 'Auction cancelled successfully.' });
+      return apiSuccess({ message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionCancelledSuccessfully });
     }
 
     if (auction.status !== 'DRAFT') {
-      return apiError('Only draft auctions can be re-configured.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyDraftAuctionsCanBeReConfigured, 400);
     }
 
     const updated = await prisma.auction.update({
       where: { id },
       data: {
-        title: updateFields.title || auction.title,
+        title: interpolateUiString(UI_STRINGS.common.value1, { "value1": updateFields.title || auction.title }),
         scrollingText: updateFields.scrollingText !== undefined ? updateFields.scrollingText : auction.scrollingText,
         refreshIntervalSeconds: updateFields.refreshIntervalSeconds ? Number(updateFields.refreshIntervalSeconds) : auction.refreshIntervalSeconds,
         startingPrice: updateFields.startingPrice ? Number(updateFields.startingPrice) : auction.startingPrice,
@@ -397,10 +400,10 @@ export async function PUT(
       },
     });
 
-    return apiSuccess({ auction: updated, message: 'Auction draft updated successfully.' });
+    return apiSuccess({ auction: updated, message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionDraftUpdatedSuccessfully });
   } catch (error: any) {
     console.error('Error updating auction:', error);
-    return apiError(error.message || 'Failed to update auction', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateAuction }), 500);
   }
 }
 
@@ -420,20 +423,20 @@ export async function DELETE(
     });
 
     if (!auction) {
-      return apiError('Auction not found', 404);
+      return apiError(UI_STRINGS.common.auctionNotFound, 404);
     }
 
     if (auction.status !== 'DRAFT' && auction.bids.length > 0) {
-      return apiError('Cannot delete an auction that has already been scheduled or received bids.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.cannotDeleteAnAuctionThatHasAlreadyBeenScheduledOrReceivedBids, 400);
     }
 
     await prisma.auctionVendor.deleteMany({ where: { auctionId: id } });
     await prisma.auctionItem.deleteMany({ where: { auctionId: id } });
     await prisma.auction.delete({ where: { id } });
 
-    return apiSuccess({ message: 'Auction deleted successfully.' });
+    return apiSuccess({ message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionDeletedSuccessfully });
   } catch (error: any) {
     console.error('Error deleting auction:', error);
-    return apiError(error.message || 'Failed to delete auction', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToDeleteAuction }), 500);
   }
 }

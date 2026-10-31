@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('NEGOTIATION_MANAGE');
@@ -15,11 +18,11 @@ export async function POST(req: NextRequest) {
     const { roundId, decision, remarks } = body;
 
     if (!roundId || !decision) {
-      return apiError('Round ID and Decision are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.roundIDAndDecisionAreRequired, 400);
     }
 
     if (!['ACCEPTED', 'REJECTED', 'FINAL_ACCEPTANCE_PENDING'].includes(decision)) {
-      return apiError('Decision must be ACCEPTED, REJECTED, or FINAL_ACCEPTANCE_PENDING', 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.decisionMustBeACCEPTEDREJECTEDOrFINALACCEPTANCEPENDING, 400);
     }
 
     const round = await prisma.negotiationRound.findFirst({
@@ -35,7 +38,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!round) {
-      return apiError('Negotiation round not found or access denied', 404);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.negotiationRoundNotFoundOrAccessDenied, 404);
     }
 
     const rfq = round.negotiation.rfq;
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
       entityType: 'NEGOTIATION',
       entityId: round.id,
       action: `BUYER_DECISION_${decision}`,
-      description: `Buyer decision '${decision}' recorded for ${vendor.name} on RFQ ${rfq.rfqNumber}. Remarks: ${remarks || 'None'}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.buyerDecisionDecisionRecordedForNameOnRFQRfqNumberRemarksValue4, { "decision": decision, "name": vendor.name, "rfqNumber": rfq.rfqNumber, "value4": remarks || UI_STRINGS.common.none }),
       newValue: {
         decision,
         decisionDate,
@@ -125,10 +128,10 @@ export async function POST(req: NextRequest) {
         : decision === 'REJECTED'
         ? 'Quote Not Accepted / Negotiation Closed'
         : 'Final Acceptance Pending from Buyer',
-      message: `Buyer decision recorded successfully: ${decision}`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.buyerDecisionRecordedSuccessfullyDecision, { "decision": decision }),
     });
   } catch (error: any) {
     console.error('Error recording buyer decision:', error);
-    return apiError(error.message || 'Failed to record buyer decision', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordBuyerDecision }), 500);
   }
 }

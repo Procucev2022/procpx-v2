@@ -4,6 +4,8 @@ import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -70,12 +72,12 @@ describe('direct PPO from rate card route', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toBe(denied);
 
-    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: 'Rate Card ID and either prId or rfqId are required', status: 400 });
-    await expect(POST(request({ rateCardId: 'rate-card-1' }))).resolves.toEqual({ ok: false, error: 'Rate Card ID and either prId or rfqId are required', status: 400 });
+    await expect(POST(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.rateCardIDAndEitherPrIdOrRfqIdAreRequired, status: 400 });
+    await expect(POST(request({ rateCardId: 'rate-card-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.rateCardIDAndEitherPrIdOrRfqIdAreRequired, status: 400 });
 
     db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(POST(request({ rateCardId: 'foreign', prId: 'pr-1' }))).resolves.toEqual({
-      ok: false, error: 'Vendor Rate Card not found or access denied', status: 404,
+      ok: false, error: UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.vendorRateCardNotFoundOrAccessDenied, status: 404,
     });
 
     db.vendorRateCard.findFirst.mockResolvedValueOnce({ ...rateCard, status: 'DRAFT' });
@@ -102,7 +104,7 @@ describe('direct PPO from rate card route', () => {
   it('validates approved PRs, duplicate orders, and non-empty requirements', async () => {
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'missing' }))).resolves.toEqual({
-      ok: false, error: 'Approved Procurement Request not found', status: 404,
+      ok: false, error: UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.approvedProcurementRequestNotFound, status: 404,
     });
 
     db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, status: 'PR_DRAFT' });
@@ -117,7 +119,7 @@ describe('direct PPO from rate card route', () => {
 
     db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, lines: [] });
     await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toEqual({
-      ok: false, error: 'Requirement has no lines to source', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.requirementHasNoLinesToSource, status: 400,
     });
 
     db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, lines: [{ ...pr.lines[0], itemDescription: 'Concrete pump' }] });
@@ -174,7 +176,7 @@ describe('direct PPO from rate card route', () => {
   it('returns RFQ lookup errors and reports persistence failures', async () => {
     db.rfq.findFirst.mockResolvedValueOnce(null);
     await expect(POST(request({ rateCardId: 'rate-card-1', rfqId: 'missing' }))).resolves.toEqual({
-      ok: false, error: 'RFQ not found', status: 404,
+      ok: false, error: UI_STRINGS.common.rFQNotFound, status: 404,
     });
 
     jest.spyOn(console, 'error').mockImplementation(() => undefined);

@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -87,7 +90,7 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     // 1. Group quotes by vendor to keep full version history and evaluate latest active quote
@@ -463,7 +466,7 @@ export async function GET(
       entityType: 'RFQ',
       entityId: rfq.id,
       action: 'QUOTE_COMPARED',
-      description: `Evaluated ${evaluatedQuotes.length} vendor quotes for RFQ ${rfq.rfqNumber}. L1: ${lowestQuote?.vendorName || 'None'} (₹ ${lowestQuoteTotal.toLocaleString()})`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() }),
     });
 
     return apiSuccess({
@@ -499,6 +502,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error generating quote comparison:', error);
-    return apiError(error.message || 'Failed to compare quotes', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCompareQuotes }), 500);
   }
 }

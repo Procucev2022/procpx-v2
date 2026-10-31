@@ -5,6 +5,9 @@ import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils
 import { validateBoqLine } from '@/lib/boq-validate';
 import { createAuditLog } from '@/lib/audit';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 async function resolveRevision(idOrBoqId: string, tenantId: string) {
   let revision = await prisma.boqRevision.findFirst({
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
   const search = searchParams.get('search') || '';
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
 
   const where: any = { boqRevisionId: revision.id, tenantId: ctx.tenantId, isDeleted: false };
   if (validationStatus) where.validationStatus = validationStatus;
@@ -106,9 +109,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ revi
   const { revisionId } = await params;
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
   if (revision.status === 'APPROVED') {
-    return apiError('Approved BOQs cannot be edited. Create a new revision instead.');
+    return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead);
   }
 
   const body = await req.json();
@@ -164,24 +167,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ revi
   }
 
   const { lineId, updates } = body;
-  if (!lineId) return apiError('Line ID required');
+  if (!lineId) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDRequired);
 
   const line = await prisma.boqLine.findFirst({
     where: { id: lineId, boqRevisionId: revision.id, tenantId: ctx.tenantId },
   });
-  if (!line) return apiError('BOQ line not found', 404);
+  if (!line) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.bOQLineNotFound, 404);
 
   const rawQty = updates.quantity;
   const updatedQty = rawQty !== undefined
     ? (rawQty === null || rawQty === '' ? null : parseFloat(rawQty))
     : line.quantity;
   if (updatedQty !== null && updatedQty !== undefined && updatedQty <= 0) {
-    return apiError('Quantity must be greater than zero.', 400);
+    return apiError(UI_STRINGS.common.quantityMustBeGreaterThanZero, 400);
   }
 
   const updatedDesc = updates.standardDescription !== undefined ? updates.standardDescription : (updates.originalDescription ?? line.originalDescription);
   if (!updatedDesc || !updatedDesc.trim()) {
-    return apiError('Description cannot be blank.', 400);
+    return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.descriptionCannotBeBlank, 400);
   }
 
   // Recalculate AI total cost if rate and positive quantity exist
@@ -251,7 +254,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ revi
     entityType: 'BOQ_LINE',
     entityId: lineId,
     action: 'BOQ_LINE_UPDATED',
-    description: `BOQ line ${line.lineNumber} updated (${updated.standardDescription || updated.originalDescription})`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdLinesRoute.bOQLineLineNumberUpdatedValue2, { "lineNumber": line.lineNumber, "value2": updated.standardDescription || updated.originalDescription }),
     oldValue: {
       standardDescription: line.standardDescription,
       quantity: line.quantity,
@@ -277,9 +280,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rev
   const { revisionId } = await params;
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
   if (revision.status === 'APPROVED') {
-    return apiError('Approved BOQs cannot be edited. Create a new revision instead.');
+    return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead);
   }
 
   const body = await req.json();
@@ -301,12 +304,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rev
 
   const desc = (description || '').trim();
   if (!desc) {
-    return apiError('Description is required.', 400);
+    return apiError(UI_STRINGS.common.descriptionIsRequired, 400);
   }
 
   const qty = parseFloat(quantity) || 1;
   if (qty <= 0) {
-    return apiError('Quantity must be greater than zero.', 400);
+    return apiError(UI_STRINGS.common.quantityMustBeGreaterThanZero, 400);
   }
 
   const existingCount = await prisma.boqLine.count({
@@ -366,11 +369,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rev
     entityType: 'BOQ_LINE',
     entityId: newLine.id,
     action: 'BOQ_LINE_ADDED',
-    description: `BOQ line ${lineNumber} added: "${desc}" (Qty: ${qty} ${uomRaw || 'NOS'})`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdLinesRoute.bOQLineLineNumberAddedDescQtyQtyValue4, { "lineNumber": lineNumber, "desc": desc, "qty": qty, "value4": uomRaw || UI_STRINGS.common.nOS }),
     newValue: { lineNumber, description: desc, quantity: qty, uom: uomRaw },
   });
 
-  return apiSuccess({ line: newLine, message: 'Line item added successfully.' }, 201);
+  return apiSuccess({ line: newLine, message: UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineItemAddedSuccessfully }, 201);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
@@ -379,19 +382,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ r
   const { revisionId } = await params;
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError('Revision not found', 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
   if (revision.status === 'APPROVED') {
-    return apiError('Approved BOQs cannot be edited. Create a new revision instead.');
+    return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead);
   }
 
   const { searchParams } = new URL(req.url);
   const lineId = searchParams.get('lineId');
-  if (!lineId) return apiError('Line ID is required.', 400);
+  if (!lineId) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDIsRequired, 400);
 
   const line = await prisma.boqLine.findFirst({
     where: { id: lineId, boqRevisionId: revision.id, tenantId: ctx.tenantId },
   });
-  if (!line) return apiError('Line not found.', 404);
+  if (!line) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineNotFound, 404);
 
   await prisma.boqLine.update({
     where: { id: lineId },
@@ -418,8 +421,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ r
     entityType: 'BOQ_LINE',
     entityId: lineId,
     action: 'BOQ_LINE_DELETED',
-    description: `BOQ line ${line.lineNumber} deleted: "${line.standardDescription || line.originalDescription}"`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdLinesRoute.bOQLineLineNumberDeletedValue2, { "lineNumber": line.lineNumber, "value2": line.standardDescription || line.originalDescription }),
   });
 
-  return apiSuccess({ message: `Line ${line.lineNumber} deleted successfully.` });
+  return apiSuccess({ message: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineLineNumberDeletedSuccessfully, { "lineNumber": line.lineNumber }) });
 }

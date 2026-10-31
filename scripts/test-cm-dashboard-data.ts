@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 function mapRfqStage(rfq: any): string {
   if (!rfq) return 'Approved BOQ — Awaiting RFQ';

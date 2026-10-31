@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -30,17 +33,17 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError('Purchase Order not found or access denied', 404);
+      return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404);
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId || ctx.vendorId !== ppo.vendorId) {
-        return apiError('Forbidden: you can only accept purchase orders issued to your company', 403);
+        return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.forbiddenYouCanOnlyAcceptPurchaseOrdersIssuedToYourCompany, 403);
       }
     }
 
     if (ppo.vendorStatus === 'ACCEPTED_BY_VENDOR') {
-      return apiError('This Purchase Order has already been accepted', 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.thisPurchaseOrderHasAlreadyBeenAccepted, 400);
     }
 
     const acceptedAt = new Date();
@@ -74,7 +77,7 @@ export async function POST(
           senderId: ctx.userId,
           senderName: signatoryName,
           senderRole: 'VENDOR',
-          message: `[PPO ACCEPTED — ORDER EXECUTION] Vendor ${ppo.vendor.name} has formally accepted Purchase Order ${ppo.ppoNumber} (Total: ₹ ${ppo.totalValue.toLocaleString()}) on ${acceptedAt.toLocaleString()}. Order execution commenced.`,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.pPOACCEPTEDORDEREXECUTIONVendorNameHasFormallyAcceptedPurchaseOrderPpoNumberTotalToLocaleStringOnToLocaleString2OrderExecutionCommenced, { "name": ppo.vendor.name, "ppoNumber": ppo.ppoNumber, "toLocaleString": ppo.totalValue.toLocaleString(), "toLocaleString2": acceptedAt.toLocaleString() }),
           isVendorSent: true,
           vendorId: ppo.vendorId,
         },
@@ -89,7 +92,7 @@ export async function POST(
       entityType: 'PPO',
       entityId: ppo.id,
       action: 'PPO_VENDOR_ACCEPTED',
-      description: `Purchase Order ${ppo.ppoNumber} formally accepted by vendor ${ppo.vendor.name} (${signatoryName}). Status transitioned to CONFIRMED.`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.purchaseOrderPpoNumberFormallyAcceptedByVendorNameSignatoryNameStatusTransitionedToCONFIRMED, { "ppoNumber": ppo.ppoNumber, "name": ppo.vendor.name, "signatoryName": signatoryName }),
       newValue: {
         vendorStatus: 'ACCEPTED_BY_VENDOR',
         status: 'CONFIRMED',
@@ -115,10 +118,10 @@ export async function POST(
 
     return apiSuccess({
       ppo: updated,
-      message: `Purchase Order ${ppo.ppoNumber} successfully accepted by ${signatoryName}.`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.purchaseOrderPpoNumberSuccessfullyAcceptedBySignatoryName, { "ppoNumber": ppo.ppoNumber, "signatoryName": signatoryName }),
     });
   } catch (error: any) {
     console.error('Error accepting PPO as vendor:', error);
-    return apiError(error.message || 'Failed to accept Purchase Order', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder2 }), 500);
   }
 }

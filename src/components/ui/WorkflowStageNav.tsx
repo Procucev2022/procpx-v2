@@ -5,6 +5,8 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 import type { WorkflowStageItem, WorkflowStageNavProps } from "@app-types/components/ui/WorkflowStageNav.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 export type { WorkflowStageItem, WorkflowStageNavProps };
 
 
@@ -14,16 +16,14 @@ export default function WorkflowStageNav({
 }: WorkflowStageNavProps) {
   return (
     <nav
-      aria-label="Workflow Navigation"
+      aria-label={UI_STRINGS.componentsUiWorkflowStageNav.workflowNavigation}
       className={`w-full bg-white border border-slate-200 rounded-xl p-2 md:p-2.5 shadow-2xs mb-6 flex items-center overflow-hidden ${className}`}
     >
       {/* Stages Stepper List - Full width layout, intentional horizontal scrolling for tabs alone */}
       <div className="flex items-center gap-2.5 overflow-x-auto py-1 px-1 scrollbar-thin w-full">
         <div className="flex items-center gap-2 px-2 shrink-0 select-none">
           <span className="w-2 h-2 rounded-full bg-[#0f52ba]" />
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Workflow:
-          </span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.componentsUiWorkflowStageNav.workflow}</span>
         </div>
 
         {stages.map((stage) => {

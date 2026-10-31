@@ -1,11 +1,10 @@
 // tests/boq-workspace-simplification.test.ts
 // Acceptance test suite for simplified BOQ Workspace and integrated financial summary
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const prisma = new PrismaClient();
 
 async function runTests() {
   console.log('============================================================');

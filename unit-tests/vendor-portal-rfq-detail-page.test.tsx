@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VendorRfqWorkspacePage from '../src/app/(app)/vendor-portal/rfqs/[id]/page';
@@ -51,35 +55,35 @@ describe('vendor portal RFQ detail workspace', () => {
       commercialNotes: 'Saved terms', validUntil: '2026-11-30', savedAt: '10:30 AM',
     }));
     render(<VendorRfqWorkspacePage />);
-    expect(screen.getByText('Loading RFQ workspace...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.loadingRFQWorkspace))).toBeInTheDocument();
     expect(await screen.findByText('RFQ-2026-001 — Electrical Package')).toBeInTheDocument();
     expect(screen.getByText(/Project: North Plant/)).toBeInTheDocument();
     expect(screen.getByDisplayValue('99')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Saved terms')).toBeInTheDocument();
-    expect(screen.getByText(/Draft saved locally at 10:30 AM/)).toBeInTheDocument();
-    expect(screen.getByText('Awaiting Quote')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.draftSavedLocallyAtNow))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.awaitingQuote))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clarification Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.clarificationChat) }));
     expect(screen.getByTestId('rfq-chat')).toHaveTextContent('RFQ-2026-001');
     fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
     expect(screen.queryByTestId('rfq-chat')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Refresh'));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.refresh2)));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/rfqs/rfq-vendor-1'));
     expect(await screen.findByText('RFQ-2026-001 — Electrical Package')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
-    expect(screen.getAllByText(/Draft saved locally at/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.draftSavedLocallyAt, "", false)).length).toBeGreaterThan(0);
     expect(JSON.parse(localStorage.getItem('procpx_quote_draft_rfq-vendor-1')!).lineQuotes['line-1'].unitRate).toBe('99');
 
-    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '100' } });
-    fireEvent.change(screen.getAllByPlaceholderText('0.00')[1], { target: { value: '200' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor))[0], { target: { value: '100' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor))[1], { target: { value: '200' } });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '12' } });
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'EXCEPTION' } });
-    fireEvent.change(screen.getAllByPlaceholderText('Days')[0], { target: { value: '5' } });
-    fireEvent.change(screen.getAllByPlaceholderText('e.g. 30 days credit from invoice submission...')[0], { target: { value: 'Net 45' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.days))[0], { target: { value: '5' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.eG30DaysCreditFromInvoiceSubmission))[0], { target: { value: 'Net 45' } });
     fireEvent.change(document.querySelector('input[type="date"]')!, { target: { value: '2026-12-15' } });
-    expect(screen.getByText(/Total Offer Amount:/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit 1st Quote' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.totalOfferAmount, "", false))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.submit1stQuote) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/rfqs/rfq-vendor-1', expect.objectContaining({ method: 'POST' })));
     const payload = JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1].body as string);
     expect(payload).toMatchObject({
@@ -89,7 +93,7 @@ describe('vendor portal RFQ detail workspace', () => {
         { rfqLineId: 'line-2', unitRate: 200, gstPercent: 18, leadTimeDays: 14, technicalCompliance: 'COMPLIANT' },
       ],
     });
-    expect(mockToastSuccess).toHaveBeenCalledWith('Quote submitted successfully.', 'RFQ-2026-001', 'Awaiting Buyer Evaluation');
+    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.appAppVendorPortalRfqsIdPage.quoteSubmittedSuccessfully, 'RFQ-2026-001', UI_STRINGS.common.userMessages.awaitingBuyerEvaluation);
   });
 
   it('shows buyer counters, accepts counter rates and handles failed revisions and storage errors', async () => {
@@ -108,11 +112,11 @@ describe('vendor portal RFQ detail workspace', () => {
     render(<VendorRfqWorkspacePage />);
     expect(await screen.findByText(/Buyer Counteroffer Received/)).toBeInTheDocument();
     expect(screen.getByText('Please sharpen the pricing')).toBeInTheDocument();
-    expect(screen.getAllByText('Awaiting Your Response').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.awaitingYourResponse)).length).toBeGreaterThan(0);
     expect(screen.getByText('Submitted Quotation Summary — Q-001 (Version 2)')).toBeInTheDocument();
-    expect(screen.getByText('Category Manager Counteroffer History (Buyer Offers 1–4)')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.categoryManagerCounterofferHistoryBuyerOffers14))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Counteroffer Rates' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.acceptCounterofferRates) }));
     expect(screen.getByDisplayValue('150')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Cancel Revision/ }));
     expect(screen.getByText('Submitted Quotation Summary — Q-001 (Version 2)')).toBeInTheDocument();
@@ -120,12 +124,12 @@ describe('vendor portal RFQ detail workspace', () => {
     expect(screen.getByRole('button', { name: /Cancel Revision/ })).toBeInTheDocument();
 
     jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage denied'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
-    expect(await screen.findByText('Failed to save draft locally in browser storage.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.failedToSaveDraftLocallyInBrowserStorage))).toBeInTheDocument();
 
-    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '145' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor))[0], { target: { value: '145' } });
     quoteResponse = reply({ error: 'Quotation window closed' }, false);
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Quote Version 3' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsIdPage.submitQuoteVersionValue1, {"value1":"3"})) }));
     expect(await screen.findByText('Quotation window closed')).toBeInTheDocument();
   });
 
@@ -140,7 +144,7 @@ describe('vendor portal RFQ detail workspace', () => {
     jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     const view = render(<VendorRfqWorkspacePage />);
     expect(await screen.findByText(/Project: Enterprise Project/)).toBeInTheDocument();
-    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.open))).toBeInTheDocument();
     expect(screen.getByText('0 Items')).toBeInTheDocument();
     view.unmount();
   });
@@ -186,12 +190,12 @@ describe('vendor portal RFQ detail workspace', () => {
       ],
     };
     const view = render(<VendorRfqWorkspacePage />);
-    expect(await screen.findByRole('heading', { level: 2, name: /Submitted Quotation Summary/ })).toHaveTextContent('Q-SPARSE');
+    expect(await screen.findByRole('heading', { level: 2, name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.submittedQuotationSummary, "", false) })).toHaveTextContent('Q-SPARSE');
     expect(screen.getByText('Fallback cable')).toBeInTheDocument();
-    expect(screen.getByText('Max 5 Quote Versions Reached')).toBeInTheDocument();
-    expect(screen.getByText('Addressed')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.max5QuoteVersionsReached))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.addressed))).toBeInTheDocument();
     expect(screen.getByText(/Submitted by: Vendor/)).toBeInTheDocument();
-    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.open))).toBeInTheDocument();
     expect(screen.getByText(/₹75/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Submit Revised Quote (v6)' }));
     expect(screen.getByText('Fallback cable')).toBeInTheDocument();
@@ -234,20 +238,20 @@ describe('vendor portal RFQ detail workspace', () => {
     render(<VendorRfqWorkspacePage />);
     expect(await screen.findByText(/Buyer Counteroffer Received/)).toBeInTheDocument();
     expect(screen.getByText(/Submit Revised Quote \(v5\)/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Buyer Counter Rate/)).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.buyerCounterRate, "", false))).toHaveLength(2);
     expect(screen.getAllByText(/Buyer Offer 1/).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Counteroffer Rates' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.acceptCounterofferRates) }));
     expect(screen.getAllByDisplayValue('40000')).toHaveLength(1);
     expect(screen.getByDisplayValue('110')).toBeInTheDocument();
 
-    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '90' } });
-    fireEvent.change(screen.getAllByPlaceholderText('0.00')[1], { target: { value: '80' } });
-    fireEvent.change(screen.getAllByPlaceholderText('Days')[0], { target: { value: '' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor))[0], { target: { value: '90' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor))[1], { target: { value: '80' } });
+    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.days))[0], { target: { value: '' } });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '0' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 30 days credit from invoice submission...'), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.eG30DaysCreditFromInvoiceSubmission)), { target: { value: '' } });
     jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('storage denied'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Quote Version 5' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsIdPage.submitQuoteVersionValue1, {"value1":"5"})) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/rfqs/rfq-vendor-1', expect.objectContaining({ method: 'POST' })));
     const payload = JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1].body as string);
     expect(payload.validUntil).toBeNull();
@@ -269,23 +273,23 @@ describe('vendor portal RFQ detail workspace', () => {
       }] }],
     };
     render(<VendorRfqWorkspacePage />);
-    expect(await screen.findByRole('heading', { level: 2, name: /Submitted Quotation Summary/ })).toHaveTextContent('Q-001');
-    expect(screen.getByText('₹0')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.submittedQuotationSummary, "", false) })).toHaveTextContent('Q-001');
+    expect(screen.getAllByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.toLocaleString2, {"toLocaleString":"0"}), '', true)).length).toBeGreaterThan(0);
     expect(screen.getByText('FINAL OFFER SUBMITTED')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Submit Revised Quote (v2)' }));
-    expect(screen.getByRole('button', { name: 'Cancel Revision & Return to Summary' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept Counteroffer Rates' }));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.cancelRevisionReturnToSummary) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.acceptCounterofferRates) }));
     expect(screen.getByDisplayValue('70')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor)), { target: { value: '25' } });
     quoteResponse = { ok: false, json: async () => { throw new Error('invalid response'); } };
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Quote Version 2' }));
-    expect(await screen.findByText('Failed to submit quotation')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsIdPage.submitQuoteVersionValue1, {"value1":"2"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToSubmitQuotation))).toBeInTheDocument();
   });
 
   it('uses a generic load error when an unsuccessful RFQ response has invalid JSON', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, json: async () => { throw new Error('invalid response'); } });
     render(<VendorRfqWorkspacePage />);
-    expect(await screen.findByText('Failed to load RFQ workspace')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadRfqWorkspace))).toBeInTheDocument();
   });
 });

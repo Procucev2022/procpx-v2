@@ -22,3 +22,16 @@ export interface InitiateRateCardProps {
   onBack: () => void;
   onSubmit: (formData: any) => void;
 }
+
+export interface InitiateRateCardForm {
+  vendor: string;
+  vendorId: string;
+  effectiveFrom: string;
+  validUntil: string;
+  category: string;
+  subcategory: string;
+  location: string;
+  title: string;
+  commercialTerms: string;
+  scope: string;
+}

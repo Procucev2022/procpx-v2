@@ -1,7 +1,11 @@
 // src/app/api/budgets/approve/route.ts - Project Approver Budget Approval API
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_APPROVE');
@@ -11,16 +15,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { contributionId, remarks } = body;
 
-    if (!contributionId) return apiError('Contribution ID is required.', 400);
+    if (!contributionId) return apiError(UI_STRINGS.common.contributionIDIsRequired, 400);
 
     const contribution = await prisma.budgetContribution.findFirst({
       where: { id: contributionId, tenantId: ctx.tenantId },
       include: { boqRevision: true, boq: true, costCentre: true },
     });
 
-    if (!contribution) return apiError('Budget contribution not found.', 404);
+    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
     if (contribution.status !== 'PENDING_PROJECT_APPROVAL' && contribution.status !== 'UNDER_APPROVAL') {
-      return apiError(`Cannot approve contribution in state ${contribution.status}. Expected Under Approval.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsApproveRoute.cannotApproveContributionInStateStatusExpectedUnderApproval, { "status": contribution.status }), 400);
     }
 
     // Record Project Approval log
@@ -100,16 +104,16 @@ export async function POST(req: NextRequest) {
         entityType: 'BUDGET_CONTRIBUTION',
         entityId: contribution.id,
         action: 'BUDGET_PROJECT_APPROVED',
-        description: `Budget contribution approved by Project Approver for Cost Centre ${contribution.costCentre.code} (₹ ${contribution.acceptedEstimatedValue.toLocaleString('en-IN')}) -> Moved to APPROVED`,
+        description: interpolateUiString(UI_STRINGS.appApiBudgetsApproveRoute.budgetContributionApprovedByProjectApproverForCostCentreCodeToLocaleStringMovedToAPPROVED, { "code": contribution.costCentre.code, "toLocaleString": contribution.acceptedEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
       },
     });
 
     return apiSuccess({
       contribution: updated,
       status: nextStatus,
-      message: 'Budget contribution approved by Project Approver.',
+      message: UI_STRINGS.appApiBudgetsApproveRoute.budgetContributionApprovedByProjectApprover,
     });
   } catch (err: any) {
-    return apiError(err.message || 'Project budget approval failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.projectBudgetApprovalFailed }), 500);
   }
 }

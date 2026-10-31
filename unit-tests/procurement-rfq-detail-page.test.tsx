@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import RfqDetailPage from '../src/app/(app)/procurement/rfqs/[id]/page';
@@ -68,12 +72,12 @@ describe('RFQ detail lifecycle page', () => {
   it('loads the zero quote demo, resets it with full sample data, and opens the chat drawer', async () => {
     renderRfq();
     expect(await screen.findByText('RFQ-DEMO-001')).toBeInTheDocument();
-    expect(screen.getByText('No Quotations Received Yet')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate 3 Received Quotes' }));
-    expect(await screen.findByText('Enterprise Quotation Register')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /2\. Negotiation/ }));
-    fireEvent.click(screen.getByRole('button', { name: '3. Awarding & PPO' }));
-    fireEvent.click(screen.getByRole('button', { name: /Clarifications \/ Chat/ }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.noQuotationsReceivedYet))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.simulate3ReceivedQuotes) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.enterpriseQuotationRegister))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, "", false) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copyfg2yyg) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.clarificationsChat, "", false) }));
     expect(screen.getByText('Close chat')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
   });
@@ -81,11 +85,11 @@ describe('RFQ detail lifecycle page', () => {
   it('uses the non-demo endpoints and renders a missing-RFQ fallback', async () => {
     mockSearchParams.mockReturnValue(paramsFor('tab=negotiations'));
     renderRfq('rfq-missing');
-    expect(await screen.findByText('RFQ not found or access denied.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rFQNotFoundOrAccessDenied))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing');
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing/compare');
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rate-cards/match?rfqId=rfq-missing');
-    expect(screen.getByRole('link', { name: /Back to RFQs Register/ })).toHaveAttribute('href', '/procurement/rfqs');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.backToRFQsRegister, "", false) })).toHaveAttribute('href', '/procurement/rfqs');
   });
 
   it('redirects vendor users to the vendor portal', async () => {
@@ -98,95 +102,95 @@ describe('RFQ detail lifecycle page', () => {
 
   it('records a manual demonstration quote and creates a direct rate-card PPO', async () => {
     renderRfq();
-    expect(await screen.findByText('No Quotations Received Yet')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Record Individual Quote Manually' }));
-    const quoteModal = screen.getByRole('dialog', { name: 'Record Vendor Quotation' });
-    fireEvent.click(within(quoteModal).getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Record Individual Quote Manually' }));
-    const reopenedQuoteModal = screen.getByRole('dialog', { name: 'Record Vendor Quotation' });
-    fireEvent.change(within(reopenedQuoteModal).getByText('Commercial Terms').parentElement!.querySelector('input')!, { target: { value: '' } });
-    fireEvent.change(within(reopenedQuoteModal).getByText('Delivery Lead Time (Days)').parentElement!.querySelector('input')!, { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save & Capture Quote' }));
-    expect(await screen.findByText(/Quotation successfully recorded/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.noQuotationsReceivedYet))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Record","toLocaleString":"Individual Quote Manually"})) }));
+    const quoteModal = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuotation) });
+    fireEvent.click(within(quoteModal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Record","toLocaleString":"Individual Quote Manually"})) }));
+    const reopenedQuoteModal = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuotation) });
+    fireEvent.change(within(reopenedQuoteModal).getByText(uiStringPattern(UI_STRINGS.common.commercialTerms)).parentElement!.querySelector('input')!, { target: { value: '' } });
+    fireEvent.change(within(reopenedQuoteModal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.deliveryLeadTimeDays)).parentElement!.querySelector('input')!, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.saveCaptureQuote) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecorded, "", false))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '2. Negotiation' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk) }));
     fireEvent.click(screen.getByRole('button', { name: 'Record quote from workspace' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
     fireEvent.click(screen.getByRole('button', { name: 'Refresh after negotiation' }));
     await waitFor(() => expect(screen.getByTestId('commercial-workspace')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Open rate cards' }));
-    expect(await screen.findByRole('dialog', { name: 'Approved Vendor Rate Card Sourcing Comparison' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
+    expect(await screen.findByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approvedVendorRateCardSourcingComparison) })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
     fireEvent.click(screen.getByRole('button', { name: 'Open rate cards' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Create Direct PPO from Rate Card' }));
-    expect(await screen.findByText(/PPO successfully created/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
+    expect(mockToast.success).toHaveBeenCalledWith(expect.objectContaining({ message: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreated }));
   });
 
   it('submits and approves a demonstration award and generates its PPO', async () => {
     renderRfq();
-    expect(await screen.findByText('No Quotations Received Yet')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate 3 Received Quotes' }));
-    fireEvent.click(screen.getByRole('button', { name: '3. Awarding & PPO' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Prepare Award Recommendation' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Prepare Award Recommendation' })[1]);
-    const awardDialog = screen.getByRole('dialog', { name: 'Submit Commercial Award Recommendation' });
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.noQuotationsReceivedYet))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.simulate3ReceivedQuotes) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copyfg2yyg) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2) })[0]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2) })[1]);
+    const awardDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitCommercialAwardRecommendation) });
     fireEvent.change(within(awardDialog).getByRole('combobox'), { target: { value: 'v-demo-002' } });
-    fireEvent.click(within(awardDialog).getByRole('button', { name: 'Submit Award Recommendation' }));
+    fireEvent.click(within(awardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation) }));
     await waitFor(() => expect(mockToast.error).toHaveBeenCalled());
     fireEvent.change(within(awardDialog).getByRole('combobox'), { target: { value: 'v-demo-001' } });
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Competitive L1 offer with complete scope.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Award Recommendation' }));
-    expect(await screen.findByText(/PPO submitted successfully for approval/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSubmittedSuccessfullyForApproval, "", false))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Recommendation' }));
-    fireEvent.change(screen.getByPlaceholderText('Enter approval sanction remarks or reason for rejection'), { target: { value: 'Approved for release.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Approval' }));
-    expect(await screen.findByText(/PPO approved successfully/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Generate Purchase Order \(PPO\)/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: /Generate Purchase Order \(PPO\)/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
-    expect(await screen.findByText(/PPO successfully created/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approveRecommendation) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.enterApprovalSanctionRemarksOrReasonForRejection)), { target: { value: 'Approved for release.' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1, {"value1":"Approval"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfully, "", false))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.generatePurchaseOrderPPO, "", false) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.generatePurchaseOrderPPO, "", false) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
+    expect(mockToast.success).toHaveBeenCalledWith(expect.objectContaining({ message: UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreated }));
   });
 
   it('opens quote details, records another vendor quote, and validates a non-L1 PPO', async () => {
     renderRfq();
-    expect(await screen.findByText('No Quotations Received Yet')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate 3 Received Quotes' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'View Quote' })[0]);
-    const quoteDialog = screen.getByRole('dialog', { name: /Quotation Details/ });
-    fireEvent.click(within(quoteDialog).getByRole('button', { name: 'Close' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'View Quote' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.noQuotationsReceivedYet))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.simulate3ReceivedQuotes) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Quote"})) })[0]);
+    const quoteDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.quotationDetailsValue1, "", false) });
+    fireEvent.click(within(quoteDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close, '', true) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Quote"})) })[0]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Record New Quote' }));
-    const quoteModal = screen.getByRole('dialog', { name: 'Record Vendor Quotation' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Record","toLocaleString":"New Quote"})) }));
+    const quoteModal = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuotation) });
     fireEvent.change(within(quoteModal).getByRole('combobox'), { target: { value: 'v-demo-002' } });
     within(quoteModal).getAllByRole('spinbutton').forEach((input) => fireEvent.change(input, { target: { value: '42' } }));
     within(quoteModal).getAllByRole('textbox').forEach((input) => fireEvent.change(input, { target: { value: 'Revised commercial terms' } }));
-    fireEvent.click(within(quoteModal).getByRole('button', { name: 'Save & Capture Quote' }));
-    expect(await screen.findByText(/Quotation successfully recorded/)).toBeInTheDocument();
+    fireEvent.click(within(quoteModal).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.saveCaptureQuote) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecorded, "", false))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Negotiation Workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.openNegotiationWorkspace) }));
     expect(screen.getByTestId('commercial-workspace')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '3. Awarding & PPO' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Prepare Award Recommendation' })[1]);
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Prepare Award Recommendation' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
-    const raiseButtons = screen.getAllByRole('button', { name: /Raise PPO/ });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copyfg2yyg) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2) })[1]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2) })[0]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    const raiseButtons = screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePPO, "", false) });
     fireEvent.click(raiseButtons[raiseButtons.length - 1]);
-    const ppoDialog = screen.getByRole('dialog', { name: 'Raise Purchase Order (PPO)' });
-    fireEvent.click(within(ppoDialog).getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
+    const ppoDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePurchaseOrderPPO) });
+    fireEvent.click(within(ppoDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
     await waitFor(() => expect(mockToast.error).toHaveBeenCalled());
     fireEvent.change(within(ppoDialog).getByPlaceholderText(/mandatory justification/), { target: { value: 'Specialized compliant delivery scope.' } });
     fireEvent.change(within(ppoDialog).getAllByRole('textbox')[1], { target: { value: 'Deliver within 10 days' } });
     fireEvent.change(within(ppoDialog).getAllByRole('textbox')[2], { target: { value: 'Net 45' } });
-    fireEvent.click(within(ppoDialog).getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
-    expect(await screen.findByText(/PPO successfully created/)).toBeInTheDocument();
+    fireEvent.click(within(ppoDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreatedPpoNumber))).toBeInTheDocument();
   });
 
   it('runs the live RFQ lifecycle through server retries, finance approval, PPOs, and rate-card fallbacks', async () => {
@@ -332,87 +336,87 @@ describe('RFQ detail lifecycle page', () => {
     });
 
     renderRfq('rfq-live');
-    expect(await screen.findByText('No Quotations Received Yet')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.noQuotationsReceivedYet))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Release RFQ' }));
-    expect(await screen.findByText('Failed to release RFQ')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Release RFQ' }));
-    expect(await screen.findByText('RFQ issued successfully.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Release","toLocaleString":"RFQ"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToReleaseRfq))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Release","toLocaleString":"RFQ"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Record Vendor Quote' }));
-    const quoteDialog = screen.getByRole('dialog', { name: 'Record Vendor Quotation' });
-    fireEvent.change(within(quoteDialog).getAllByPlaceholderText('Unit rate')[0], { target: { value: '90' } });
-    fireEvent.change(within(quoteDialog).getByText('Delivery Lead Time (Days)').parentElement!.querySelector('input')!, { target: { value: '' } });
-    fireEvent.click(within(quoteDialog).getByRole('button', { name: 'Save & Capture Quote' }));
-    expect(await screen.findByText('Failed to capture vendor quote')).toBeInTheDocument();
-    fireEvent.click(within(quoteDialog).getByRole('button', { name: 'Save & Capture Quote' }));
-    expect(await screen.findByText(/Quotation successfully recorded/)).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'View Quote' }));
-    const details = screen.getByRole('dialog', { name: /Quotation Details/ });
-    expect(within(details).getAllByText('30 Days').length).toBeGreaterThan(0);
-    expect(within(details).getByText('Standard FOB Site')).toBeInTheDocument();
-    fireEvent.click(within(details).getByRole('button', { name: 'Close modal' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuote) }));
+    const quoteDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.recordVendorQuotation) });
+    fireEvent.change(within(quoteDialog).getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.unitRate))[0], { target: { value: '90' } });
+    fireEvent.change(within(quoteDialog).getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.deliveryLeadTimeDays)).parentElement!.querySelector('input')!, { target: { value: '' } });
+    fireEvent.click(within(quoteDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.saveCaptureQuote) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToCaptureVendorQuote))).toBeInTheDocument();
+    fireEvent.click(within(quoteDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.saveCaptureQuote) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.quotationSuccessfullyRecorded, "", false))).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Quote"})) }));
+    const details = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.quotationDetailsValue1, "", false) });
+    expect(within(details).getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copy1xeupjt)).length).toBeGreaterThan(0);
+    expect(within(details).getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.standardFOBSite))).toBeInTheDocument();
+    fireEvent.click(within(details).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
 
-    fireEvent.click(screen.getByRole('button', { name: '3. Awarding & PPO' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Prepare Award Recommendation' })[0]);
-    const awardDialog = screen.getByRole('dialog', { name: 'Submit Commercial Award Recommendation' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copyfg2yyg) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2) })[0]);
+    const awardDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitCommercialAwardRecommendation) });
     fireEvent.change(within(awardDialog).getByRole('combobox'), { target: { value: '' } });
-    fireEvent.click(within(awardDialog).getByRole('button', { name: 'Submit Award Recommendation' }));
-    expect(mockToast.error).toHaveBeenCalledWith(expect.objectContaining({ title: 'Validation Error', message: 'Please select a vendor.' }));
+    fireEvent.click(within(awardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation) }));
+    expect(mockToast.error).toHaveBeenCalledWith({ title: UI_STRINGS.appAppProcurementRfqsIdPage.validationError, message: UI_STRINGS.appAppProcurementRfqsIdPage.pleaseSelectAVendor });
     fireEvent.change(within(awardDialog).getByRole('combobox'), { target: { value: 'v-live-1' } });
-    fireEvent.click(within(awardDialog).getByRole('button', { name: 'Submit Award Recommendation' }));
-    expect(await screen.findByText('Failed to submit award recommendation')).toBeInTheDocument();
+    fireEvent.click(within(awardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToSubmitAwardRecommendation))).toBeInTheDocument();
     fireEvent.change(within(awardDialog).getByRole('combobox'), { target: { value: 'v-live-2' } });
-    fireEvent.click(within(awardDialog).getByRole('button', { name: 'Submit Award Recommendation' }));
-    expect(mockToast.error).toHaveBeenCalledWith(expect.objectContaining({ title: 'Justification Required' }));
+    fireEvent.click(within(awardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation) }));
+    expect(mockToast.error.mock.calls.some(([toast]) => toast?.title === UI_STRINGS.appAppProcurementRfqsIdPage.justificationRequired)).toBe(true);
     fireEvent.change(within(awardDialog).getByRole('textbox'), { target: { value: 'Superior delivery and service coverage.' } });
-    fireEvent.click(within(awardDialog).getByRole('button', { name: 'Submit Award Recommendation' }));
-    expect(await screen.findByText('PPO submitted successfully for approval.')).toBeInTheDocument();
+    fireEvent.click(within(awardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitAwardRecommendation) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSubmittedSuccessfullyForApproval))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Recommendation' }));
-    const approvalDialog = screen.getByRole('dialog', { name: 'Approve Commercial Award' });
-    fireEvent.change(within(approvalDialog).getByPlaceholderText('Enter approval sanction remarks or reason for rejection'), { target: { value: 'Finance approved the non-L1 exception.' } });
-    fireEvent.click(within(approvalDialog).getByRole('button', { name: 'Confirm Approval' }));
-    expect(await screen.findByText('Failed to review award recommendation')).toBeInTheDocument();
-    fireEvent.click(within(approvalDialog).getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
-    const rejectionDialog = screen.getByRole('dialog', { name: 'Reject Commercial Award' });
-    fireEvent.click(within(rejectionDialog).getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Award recommendation rejected.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approveRecommendation) }));
+    const approvalDialog = screen.getByRole('dialog', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.value1CommercialAward, {"value1":"Approve"})) });
+    fireEvent.change(within(approvalDialog).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.enterApprovalSanctionRemarksOrReasonForRejection)), { target: { value: 'Finance approved the non-L1 exception.' } });
+    fireEvent.click(within(approvalDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1, {"value1":"Approval"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation))).toBeInTheDocument();
+    fireEvent.click(within(approvalDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) }));
+    const rejectionDialog = screen.getByRole('dialog', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.value1CommercialAward, {"value1":"Reject"})) });
+    fireEvent.click(within(rejectionDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.awardRecommendationRejected))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Approve Recommendation' }));
-    const finalApprovalDialog = screen.getByRole('dialog', { name: 'Approve Commercial Award' });
-    fireEvent.click(within(finalApprovalDialog).getByRole('button', { name: 'Confirm Approval' }));
-    expect(await screen.findByText('PPO approved successfully by Finance.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approveRecommendation) }));
+    const finalApprovalDialog = screen.getByRole('dialog', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.value1CommercialAward, {"value1":"Approve"})) });
+    fireEvent.click(within(finalApprovalDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1, {"value1":"Approval"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfullyByFinance))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Generate Purchase Order \(PPO\)/ }));
-    const ppoDialog = screen.getByRole('dialog', { name: 'Raise Purchase Order (PPO)' });
-    fireEvent.click(within(ppoDialog).getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
-    expect(mockToast.error).toHaveBeenCalledWith(expect.objectContaining({ title: 'Justification Required' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.generatePurchaseOrderPPO, "", false) }));
+    const ppoDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePurchaseOrderPPO) });
+    fireEvent.click(within(ppoDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
+    expect(mockToast.error.mock.calls.some(([toast]) => toast?.title === UI_STRINGS.appAppProcurementRfqsIdPage.justificationRequired)).toBe(true);
     fireEvent.change(within(ppoDialog).getByPlaceholderText(/Enter mandatory justification/), { target: { value: 'Specialist delivery team is required.' } });
     fireEvent.change(within(ppoDialog).getAllByRole('textbox')[1], { target: { value: '' } });
     fireEvent.change(within(ppoDialog).getAllByRole('textbox')[2], { target: { value: '' } });
-    fireEvent.click(within(ppoDialog).getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
-    expect(await screen.findByText('Failed to generate PPO')).toBeInTheDocument();
-    fireEvent.click(within(ppoDialog).getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
+    fireEvent.click(within(ppoDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToGeneratePpo))).toBeInTheDocument();
+    fireEvent.click(within(ppoDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
     expect(await screen.findByText(/PPO successfully created \(PPO-LIVE-001\)/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Raise PPO (L1)' }));
-    const l1PpoDialog = screen.getByRole('dialog', { name: 'Raise Purchase Order (PPO)' });
-    fireEvent.click(within(l1PpoDialog).getByRole('button', { name: 'Issue Purchase Order (PPO)' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePPOL1, '', true) }));
+    const l1PpoDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePurchaseOrderPPO) });
+    fireEvent.click(within(l1PpoDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.issuePurchaseOrderPPO) }));
     expect(await screen.findByText(/PPO successfully created \(PPO-LIVE-002\)/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /2\. Negotiation/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, "", false) }));
     fireEvent.click(screen.getByRole('button', { name: 'Open rate cards' }));
-    const rateCardDialog = screen.getByRole('dialog', { name: 'Approved Vendor Rate Card Sourcing Comparison' });
+    const rateCardDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approvedVendorRateCardSourcingComparison) });
     expect(within(rateCardDialog).getByText('Coverage is incomplete')).toBeInTheDocument();
     expect(within(rateCardDialog).getAllByText('88/100').length).toBeGreaterThan(0);
     (window.confirm as jest.Mock).mockReturnValueOnce(false);
-    fireEvent.click(within(rateCardDialog).getByRole('button', { name: 'Create Direct PPO from Rate Card' }));
-    fireEvent.click(within(rateCardDialog).getByRole('button', { name: 'Create Direct PPO from Rate Card' }));
-    expect(await screen.findByText('Failed to issue direct PPO from rate card')).toBeInTheDocument();
-    fireEvent.click(within(rateCardDialog).getByRole('button', { name: 'Create Direct PPO from Rate Card' }));
-    expect(await screen.findByText(/^PPO successfully created\.$/)).toBeInTheDocument();
+    fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
+    fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToIssueDirectPpoFromRateCard))).toBeInTheDocument();
+    fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.pPOSuccessfullyCreated, "", true))).toBeInTheDocument();
   });
 
   it('uses sparse RFQ fallbacks when comparison and rate-card services fail', async () => {
@@ -447,30 +451,30 @@ describe('RFQ detail lifecycle page', () => {
 
     renderRfq('rfq-sparse');
     expect(await screen.findByRole('heading', { name: 'Sparse package' })).toBeInTheDocument();
-    expect(screen.getByText('Commercial Award Recommendation')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.commercialAwardRecommendation))).toBeInTheDocument();
     expect(errorSpy).toHaveBeenCalledWith('Failed to load quote comparison:', expect.any(Error));
     expect(errorSpy).toHaveBeenCalledWith('Failed to load rate card matches:', expect.any(Error));
 
-    fireEvent.click(screen.getByRole('button', { name: /1\. Quotations Received/ }));
-    expect(screen.getByText('Civil & Commercial')).toBeInTheDocument();
-    expect(screen.getAllByText('Recorded').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('QTE-REC-001').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getAllByRole('button', { name: 'View Quote' })[0]);
-    const fallbackDetails = screen.getByRole('dialog', { name: 'Quotation Details: Vendor Quote' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copy1v8aisw, "", false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.civilCommercial))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.recorded)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.qTEREC001)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Quote"})) })[0]);
+    const fallbackDetails = screen.getByRole('dialog', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.quotationDetailsValue1, {"value1":"Vendor Quote"})) });
     expect(within(fallbackDetails).getByText('Fallback Supplier')).toBeInTheDocument();
-    expect(within(fallbackDetails).getByText('Standard FOB Site')).toBeInTheDocument();
-    fireEvent.click(within(fallbackDetails).getByRole('button', { name: 'Close modal' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'View Quote' })[1]);
-    const genericDetails = screen.getByRole('dialog', { name: 'Quotation Details: Vendor Quote' });
-    expect(within(genericDetails).getByText('Vendor')).toBeInTheDocument();
-    fireEvent.click(within(genericDetails).getByRole('button', { name: 'Close modal' }));
+    expect(within(fallbackDetails).getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.standardFOBSite))).toBeInTheDocument();
+    fireEvent.click(within(fallbackDetails).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Quote"})) })[1]);
+    const genericDetails = screen.getByRole('dialog', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.quotationDetailsValue1, {"value1":"Vendor Quote"})) });
+    expect(within(genericDetails).getByText(uiStringPattern(UI_STRINGS.common.vendor, '', true))).toBeInTheDocument();
+    fireEvent.click(within(genericDetails).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Record New Quote' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save & Capture Quote' }));
-    expect(mockToast.error).toHaveBeenCalledWith(expect.objectContaining({ title: 'Validation Error', message: 'Please select a vendor.' }));
-    fireEvent.click(screen.getByRole('button', { name: /2\. Negotiation/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Record","toLocaleString":"New Quote"})) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.saveCaptureQuote) }));
+    expect(mockToast.error).toHaveBeenCalledWith({ title: UI_STRINGS.appAppProcurementRfqsIdPage.validationError, message: UI_STRINGS.appAppProcurementRfqsIdPage.pleaseSelectAVendor });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, "", false) }));
     fireEvent.click(screen.getByRole('button', { name: 'Open rate cards' }));
-    expect(screen.getByText('No Applicable Rate Cards')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.noApplicableRateCards))).toBeInTheDocument();
     errorSpy.mockRestore();
   });
 
@@ -507,15 +511,15 @@ describe('RFQ detail lifecycle page', () => {
 
     renderRfq('rfq-fallback');
     expect(await screen.findByRole('heading', { name: 'Fallback package' })).toBeInTheDocument();
-    expect(screen.getByText('Civil & Commercial')).toBeInTheDocument();
-    expect(screen.getByText('13 Oct 2026')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Release RFQ' }));
-    await waitFor(() => expect(mockToast.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'An error occurred while releasing the RFQ.' })));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.civilCommercial))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copyqwrkgb))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Release","toLocaleString":"RFQ"})) }));
+    await waitFor(() => expect(mockToast.error).toHaveBeenCalledWith(expect.objectContaining({ message: UI_STRINGS.common.userMessages.anErrorOccurredWhileReleasingTheRfq })));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Raise PPO (L1)' }));
-    const ppoDialog = screen.getByRole('dialog', { name: 'Raise Purchase Order (PPO)' });
-    expect(within(ppoDialog).getByText('Selected Vendor', { exact: true })).toBeInTheDocument();
-    expect(within(ppoDialog).getByText(/Total Order Value:/).parentElement).toHaveTextContent('0');
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePPO) }));
+    const ppoDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.raisePurchaseOrderPPO) });
+    expect(within(ppoDialog).getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.selectedVendor, '', true))).toBeInTheDocument();
+    expect(within(ppoDialog).getByText(uiStringPattern(UI_STRINGS.common.totalOrderValue, "", false)).parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
   });
 
   it('releases a draft RFQ through the server action', async () => {
@@ -534,8 +538,8 @@ describe('RFQ detail lifecycle page', () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
     renderRfq('rfq-draft');
-    expect(await screen.findByRole('button', { name: 'Release RFQ' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Release RFQ' }));
-    expect(await screen.findByText('RFQ issued successfully.')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Release","toLocaleString":"RFQ"})) })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Release","toLocaleString":"RFQ"})) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully))).toBeInTheDocument();
   });
 });

@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -20,7 +23,7 @@ export async function POST(
     const { issueRemarks, raisedBy } = body;
 
     if (!issueRemarks || !issueRemarks.trim()) {
-      return apiError('Issue / clarification description is required', 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.issueClarificationDescriptionIsRequired, 400);
     }
 
     const ppo = await prisma.ppo.findFirst({
@@ -33,12 +36,12 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError('Purchase Order not found or access denied', 404);
+      return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404);
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId || ctx.vendorId !== ppo.vendorId) {
-        return apiError('Forbidden: you can only raise issues on purchase orders issued to your company', 403);
+        return apiError(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.forbiddenYouCanOnlyRaiseIssuesOnPurchaseOrdersIssuedToYourCompany, 403);
       }
     }
 
@@ -71,7 +74,7 @@ export async function POST(
           senderId: ctx.userId,
           senderName: reporterName,
           senderRole: 'VENDOR',
-          message: `[PPO CLARIFICATION / ISSUE RAISED] Vendor ${ppo.vendor.name} raised an issue on PPO ${ppo.ppoNumber}: "${issueRemarks.trim()}". PPO acceptance is held pending resolution.`,
+          message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.pPOCLARIFICATIONISSUERAISEDVendorNameRaisedAnIssueOnPPOPpoNumberTrimPPOAcceptanceIsHeldPendingResolution, { "name": ppo.vendor.name, "ppoNumber": ppo.ppoNumber, "trim": issueRemarks.trim() }),
           isVendorSent: true,
           vendorId: ppo.vendorId,
         },
@@ -86,7 +89,7 @@ export async function POST(
       entityType: 'PPO',
       entityId: ppo.id,
       action: 'PPO_VENDOR_ISSUE_RAISED',
-      description: `Clarification/Issue raised on Purchase Order ${ppo.ppoNumber} by vendor ${ppo.vendor.name}: ${issueRemarks.trim()}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.clarificationIssueRaisedOnPurchaseOrderPpoNumberByVendorNameTrim, { "ppoNumber": ppo.ppoNumber, "name": ppo.vendor.name, "trim": issueRemarks.trim() }),
       newValue: {
         vendorStatus: 'ISSUE_RAISED',
         issueRemarks: issueRemarks.trim(),
@@ -111,10 +114,10 @@ export async function POST(
 
     return apiSuccess({
       ppo: updated,
-      message: `Issue successfully logged and routed to the procurement team for review.`,
+      message: UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.issueSuccessfullyLoggedAndRoutedToTheProcurementTeamForReview,
     });
   } catch (error: any) {
     console.error('Error raising issue on PPO:', error);
-    return apiError(error.message || 'Failed to submit issue on Purchase Order', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitIssueOnPurchaseOrder }), 500);
   }
 }

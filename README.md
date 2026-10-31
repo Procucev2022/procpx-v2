@@ -5,57 +5,9 @@
 
 ---
 
-## 🚀 Key Highlights & Capabilities
+## Quick Start Guide
 
-- **Role-Aware Workspaces**: Fine-grained permissions matrix tailored across 7 enterprise roles:
-  - `PROJECT_USER` (Site engineers, project managers)
-  - `PROJECT_APPROVER` (Capex approvers, regional heads)
-  - `PROCUREMENT_USER` (Buyers, commercial teams)
-  - `FINANCE_USER` (Cost controllers, auditors)
-  - `CATEGORY_MANAGER` (Specifiers, standard owners)
-  - `CLIENT_ADMIN` (Organization tenant administrators)
-  - `SUPER_ADMIN` (Platform administrators)
-- **8-Step BOQ Ingestion & Processing**:
-  - Drag-and-drop `.xlsx` / `.xls` spreadsheet parser using native memory buffers
-  - Automatic sheet identification and header row detection
-  - Intelligent column-mapping engine with auto-matching algorithms
-  - UOM standardisation against an enterprise unit dictionary
-  - Quality score calculation (0–100%) flagging missing descriptions, quantities, and anomalies
-  - Auto revisioning (`R0`, `R1`, `R2`, ...) preserving immutable historical records
-- **Interactive BOQ Workspace Grid**:
-  - High-performance paginated line grid
-  - Modal and inline item editors with real-time validation checks
-  - Approval and rejection workflows with mandatory remarks and reason tracking
-- **Project Master & Lifecycle**:
-  - Auto project code sequencing (`PRJ-2026-XXXXXX`)
-  - Sector presets (Retail, Hospitality, Banking, Healthcare, etc.)
-  - Tabbed overview with BOQs, Team members, and Document repositories
-- **Master Data & Category Management**:
-  - Hierarchical category taxonomy (Parent & Subcategory tree)
-  - UOM dictionary with canonical symbols and conversion factors
-- **Immutable Audit Trail**:
-  - Structured audit logging tracking all entity mutations, IP addresses, and actors
-  - Interactive state diff inspection comparing before and after JSON payloads
-
----
-
-## 🛠 Tech Stack
-
-- **Framework**: Next.js 16 (App Router + Turbopack)
-- **Runtime & Language**: Node.js & TypeScript
-- **Styling**: Vanilla CSS Design System with Tailwind v4 utilities & Dark Mode enterprise palette
-- **Database & ORM**: Prisma ORM with SQLite (`file:./dev.db`) – zero external setup required; seamlessly switchable to PostgreSQL
-- **Authentication**: NextAuth.js v5 with JWT session handling & bcrypt credential hashing
-- **Spreadsheet Engine**: SheetJS (`xlsx`) with custom parsing and standardisation pipelines
-
----
-
-## 📋 Quick Start Guide
-
-### 1. Prerequisites
-- Node.js 18+ installed
-
-### 2. Install Dependencies
+### 1. Install Dependencies
 ```bash
 npm install
 cp .env.example .env
@@ -65,15 +17,21 @@ cp .env.example .env
 
 ### 3. Initialize Database Schema
 ```bash
-npx prisma db push
+npm run db:migrate:safe
+npm run db:integrity
 ```
 
-### 4. Seed Demo Data & Accounts
+To apply the schema to your configured Cloudflare D1 database:
 ```bash
-npx tsx prisma/seed.ts
+npm run db:d1:migrate:remote
+npm run db:integrity:remote
 ```
 
-### 5. Launch Development Server
+The current migration starts with an empty database. It does not import the legacy mocked SQLite records or seed demo accounts.
+
+**Production readiness:** Prisma's D1 adapter currently ignores transaction boundaries. Multi-write procurement flows must be redesigned before production traffic uses D1. The current affected routes are `src/app/api/vendor-portal/rfqs/[id]/route.ts`, `src/app/api/procurement/negotiations/route.ts`, `src/app/api/procurement/ppos/route.ts`, and `src/app/api/procurement/rfqs/[id]/vendors/route.ts`.
+
+### 4. Launch Development Server
 ```bash
 npm run dev
 ```

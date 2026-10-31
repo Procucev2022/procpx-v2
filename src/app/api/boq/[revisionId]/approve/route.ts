@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_APPROVE');
@@ -13,8 +16,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rev
     where: { id: revisionId, tenantId: ctx.tenantId },
     include: { boq: true },
   });
-  if (!revision) return apiError('Revision not found', 404);
-  if (revision.status !== 'SUBMITTED') return apiError('Only submitted BOQs can be approved.');
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (revision.status !== 'SUBMITTED') return apiError(UI_STRINGS.appApiBoqRevisionIdApproveRoute.onlySubmittedBOQsCanBeApproved);
 
   await prisma.boqRevision.update({
     where: { id: revisionId },
@@ -38,8 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rev
     entityType: 'BOQ_REVISION',
     entityId: revisionId,
     action: 'APPROVE',
-    description: `BOQ Revision ${revision.revisionCode} APPROVED`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdApproveRoute.bOQRevisionRevisionCodeAPPROVED, { "revisionCode": revision.revisionCode }),
   });
 
-  return apiSuccess({ message: 'BOQ approved successfully.', revisionCode: revision.revisionCode });
+  return apiSuccess({ message: UI_STRINGS.common.bOQApprovedSuccessfully, revisionCode: revision.revisionCode });
 }

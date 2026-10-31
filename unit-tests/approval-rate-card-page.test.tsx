@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import RateCardApprovalsPage from '../src/app/(app)/approvals/rate-cards/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, ...props }: any) => <a {...props}>{children}</a> }));
 jest.mock('../src/components/rate-cards/Section6ApproverView', () => ({
@@ -56,7 +60,7 @@ function setupFetch(overrides: Record<string, (url: string, init?: RequestInit) 
 
 function openReview(id: string) {
   const row = screen.getByText(id).closest('tr')!;
-  fireEvent.click(within(row).getByRole('button', { name: 'Review' }));
+  fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.review) }));
 }
 
 async function invokeDisabledClick(element: HTMLElement) {
@@ -78,43 +82,43 @@ describe('rate card approvals queue', () => {
 
   it('loads role-aware queues, filters the tabs and reviews commercial details and messages', async () => {
     render(<RateCardApprovalsPage />);
-    expect(screen.getByText('Loading Approvals Queue...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadingApprovalsQueue))).toBeInTheDocument();
     expect(await screen.findByText('RC-1')).toBeInTheDocument();
     expect(screen.getByTestId('section-six')).toHaveAttribute('data-role', 'FINANCE_APPROVER');
     expect(screen.getByText('2 Pending Approval')).toBeInTheDocument();
-    expect(screen.getByText('Awaiting Level 1 Review')).toBeInTheDocument();
-    expect(screen.getByText('Project Approved → Awaiting Finance')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.awaitingLevel1Review))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.projectApprovedAwaitingFinance))).toBeInTheDocument();
     expect(screen.getByTestId('section-seven')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Project approval' }));
-    expect(screen.getByText(/Level 1 Project Approval completed/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.projectApproval))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Finance approval' }));
     expect(screen.getByText(/Level 2 Finance Approval completed/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Section reject' }));
-    expect(screen.getByText('Rate Card rejected with remarks.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRejectedWithRemarks))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Level 1: Project Approver Queue/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApproverQueueLevel1Count) }));
     expect(screen.getByText('RC-1')).toBeInTheDocument();
     expect(screen.queryByText('RC-2')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Level 2: Finance Approver Queue/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApproverQueueLevel2Count) }));
     expect(screen.getByText('RC-2')).toBeInTheDocument();
     expect(screen.queryByText('RC-1')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'History & Concluded' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.historyConcluded) }));
     expect(screen.getByText('RC-3')).toBeInTheDocument();
     expect(screen.queryByText('RC-1')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /All Pending/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.allPendingTotalPending) }));
 
     openReview('RC-1');
     expect(document.querySelector('.modal-content')).toBeInTheDocument();
     expect(screen.getByText(/Signed by Vendor Signatory/)).toBeInTheDocument();
     expect(screen.getByText('Copper Cable')).toBeInTheDocument();
-    expect(screen.getAllByText('Standard specification compliant')).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.standardSpecificationCompliant))).toHaveLength(2);
     expect(screen.getByText('Net 45')).toBeInTheDocument();
     expect(screen.getByText('Volume discount')).toBeInTheDocument();
-    expect(screen.getByText('Confirm lead time')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1))).toBeInTheDocument();
 
-    const messageInput = screen.getByPlaceholderText('Ask clarification or enter enquiry remarks...');
-    expect(screen.getByRole('button', { name: 'Post Message' })).toBeDisabled();
+    const messageInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.postMessage) })).toBeDisabled();
     fireEvent.change(messageInput, { target: { value: '  Please attach the updated sheet  ' } });
     fireEvent.keyDown(messageInput, { key: 'Tab' });
     fireEvent.keyDown(messageInput, { key: 'Enter' });
@@ -139,46 +143,46 @@ describe('rate card approvals queue', () => {
     await screen.findByText('RC-1');
 
     openReview('RC-1');
-    fireEvent.click(screen.getByRole('button', { name: /Approve Level 1/ }));
-    expect(await screen.findByText('Rate Card approved successfully!')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.approveLevel1ForwardToFinance) }).at(-1)!);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.rateCardApprovedSuccessfully))).toBeInTheDocument();
 
     openReview('RC-2');
-    fireEvent.click(screen.getByRole('button', { name: /Approve Level 2/ }));
-    expect(await screen.findByText('Failed to approve Rate Card')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Approve Level 2/ })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: /Return for Correction/ }));
-    const returnButton = screen.getByRole('button', { name: 'Confirm Return for Correction' });
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.approveLevel2ActivateRateCard) }).at(-1)!);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.failedToApproveRateCard))).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.approveLevel2ActivateRateCard) }).at(-1)).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.returnForCorrection) }));
+    const returnButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.confirmReturnForCorrection) });
     expect(returnButton).toBeDisabled();
     await invokeDisabledClick(returnButton);
-    expect(await screen.findByText('Remarks / Reason for return is mandatory')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Mandatory remarks for correction...'), { target: { value: '  Fix tax terms  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Return for Correction' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.remarksReasonForReturnIsMandatory))).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryRemarksForCorrection)), { target: { value: '  Fix tax terms  ' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.confirmReturnForCorrection) }));
     expect(await screen.findByText('Rate Card returned for correction with remarks recorded.')).toBeInTheDocument();
 
     openReview('RC-2');
-    fireEvent.click(screen.getByRole('button', { name: /Reject Rate Card/ }));
-    fireEvent.change(screen.getByPlaceholderText('Mandatory rejection reason...'), { target: { value: '  Duplicate schedule  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.rejectRateCard2) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryRejectionReason)), { target: { value: '  Duplicate schedule  ' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
     expect(await screen.findByText('Rate Card rejected with reason recorded.')).toBeInTheDocument();
 
     openReview('RC-1');
-    fireEvent.click(screen.getByRole('button', { name: /Reject Rate Card/ }));
-    const rejectButton = screen.getByRole('button', { name: 'Confirm Rejection' });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.rejectRateCard2) }));
+    const rejectButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) });
     expect(rejectButton).toBeDisabled();
     await invokeDisabledClick(rejectButton);
-    expect(await screen.findByText('Rejection reason / remarks is mandatory')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Mandatory rejection reason...'), { target: { value: 'Incomplete files' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Rejection' }));
-    expect(await screen.findByText('Rejection failed')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.rejectionReasonRemarksIsMandatory))).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryRejectionReason)), { target: { value: 'Incomplete files' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.rejectionFailed))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: /Return for Correction/ }));
-    fireEvent.change(screen.getByPlaceholderText('Mandatory remarks for correction...'), { target: { value: 'Update delivery window' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Return for Correction' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.returnForCorrection) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.mandatoryRemarksForCorrection)), { target: { value: 'Update delivery window' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.confirmReturnForCorrection) }));
     expect(await screen.findByText('Return failed')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.change(screen.getByPlaceholderText('Ask clarification or enter enquiry remarks...'), { target: { value: 'Question' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Post Message' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks)), { target: { value: 'Question' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.postMessage) }));
     await waitFor(() => expect(global.alert).toHaveBeenCalledWith('Message failed'));
   });
 
@@ -188,14 +192,14 @@ describe('rate card approvals queue', () => {
       return Promise.resolve(reply({}));
     });
     const emptyView = render(<RateCardApprovalsPage />);
-    expect(await screen.findByText('No Rate Cards currently awaiting approval in this queue.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.noRateCardsCurrentlyAwaitingApprovalInThisQueue))).toBeInTheDocument();
     expect(screen.getByTestId('section-six')).toHaveAttribute('data-role', 'PROJECT_APPROVER');
     emptyView.unmount();
 
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockImplementation((url: string) => url === '/api/auth/me' ? Promise.resolve(reply({})) : Promise.reject(new Error('Network unavailable')));
     render(<RateCardApprovalsPage />);
-    expect(await screen.findByText('No Rate Cards currently awaiting approval in this queue.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.noRateCardsCurrentlyAwaitingApprovalInThisQueue))).toBeInTheDocument();
     await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Error fetching rate cards:', expect.any(Error)));
     errorSpy.mockRestore();
   });

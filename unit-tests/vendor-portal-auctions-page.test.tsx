@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VendorAuctionsPage from '../src/app/(app)/vendor-portal/auctions/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockToastError = jest.fn();
 jest.mock('../src/components/ui/PageHeader', () => ({
@@ -49,22 +53,22 @@ describe('vendor portal auctions page', () => {
   it('shows loading while the first request is pending', () => {
     fetchMock.mockReturnValueOnce(new Promise(() => undefined));
     const loading = render(<VendorAuctionsPage />);
-    expect(screen.getByText('Loading invited auctions...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.loadingInvitedAuctions))).toBeInTheDocument();
     loading.unmount();
   });
 
   it('shows empty results, refreshes without replacing data, and reports fetch errors', async () => {
     fetchMock.mockResolvedValueOnce(response({ auctions: [] }));
     render(<VendorAuctionsPage />);
-    expect(await screen.findByText('No Auctions in this Tab')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.noAuctionsInThisTab))).toBeInTheDocument();
     fetchMock.mockResolvedValueOnce(response({}));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh Telemetry' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refreshTelemetry) }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('No Auctions in this Tab')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.noAuctionsInThisTab))).toBeInTheDocument();
 
     fetchMock.mockRejectedValueOnce(new Error('network unavailable'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh Telemetry' }));
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: 'Error', message: 'Failed to load invited auctions' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refreshTelemetry) }));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: UI_STRINGS.appAppVendorPortalAuctionsPage.failedToLoadInvitedAuctions }));
   });
 
   it('filters auction tabs, searches auction/title/RFQ identifiers, and renders auction details', async () => {
@@ -74,30 +78,30 @@ describe('vendor portal auctions page', () => {
     expect(screen.getByText('AUC-002')).toBeInTheDocument();
     expect(screen.queryByText('AUC-003')).not.toBeInTheDocument();
     expect(screen.getByText('invalid-start')).toBeInTheDocument();
-    expect(screen.getByText('Current Leading: INR 12,500')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.currentLeading))).toBeInTheDocument();
     expect(dateFormat).toHaveBeenCalled();
-    expect(screen.getByText('Reverse')).toBeInTheDocument();
-    expect(screen.getByText('Forward')).toBeInTheDocument();
-    expect(screen.getByText('Item Wise')).toBeInTheDocument();
-    expect(screen.getByText('RFQ Total Wise')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /Enter Bidding Room/ })[0]).toHaveAttribute('href', '/vendor-portal/auctions/live-1');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.reverse))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.forward))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.itemWise))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.rFQTotalWise))).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.enterBiddingRoom) })[0]).toHaveAttribute('href', '/vendor-portal/auctions/live-1');
 
-    fireEvent.click(screen.getByRole('button', { name: /Upcoming Scheduled/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.upcomingScheduled) }));
     expect(screen.getByText('AUC-003')).toBeInTheDocument();
-    expect(screen.getAllByText('Sealed Bid')).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.sealedBid))).toHaveLength(2);
     expect(screen.queryByText('AUC-001')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /My Placed Bids/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.myPlacedBids) }));
     expect(screen.getByText('AUC-005')).toBeInTheDocument();
     expect(screen.queryByText('AUC-002')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Completed & Results/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.completedResults) }));
     expect(screen.getByText('AUC-004')).toBeInTheDocument();
     expect(screen.getByText('AUC-005')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /All Invitations/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.allInvitations) }));
     expect(screen.getByText('AUC-001')).toBeInTheDocument();
-    const search = screen.getByPlaceholderText('Search by Auction #, Title, RFQ...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsPage.searchByAuctionTitleRFQ));
     fireEvent.change(search, { target: { value: 'auc-001' } });
     expect(screen.getByText('AUC-001')).toBeInTheDocument();
     expect(screen.queryByText('AUC-002')).not.toBeInTheDocument();

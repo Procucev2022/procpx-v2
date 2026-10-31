@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -104,7 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
   }
 
   if (!boq && !revision) {
-    return apiError('BOQ or Revision not found.', 404);
+    return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQOrRevisionNotFound, 404);
   }
 
   const rawLines = revision?.lines || [];
@@ -169,7 +172,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
     }
 
     if (!boq) {
-      return apiError('BOQ not found', 404);
+      return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQNotFound, 404);
     }
 
     const updatedBoq = await prisma.boq.update({
@@ -186,7 +189,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
 
     return apiSuccess({ success: true, boq: updatedBoq });
   } catch (err: any) {
-    return apiError(err.message || 'Failed to update BOQ', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateBoq }), 500);
   }
 }
 

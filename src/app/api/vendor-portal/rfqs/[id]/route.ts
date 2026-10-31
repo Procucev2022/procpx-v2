@@ -1,10 +1,14 @@
 // src/app/api/vendor-portal/rfqs/[id]/route.ts
 // Single RFQ details & Quote submission for Authenticated Vendor
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -14,12 +18,12 @@ export async function GET(
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError('Forbidden: Vendor Portal is accessible only to mapped vendor accounts', 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError('Vendor record not associated with this user account', 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
   const { id: rfqId } = await params;
@@ -66,13 +70,13 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     return apiSuccess({ rfq });
   } catch (error: any) {
     console.error('Error fetching vendor RFQ detail:', error);
-    return apiError(error.message || 'Failed to fetch RFQ detail', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500);
   }
 }
 
@@ -84,12 +88,12 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError('Forbidden: Vendor Portal is accessible only to mapped vendor accounts', 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError('Vendor record not associated with this user account', 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
   const { id: rfqId } = await params;
@@ -115,11 +119,11 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or vendor not invited', 404);
+      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.rFQNotFoundOrVendorNotInvited, 404);
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(`RFQ status (${rfq.status}) does not permit vendor quotation submissions`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400);
     }
 
     // Determine quote version
@@ -132,12 +136,12 @@ export async function POST(
 
     // Rule: Maximum 20 quote versions per vendor per RFQ during multi-round negotiations
     if (nextVersion > 20) {
-      return apiError('Maximum limit of 20 quote versions reached per vendor for this RFQ.', 400);
+      return apiError(UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, 400);
     }
 
     // Rule: Validate that all required line-item prices are provided and positive
     if (!Array.isArray(lines) || lines.length === 0) {
-      return apiError('Line-item quotation rates are mandatory before submitting.', 400);
+      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemQuotationRatesAreMandatoryBeforeSubmitting, 400);
     }
 
     const lineRateMap = new Map<string, number>();
@@ -152,7 +156,7 @@ export async function POST(
       const rate = lineRateMap.get(rfqLine.id);
       if (rate === undefined || isNaN(rate) || rate <= 0) {
         return apiError(
-          `Line item ${rfqLine.lineNumber} ("${rfqLine.description}") must have a valid positive unit rate before submission.`,
+          interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemLineNumberDescriptionMustHaveAValidPositiveUnitRateBeforeSubmission, { "lineNumber": rfqLine.lineNumber, "description": rfqLine.description }),
           400
         );
       }
@@ -281,7 +285,7 @@ export async function POST(
               const rate = Number(li.unitRate || 0);
               return {
                 rfqLineId: li.rfqLineId || li.id,
-                description: rfqLine?.description || prev?.description || 'Item',
+                description: interpolateUiString(UI_STRINGS.common.value1, { "value1": rfqLine?.description || prev?.description || UI_STRINGS.appAppBoqStudioPage.item }),
                 uom: rfqLine?.uom || prev?.uom || 'Unit',
                 quantity: qty,
                 counterRate: prev?.counterRate ?? null,
@@ -316,7 +320,7 @@ export async function POST(
               senderId: ctx.userId,
               senderName: ctx.userName || 'Vendor Representative',
               senderRole: 'VENDOR',
-              message: `[REVISED QUOTE RECORDED] Vendor submitted Quote v${nextVersion} (₹ ${totalQuoteAmount.toLocaleString('en-IN')}) responding to Round ${activeRound.roundNumber}.`,
+              message: interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.rEVISEDQUOTERECORDEDVendorSubmittedQuoteVNextVersionToLocaleStringRespondingToRoundRoundNumber, { "nextVersion": nextVersion, "toLocaleString": totalQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale), "roundNumber": activeRound.roundNumber }),
               isVendorSent: true,
               vendorId,
             },
@@ -333,7 +337,7 @@ export async function POST(
       entityType: 'QUOTE',
       entityId: quote.id,
       action: 'VENDOR_QUOTE_SUBMITTED',
-      description: `Quote ${quoteNumber} (v${nextVersion}) submitted for RFQ ${rfq.rfqNumber} with total ₹${totalQuoteAmount.toLocaleString('en-IN')}`,
+      description: interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.quoteQuoteNumberVNextVersionSubmittedForRFQRfqNumberWithTotalToLocaleString, { "quoteNumber": quoteNumber, "nextVersion": nextVersion, "rfqNumber": rfq.rfqNumber, "toLocaleString": totalQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale) }),
     });
 
     await notifyNextResponsibleParty({
@@ -356,6 +360,6 @@ export async function POST(
     return apiSuccess({ quote, message: confirmationMsg, version: nextVersion }, 201);
   } catch (error: any) {
     console.error('Error submitting quotation:', error);
-    return apiError(error.message || 'Failed to submit quotation', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuotation }), 500);
   }
 }

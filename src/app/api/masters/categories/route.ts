@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('MASTER_VIEW');
@@ -127,7 +130,7 @@ export async function POST(req: NextRequest) {
     const { name, parentId, code } = body;
 
     if (!name?.trim()) {
-      return apiError('Category name is required.', 400);
+      return apiError(UI_STRINGS.common.categoryNameIsRequired, 400);
     }
 
     const normalizedName = name.trim();
@@ -143,7 +146,7 @@ export async function POST(req: NextRequest) {
         where: { id: targetParentId, tenantId: ctx.tenantId, isActive: true },
       });
       if (!parentCategory) {
-        return apiError('Selected parent category does not exist.', 404);
+        return apiError(UI_STRINGS.appApiMastersCategoriesRoute.selectedParentCategoryDoesNotExist, 404);
       }
     }
 
@@ -160,8 +163,8 @@ export async function POST(req: NextRequest) {
     if (existingName) {
       return apiError(
         targetParentId
-          ? `Subcategory "${normalizedName}" already exists under the selected parent category.`
-          : `Category "${normalizedName}" already exists.`,
+          ? interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.subcategoryNormalizedNameAlreadyExistsUnderTheSelectedParentCategory, { "normalizedName": normalizedName })
+          : interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.categoryNormalizedNameAlreadyExists, { "normalizedName": normalizedName }),
         409
       );
     }
@@ -177,7 +180,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingCode) {
-        return apiError(`Category code "${finalCode}" is already in use by "${existingCode.name}".`, 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.categoryCodeFinalCodeIsAlreadyInUseByName, { "finalCode": finalCode, "name": existingCode.name }), 409);
       }
     } else {
       // Automatic category code generation (Correction 1)
@@ -213,7 +216,7 @@ export async function POST(req: NextRequest) {
           entityType: 'CATEGORY' as any,
           entityId: category.id,
           action: 'CREATE',
-          description: `Created ${targetParentId ? 'subcategory' : 'category'} "${normalizedName}" (Code: ${normalizedCode || 'N/A'})`,
+          description: interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.createdValue1NormalizedNameCodeValue3, { "value1": targetParentId ? 'subcategory' : 'category', "normalizedName": normalizedName, "value3": normalizedCode || UI_STRINGS.appAppApprovalsVendorRatingsPage.nA }),
           newValue: JSON.stringify({ name: normalizedName, code: normalizedCode, parentId: targetParentId }),
         },
       });
@@ -223,6 +226,6 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess(category, 201);
   } catch (err: any) {
-    return apiError(err.message || 'Failed to create category.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateCategory }), 500);
   }
 }

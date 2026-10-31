@@ -1,6 +1,8 @@
 /* Application constants extracted from components/rate-cards/InitiateRateCardWorkspace.tsx. */
 
 import type { RateLineItem } from "@app-types/components/rate-cards/InitiateRateCardWorkspace.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 // Authoritative baseline data from verified database records
 export const INITIAL_RATE_LINES: RateLineItem[] = [
@@ -9,7 +11,7 @@ export const INITIAL_RATE_LINES: RateLineItem[] = [
     itemCode: 'INT-001',
     category: 'Interior Works',
     subcategory: 'False Ceiling',
-    description: 'Gypsum False Ceiling',
+    description: UI_STRINGS.common.gypsumFalseCeiling,
     specification: 'Saint-Gobain Gypboard 12.5mm with ultra acoustics perimeter GI framework',
     uom: 'SQFT',
     qty: 500,
@@ -25,7 +27,7 @@ export const INITIAL_RATE_LINES: RateLineItem[] = [
     itemCode: 'INT-002',
     category: 'Interior Works',
     subcategory: 'Flooring',
-    description: 'Vitrified Tiles 2x2 ft',
+    description: UI_STRINGS.common.vitrifiedTiles2x2Ft,
     specification: '600x600 mm vitrified floor tile, commercial-grade double charged, anti-skid',
     uom: 'SQFT',
     qty: 1000,
@@ -41,7 +43,7 @@ export const INITIAL_RATE_LINES: RateLineItem[] = [
     itemCode: 'INT-003',
     category: 'Interior Works',
     subcategory: 'Partitions',
-    description: 'Modular Partitions',
+    description: UI_STRINGS.common.modularPartitions,
     specification: 'Supply & installation of gypsum partition wall with acoustic insulation, 12.5mm MR board on 75mm GI studs',
     uom: 'SQFT',
     qty: 300,
@@ -57,7 +59,7 @@ export const INITIAL_RATE_LINES: RateLineItem[] = [
     itemCode: 'INT-004',
     category: 'Interior Works',
     subcategory: 'Carpentry & Joinery',
-    description: 'Wooden Carpentry',
+    description: UI_STRINGS.common.woodenCarpentry,
     specification: 'Custom commercial veneer finished plywood storage credenza & paneling',
     uom: 'SQFT',
     qty: 250,
@@ -73,7 +75,7 @@ export const INITIAL_RATE_LINES: RateLineItem[] = [
     itemCode: 'INT-005',
     category: 'Interior Works',
     subcategory: 'Painting',
-    description: 'Painting (Premium Emulsion)',
+    description: UI_STRINGS.common.paintingPremiumEmulsion,
     specification: 'Two coats premium low-VOC acrylic emulsion over 1 coat primer & putty',
     uom: 'SQFT',
     qty: 2000,

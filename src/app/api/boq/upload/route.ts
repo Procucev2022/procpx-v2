@@ -7,6 +7,9 @@ import { saveUpload } from '@/lib/storage';
 import path from 'path';
 import crypto from 'crypto';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
@@ -17,12 +20,12 @@ export async function POST(req: NextRequest) {
   const projectId = formData.get('projectId') as string;
   const boqId = formData.get('boqId') as string | null;
 
-  if (!file) return apiError('No file provided.');
-  if (!projectId) return apiError('Project ID is required.');
+  if (!file) return apiError(UI_STRINGS.appApiBoqUploadRoute.noFileProvided);
+  if (!projectId) return apiError(UI_STRINGS.common.projectIDIsRequired);
 
   // Validate project belongs to tenant
   const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenantId } });
-  if (!project) return apiError('Project not found.', 404);
+  if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
   const allowedTypes = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
   const fileExt = path.extname(file.name).toLowerCase();
 
   if (!allowedExts.includes(fileExt)) {
-    return apiError('BOQ upload failed. Only .xlsx, .xls, and .csv files are supported.');
+    return apiError(UI_STRINGS.appApiBoqUploadRoute.bOQUploadFailedOnlyXlsxXlsAndCsvFilesAreSupported);
   }
 
   const bytes = await file.arrayBuffer();
@@ -97,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!targetBoqId) return apiError('Failed to create or locate target BOQ', 500);
+  if (!targetBoqId) return apiError(UI_STRINGS.appApiBoqUploadRoute.failedToCreateOrLocateTargetBOQ, 500);
 
   // Create or update revision safely
   const latestRevision = await prisma.boqRevision.findFirst({
@@ -145,7 +148,7 @@ export async function POST(req: NextRequest) {
     entityType: 'BOQ_REVISION',
     entityId: revision.id,
     action: 'UPLOAD',
-    description: `BOQ file uploaded: ${file.name} (Revision ${revisionCode})`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqUploadRoute.bOQFileUploadedNameRevisionRevisionCode, { "name": file.name, "revisionCode": revisionCode }),
     newValue: { fileName: file.name, fileSize: file.size, revisionCode },
   });
 

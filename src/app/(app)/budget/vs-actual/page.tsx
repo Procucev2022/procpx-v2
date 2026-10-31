@@ -2,6 +2,7 @@
 // src/app/(app)/budget/vs-actual/page.tsx
 // Budget vs Actual Cost Analysis Engine & Line-Level Traceability
 
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -31,6 +32,9 @@ import {
   Landmark,
   History,
 } from 'lucide-react';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function BudgetVsActualContent() {
   const searchParams = useSearchParams();
@@ -132,17 +136,17 @@ function BudgetVsActualContent() {
   });
 
   const formatCurrency = (val: number) => {
-    return `₹ ${Math.round(val || 0).toLocaleString('en-IN')}`;
+    return `₹ ${Math.round(val || 0).toLocaleString(I18N_CONFIG.defaultLocale)}`;
   };
 
   return (
     <div className="space-y-6" style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 32px' }}>
       <PageHeader
-        title="BUDGET VS ACTUAL"
-        subtitle="Enterprise Capex control from baseline BOQ budget to downstream commitments and actual spend"
+        title={UI_STRINGS.appAppBudgetVsActualPage.bUDGETVSACTUAL}
+        subtitle={UI_STRINGS.appAppBudgetVsActualPage.enterpriseCapexControlFromBaselineBOQBudgetToDownstreamCommitmentsAndActualSpend}
         breadcrumbs={[
-          { label: 'Budget', href: '/budget' },
-          { label: 'Budget vs Actual' },
+          { label: UI_STRINGS.common.budget, href: '/budget' },
+          { label: UI_STRINGS.common.budgetVsActual },
         ]}
         actions={
           <div className="flex items-center gap-3">
@@ -150,23 +154,17 @@ function BudgetVsActualContent() {
               href="/budget"
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
             >
-              <Landmark size={14} />
-              Project Budget
-            </Link>
+              <Landmark size={14} />{UI_STRINGS.common.projectBudget}</Link>
             <Link
               href="/budget/transactions"
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
             >
-              <History size={14} />
-              Ledger
-            </Link>
+              <History size={14} />{UI_STRINGS.common.ledger}</Link>
             <button
               onClick={fetchReport}
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
             >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
           </div>
         }
       />
@@ -177,7 +175,7 @@ function BudgetVsActualContent() {
           <div className="flex flex-wrap items-center gap-3 flex-1">
             <div className="flex items-center gap-2">
               <Building2 size={16} className="text-slate-400" />
-              <span className="text-xs font-semibold text-slate-700">Project:</span>
+              <span className="text-xs font-semibold text-slate-700">{UI_STRINGS.common.project2}</span>
             </div>
             <select
               value={selectedProjectId}
@@ -189,37 +187,37 @@ function BudgetVsActualContent() {
             >
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.projectCode}: {p.name}
+                  {p.projectCode}{UI_STRINGS.common.copy13emybb}{p.name}
                 </option>
               ))}
             </select>
 
             <div className="flex items-center gap-2 ml-2">
               <Layers size={16} className="text-slate-400" />
-              <span className="text-xs font-semibold text-slate-700">Cost Centre:</span>
+              <span className="text-xs font-semibold text-slate-700">{UI_STRINGS.common.costCentre3}</span>
             </div>
             <select
               value={selectedCostCentre}
               onChange={(e) => setSelectedCostCentre(e.target.value)}
               className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[180px]"
             >
-              <option value="">All Cost Centres</option>
+              <option value="">{UI_STRINGS.common.allCostCentres}</option>
               {costCentresList.map((cc) => (
                 <option key={cc.id} value={cc.id}>
-                  {cc.code}: {cc.name}
+                  {cc.code}{UI_STRINGS.common.copy13emybb}{cc.name}
                 </option>
               ))}
             </select>
 
             <div className="flex items-center gap-2 ml-2">
-              <span className="text-xs font-semibold text-slate-700">Category:</span>
+              <span className="text-xs font-semibold text-slate-700">{UI_STRINGS.common.category3}</span>
             </div>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[160px]"
             >
-              <option value="">All Categories</option>
+              <option value="">{UI_STRINGS.common.allCategories}</option>
               {categoriesSummary.map((cat) => (
                 <option key={cat.category} value={cat.category}>
                   {cat.category}
@@ -228,8 +226,7 @@ function BudgetVsActualContent() {
             </select>
           </div>
 
-          <div className="text-xs text-slate-500 font-medium">
-            Active Area: <strong className="text-slate-800">{activeArea > 0 ? `${activeArea.toLocaleString('en-IN')} Sqft` : 'Not specified'}</strong>
+          <div className="text-xs text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.activeArea}<strong className="text-slate-800">{activeArea > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleStringSqft, { "toLocaleString": activeArea.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.notSpecified}</strong>
           </div>
         </div>
       </div>
@@ -238,71 +235,58 @@ function BudgetVsActualContent() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         {/* 1. TOTAL BUDGET */}
         <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            TOTAL BUDGET
-          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.tOTALBUDGET}</div>
           <div className="mt-2 text-2xl font-extrabold text-slate-900">
             {formatCurrency(kpis.totalBudget)}
           </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">Sanctioned allocation</div>
+          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.sanctionedAllocation}</div>
         </Card>
 
         {/* 2. TOTAL ACTUAL */}
         <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            TOTAL ACTUAL
-          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.tOTALACTUAL}</div>
           <div className="mt-2 text-2xl font-extrabold text-slate-900">
             {formatCurrency(kpis.totalActual)}
           </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">Downstream invoiced spend</div>
+          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.downstreamInvoicedSpend}</div>
         </Card>
 
         {/* 3. BALANCE */}
         <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            BALANCE
-          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.bALANCE}</div>
           <div className="mt-2 text-2xl font-extrabold text-emerald-700">
             {formatCurrency(kpis.totalRemaining)}
           </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">Budget - Actual</div>
+          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.budgetActual}</div>
         </Card>
 
         {/* 4. BUDGET UTILISATION */}
         <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            BUDGET UTILISATION
-          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.bUDGETUTILISATION}</div>
           <div className="mt-2 text-2xl font-extrabold text-blue-700">
-            {budgetUtilisation}%
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">Actual ÷ Budget</div>
+            {budgetUtilisation}{UI_STRINGS.common.copy8w4luo}</div>
+          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.actualBudget}</div>
         </Card>
 
         {/* 5. BUDGET / SQFT */}
         <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            BUDGET / SQFT
-          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.bUDGETSQFT}</div>
           <div className="mt-2 text-2xl font-extrabold text-slate-900">
-            {budgetPerSqFt !== null ? `₹ ${budgetPerSqFt.toLocaleString('en-IN')}` : '—'}
+            {budgetPerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": budgetPerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
           </div>
           <div className="mt-1 text-[11px] text-slate-500 font-medium">
-            {activeArea > 0 ? `Per ${activeArea.toLocaleString()} sqft` : 'Area missing'}
+            {activeArea > 0 ? interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.perToLocaleStringSqft, { "toLocaleString": activeArea.toLocaleString() }) : UI_STRINGS.appAppBudgetVsActualPage.areaMissing}
           </div>
         </Card>
 
         {/* 6. ACTUAL / SQFT */}
         <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            ACTUAL / SQFT
-          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.aCTUALSQFT}</div>
           <div className="mt-2 text-2xl font-extrabold text-slate-900">
-            {actualPerSqFt !== null ? `₹ ${actualPerSqFt.toLocaleString('en-IN')}` : '—'}
+            {actualPerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": actualPerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
           </div>
           <div className="mt-1 text-[11px] text-slate-500 font-medium">
-            {activeArea > 0 ? `Actual spend / sqft` : 'Area missing'}
+            {activeArea > 0 ? UI_STRINGS.appAppBudgetVsActualPage.actualSpendSqft : UI_STRINGS.appAppBudgetVsActualPage.areaMissing}
           </div>
         </Card>
       </div>
@@ -312,38 +296,31 @@ function BudgetVsActualContent() {
         <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
           <div>
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <Scale size={15} className="text-blue-600" />
-              BUDGET VS ACTUAL ANALYSIS
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Comparison of approved commercial budget and verified downstream procurement actuals.
-            </p>
+              <Scale size={15} className="text-blue-600" />{UI_STRINGS.appAppBudgetVsActualPage.bUDGETVSACTUALANALYSIS}</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">{UI_STRINGS.appAppBudgetVsActualPage.comparisonOfApprovedCommercialBudgetAndVerifiedDownstreamProcurementActuals}</p>
           </div>
           <span className="text-xs text-slate-600 font-semibold">
-            {categoriesSummary.length} Categories
-          </span>
+            {categoriesSummary.length}{UI_STRINGS.appAppBudgetVsActualPage.categories}</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4 text-right">Budget</th>
-                <th className="py-3 px-4 text-right">Actual</th>
-                <th className="py-3 px-4 text-right">Variance</th>
-                <th className="py-3 px-4 text-right">Variance %</th>
-                <th className="py-3 px-4 text-right">₹/Sqft Budget</th>
-                <th className="py-3 px-4 text-right">₹/Sqft Actual</th>
+                <th className="py-3 px-4">{UI_STRINGS.common.category2}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.common.budget}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.common.actual}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.common.variance}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.variance}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.sqftBudget}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.sqftActual}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {categoriesSummary.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Scale size={32} className="mx-auto text-slate-300 mb-2" />
-                    No budget or actual spend records found for selected filter.
-                  </td>
+                    <Scale size={32} className="mx-auto text-slate-300 mb-2" />{UI_STRINGS.appAppBudgetVsActualPage.noBudgetOrActualSpendRecordsFoundForSelectedFilter}</td>
                 </tr>
               ) : (
                 categoriesSummary.map((cat: any) => {
@@ -363,27 +340,26 @@ function BudgetVsActualContent() {
                         {formatCurrency(b)}
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-semibold text-slate-800">
-                        {a > 0 ? formatCurrency(a) : '₹ 0'}
+                        {a > 0 ? formatCurrency(a) : UI_STRINGS.common.copyi1bvs4}
                       </td>
                       <td
                         className={`py-3 px-4 text-right font-mono font-bold ${
                           variance >= 0 ? 'text-emerald-700' : 'text-rose-700'
                         }`}
                       >
-                        {variance >= 0 ? '+' : ''}{formatCurrency(variance)}
+                        {variance >= 0 ? UI_STRINGS.common.copycrz1ka : ''}{formatCurrency(variance)}
                       </td>
                       <td
                         className={`py-3 px-4 text-right font-mono font-bold ${
                           variancePct >= 0 ? 'text-emerald-700' : 'text-rose-700'
                         }`}
                       >
-                        {variancePct.toFixed(1)}%
-                      </td>
+                        {variancePct.toFixed(1)}{UI_STRINGS.common.copy8w4luo}</td>
                       <td className="py-3 px-4 text-right font-mono text-blue-700 font-semibold">
-                        {catBudgetSqFt !== null ? `₹ ${catBudgetSqFt.toLocaleString('en-IN')}` : (activeArea > 0 ? '₹ 0' : '—')}
+                        {catBudgetSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": catBudgetSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (activeArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-slate-700 font-semibold">
-                        {catActualSqFt !== null ? `₹ ${catActualSqFt.toLocaleString('en-IN')}` : (activeArea > 0 ? '₹ 0' : '—')}
+                        {catActualSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": catActualSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (activeArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
                       </td>
                     </tr>
                   );
@@ -399,19 +375,15 @@ function BudgetVsActualContent() {
         <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
           <div>
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <ListOrdered size={15} className="text-slate-600" />
-              ITEM-LEVEL TRACEABILITY & DOWNSTREAM ACTUALS
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Traceable linkage: BOQ Line &rarr; Budget &rarr; PR &rarr; RFQ &rarr; PPO &rarr; Actual spend
-            </p>
+              <ListOrdered size={15} className="text-slate-600" />{UI_STRINGS.appAppBudgetVsActualPage.iTEMLEVELTRACEABILITYDOWNSTREAMACTUALS}</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">{UI_STRINGS.appAppBudgetVsActualPage.traceableLinkageBOQLineRarrBudgetRarrPRRarrRFQRarrPPORarrActualSpend}</p>
           </div>
 
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
             <input
               type="text"
-              placeholder="Search description, item code..."
+              placeholder={UI_STRINGS.appAppBudgetVsActualPage.searchDescriptionItemCode}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white shadow-sm"
@@ -423,21 +395,19 @@ function BudgetVsActualContent() {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider">
-                <th className="py-3 px-4">Item / Description</th>
-                <th className="py-3 px-4">Cost Centre & Category</th>
-                <th className="py-3 px-4 text-right">Budget (Qty &times; Rate)</th>
-                <th className="py-3 px-4 text-right">Committed (PO)</th>
-                <th className="py-3 px-4 text-right">Actual Cost</th>
-                <th className="py-3 px-4 text-right">Variance</th>
-                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4">{UI_STRINGS.appAppBudgetVsActualPage.itemDescription}</th>
+                <th className="py-3 px-4">{UI_STRINGS.appAppBudgetVsActualPage.costCentreCategory}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.budgetQtyTimesRate}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.committedPO}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.actualCost}</th>
+                <th className="py-3 px-4 text-right">{UI_STRINGS.common.variance}</th>
+                <th className="py-3 px-4 text-center">{UI_STRINGS.common.status}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {lineReports.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
-                    No traceable items found for this selection.
-                  </td>
+                  <td colSpan={7} className="py-10 text-center text-slate-400">{UI_STRINGS.appAppBudgetVsActualPage.noTraceableItemsFoundForThisSelection}</td>
                 </tr>
               ) : (
                 lineReports.map((line: any) => (
@@ -445,7 +415,7 @@ function BudgetVsActualContent() {
                     <td className="py-3 px-4">
                       <div className="font-semibold text-slate-900">{line.description}</div>
                       <div className="text-[10px] text-slate-500 font-mono">
-                        {line.boqCode} {line.revisionCode} &bull; {line.itemCode || line.lineNumber}
+                        {line.boqCode} {line.revisionCode}{UI_STRINGS.common.bull}{line.itemCode || line.lineNumber}
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -463,7 +433,7 @@ function BudgetVsActualContent() {
                         {formatCurrency(line.budgetAmount)}
                       </div>
                       <div className="text-[10px] text-slate-500">
-                        {line.budgetQuantity} {line.uom} @ ₹{line.budgetRate?.toFixed(0)}
+                        {line.budgetQuantity} {line.uom}{UI_STRINGS.appAppBudgetVsActualPage.copycus6yy}{line.budgetRate?.toFixed(0)}
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right font-mono">
@@ -488,11 +458,10 @@ function BudgetVsActualContent() {
                           line.budgetVariance >= 0 ? 'text-emerald-700' : 'text-rose-700'
                         }`}
                       >
-                        {line.budgetVariance >= 0 ? '+' : ''}{formatCurrency(line.budgetVariance)}
+                        {line.budgetVariance >= 0 ? UI_STRINGS.common.copycrz1ka : ''}{formatCurrency(line.budgetVariance)}
                       </div>
                       <div className="text-[10px] text-slate-500">
-                        {line.budgetVariancePercent?.toFixed(1)}%
-                      </div>
+                        {line.budgetVariancePercent?.toFixed(1)}{UI_STRINGS.common.copy8w4luo}</div>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <StatusBadge status={line.status || 'DRAFT'} />
@@ -510,7 +479,7 @@ function BudgetVsActualContent() {
 
 export default function BudgetVsActualPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>Loading Budget vs Actual...</div>}>
+    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppBudgetVsActualPage.loadingBudgetVsActual}</div>}>
       <BudgetVsActualContent />
     </Suspense>
   );

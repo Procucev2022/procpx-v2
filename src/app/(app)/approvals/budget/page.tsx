@@ -1,5 +1,6 @@
 'use client';
 // src/app/(app)/approvals/budget/page.tsx - Budget Approvals Workspace for Project Approver
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -23,6 +24,9 @@ import { useToast } from '@/components/ui/Toast';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function BudgetApprovalQueuePage() {
   const toast = useToast();
@@ -71,10 +75,10 @@ export default function BudgetApprovalQueuePage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Approval failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.approvalFailed }));
       }
-      toast.success('Budget approved successfully.', selectedContrib?.category?.name, 'Under Finance Approval');
-      setStatusMessage('Budget approved successfully.');
+      toast.success(UI_STRINGS.common.budgetApprovedSuccessfully, selectedContrib?.category?.name, UI_STRINGS.common.underFinanceApproval);
+      setStatusMessage(UI_STRINGS.common.budgetApprovedSuccessfully);
       setReviewModalOpen(false);
       loadQueue();
     } catch (err: any) {
@@ -97,12 +101,12 @@ export default function BudgetApprovalQueuePage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Rejection failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.rejectionFailed }));
       }
       setRejectModalOpen(false);
       setRejectReason('');
       setSelectedContrib(null);
-      setStatusMessage('Budget contribution rejected with audit notes.');
+      setStatusMessage(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes);
       loadQueue();
     } catch (err: any) {
       setActionError(err.message);
@@ -130,36 +134,34 @@ export default function BudgetApprovalQueuePage() {
     <div className="page-container" style={{ padding: '24px 32px' }}>
       {/* Header */}
       <PageHeader
-        title="Budget Approvals"
-        subtitle="Review category-wise budget contributions awaiting Project Approver approval. Project approval advances contributions to Finance Approval."
-        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>Project Approver</span>}
+        title={UI_STRINGS.appAppApprovalsBudgetPage.budgetApprovals}
+        subtitle={UI_STRINGS.appAppApprovalsBudgetPage.reviewCategoryWiseBudgetContributionsAwaitingProjectApproverApprovalProjectApprovalAdvancesContributionsToFinanceApproval}
+        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>{UI_STRINGS.common.projectApprover}</span>}
         actions={
-          <Link href="/approvals/boq-pr" className="btn btn-secondary" style={{ height: 40, display: 'inline-flex', alignItems: 'center' }}>
-            Switch to PR Approvals
-          </Link>
+          <Link href="/approvals/boq-pr" className="btn btn-secondary" style={{ height: 40, display: 'inline-flex', alignItems: 'center' }}>{UI_STRINGS.appAppApprovalsBudgetPage.switchToPRApprovals}</Link>
         }
       />
 
       {/* KPI Cards */}
       <SummaryCardGrid columns={3} className="mb-6">
         <SummaryCard
-          label="Pending Queue"
+          label={UI_STRINGS.common.pendingQueue}
           value={loading ? '—' : `${queue.length} Allocations`}
-          secondary="Awaiting Project Approver sign-off"
+          secondary={UI_STRINGS.common.awaitingProjectApproverSignOff}
           icon={<Clock size={16} />}
           accent="amber"
         />
         <SummaryCard
-          label="Proposed Contribution Total"
-          value={loading ? '—' : `₹ ${totalProposed.toLocaleString('en-IN')}`}
-          secondary="To be routed to Finance Approval"
+          label={UI_STRINGS.appAppApprovalsBudgetPage.proposedContributionTotal}
+          value={loading ? '—' : `₹ ${totalProposed.toLocaleString(I18N_CONFIG.defaultLocale)}`}
+          secondary={UI_STRINGS.appAppApprovalsBudgetPage.toBeRoutedToFinanceApproval}
           icon={<Landmark size={16} />}
           accent="emerald"
         />
         <SummaryCard
-          label="Clarifications Active"
+          label={UI_STRINGS.common.clarificationsActive}
           value={loading ? '—' : `${pendingClarifications} Inquiries`}
-          secondary="Queries pending resolution"
+          secondary={UI_STRINGS.common.queriesPendingResolution}
           icon={<HelpCircle size={16} />}
           accent="blue"
         />
@@ -171,7 +173,7 @@ export default function BudgetApprovalQueuePage() {
             <CheckCircle2 size={16} />
             <span>{statusMessage}</span>
           </div>
-          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>✕</button>
+          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -181,7 +183,7 @@ export default function BudgetApprovalQueuePage() {
             <AlertTriangle size={16} />
             <span>{actionError}</span>
           </div>
-          <button type="button" onClick={() => setActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>✕</button>
+          <button type="button" onClick={() => setActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -190,40 +192,36 @@ export default function BudgetApprovalQueuePage() {
         <table className="table" style={{ width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569', height: 42 }}>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>BOQ Number</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>BOQ Description</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Cost Centre</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Category</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>Proposed Amount</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Submitted By</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Submission Date</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Status</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.bOQNumber}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.bOQDescription}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.costCentre2}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.category2}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>{UI_STRINGS.common.proposedAmount}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.submittedBy}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.submissionDate}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.status}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-                  Loading budget approvals queue...
-                </td>
+                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppApprovalsBudgetPage.loadingBudgetApprovalsQueue}</td>
               </tr>
             ) : queue.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-                  No budget contributions currently awaiting Project Approver approval.
-                </td>
+                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppApprovalsBudgetPage.noBudgetContributionsCurrentlyAwaitingProjectApproverApproval}</td>
               </tr>
             ) : (
               queue.map(item => (
                 <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', height: 56 }}>
                   <td style={{ padding: '0 16px', fontWeight: 700, color: '#1e40af' }}>
-                    <div>{item.boq?.boqCode || '—'}</div>
-                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{item.boqRevision?.revisionCode || 'R0'}</div>
+                    <div>{item.boq?.boqCode || UI_STRINGS.common.copy4s9bsz}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{item.boqRevision?.revisionCode || UI_STRINGS.common.r0}</div>
                   </td>
                   <td style={{ padding: '0 16px', color: '#0f172a', maxWidth: 200 }}>
                     <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {item.boq?.title || 'BOQ Fitout Scope'}
+                      {item.boq?.title || UI_STRINGS.common.bOQFitoutScope}
                     </div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>
                       {item.project?.name}
@@ -235,28 +233,23 @@ export default function BudgetApprovalQueuePage() {
                   </td>
                   <td style={{ padding: '0 16px' }}>
                     <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#334155', fontWeight: 500 }}>
-                      {(item.categories || []).join(', ') || 'General'}
+                      {(item.categories || []).join(', ') || UI_STRINGS.common.general}
                     </span>
                   </td>
-                  <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                    ₹ {(item.totalEstimatedValue || 0).toLocaleString('en-IN')}
+                  <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(item.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                   </td>
                   <td style={{ padding: '0 16px', color: '#334155' }}>
-                    <div style={{ fontWeight: 600 }}>{item.submitterName || 'Project User'}</div>
+                    <div style={{ fontWeight: 600 }}>{item.submitterName || UI_STRINGS.common.projectUser}</div>
                     {item.submitterEmail && <div style={{ fontSize: 11, color: '#64748b' }}>{item.submitterEmail}</div>}
                   </td>
                   <td style={{ padding: '0 16px', color: '#64748b' }}>
                     {new Date(item.submittedAt || item.createdAt).toLocaleDateString()}
                   </td>
                   <td style={{ padding: '0 16px' }}>
-                    <span className="badge badge-warning" style={{ fontSize: 11, padding: '3px 8px' }}>
-                      Under Project Approval
-                    </span>
+                    <span className="badge badge-warning" style={{ fontSize: 11, padding: '3px 8px' }}>{UI_STRINGS.common.underProjectApproval}</span>
                     {item.hasEnquiry && (
                       <div style={{ marginTop: 2 }}>
-                        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>
-                          Clarification Pending
-                        </span>
+                        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>{UI_STRINGS.common.clarificationPending}</span>
                       </div>
                     )}
                   </td>
@@ -266,32 +259,29 @@ export default function BudgetApprovalQueuePage() {
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-                        title="Review BOQ line items and Cost Centre budget impact"
+                        title={UI_STRINGS.appAppApprovalsBudgetPage.reviewBOQLineItemsAndCostCentreBudgetImpact}
                         onClick={() => {
                           setSelectedContrib(item);
                           setReviewModalOpen(true);
                         }}
                       >
-                        <Eye size={12} /> Review
-                      </button>
+                        <Eye size={12} />{UI_STRINGS.appAppApprovalsBudgetPage.review}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#d97706', borderColor: '#fde68a', background: '#fffbeb' }}
-                        title="Request clarification from submitter"
+                        title={UI_STRINGS.appAppApprovalsBudgetPage.requestClarificationFromSubmitter}
                         onClick={() => openEnquiry(item)}
                       >
-                        <HelpCircle size={12} /> Enquire
-                      </button>
+                        <HelpCircle size={12} />{UI_STRINGS.common.enquire}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-                        title="Open communication history"
+                        title={UI_STRINGS.common.openCommunicationHistory}
                         onClick={() => openChat(item)}
                       >
-                        <MessageSquare size={12} /> Chat
-                      </button>
+                        <MessageSquare size={12} />{UI_STRINGS.common.chat}</button>
                       <button
                         type="button"
                         className="btn btn-primary btn-sm"
@@ -299,8 +289,7 @@ export default function BudgetApprovalQueuePage() {
                         onClick={() => handleApprove(item.id)}
                         disabled={processing}
                       >
-                        <CheckCircle2 size={12} /> Approve
-                      </button>
+                        <CheckCircle2 size={12} />{UI_STRINGS.common.approve}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
@@ -311,8 +300,7 @@ export default function BudgetApprovalQueuePage() {
                         }}
                         disabled={processing}
                       >
-                        <XCircle size={12} /> Reject
-                      </button>
+                        <XCircle size={12} />{UI_STRINGS.common.reject}</button>
                     </div>
                   </td>
                 </tr>
@@ -328,12 +316,11 @@ export default function BudgetApprovalQueuePage() {
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 800, maxWidth: '94vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
-                <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  Budget Review: {selectedContrib.boq?.boqCode} ({selectedContrib.boqRevision?.revisionCode || 'R0'})
-                </h3>
+                <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: '#0f172a' }}>{selectedContrib.boq?.boqCode
+                  ? interpolateUiString(UI_STRINGS.appAppApprovalsBudgetPage.budgetReviewTitleWithCode, { boqCode: selectedContrib.boq.boqCode, revisionCode: selectedContrib.boqRevision?.revisionCode || UI_STRINGS.common.r0 })
+                  : interpolateUiString(UI_STRINGS.appAppApprovalsBudgetPage.budgetReviewTitleWithoutCode, { revisionCode: selectedContrib.boqRevision?.revisionCode || UI_STRINGS.common.r0 })}</h3>
                 <div style={{ fontSize: 12, color: '#64748b' }}>
-                  {selectedContrib.project?.name} • Cost Centre: {selectedContrib.costCentre?.code} ({selectedContrib.costCentre?.name})
-                </div>
+                  {selectedContrib.project?.name}{UI_STRINGS.common.costCentre}{selectedContrib.costCentre?.code}{UI_STRINGS.common.copy1b3t0c5}{selectedContrib.costCentre?.name}{UI_STRINGS.common.copyc7zu6c}</div>
               </div>
               <button type="button" onClick={() => setReviewModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={18} />
@@ -343,39 +330,34 @@ export default function BudgetApprovalQueuePage() {
             {/* Cost Centre Budget Financial Impact Box */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: 14, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Current Approved Budget</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-                  ₹ {(selectedContrib.financialImpact?.currentApprovedAmount || 0).toLocaleString('en-IN')}
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>{UI_STRINGS.appAppApprovalsBudgetPage.currentApprovedBudget}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{(selectedContrib.financialImpact?.currentApprovedAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                 </div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Existing Sanction</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppApprovalsBudgetPage.existingSanction}</div>
               </div>
               <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: 12 }}>
-                <div style={{ fontSize: 11, color: '#d97706', marginBottom: 2 }}>Proposed Contribution</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#d97706' }}>
-                  + ₹ {(selectedContrib.totalEstimatedValue || 0).toLocaleString('en-IN')}
+                <div style={{ fontSize: 11, color: '#d97706', marginBottom: 2 }}>{UI_STRINGS.common.proposedContribution}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#d97706' }}>{UI_STRINGS.common.copy1ryoj2d}{(selectedContrib.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                 </div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Awaiting Approvals</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppApprovalsBudgetPage.awaitingApprovals}</div>
               </div>
               <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: 12 }}>
-                <div style={{ fontSize: 11, color: '#047857', marginBottom: 2 }}>Projected Approved Total</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#047857' }}>
-                  ₹ {(selectedContrib.financialImpact?.projectedApprovedTotal || selectedContrib.totalEstimatedValue).toLocaleString('en-IN')}
+                <div style={{ fontSize: 11, color: '#047857', marginBottom: 2 }}>{UI_STRINGS.appAppApprovalsBudgetPage.projectedApprovedTotal}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(selectedContrib.financialImpact?.projectedApprovedTotal || selectedContrib.totalEstimatedValue).toLocaleString(I18N_CONFIG.defaultLocale)}
                 </div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Post-Finance Sanction</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppApprovalsBudgetPage.postFinanceSanction}</div>
               </div>
             </div>
 
             {/* Category Contributions */}
             <div style={{ marginBottom: 14 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#334155', margin: '0 0 8px 0' }}>
-                Category-wise Allocation Breakdown
-              </h4>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: '#334155', margin: '0 0 8px 0' }}>{UI_STRINGS.common.categoryWiseAllocationBreakdown}</h4>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {(selectedContrib.transactions || []).map((tx: any) => (
                   <div key={tx.id} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 12px', fontSize: 12 }}>
-                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{tx.category}: </span>
-                    <span style={{ color: '#047857', fontWeight: 700 }}>₹ {(tx.amount || 0).toLocaleString('en-IN')}</span>
-                    {tx.quantity && <span style={{ color: '#64748b' }}> ({tx.quantity} {tx.uom})</span>}
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{tx.category}{UI_STRINGS.common.copy13emybb}</span>
+                    <span style={{ color: '#047857', fontWeight: 700 }}>{UI_STRINGS.common.copytfdhmk}{(tx.amount || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</span>
+                    {tx.quantity && <span style={{ color: '#64748b' }}>{UI_STRINGS.common.copy1b3t0c5}{tx.quantity} {tx.uom}{UI_STRINGS.common.copyc7zu6c}</span>}
                   </div>
                 ))}
               </div>
@@ -386,13 +368,13 @@ export default function BudgetApprovalQueuePage() {
               <table className="table" style={{ width: '100%', fontSize: 12 }}>
                 <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                   <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '0 10px', width: 45 }}>S.No.</th>
-                    <th style={{ padding: '0 10px' }}>Item Description</th>
-                    <th style={{ padding: '0 10px' }}>Category</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Quantity</th>
-                    <th style={{ padding: '0 10px' }}>UOM</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Rate (₹)</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ padding: '0 10px', width: 45 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.itemDescription}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.category2}</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.rate}</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.total}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -402,12 +384,11 @@ export default function BudgetApprovalQueuePage() {
                       <td style={{ padding: '0 10px', fontWeight: 600, color: '#0f172a' }}>
                         {line.standardDescription || line.originalDescription}
                       </td>
-                      <td style={{ padding: '0 10px', color: '#475569' }}>{line.category?.name || 'General'}</td>
+                      <td style={{ padding: '0 10px', color: '#475569' }}>{line.category?.name || UI_STRINGS.common.general}</td>
                       <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 600 }}>{line.quantity}</td>
-                      <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uomRaw || 'NOS'}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.aiUnitCost || 0).toLocaleString('en-IN')}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                        ₹ {(line.aiTotalCost || (line.quantity * (line.aiUnitCost || 0))).toLocaleString('en-IN')}
+                      <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uomRaw || UI_STRINGS.common.nOS}</td>
+                      <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.aiUnitCost || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</td>
+                      <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(line.aiTotalCost || (line.quantity * (line.aiUnitCost || 0))).toLocaleString(I18N_CONFIG.defaultLocale)}
                       </td>
                     </tr>
                   ))}
@@ -427,8 +408,7 @@ export default function BudgetApprovalQueuePage() {
                     openEnquiry(selectedContrib);
                   }}
                 >
-                  <HelpCircle size={13} /> Ask Clarification
-                </button>
+                  <HelpCircle size={13} />{UI_STRINGS.common.askClarification}</button>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -437,8 +417,7 @@ export default function BudgetApprovalQueuePage() {
                     openChat(selectedContrib);
                   }}
                 >
-                  <MessageSquare size={13} /> Chat with Submitter
-                </button>
+                  <MessageSquare size={13} />{UI_STRINGS.appAppApprovalsBudgetPage.chatWithSubmitter}</button>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -446,9 +425,7 @@ export default function BudgetApprovalQueuePage() {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setReviewModalOpen(false)}
-                >
-                  Close
-                </button>
+                >{UI_STRINGS.common.close}</button>
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -458,8 +435,7 @@ export default function BudgetApprovalQueuePage() {
                     setRejectModalOpen(true);
                   }}
                 >
-                  <XCircle size={14} /> Reject Contribution
-                </button>
+                  <XCircle size={14} />{UI_STRINGS.common.rejectContribution}</button>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -467,8 +443,7 @@ export default function BudgetApprovalQueuePage() {
                   onClick={() => handleApprove(selectedContrib.id)}
                   disabled={processing}
                 >
-                  <CheckCircle2 size={14} /> Approve & Route to Finance
-                </button>
+                  <CheckCircle2 size={14} />{UI_STRINGS.appAppApprovalsBudgetPage.approveRouteToFinance}</button>
               </div>
             </div>
           </div>
@@ -479,18 +454,14 @@ export default function BudgetApprovalQueuePage() {
       {rejectModalOpen && selectedContrib && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, maxWidth: '90vw', padding: 24 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
-              Reject Budget Contribution
-            </h3>
-            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>
-              Please state the specific reason for rejecting the budget contribution for <strong>{selectedContrib.boq?.boqCode}</strong> against Cost Centre <strong>{selectedContrib.costCentre?.code}</strong>.
-            </p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>{UI_STRINGS.common.rejectBudgetContribution}</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>{UI_STRINGS.appAppApprovalsBudgetPage.pleaseStateTheSpecificReasonForRejectingTheBudgetContributionFor}<strong>{selectedContrib.boq?.boqCode}</strong>{UI_STRINGS.appAppApprovalsBudgetPage.againstCostCentre}<strong>{selectedContrib.costCentre?.code}</strong>{UI_STRINGS.common.copyby08hd}</p>
 
             <form onSubmit={handleReject}>
               <textarea
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
-                placeholder="Reason for rejection (mandatory)..."
+                placeholder={UI_STRINGS.common.reasonForRejectionMandatory}
                 rows={4}
                 required
                 style={{
@@ -513,16 +484,14 @@ export default function BudgetApprovalQueuePage() {
                     setRejectReason('');
                   }}
                   disabled={processing}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   className="btn btn-primary"
                   style={{ background: '#dc2626', borderColor: '#dc2626' }}
                   disabled={processing || !rejectReason.trim()}
                 >
-                  {processing ? 'Rejecting...' : 'Confirm Rejection'}
+                  {processing ? UI_STRINGS.common.rejecting : UI_STRINGS.common.confirmRejection}
                 </button>
               </div>
             </form>

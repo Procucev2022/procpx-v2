@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
     const { projectId, costCentreId, boqId, boqRevisionId, lines, action, title, description, purpose, category } = body;
 
     if (!projectId && !boqId) {
-      return apiError('Project ID or BOQ ID is required.', 400);
+      return apiError(UI_STRINGS.appApiBoqManualRoute.projectIDOrBOQIDIsRequired, 400);
     }
 
     let targetBoqId = boqId;
@@ -35,7 +38,7 @@ export async function POST(req: NextRequest) {
           projectId,
           costCentreId: costCentreId || null,
           boqCode,
-          title: title?.trim() || defaultTitle,
+          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": title?.trim() || defaultTitle }),
           description: description?.trim() || null,
           category: catParam || null,
           purpose: purpose || 'BUDGET',
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
           entityType: 'BOQ',
           entityId: boq.id,
           action: 'MANUAL_BOQ_CREATED',
-          description: `Manual BOQ created: ${boq.boqCode}`,
+          description: interpolateUiString(UI_STRINGS.appApiBoqManualRoute.manualBOQCreatedBoqCode, { "boqCode": boq.boqCode }),
         },
       });
     }
@@ -81,9 +84,9 @@ export async function POST(req: NextRequest) {
     const currentRev = await prisma.boqRevision.findFirst({
       where: { id: targetRevId, tenantId: ctx.tenantId },
     });
-    if (!currentRev) return apiError('BOQ Revision not found.', 404);
+    if (!currentRev) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
     if (currentRev.status === 'APPROVED') {
-      return apiError('Approved BOQ revisions are strictly immutable. Branch a new revision to edit.', 403);
+      return apiError(UI_STRINGS.appApiBoqManualRoute.approvedBOQRevisionsAreStrictlyImmutableBranchANewRevisionToEdit, 403);
     }
 
     // If lines provided, handle save/replace or operations
@@ -113,11 +116,11 @@ export async function POST(req: NextRequest) {
         const valMsgs: any[] = [];
         let status = 'VALID';
         if (!desc) {
-          valMsgs.push({ level: 'ERROR', code: 'DESC_MISSING', message: 'Description is required' });
+          valMsgs.push({ level: 'ERROR', code: 'DESC_MISSING', message: UI_STRINGS.appApiBoqManualRoute.descriptionIsRequired });
           status = 'ERROR';
         }
         if (qty <= 0) {
-          valMsgs.push({ level: 'ERROR', code: 'QTY_INVALID', message: 'Quantity must be positive' });
+          valMsgs.push({ level: 'ERROR', code: 'QTY_INVALID', message: UI_STRINGS.appApiBoqManualRoute.quantityMustBePositive });
           status = 'ERROR';
         }
 
@@ -181,6 +184,6 @@ export async function POST(req: NextRequest) {
       totalLines: updatedRev?.lines.length || 0,
     });
   } catch (err: any) {
-    return apiError(err.message || 'Manual BOQ operation failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.manualBoqOperationFailed }), 500);
   }
 }

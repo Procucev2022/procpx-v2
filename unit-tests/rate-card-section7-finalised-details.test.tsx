@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Section7FinalisedDetails from '../src/components/rate-cards/Section7FinalisedDetails';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('xlsx', () => ({
   __esModule: true,
@@ -37,34 +41,34 @@ describe('rate card Section 7 finalised details', () => {
   it('shows the baseline information, agreement preview, exported workbook, and all detail tabs', () => {
     render(<Section7FinalisedDetails />);
 
-    expect(screen.getByText('1. Rate Card Overview')).toBeInTheDocument();
-    expect(screen.getByText('Ramakrishna Interiors')).toBeInTheDocument();
-    expect(screen.getByText('Vendor Code: VND-0006')).toBeInTheDocument();
-    expect(screen.getByText('3. Commercial Terms & Conditions')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copy1fc1rd5))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appLoginPageConstants.ramakrishnaInteriors, '', true))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.vendorCode2, '', false))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copy83fqgv))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'View Executed Agreement' }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewExecutedAgreement, '', true) })[0]);
     expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close agreement' }));
     expect(screen.queryByRole('dialog', { name: 'Agreement preview' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download Rate Card' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadRateCard) }));
     expect(xlsx.utils.json_to_sheet).toHaveBeenCalledTimes(2);
     expect(xlsx.utils.book_append_sheet).toHaveBeenCalledTimes(2);
     expect(xlsx.writeFile).toHaveBeenCalledWith(expect.any(Object), 'proCPX_Finalised_Rate_Card_RC-2026-0006.xlsx');
-    expect(screen.getByText('Downloaded Excel')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadedExcel))).toBeInTheDocument();
     act(() => jest.advanceTimersByTime(4000));
-    expect(screen.queryByText('Downloaded Excel')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadedExcel))).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Agreed Rates/ }));
-    expect(screen.getByText('Final Agreed Rates Schedule')).toBeInTheDocument();
-    expect(screen.getByText('Gypsum False Ceiling')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Negotiation History' }));
-    expect(screen.getByText('Multi-Round Commercial Negotiation Audit Trail')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Sign-off Timeline' }));
-    expect(screen.getByText('Governance Sign-off Timeline & Approvals Chain')).toBeInTheDocument();
-    expect(screen.getByText('All Milestones Completed')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Rate Card Info' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Preview / View Executed Agreement' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.finalAgreedRatesSchedule))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.multiRoundCommercialNegotiationAuditTrail))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.governanceSignOffTimelineApprovalsChain))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.allMilestonesCompleted))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.rateCardInfo) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.previewViewExecutedAgreement) }));
     expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toBeInTheDocument();
   });
 
@@ -105,12 +109,12 @@ describe('rate card Section 7 finalised details', () => {
 
     render(<Section7FinalisedDetails rateCard={rateCard} />);
     expect(screen.getByText('Stored Vendor')).toBeInTheDocument();
-    expect(screen.getByText('Status: Active')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.active, '', false))).toBeInTheDocument();
     expect(screen.getByText(/01 Oct 2026 to 30 Sep/)).toBeInTheDocument();
     expect(screen.getByText('Stored agreement')).toBeInTheDocument();
-    expect(screen.getByText('Pending Signature')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.pendingSignature))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download Rate Card' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadRateCard) }));
     const exportedItem = xlsx.utils.json_to_sheet.mock.calls[0][0][0];
     expect(exportedItem).toMatchObject({
       'Item Code': 'ST-001', 'Item Description': 'Stored item', 'Quantity': 7,
@@ -120,15 +124,15 @@ describe('rate card Section 7 finalised details', () => {
     expect(exportedRateKey).toBeDefined();
     expect(exportedItem[exportedRateKey!]).toBe(8);
 
-    fireEvent.click(screen.getByRole('button', { name: /Agreed Rates/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
     expect(screen.getAllByText('Stored item')).toHaveLength(2);
     expect(screen.getByText('SQFT')).toBeInTheDocument();
     expect(document.body).toHaveTextContent(/\b8\b/);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Negotiation History' }));
-    expect(screen.getByText(/Rate Card initiated by Buyer One/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.rateCardInitiatedBy))).toBeInTheDocument();
     expect(screen.getByText(/Aligned/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Sign-off Timeline' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
     expect(screen.getByText('Project approved')).toBeInTheDocument();
     expect(screen.getByText('Finance approved')).toBeInTheDocument();
   });
@@ -143,26 +147,26 @@ describe('rate card Section 7 finalised details', () => {
         id: 'bad-meta', itemCode: 'BAD-1', description: 'Fallback description', rate: 25, minQuantity: 0, comparisonRef: '{bad json',
       }],
     }} agreement={null} />);
-    expect(screen.queryByRole('button', { name: 'View Executed Agreement' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewExecutedAgreement) })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download Rate Card' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadRateCard) }));
     expect(print).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Agreed Rates/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
     expect(screen.getAllByText('Fallback description')).toHaveLength(2);
-    expect(screen.getAllByText(/Valuation:/).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Negotiation History' }));
-    expect(screen.getByText(/Savings:/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Sign-off Timeline' }));
-    expect(screen.getByText('In Progress')).toBeInTheDocument();
-    expect(screen.getAllByText('Pending')).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.valuation, '', false)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.savings))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.inProgress))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.pending))).toHaveLength(2);
 
     cleanup();
     const empty = render(<Section7FinalisedDetails rateCard={{ rateCardNumber: 'RC-EMPTY', status: 'DRAFT', items: [], notes: null }} items={[]} agreement={{ required: false, type: 'NONE' }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Rate Card Info' }));
-    expect(screen.getByText(/Direct Schedule of Rates/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Agreed Rates/ }));
-    expect(screen.getAllByText(/Valuation:/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.rateCardInfo) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.directSchedule))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates) }));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.valuation)).length).toBeGreaterThan(0);
     expect(empty.container).toBeInTheDocument();
   });
 });

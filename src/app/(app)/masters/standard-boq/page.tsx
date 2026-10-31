@@ -28,6 +28,9 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import type { StandardItem } from "@app-types/app/(app)/masters/standard-boq/page.types";
 import { COMMON_UOMS, SECTORS } from "./page.constants";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function StandardBoqCreationPage() {
@@ -138,7 +141,7 @@ export default function StandardBoqCreationPage() {
         setItems(d.data || d || []);
       }
     } catch (e: any) {
-      setNotification({ type: 'error', message: 'Failed to load standard BOQ items.' });
+      setNotification({ type: 'error', message: UI_STRINGS.appAppMastersStandardBoqPage.failedToLoadStandardBOQItems });
     } finally {
       setLoading(false);
     }
@@ -198,7 +201,7 @@ export default function StandardBoqCreationPage() {
     setFormError(null);
 
     if (!selectedCategory) {
-      setFormError('Please select a Category.');
+      setFormError(UI_STRINGS.appAppMastersStandardBoqPage.pleaseSelectACategory);
       return;
     }
 
@@ -212,27 +215,27 @@ export default function StandardBoqCreationPage() {
       const uom = line.uom.trim();
 
       if (!code) {
-        setFormError(`Line #${lineNum}: Item Code is required.`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.lineLineNumItemCodeIsRequired, { "lineNum": lineNum }));
         return;
       }
       if (!desc) {
-        setFormError(`Line #${lineNum} (${code}): Description is required.`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.lineLineNumCodeDescriptionIsRequired, { "lineNum": lineNum, "code": code }));
         return;
       }
       if (!uom) {
-        setFormError(`Line #${lineNum} (${code}): UOM is required.`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.lineLineNumCodeUOMIsRequired, { "lineNum": lineNum, "code": code }));
         return;
       }
 
       if (seenCodes.has(code.toLowerCase())) {
-        setFormError(`Duplicate item code in table: "${code}".`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.duplicateItemCodeInTableCode, { "code": code }));
         return;
       }
       seenCodes.add(code.toLowerCase());
 
       // Check against existing items
       if (items.some(it => it.itemCode.toLowerCase() === code.toLowerCase())) {
-        setFormError(`Item code "${code}" already exists in the central Standard BOQ Master.`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.itemCodeCodeAlreadyExistsInTheCentralStandardBOQMaster, { "code": code }));
         return;
       }
     }
@@ -262,18 +265,18 @@ export default function StandardBoqCreationPage() {
 
       const json = await res.json();
       if (!res.ok) {
-        setFormError(json.error || 'Failed to save standard BOQ items.');
+        setFormError(interpolateUiString(UI_STRINGS.common.value1, { "value1": json.error || UI_STRINGS.common.userMessages.failedToSaveStandardBoqItems }));
         return;
       }
 
       setNotification({
         type: 'success',
-        message: `Successfully created ${lineItems.length} standard BOQ items! They are now available in BOQ Studio's Download Standard BOQ function.`,
+        message: interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.successfullyCreatedLengthStandardBOQItemsTheyAreNowAvailableInBOQStudioSDownloadStandardBOQFunction, { "length": lineItems.length }),
       });
       setModalOpen(false);
       loadStandardItems();
     } catch (e: any) {
-      setFormError(e.message || 'Network error saving items.');
+      setFormError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorSavingItems }));
     } finally {
       setSaving(false);
     }
@@ -402,7 +405,7 @@ export default function StandardBoqCreationPage() {
         const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (!rawJson || rawJson.length === 0) {
-          setUploadError('Spreadsheet contains no data rows.');
+          setUploadError(UI_STRINGS.appAppMastersStandardBoqPage.spreadsheetContainsNoDataRows);
           return;
         }
 
@@ -436,7 +439,7 @@ export default function StandardBoqCreationPage() {
         const validated = validateParsedRows(mappedRows);
         setUploadParsedRows(validated);
       } catch (err: any) {
-        setUploadError(`Failed to parse Excel file: ${err.message}`);
+        setUploadError(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.failedToParseExcelFileMessage, { "message": err.message }));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -452,7 +455,7 @@ export default function StandardBoqCreationPage() {
   const handleConfirmImport = async () => {
     const validRows = uploadParsedRows.filter(r => r.isValid);
     if (validRows.length === 0) {
-      setUploadError('No valid rows available to import. Please correct row errors first.');
+      setUploadError(UI_STRINGS.appAppMastersStandardBoqPage.noValidRowsAvailableToImportPleaseCorrectRowErrorsFirst);
       return;
     }
 
@@ -481,20 +484,20 @@ export default function StandardBoqCreationPage() {
 
       const json = await res.json();
       if (!res.ok) {
-        setUploadError(json.error || 'Failed to import standard BOQ items.');
+        setUploadError(interpolateUiString(UI_STRINGS.common.value1, { "value1": json.error || UI_STRINGS.common.userMessages.failedToImportStandardBoqItems }));
         return;
       }
 
       setNotification({
         type: 'success',
-        message: `Successfully imported ${validRows.length} standard BOQ items! They are now live in the central master.`,
+        message: interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.successfullyImportedLengthStandardBOQItemsTheyAreNowLiveInTheCentralMaster, { "length": validRows.length }),
       });
       setUploadModalOpen(false);
       setUploadParsedRows([]);
       setUploadFile(null);
       loadStandardItems();
     } catch (err: any) {
-      setUploadError(err.message || 'Network error importing items.');
+      setUploadError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.networkErrorImportingItems }));
     } finally {
       setImporting(false);
     }
@@ -514,11 +517,11 @@ export default function StandardBoqCreationPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Standard BOQ Creation & Central Master"
-        subtitle="Enterprise Standard BOQ repository. Items created here are instantly available for download via Download Standard BOQ in BOQ Studio."
+        title={UI_STRINGS.appAppMastersStandardBoqPage.standardBOQCreationCentralMaster}
+        subtitle={UI_STRINGS.appAppMastersStandardBoqPage.enterpriseStandardBOQRepositoryItemsCreatedHereAreInstantlyAvailableForDownloadViaDownloadStandardBOQInBOQStudio}
         breadcrumbs={[
-          { label: 'Master Creation', href: '/masters/standard-boq' },
-          { label: 'Standard BOQ Master' },
+          { label: UI_STRINGS.common.masterCreation, href: '/masters/standard-boq' },
+          { label: UI_STRINGS.appAppMastersStandardBoqPage.standardBOQMaster },
         ]}
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -526,10 +529,9 @@ export default function StandardBoqCreationPage() {
               type="button"
               className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
               onClick={handleDownloadTemplate}
-              title="Download standard Excel import template"
+              title={UI_STRINGS.appAppMastersStandardBoqPage.downloadStandardExcelImportTemplate}
             >
-              <Download size={14} /> Download Excel Template
-            </button>
+              <Download size={14} />{UI_STRINGS.appAppMastersStandardBoqPage.downloadExcelTemplate}</button>
 
             {canEdit && (
               <button
@@ -541,18 +543,16 @@ export default function StandardBoqCreationPage() {
                   setUploadFile(null);
                   setUploadModalOpen(true);
                 }}
-                title="Upload standard BOQ items from Excel spreadsheet"
+                title={UI_STRINGS.appAppMastersStandardBoqPage.uploadStandardBOQItemsFromExcelSpreadsheet}
               >
-                <Upload size={14} /> Upload Excel
-              </button>
+                <Upload size={14} />{UI_STRINGS.appAppMastersStandardBoqPage.uploadExcel}</button>
             )}
 
             <Link
               href="/boq/studio"
               className="btn btn-secondary h-[40px] px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs"
             >
-              <FileSpreadsheet size={14} /> Open BOQ Studio
-            </Link>
+              <FileSpreadsheet size={14} />{UI_STRINGS.common.openBOQStudio}</Link>
 
             {canEdit ? (
               <button
@@ -560,17 +560,15 @@ export default function StandardBoqCreationPage() {
                 className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
                 onClick={handleOpenModal}
               >
-                <Plus size={16} /> + Create Standard BOQ Items
-              </button>
+                <Plus size={16} />{UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQItems}</button>
             ) : (
               <button
                 type="button"
                 className="btn btn-outline h-[40px] px-4 text-xs font-semibold inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed"
                 disabled
-                title="Restricted: Master Data Administrator or Category Manager role required"
+                title={UI_STRINGS.common.restrictedMasterDataAdministratorOrCategoryManagerRoleRequired}
               >
-                <Plus size={16} /> + Create Standard BOQ (Admin Only)
-              </button>
+                <Plus size={16} />{UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQAdminOnly}</button>
             )}
           </div>
         }
@@ -581,8 +579,7 @@ export default function StandardBoqCreationPage() {
         <div className="p-3.5 mb-6 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center gap-2.5">
           <ShieldAlert size={18} className="text-slate-500 shrink-0" />
           <div>
-            <strong className="text-slate-900">Read-Only Master View:</strong> Standard BOQ item creation is restricted to Master Data Administrators and Category Managers. Project Users can view standard specifications below and use <strong>BOQ Studio</strong> to download templates, enter project quantities, and generate project BOQs.
-          </div>
+            <strong className="text-slate-900">{UI_STRINGS.common.readOnlyMasterView}</strong>{UI_STRINGS.appAppMastersStandardBoqPage.standardBOQItemCreationIsRestrictedToMasterDataAdministratorsAndCategoryManagersProjectUsersCanViewStandardSpecificationsBelowAndUse}<strong>{UI_STRINGS.appAppMastersStandardBoqPage.bOQStudio}</strong>{UI_STRINGS.appAppMastersStandardBoqPage.toDownloadTemplatesEnterProjectQuantitiesAndGenerateProjectBOQs}</div>
         </div>
       )}
 
@@ -606,21 +603,21 @@ export default function StandardBoqCreationPage() {
       {/* KPI Cards */}
       <SummaryCardGrid columns={3}>
         <SummaryCard
-          label="Total Standard BOQ Items"
+          label={UI_STRINGS.appAppMastersStandardBoqPage.totalStandardBOQItems}
           value={items.length}
-          secondary="Available in Download Standard BOQ"
+          secondary={UI_STRINGS.appAppMastersStandardBoqPage.availableInDownloadStandardBOQ}
           accent="default"
         />
         <SummaryCard
-          label="Covered Sectors"
+          label={UI_STRINGS.appAppMastersStandardBoqPage.coveredSectors}
           value={SECTORS.length}
-          secondary="Retail, Hospitality, Banking, Office, etc."
+          secondary={UI_STRINGS.appAppMastersStandardBoqPage.retailHospitalityBankingOfficeEtc}
           accent="blue"
         />
         <SummaryCard
-          label="Integrated Architecture"
+          label={UI_STRINGS.appAppMastersStandardBoqPage.integratedArchitecture}
           value="Single Master"
-          secondary="Feeds BOQ Studio without duplication"
+          secondary={UI_STRINGS.appAppMastersStandardBoqPage.feedsBOQStudioWithoutDuplication}
           accent="emerald"
         />
       </SummaryCardGrid>
@@ -630,7 +627,7 @@ export default function StandardBoqCreationPage() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Filter size={15} color="#64748b" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Sector:</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{UI_STRINGS.appAppMastersStandardBoqPage.sector2}</span>
           </div>
           <select
             className="select-field"
@@ -638,20 +635,20 @@ export default function StandardBoqCreationPage() {
             onChange={e => setSectorFilter(e.target.value)}
             style={{ width: 170, height: 38 }}
           >
-            <option value="">All Sectors</option>
+            <option value="">{UI_STRINGS.common.allSectors}</option>
             {SECTORS.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
 
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Category:</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{UI_STRINGS.common.category3}</span>
           <select
             className="select-field"
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
             style={{ width: 220, height: 38 }}
           >
-            <option value="">All Categories</option>
+            <option value="">{UI_STRINGS.common.allCategories}</option>
             {categories.map(c => (
               <option key={c.id} value={c.name}>{c.name}</option>
             ))}
@@ -661,7 +658,7 @@ export default function StandardBoqCreationPage() {
             <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: 12, top: 12 }} />
             <input
               type="text"
-              placeholder="Search by code, description, specification..."
+              placeholder={UI_STRINGS.appAppMastersStandardBoqPage.searchByCodeDescriptionSpecification}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input-field"
@@ -675,45 +672,36 @@ export default function StandardBoqCreationPage() {
             onClick={loadStandardItems}
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 38 }}
           >
-            <RefreshCw size={13} /> Refresh
-          </button>
+            <RefreshCw size={13} />{UI_STRINGS.common.refresh}</button>
         </div>
       </div>
 
       {/* Items Table */}
       <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-            Standard BOQ Master Items ({filteredItems.length})
-          </h3>
-          <span style={{ fontSize: 12, color: '#64748b' }}>
-            Downloaded automatically via BOQ Studio
-          </span>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppMastersStandardBoqPage.standardBOQMasterItems}{filteredItems.length}{UI_STRINGS.common.copyc7zu6c}</h3>
+          <span style={{ fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppMastersStandardBoqPage.downloadedAutomaticallyViaBOQStudio}</span>
         </div>
 
         {loading ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>
-            Loading Standard BOQ Items...
-          </div>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppMastersStandardBoqPage.loadingStandardBOQItems}</div>
         ) : filteredItems.length === 0 ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>
-            No standard BOQ items found matching your filters.
-          </div>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppMastersStandardBoqPage.noStandardBOQItemsFoundMatchingYourFilters}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ width: '100%', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', height: 40, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                  <th style={{ padding: '0 12px', width: 60 }}>S.No.</th>
-                  <th style={{ padding: '0 12px', width: 120 }}>Item Code</th>
-                  <th style={{ padding: '0 12px', minWidth: 200 }}>Item Description</th>
-                  <th style={{ padding: '0 12px', minWidth: 220 }}>BOQ Description</th>
-                  <th style={{ padding: '0 12px', width: 70, textAlign: 'center' }}>UOM</th>
-                  <th style={{ padding: '0 12px', width: 120, textAlign: 'right' }}>Benchmark Rate (₹)</th>
-                  <th style={{ padding: '0 12px', width: 90 }}>Sector</th>
-                  <th style={{ padding: '0 12px', width: 130 }}>Category</th>
-                  <th style={{ padding: '0 12px', width: 120 }}>Sub-category</th>
-                  <th style={{ padding: '0 12px', width: 80 }}>Status</th>
+                  <th style={{ padding: '0 12px', width: 60 }}>{UI_STRINGS.common.sNo2}</th>
+                  <th style={{ padding: '0 12px', width: 120 }}>{UI_STRINGS.common.itemCode}</th>
+                  <th style={{ padding: '0 12px', minWidth: 200 }}>{UI_STRINGS.common.itemDescription}</th>
+                  <th style={{ padding: '0 12px', minWidth: 220 }}>{UI_STRINGS.common.bOQDescription}</th>
+                  <th style={{ padding: '0 12px', width: 70, textAlign: 'center' }}>{UI_STRINGS.common.uOM}</th>
+                  <th style={{ padding: '0 12px', width: 120, textAlign: 'right' }}>{UI_STRINGS.common.benchmarkRate}</th>
+                  <th style={{ padding: '0 12px', width: 90 }}>{UI_STRINGS.common.sector}</th>
+                  <th style={{ padding: '0 12px', width: 130 }}>{UI_STRINGS.common.category2}</th>
+                  <th style={{ padding: '0 12px', width: 120 }}>{UI_STRINGS.common.subCategory}</th>
+                  <th style={{ padding: '0 12px', width: 80 }}>{UI_STRINGS.common.status}</th>
                 </tr>
               </thead>
               <tbody>
@@ -740,7 +728,7 @@ export default function StandardBoqCreationPage() {
                       {it.uom}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                      {it.benchmarkRate ? `₹ ${it.benchmarkRate.toLocaleString()}` : '—'}
+                      {it.benchmarkRate ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": it.benchmarkRate.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                     </td>
                     <td style={{ padding: '12px', color: '#475569', fontSize: 11, fontWeight: 600 }}>
                       {it.sector}
@@ -752,9 +740,7 @@ export default function StandardBoqCreationPage() {
                       {it.subcategory}
                     </td>
                     <td style={{ padding: '12px' }}>
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#047857' }}>
-                        ACTIVE
-                      </span>
+                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#047857' }}>{UI_STRINGS.common.aCTIVE}</span>
                     </td>
                   </tr>
                 ))}
@@ -771,9 +757,7 @@ export default function StandardBoqCreationPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <BookOpen size={20} color="#2563eb" />
-                <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                  Create Standard BOQ Master Items
-                </h3>
+                <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQMasterItems}</h3>
               </div>
               <button type="button" onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={20} />
@@ -791,9 +775,7 @@ export default function StandardBoqCreationPage() {
               {/* Group Parameters */}
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
-                    Sector *
-                  </label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.appAppMastersStandardBoqPage.sector}</label>
                   <select
                     className="select-field"
                     value={sector}
@@ -808,12 +790,10 @@ export default function StandardBoqCreationPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
-                    Project Type *
-                  </label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.appAppMastersStandardBoqPage.projectType}</label>
                   <input
                     type="text"
-                    placeholder="e.g. Store Fitout"
+                    placeholder={UI_STRINGS.appAppMastersStandardBoqPage.eGStoreFitout}
                     value={projectType}
                     onChange={e => setProjectType(e.target.value)}
                     className="input-field"
@@ -823,9 +803,7 @@ export default function StandardBoqCreationPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
-                    Category *
-                  </label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.appAppMastersStandardBoqPage.category}</label>
                   <select
                     className="select-field"
                     value={selectedCategory}
@@ -840,12 +818,10 @@ export default function StandardBoqCreationPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
-                    Subcategory
-                  </label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.common.subcategory}</label>
                   <input
                     type="text"
-                    placeholder="e.g. Flooring, Wiring"
+                    placeholder={UI_STRINGS.appAppMastersStandardBoqPage.eGFlooringWiring}
                     value={selectedSubcategory}
                     onChange={e => setSelectedSubcategory(e.target.value)}
                     className="input-field"
@@ -859,12 +835,12 @@ export default function StandardBoqCreationPage() {
                 <table className="table" style={{ width: '100%', fontSize: 12 }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10 }}>
                     <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                      <th style={{ padding: '0 8px', width: 50 }}>S.No.</th>
-                      <th style={{ padding: '0 8px', width: 130 }}>Item Code *</th>
-                      <th style={{ padding: '0 8px', width: 260 }}>Item Description *</th>
-                      <th style={{ padding: '0 8px', width: 220 }}>BOQ Description</th>
-                      <th style={{ padding: '0 8px', width: 100 }}>UOM *</th>
-                      <th style={{ padding: '0 8px', width: 100 }}>Rate (₹)</th>
+                      <th style={{ padding: '0 8px', width: 50 }}>{UI_STRINGS.common.sNo2}</th>
+                      <th style={{ padding: '0 8px', width: 130 }}>{UI_STRINGS.appAppMastersStandardBoqPage.itemCode}</th>
+                      <th style={{ padding: '0 8px', width: 260 }}>{UI_STRINGS.common.itemDescription2}</th>
+                      <th style={{ padding: '0 8px', width: 220 }}>{UI_STRINGS.common.bOQDescription}</th>
+                      <th style={{ padding: '0 8px', width: 100 }}>{UI_STRINGS.common.uOM2}</th>
+                      <th style={{ padding: '0 8px', width: 100 }}>{UI_STRINGS.common.rate}</th>
                       <th style={{ padding: '0 8px', width: 50, textAlign: 'center' }}></th>
                     </tr>
                   </thead>
@@ -877,7 +853,7 @@ export default function StandardBoqCreationPage() {
                         <td style={{ padding: '6px 8px' }}>
                           <input
                             type="text"
-                            placeholder="STD-CIV-001"
+                            placeholder={UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001}
                             value={line.itemCode}
                             onChange={e => handleUpdateRow(idx, 'itemCode', e.target.value)}
                             className="input-field font-mono"
@@ -888,7 +864,7 @@ export default function StandardBoqCreationPage() {
                         <td style={{ padding: '6px 8px' }}>
                           <input
                             type="text"
-                            placeholder="e.g. Vitrified Floor Tile 600x600"
+                            placeholder={UI_STRINGS.appAppMastersStandardBoqPage.eGVitrifiedFloorTile600x600}
                             value={line.description}
                             onChange={e => handleUpdateRow(idx, 'description', e.target.value)}
                             className="input-field"
@@ -899,7 +875,7 @@ export default function StandardBoqCreationPage() {
                         <td style={{ padding: '6px 8px' }}>
                           <input
                             type="text"
-                            placeholder="Detailed technical spec..."
+                            placeholder={UI_STRINGS.appAppMastersStandardBoqPage.detailedTechnicalSpec}
                             value={line.specification}
                             onChange={e => handleUpdateRow(idx, 'specification', e.target.value)}
                             className="input-field"
@@ -922,7 +898,7 @@ export default function StandardBoqCreationPage() {
                         <td style={{ padding: '6px 8px' }}>
                           <input
                             type="number"
-                            placeholder="0.00"
+                            placeholder={UI_STRINGS.common.copywwhtor}
                             value={line.rate}
                             onChange={e => handleUpdateRow(idx, 'rate', e.target.value)}
                             className="input-field"
@@ -942,7 +918,7 @@ export default function StandardBoqCreationPage() {
                               color: lineItems.length === 1 ? '#cbd5e1' : '#ef4444',
                               padding: 4,
                             }}
-                            title="Remove row"
+                            title={UI_STRINGS.appAppMastersStandardBoqPage.removeRow}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -961,16 +937,13 @@ export default function StandardBoqCreationPage() {
                   onClick={handleAddRow}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
                 >
-                  <Plus size={14} />
-                  + Add Another Standard Item
-                </button>
+                  <Plus size={14} />{UI_STRINGS.appAppMastersStandardBoqPage.addAnotherStandardItem}</button>
               </div>
 
               {/* Modal Footer */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: '#64748b' }}>
-                  {lineItems.length} standard item{lineItems.length > 1 ? 's' : ''} ready to save.
-                </span>
+                  {lineItems.length}{UI_STRINGS.appAppMastersStandardBoqPage.standardItem}{lineItems.length > 1 ? UI_STRINGS.common.s : ''}{UI_STRINGS.appAppMastersStandardBoqPage.readyToSave}</span>
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
@@ -978,16 +951,14 @@ export default function StandardBoqCreationPage() {
                     className="btn btn-outline"
                     onClick={() => setModalOpen(false)}
                     disabled={saving}
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
                   <button
                     type="submit"
                     className="btn btn-primary"
                     disabled={saving}
                     style={{ fontWeight: 700 }}
                   >
-                    {saving ? 'Saving...' : `Save ${lineItems.length} Item${lineItems.length > 1 ? 's' : ''} to Master`}
+                    {saving ? UI_STRINGS.common.saving : interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster, { "length": lineItems.length, "value2": lineItems.length > 1 ? 's' : '' })}
                   </button>
                 </div>
               </div>
@@ -1005,12 +976,8 @@ export default function StandardBoqCreationPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <FileSpreadsheet size={20} color="#2563eb" />
                 <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                    Upload Standard BOQ Items (Excel Import)
-                  </h3>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>
-                    Import catalog items from Excel. Validates against Category Master, UOMs, and duplicate item codes.
-                  </span>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppMastersStandardBoqPage.uploadStandardBOQItemsExcelImport}</h3>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppMastersStandardBoqPage.importCatalogItemsFromExcelValidatesAgainstCategoryMasterUOMsAndDuplicateItemCodes}</span>
                 </div>
               </div>
               <button
@@ -1035,12 +1002,8 @@ export default function StandardBoqCreationPage() {
               {uploadParsedRows.length === 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', border: '2px dashed #cbd5e1', borderRadius: 8, background: '#f8fafc', textAlign: 'center' }}>
                   <Upload size={40} color="#3b82f6" style={{ marginBottom: 12 }} />
-                  <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 6px 0', color: '#0f172a' }}>
-                    Select or Drop Standard BOQ Excel Spreadsheet
-                  </h4>
-                  <p style={{ fontSize: 12, color: '#64748b', maxWidth: 500, margin: '0 0 18px 0' }}>
-                    Upload your filled standard template. Requires Item Code, Category (matching Category Master), Description, and UOM.
-                  </p>
+                  <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 6px 0', color: '#0f172a' }}>{UI_STRINGS.appAppMastersStandardBoqPage.selectOrDropStandardBOQExcelSpreadsheet}</h4>
+                  <p style={{ fontSize: 12, color: '#64748b', maxWidth: 500, margin: '0 0 18px 0' }}>{UI_STRINGS.appAppMastersStandardBoqPage.uploadYourFilledStandardTemplateRequiresItemCodeCategoryMatchingCategoryMasterDescriptionAndUOM}</p>
 
                   <input
                     type="file"
@@ -1061,18 +1024,14 @@ export default function StandardBoqCreationPage() {
                       onClick={() => uploadFileInputRef.current?.click()}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}
                     >
-                      <FileUp size={16} />
-                      Choose Excel File
-                    </button>
+                      <FileUp size={16} />{UI_STRINGS.appAppMastersStandardBoqPage.chooseExcelFile}</button>
                     <button
                       type="button"
                       className="btn btn-outline"
                       onClick={handleDownloadTemplate}
                       style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                     >
-                      <Download size={14} />
-                      Download Blank Template
-                    </button>
+                      <Download size={14} />{UI_STRINGS.appAppMastersStandardBoqPage.downloadBlankTemplate}</button>
                   </div>
                 </div>
               ) : (
@@ -1082,7 +1041,7 @@ export default function StandardBoqCreationPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <FileSpreadsheet size={18} color="#2563eb" />
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{uploadFile?.name}</span>
-                      <span style={{ fontSize: 11, color: '#64748b' }}>({uploadParsedRows.length} total rows parsed)</span>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.copychzfvb}{uploadParsedRows.length}{UI_STRINGS.appAppMastersStandardBoqPage.totalRowsParsed}</span>
                     </div>
 
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1093,26 +1052,24 @@ export default function StandardBoqCreationPage() {
                           setUploadFile(null);
                         }}
                         style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                      >
-                        Choose Different File
-                      </button>
+                      >{UI_STRINGS.appAppMastersStandardBoqPage.chooseDifferentFile}</button>
                     </div>
                   </div>
 
                   {/* Summary KPI Cards */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 18 }}>
                     <div style={{ padding: 12, borderRadius: 6, background: '#f1f5f9', border: '1px solid #cbd5e1' }}>
-                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Total Rows</div>
+                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.common.totalRows}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>{uploadParsedRows.length}</div>
                     </div>
                     <div style={{ padding: 12, borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
-                      <div style={{ fontSize: 11, color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>Valid (Ready to Save)</div>
+                      <div style={{ fontSize: 11, color: '#047857', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.appAppMastersStandardBoqPage.validReadyToSave}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: '#047857' }}>
                         {uploadParsedRows.filter(r => r.isValid).length}
                       </div>
                     </div>
                     <div style={{ padding: 12, borderRadius: 6, background: uploadParsedRows.some(r => !r.isValid) ? '#fef2f2' : '#f8fafc', border: `1px solid ${uploadParsedRows.some(r => !r.isValid) ? '#fecaca' : '#e2e8f0'}` }}>
-                      <div style={{ fontSize: 11, color: uploadParsedRows.some(r => !r.isValid) ? '#b91c1c' : '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Errors to Correct</div>
+                      <div style={{ fontSize: 11, color: uploadParsedRows.some(r => !r.isValid) ? '#b91c1c' : '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.appAppMastersStandardBoqPage.errorsToCorrect}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: uploadParsedRows.some(r => !r.isValid) ? '#b91c1c' : '#64748b' }}>
                         {uploadParsedRows.filter(r => !r.isValid).length}
                       </div>
@@ -1138,16 +1095,14 @@ export default function StandardBoqCreationPage() {
                             cursor: 'pointer',
                           }}
                         >
-                          {f === 'ALL' && `All Rows (${uploadParsedRows.length})`}
-                          {f === 'VALID' && `Valid Only (${uploadParsedRows.filter(r => r.isValid).length})`}
-                          {f === 'INVALID' && `Errors Only (${uploadParsedRows.filter(r => !r.isValid).length})`}
+                          {f === 'ALL' && interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.allRowsLength, { "length": uploadParsedRows.length })}
+                          {f === 'VALID' && interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.validOnlyLength, { "length": uploadParsedRows.filter(r => r.isValid).length })}
+                          {f === 'INVALID' && interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.errorsOnlyLength, { "length": uploadParsedRows.filter(r => !r.isValid).length })}
                         </button>
                       ))}
                     </div>
 
-                    <span style={{ fontSize: 11, color: '#64748b' }}>
-                      💡 You can edit invalid fields directly below to fix errors before saving.
-                    </span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppMastersStandardBoqPage.youCanEditInvalidFieldsDirectlyBelowToFixErrorsBeforeSaving}</span>
                   </div>
 
                   {/* Preview Table */}
@@ -1155,16 +1110,16 @@ export default function StandardBoqCreationPage() {
                     <table className="table" style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', height: 36, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                          <th style={{ padding: '0 10px', width: 60 }}>Status</th>
-                          <th style={{ padding: '0 8px', width: 50 }}>S.No.</th>
-                          <th style={{ padding: '0 10px', width: 120 }}>Item Code *</th>
-                          <th style={{ padding: '0 10px', width: 150 }}>Category *</th>
-                          <th style={{ padding: '0 10px', width: 120 }}>Sub-category</th>
-                          <th style={{ padding: '0 10px', width: 180 }}>Item Description *</th>
-                          <th style={{ padding: '0 10px', width: 180 }}>BOQ Description</th>
-                          <th style={{ padding: '0 10px', width: 85 }}>UOM *</th>
-                          <th style={{ padding: '0 10px', width: 95 }}>Rate (₹)</th>
-                          <th style={{ padding: '0 10px' }}>Validation Details</th>
+                          <th style={{ padding: '0 10px', width: 60 }}>{UI_STRINGS.common.status}</th>
+                          <th style={{ padding: '0 8px', width: 50 }}>{UI_STRINGS.common.sNo2}</th>
+                          <th style={{ padding: '0 10px', width: 120 }}>{UI_STRINGS.appAppMastersStandardBoqPage.itemCode}</th>
+                          <th style={{ padding: '0 10px', width: 150 }}>{UI_STRINGS.appAppMastersStandardBoqPage.category}</th>
+                          <th style={{ padding: '0 10px', width: 120 }}>{UI_STRINGS.common.subCategory}</th>
+                          <th style={{ padding: '0 10px', width: 180 }}>{UI_STRINGS.common.itemDescription2}</th>
+                          <th style={{ padding: '0 10px', width: 180 }}>{UI_STRINGS.common.bOQDescription}</th>
+                          <th style={{ padding: '0 10px', width: 85 }}>{UI_STRINGS.common.uOM2}</th>
+                          <th style={{ padding: '0 10px', width: 95 }}>{UI_STRINGS.common.rate}</th>
+                          <th style={{ padding: '0 10px' }}>{UI_STRINGS.appAppMastersStandardBoqPage.validationDetails}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1185,12 +1140,10 @@ export default function StandardBoqCreationPage() {
                               <td style={{ padding: '8px 10px', verticalAlign: 'middle' }}>
                                 {row.isValid ? (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#047857', fontWeight: 700, fontSize: 11 }}>
-                                    <Check size={14} /> OK
-                                  </span>
+                                    <Check size={14} />{UI_STRINGS.appAppMastersStandardBoqPage.oK}</span>
                                 ) : (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#b91c1c', fontWeight: 700, fontSize: 11 }}>
-                                    <AlertTriangle size={14} /> Err
-                                  </span>
+                                    <AlertTriangle size={14} />{UI_STRINGS.appAppMastersStandardBoqPage.err}</span>
                                 )}
                               </td>
                               <td style={{ padding: '6px 8px', color: '#64748b', fontWeight: 600 }}>
@@ -1212,7 +1165,7 @@ export default function StandardBoqCreationPage() {
                                   className="select-field"
                                   style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 4px', borderColor: row.errors.some(e => e.includes('Category')) ? '#ef4444' : undefined }}
                                 >
-                                  <option value="">Select Category...</option>
+                                  <option value="">{UI_STRINGS.appAppMastersStandardBoqPage.selectCategory}</option>
                                   {categories.map(c => (
                                     <option key={c.id} value={c.name}>{c.name}</option>
                                   ))}
@@ -1225,7 +1178,7 @@ export default function StandardBoqCreationPage() {
                                   onChange={e => handleUpdateParsedRow(row.id, 'subcategory', e.target.value)}
                                   className="input-field"
                                   style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 6px' }}
-                                  placeholder="Sub-category"
+                                  placeholder={UI_STRINGS.common.subCategory}
                                 />
                               </td>
                               <td style={{ padding: '6px 10px' }}>
@@ -1244,7 +1197,7 @@ export default function StandardBoqCreationPage() {
                                   onChange={e => handleUpdateParsedRow(row.id, 'detailedSpecification', e.target.value)}
                                   className="input-field"
                                   style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 6px' }}
-                                  placeholder="BOQ Description"
+                                  placeholder={UI_STRINGS.common.bOQDescription}
                                 />
                               </td>
                               <td style={{ padding: '6px 10px' }}>
@@ -1266,17 +1219,16 @@ export default function StandardBoqCreationPage() {
                                   onChange={e => handleUpdateParsedRow(row.id, 'benchmarkRate', e.target.value)}
                                   className="input-field"
                                   style={{ width: '100%', height: 30, fontSize: 11, padding: '2px 6px' }}
-                                  placeholder="0.00"
+                                  placeholder={UI_STRINGS.common.copywwhtor}
                                 />
                               </td>
                               <td style={{ padding: '6px 10px', fontSize: 11 }}>
                                 {row.isValid ? (
-                                  <span style={{ color: '#059669', fontWeight: 600 }}>Ready to import</span>
+                                  <span style={{ color: '#059669', fontWeight: 600 }}>{UI_STRINGS.appAppMastersStandardBoqPage.readyToImport}</span>
                                 ) : (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     {row.errors.map((err, eIdx) => (
-                                      <span key={eIdx} style={{ color: '#b91c1c', fontWeight: 600 }}>
-                                        • {err}
+                                      <span key={eIdx} style={{ color: '#b91c1c', fontWeight: 600 }}>{UI_STRINGS.common.copyaw0l2d}{err}
                                       </span>
                                     ))}
                                   </div>
@@ -1295,8 +1247,7 @@ export default function StandardBoqCreationPage() {
             {uploadParsedRows.length > 0 && (
               <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: '#475569' }}>
-                  <strong>{uploadParsedRows.filter(r => r.isValid).length}</strong> of <strong>{uploadParsedRows.length}</strong> items valid and ready to import.
-                </span>
+                  <strong>{uploadParsedRows.filter(r => r.isValid).length}</strong>{UI_STRINGS.common.of}<strong>{uploadParsedRows.length}</strong>{UI_STRINGS.appAppMastersStandardBoqPage.itemsValidAndReadyToImport}</span>
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
@@ -1304,9 +1255,7 @@ export default function StandardBoqCreationPage() {
                     className="btn btn-outline"
                     onClick={() => setUploadModalOpen(false)}
                     disabled={importing}
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -1315,8 +1264,8 @@ export default function StandardBoqCreationPage() {
                     style={{ fontWeight: 700 }}
                   >
                     {importing
-                      ? 'Importing...'
-                      : `Confirm & Import ${uploadParsedRows.filter(r => r.isValid).length} Valid Items`}
+                      ? UI_STRINGS.appAppMastersStandardBoqPage.importing
+                      : interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.confirmImportLengthValidItems, { "length": uploadParsedRows.filter(r => r.isValid).length })}
                   </button>
                 </div>
               </div>

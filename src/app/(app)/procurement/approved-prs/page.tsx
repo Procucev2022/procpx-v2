@@ -2,6 +2,7 @@
 // src/app/(app)/procurement/approved-prs/page.tsx
 // Procurement User: Approved PR Queue -> Sourcing & RFQ Creation
 
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -26,6 +27,9 @@ import {
   ListChecks,
   Eye,
 } from 'lucide-react';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function ApprovedPrsPage() {
   const router = useRouter();
@@ -60,50 +64,48 @@ export default function ApprovedPrsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Approved Procurement Requests"
-        subtitle="Sanctioned PRs released by Project Approver, ready for market sourcing and RFQ creation"
+        title={UI_STRINGS.appAppProcurementApprovedPrsPage.approvedProcurementRequests}
+        subtitle={UI_STRINGS.appAppProcurementApprovedPrsPage.sanctionedPRsReleasedByProjectApproverReadyForMarketSourcingAndRFQCreation}
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/approved-prs' },
-          { label: 'Approved PRs' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/approved-prs' },
+          { label: UI_STRINGS.appAppProcurementApprovedPrsPage.approvedPRs },
         ]}
         actions={
           <button
             onClick={fetchPrs}
             className="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
         }
       />
 
       {/* KPI Cards */}
       <SummaryCardGrid columns={4}>
         <SummaryCard
-          label="Total Approved PRs"
+          label={UI_STRINGS.appAppProcurementApprovedPrsPage.totalApprovedPRs}
           value={prs.length}
-          secondary="Released to Procurement"
+          secondary={UI_STRINGS.common.releasedToProcurement}
           icon={<FileCheck size={16} />}
           accent="default"
         />
         <SummaryCard
-          label="Total Sanctioned Value"
+          label={UI_STRINGS.appAppProcurementApprovedPrsPage.totalSanctionedValue}
           value={`₹${(totalValue / 100000).toFixed(2)}L`}
-          secondary="Baseline estimated budget"
+          secondary={UI_STRINGS.appAppProcurementApprovedPrsPage.baselineEstimatedBudget}
           icon={<IndianRupee size={16} />}
           accent="emerald"
         />
         <SummaryCard
-          label="Ready for Sourcing"
+          label={UI_STRINGS.appAppProcurementApprovedPrsPage.readyForSourcing}
           value={readyToSourceCount}
-          secondary="RFQ not yet initiated"
+          secondary={UI_STRINGS.appAppProcurementApprovedPrsPage.rFQNotYetInitiated}
           icon={<ShoppingBag size={16} />}
           accent="amber"
         />
         <SummaryCard
-          label="In Active Sourcing"
+          label={UI_STRINGS.appAppProcurementApprovedPrsPage.inActiveSourcing}
           value={sourcingActiveCount}
-          secondary="Linked to RFQ Packages"
+          secondary={UI_STRINGS.appAppProcurementApprovedPrsPage.linkedToRFQPackages}
           icon={<CheckCircle2 size={16} />}
           accent="blue"
         />
@@ -116,31 +118,29 @@ export default function ApprovedPrsPage() {
             <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="Search by PR #, Project, Cost Centre..."
+              placeholder={UI_STRINGS.appAppProcurementApprovedPrsPage.searchByPRProjectCostCentre}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-white shadow-sm"
             />
           </div>
 
-          <div className="text-xs text-slate-500 font-medium">
-            Showing {prs.length} released procurement packages
-          </div>
+          <div className="text-xs text-slate-500 font-medium">{UI_STRINGS.common.showing}{prs.length}{UI_STRINGS.appAppProcurementApprovedPrsPage.releasedProcurementPackages}</div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                <th className="py-3 px-4" style={{ width: 140 }}>PR Number</th>
-                <th className="py-3 px-4">Package Description</th>
-                <th className="py-3 px-4 text-center" style={{ width: 85 }}>Items</th>
-                <th className="py-3 px-4" style={{ width: 95 }}>Cost Centre</th>
-                <th className="py-3 px-4 text-right" style={{ width: 130 }}>PR Amount</th>
-                <th className="py-3 px-4" style={{ width: 110 }}>Approval Status</th>
-                <th className="py-3 px-4" style={{ width: 140 }}>Procurement Stage</th>
-                <th className="py-3 px-4 text-center" style={{ width: 90 }}>RFQ Count</th>
-                <th className="py-3 px-4 text-right" style={{ width: 115 }}>Action</th>
+                <th className="py-3 px-4" style={{ width: 140 }}>{UI_STRINGS.common.pRNumber}</th>
+                <th className="py-3 px-4">{UI_STRINGS.common.packageDescription}</th>
+                <th className="py-3 px-4 text-center" style={{ width: 85 }}>{UI_STRINGS.common.items4}</th>
+                <th className="py-3 px-4" style={{ width: 95 }}>{UI_STRINGS.common.costCentre2}</th>
+                <th className="py-3 px-4 text-right" style={{ width: 130 }}>{UI_STRINGS.common.pRAmount}</th>
+                <th className="py-3 px-4" style={{ width: 110 }}>{UI_STRINGS.common.approvalStatus}</th>
+                <th className="py-3 px-4" style={{ width: 140 }}>{UI_STRINGS.common.procurementStage}</th>
+                <th className="py-3 px-4 text-center" style={{ width: 90 }}>{UI_STRINGS.common.rFQCount}</th>
+                <th className="py-3 px-4 text-right" style={{ width: 115 }}>{UI_STRINGS.common.action}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -148,10 +148,8 @@ export default function ApprovedPrsPage() {
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-400">
                     <FileCheck size={36} className="mx-auto text-slate-300 mb-2" />
-                    <p className="font-medium">No approved procurement requests found</p>
-                    <p className="text-[11px] mt-0.5">
-                      PRs approved by Project Approver will appear here automatically for sourcing
-                    </p>
+                    <p className="font-medium">{UI_STRINGS.appAppProcurementApprovedPrsPage.noApprovedProcurementRequestsFound}</p>
+                    <p className="text-[11px] mt-0.5">{UI_STRINGS.appAppProcurementApprovedPrsPage.pRsApprovedByProjectApproverWillAppearHereAutomaticallyForSourcing}</p>
                   </td>
                 </tr>
               ) : (
@@ -170,7 +168,7 @@ export default function ApprovedPrsPage() {
                             setSelectedPr(pr);
                             setShowDetailModal(true);
                           }}
-                          title="Click to view details"
+                          title={UI_STRINGS.common.clickToViewDetails}
                         >
                           {pr.prNumber}
                         </span>
@@ -180,16 +178,16 @@ export default function ApprovedPrsPage() {
                       <td className="py-3 px-4" style={{ maxWidth: 260 }}>
                         <div
                           className="font-semibold text-slate-900 truncate"
-                          title={pr.title || 'Procurement Package'}
+                          title={interpolateUiString(UI_STRINGS.common.value1, { "value1": pr.title || UI_STRINGS.appAppProcurementApprovedPrsPage.procurementPackage })}
                         >
-                          {pr.title || 'Procurement Package'}
+                          {pr.title || UI_STRINGS.appAppProcurementApprovedPrsPage.procurementPackage}
                         </div>
                       </td>
 
                       {/* 3. Item Count */}
                       <td className="py-3 px-4 text-center">
                         <span className="text-slate-600 font-medium text-xs">
-                          {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                          {itemCount} {itemCount === 1 ? UI_STRINGS.common.item : UI_STRINGS.common.items5}
                         </span>
                       </td>
 
@@ -202,8 +200,7 @@ export default function ApprovedPrsPage() {
 
                       {/* 5. PR Amount */}
                       <td className="py-3 px-4 text-right">
-                        <div className="font-mono font-bold text-slate-900">
-                          ₹{(pr.totalEstimatedValue || 0).toLocaleString('en-IN')}
+                        <div className="font-mono font-bold text-slate-900">{UI_STRINGS.common.copy1g8b5tg}{(pr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                         </div>
                       </td>
 
@@ -215,14 +212,14 @@ export default function ApprovedPrsPage() {
                       {/* 7. Current Procurement Stage */}
                       <td className="py-3 px-4">
                         <span className={`badge ${hasRfq ? 'badge-info' : 'badge-draft'}`} style={{ fontSize: 11 }}>
-                          {hasRfq ? 'In Sourcing' : 'Ready for Sourcing'}
+                          {hasRfq ? UI_STRINGS.appAppProcurementApprovedPrsPage.inSourcing : UI_STRINGS.appAppProcurementApprovedPrsPage.readyForSourcing}
                         </span>
                       </td>
 
                       {/* 8. RFQ Count */}
                       <td className="py-3 px-4 text-center">
                         <span className={`badge ${hasRfq ? 'badge-info' : 'badge-draft'}`}>
-                          {pr.rfqs?.length || 0} {(pr.rfqs?.length || 0) === 1 ? 'RFQ' : 'RFQs'}
+                          {pr.rfqs?.length || 0} {(pr.rfqs?.length || 0) === 1 ? UI_STRINGS.common.rFQ : UI_STRINGS.common.rFQs}
                         </span>
                       </td>
 
@@ -237,7 +234,7 @@ export default function ApprovedPrsPage() {
                           className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors shadow-sm inline-flex items-center gap-1.5"
                         >
                           <Eye size={12} />
-                          <span>View Details</span>
+                          <span>{UI_STRINGS.common.viewDetails}</span>
                         </button>
                       </td>
                     </tr>

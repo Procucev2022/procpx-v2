@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorRfqsPage from '../src/app/(app)/vendor-portal/rfqs/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -75,7 +79,7 @@ describe('vendor portal RFQ register', () => {
       ? new Promise(() => undefined)
       : Promise.resolve(response({ user: { name: 'Vendor rep', vendorId: 'vendor-1' } })));
     const pending = render(<VendorRfqsPage />);
-    expect(screen.getByText('Loading invited RFQs...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.loadingInvitedRFQs))).toBeInTheDocument();
     pending.unmount();
 
     configureFetch();
@@ -83,24 +87,24 @@ describe('vendor portal RFQ register', () => {
     expect(await screen.findByText('RFQ-PENDING')).toBeInTheDocument();
     expect(screen.getByText('RFQ-NEG')).toBeInTheDocument();
     expect(screen.getByText('RFQ-AWARD')).toBeInTheDocument();
-    expect(screen.getByText('General Project')).toBeInTheDocument();
-    expect(screen.getAllByText('Enterprise Client').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Main Package').length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.generalProject))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.enterpriseClient)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.mainPackage)).length).toBeGreaterThan(0);
     expect(screen.getByText('Buyer Co')).toBeInTheDocument();
     expect(screen.getByText('Buyer Offer: ₹14,000 (R3)')).toBeInTheDocument();
-    expect(screen.getByText('₹15,000')).toBeInTheDocument();
-    expect(screen.getAllByText('Awaiting Quote').length).toBeGreaterThan(0);
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: UI_STRINGS.common.indianRupeeSymbol, amount: '15,000' }))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.awaitingQuote)).length).toBeGreaterThan(0);
     expect(screen.getByText('Closed')).toHaveClass('badge-rejected');
     expect(screen.getByText('Order Execution')).toHaveClass('badge-approved');
     expect(screen.getByText('PPO Awaited')).toHaveClass('badge-approved');
     expect(screen.getByText('Final Offer Pending Acceptance')).toHaveClass('badge-submitted');
     expect(screen.getByText('Counter-Offer Awaited')).toHaveClass('badge-submitted');
-    expect(within(screen.getByRole('row', { name: /RFQ-NEG2/ })).getByText('In Negotiation')).toHaveClass('badge-info');
+    expect(within(screen.getByRole('row', { name: /RFQ-NEG2/ })).getByText(uiStringPattern(UI_STRINGS.common.inNegotiation))).toHaveClass('badge-info');
 
     const table = document.querySelector('.table-responsive') as HTMLDivElement;
     Object.defineProperty(table, 'scrollBy', { configurable: true, value: jest.fn() });
-    fireEvent.click(screen.getByTitle('Scroll table left'));
-    fireEvent.click(screen.getByTitle('Scroll table right to actions'));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.scrollTableLeft)));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.scrollTableRightToActions)));
     expect(table.scrollBy).toHaveBeenCalledTimes(2);
     fireEvent.wheel(table, { shiftKey: true, deltaY: 45 });
     expect(table.scrollLeft).toBe(45);
@@ -124,19 +128,19 @@ describe('vendor portal RFQ register', () => {
   it('filters by tabs and each searchable RFQ field', async () => {
     render(<VendorRfqsPage />);
     await screen.findByText('RFQ-PENDING');
-    fireEvent.click(screen.getByRole('button', { name: 'Pending Quote' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.pendingQuote) }));
     expect(screen.getByText('RFQ-PENDING')).toBeInTheDocument();
     expect(screen.queryByText('RFQ-NEG')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'In Negotiation' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.inNegotiation) }));
     expect(screen.getByText('RFQ-NEG')).toBeInTheDocument();
     expect(screen.getByText('RFQ-NEG2')).toBeInTheDocument();
     expect(screen.queryByText('RFQ-AWARD')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /PPO Awarded/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.pPOAwarded) }));
     expect(screen.getByText('RFQ-AWARD')).toBeInTheDocument();
     expect(screen.queryByText('RFQ-NEG')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /All Invited/ }));
-    const search = screen.getByPlaceholderText('Search RFQ, Client, Project...');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.allInvitedLength) }));
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.searchRFQClientProject));
     fireEvent.change(search, { target: { value: 'rfq-pending' } });
     expect(screen.getByText('RFQ-PENDING')).toBeInTheDocument();
     expect(screen.queryByText('RFQ-NEG')).not.toBeInTheDocument();
@@ -147,7 +151,7 @@ describe('vendor portal RFQ register', () => {
     fireEvent.change(search, { target: { value: 'buyer two' } });
     expect(screen.getByText('RFQ-AWARD')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'not found' } });
-    expect(screen.getByText('No RFQs match your search filter.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.noRFQsMatchYourSearchFilter))).toBeInTheDocument();
   });
 
   it('opens a negotiation from the URL by id or case-insensitive RFQ number and falls back to invited vendor details', async () => {
@@ -169,20 +173,20 @@ describe('vendor portal RFQ register', () => {
   it('handles empty lists, refresh, API errors, and session request failure', async () => {
     configureFetch(response({ rfqs: [] }));
     const first = render(<VendorRfqsPage />);
-    expect(await screen.findByText('You have not been invited to any RFQs at this time.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.youHaveNotBeenInvitedToAnyRFQsAtThisTime))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(3));
     first.unmount();
 
     configureFetch(response({}, false));
     render(<VendorRfqsPage />);
-    expect(await screen.findByText('Failed to load RFQs')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadRfqs))).toBeInTheDocument();
 
     mockFetch.mockImplementation((url: string) => url === '/api/auth/session'
       ? Promise.reject(new Error('session failed'))
       : Promise.resolve({ ok: false, json: async () => { throw new Error('body parse failed'); } }));
     render(<VendorRfqsPage />);
-    expect(await screen.findByText('Failed to load RFQs')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadRfqs))).toBeInTheDocument();
 
     mockFetch.mockImplementation((url: string) => url === '/api/auth/session'
       ? Promise.resolve(response({}))

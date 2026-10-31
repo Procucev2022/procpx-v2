@@ -1,4 +1,6 @@
 import { evaluateVendorProfile, type VendorEvaluationInput } from '../src/lib/vendor-ai-evaluator';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const strongVendor: VendorEvaluationInput = {
   id: 'vendor-1',
@@ -32,7 +34,7 @@ describe('evaluateVendorProfile', () => {
   it('recommends a well-documented, verified vendor with strong compliance', () => {
     const result = evaluateVendorProfile(strongVendor);
 
-    expect(result.qualificationOutcome).toBe('RECOMMENDED');
+    expect(result.qualificationOutcome).toBe(UI_STRINGS.appAppProcurementVendorsIdPage.rECOMMENDED);
     expect(result.overallWeightedScore).toBe(97.8);
     expect(result.criteria).toHaveProperty('businessProfile');
     expect(result.criteria).toHaveProperty('financialStrength');
@@ -51,7 +53,7 @@ describe('evaluateVendorProfile', () => {
       experienceYears: 0, turnoverCrores: 0,
     });
 
-    expect(result.qualificationOutcome).toBe('NOT_RECOMMENDED');
+    expect(result.qualificationOutcome).toBe(UI_STRINGS.appAppProcurementVendorsIdPage.nOTRECOMMENDED);
     expect(result.criteria.businessProfile.verificationGaps).toContain('Legal entity structure not specified');
     expect(result.criteria.financialStrength.verificationGaps.length).toBeGreaterThan(0);
     expect(result.weaknesses.length).toBeGreaterThan(0);
@@ -129,7 +131,7 @@ describe('evaluateVendorProfile', () => {
     const result = evaluateVendorProfile({ ...strongVendor, isBlacklisted: true });
 
     expect(result.overallWeightedScore).toBeGreaterThanOrEqual(65);
-    expect(result.qualificationOutcome).toBe('CONDITIONAL');
+    expect(result.qualificationOutcome).toBe(UI_STRINGS.appAppProcurementVendorsIdPage.cONDITIONAL);
     expect(result.criticalRiskFlags).toEqual(expect.arrayContaining([expect.stringContaining('BLACKLISTED')]));
   });
 
@@ -141,7 +143,7 @@ describe('evaluateVendorProfile', () => {
       complianceStatus: 'NON_COMPLIANT',
     });
 
-    expect(result.qualificationOutcome).toBe('CONDITIONAL');
+    expect(result.qualificationOutcome).toBe(UI_STRINGS.appAppProcurementVendorsIdPage.cONDITIONAL);
     expect(result.contradictions).toHaveLength(2);
     expect(result.criticalRiskFlags).toEqual(expect.arrayContaining([
       'GSTIN provided does not match valid statutory syntax',

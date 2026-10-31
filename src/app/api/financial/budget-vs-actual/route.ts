@@ -4,6 +4,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_VIEW');
@@ -15,7 +18,7 @@ export async function GET(req: NextRequest) {
   const categoryFilter = searchParams.get('category');
 
   if (!projectId) {
-    return apiError('projectId is required', 400);
+    return apiError(UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, 400);
   }
 
   try {
@@ -27,7 +30,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!project) {
-      return apiError('Project not found', 404);
+      return apiError(UI_STRINGS.common.projectNotFound, 404);
     }
 
     // 1. Fetch all Budget Transactions for this project
@@ -300,6 +303,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error fetching budget vs actual report:', err);
-    return apiError(err.message || 'Failed to generate Budget vs Actual analysis', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateBudgetVsActualAnalysis }), 500);
   }
 }

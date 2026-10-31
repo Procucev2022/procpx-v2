@@ -4,6 +4,8 @@ import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-
 import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
 import { GET, POST } from '../src/app/api/procurement/quotes/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -96,29 +98,29 @@ describe('procurement quote routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest(quoteBody()))).resolves.toBe(denied);
     await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'vendor-1', lines: [] }))).resolves.toEqual({
-      ok: false, error: 'RFQ ID, Vendor ID, and line pricing are required', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, status: 400,
     });
 
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: null });
     await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
-      ok: false, error: 'Forbidden: vendor record not associated with this user account', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, status: 403,
     });
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: 'vendor-2' });
     await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
-      ok: false, error: 'Forbidden: you can only submit quotes for your own vendor account', status: 403,
+      ok: false, error: UI_STRINGS.appApiProcurementQuotesRoute.forbiddenYouCanOnlySubmitQuotesForYourOwnVendorAccount, status: 403,
     });
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: 'vendor-1' });
     db.rfqVendor.findFirst.mockResolvedValueOnce(null);
     await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
-      ok: false, error: 'Forbidden: vendor is not invited to this RFQ', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, status: 403,
     });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'DRAFT', lines: [] });
     await expect(POST(postRequest(quoteBody()))).resolves.toMatchObject({ ok: false, status: 400, error: expect.stringContaining('does not permit') });
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied', status: 404 });
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied, status: 404 });
   });
 
   it('creates a first quote, calculates line amounts, and advances a released RFQ', async () => {
@@ -132,7 +134,7 @@ describe('procurement quote routes', () => {
 
     expect(db.quote.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        quoteNumber: expect.stringMatching(/^QTE-\d{4}-000003$/), quoteVersion: 1, status: 'SUBMITTED',
+        quoteNumber: expect.stringMatching(/^QTE-\d{4}-000003$/), quoteVersion: 1, status: UI_STRINGS.common.sUBMITTED,
         totalBaseAmount: 40, discountAmount: 4, taxAmount: 1.8, totalQuoteAmount: 37.8,
         commercialTerms: 'Net 30', paymentTermsOffered: '30 days', deliveryLeadTimeDays: 14,
         validUntil: new Date('2026-12-31'), submittedBy: 'user-1',
@@ -144,7 +146,7 @@ describe('procurement quote routes', () => {
     }));
     expect(db.rfqVendor.upsert).toHaveBeenCalledWith(expect.objectContaining({
       where: { rfqId_vendorId: { rfqId: 'rfq-1', vendorId: 'vendor-1' } },
-      update: { submissionStatus: 'SUBMITTED', invitationStatus: 'SUBMITTED' },
+      update: { submissionStatus: UI_STRINGS.common.sUBMITTED, invitationStatus: UI_STRINGS.common.sUBMITTED },
     }));
     expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'VENDOR_RESPONSE_OPEN' } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'QUOTE_SUBMITTED', entityType: 'QUOTE', entityId: 'quote-1' }));

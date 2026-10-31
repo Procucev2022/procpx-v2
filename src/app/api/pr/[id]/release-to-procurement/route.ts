@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_APPROVE');
@@ -14,9 +17,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     where: { id, tenantId: ctx.tenantId },
   });
 
-  if (!pr) return apiError('Procurement Request not found.', 404);
+  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
   if (pr.status !== 'PR_APPROVED' && pr.status !== 'PR_RELEASED_TO_PROCUREMENT') {
-    return apiError('PR must be approved before releasing to procurement.', 400);
+    return apiError(UI_STRINGS.appApiPrIdReleaseToProcurementRoute.pRMustBeApprovedBeforeReleasingToProcurement, 400);
   }
 
   const updated = await prisma.procurementRequest.update({
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       entityType: 'PR',
       entityId: pr.id,
       action: 'PR_RELEASED_TO_PROCUREMENT',
-      description: `Procurement Request ${pr.prNumber} released to Procurement User sourcing queue`,
+      description: interpolateUiString(UI_STRINGS.appApiPrIdReleaseToProcurementRoute.procurementRequestPrNumberReleasedToProcurementUserSourcingQueue, { "prNumber": pr.prNumber }),
     },
   });
 

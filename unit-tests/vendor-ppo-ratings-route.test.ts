@@ -4,6 +4,8 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -100,7 +102,7 @@ describe('vendor PPO ratings API', () => {
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_USER' });
     await GET(getRequest(), params());
-    expect(db.ppoVendorRating.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { vendorId: 'vendor-1', tenantId: 'tenant-1', status: 'APPROVED' } }));
+    expect(db.ppoVendorRating.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { vendorId: 'vendor-1', tenantId: 'tenant-1', status: UI_STRINGS.common.aPPROVED } }));
   });
 
   it('returns null averages for empty scorecards and controlled GET failures', async () => {
@@ -119,13 +121,13 @@ describe('vendor PPO ratings API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({}), params())).resolves.toBe(denied);
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_USER' });
-    await expect(POST(postRequest({}), params())).resolves.toEqual({ ok: false, error: 'Forbidden: Procurement users have read-only access to vendor ratings.', status: 403 });
+    await expect(POST(postRequest({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.forbiddenProcurementUsersHaveReadOnlyAccessToVendorRatings, status: 403 });
 
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied.', status: 404 });
-    await expect(POST(postRequest({}), params())).resolves.toEqual({ ok: false, error: 'PPO ID is required to record performance evaluation.', status: 400 });
+    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied2, status: 404 });
+    await expect(POST(postRequest({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOIDIsRequiredToRecordPerformanceEvaluation, status: 400 });
     db.ppo.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ ppoId: 'missing' }), params())).resolves.toEqual({ ok: false, error: 'PPO not found or does not belong to this vendor.', status: 404 });
+    await expect(POST(postRequest({ ppoId: 'missing' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPONotFoundOrDoesNotBelongToThisVendor, status: 404 });
 
     for (const status of ['DRAFT', 'CANCELLED']) {
       db.ppo.findFirst.mockResolvedValueOnce({ ...ppo, status });
@@ -133,13 +135,13 @@ describe('vendor PPO ratings API', () => {
     }
 
     projectAuth.mockResolvedValueOnce(false);
-    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: 'Access denied: You are not authorised to evaluate PPOs for this project.', status: 403 });
+    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.accessDeniedYouAreNotAuthorisedToEvaluatePPOsForThisProject, status: 403 });
 
     for (const status of ['APPROVED', 'REJECTED', 'SUBMITTED']) {
       db.ppoVendorRating.findUnique.mockResolvedValueOnce({ id: 'existing', status });
       await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toMatchObject({ ok: false, error: expect.stringContaining('assessment'), status: 400 });
     }
-    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: 'Please provide feedback or areas for improvement before submitting for Project Approval.', status: 400 });
+    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, status: 400 });
   });
 
   it('saves a clamped draft and submits a new assessment with completion, audit, and notification', async () => {
@@ -172,7 +174,7 @@ describe('vendor PPO ratings API', () => {
     await expect(POST(postRequest({ ppoId: 'ppo-1', comments: 'Updated notes', markPpoCompleted: false,
       qualityComments: '  Better  ' }), params())).resolves.toMatchObject({ ok: true, status: 201 });
     const update = db.ppoVendorRating.update.mock.calls[0][0];
-    expect(update.data.status).toBe('SUBMITTED');
+    expect(update.data.status).toBe(UI_STRINGS.common.sUBMITTED);
     expect(update.data.criteriaDetails).toContain('RESUBMITTED');
     expect(update.data.criteriaDetails).toContain('Better');
     expect(db.ppo.update).not.toHaveBeenCalled();

@@ -8,6 +8,8 @@ import { notifyNextResponsibleParty } from '../src/lib/notifications';
 import { GET as getMessages, POST as postMessage } from '../src/app/api/procurement/rfqs/[id]/messages/route';
 import { POST as recordDecision } from '../src/app/api/procurement/negotiations/decision/route';
 import { GET as downloadStandardBoq } from '../src/app/api/boq/standard/download/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -60,7 +62,7 @@ describe('RFQ clarification messages', () => {
     await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toBe(denied);
 
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: null });
-    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: 'Forbidden: unmapped vendor account', status: 403 });
+    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenUnmappedVendorAccount, status: 403 });
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: 'vendor-1' });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
     db.rfqMessage.findMany.mockResolvedValueOnce([{ id: 'message-1' }]);
@@ -74,9 +76,9 @@ describe('RFQ clarification messages', () => {
 
   it('checks buyer permission, filters by an optional vendor, and reports missing RFQs and query failures', async () => {
     permission.mockReturnValueOnce(false);
-    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
+    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1?vendorId=vendor-2'), params)).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1?vendorId=vendor-2'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
     db.rfqMessage.findMany.mockResolvedValueOnce([]);
     await getMessages(request('http://localhost/api/rfqs/rfq-1?vendorId=vendor-2'), params);
@@ -94,19 +96,19 @@ describe('RFQ clarification messages', () => {
     isContext.mockReturnValueOnce(false);
     await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Hi' }), params)).resolves.toBe(denied);
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: null });
-    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Hi' }), params)).resolves.toEqual({ ok: false, error: 'Forbidden: unmapped vendor account', status: 403 });
+    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Hi' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenUnmappedVendorAccount, status: 403 });
     permission.mockReturnValueOnce(false);
-    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Hi' }), params)).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
-    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: '  ' }), params)).resolves.toEqual({ ok: false, error: 'Message text is required', status: 400 });
+    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Hi' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
+    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: '  ' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.messageTextIsRequired, status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Question' }), params)).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Question' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
 
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' });
     const created = { id: 'message-1', senderName: 'Buyer', senderRole: 'PROCUREMENT_MANAGER' };
     db.rfqMessage.create.mockResolvedValueOnce(created);
     await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: '  Please clarify  ', attachments: [{ name: 'scope.pdf' }], vendorId: 'vendor-2' }), params)).resolves.toEqual({ ok: true, data: { message: created }, status: 201 });
     expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: {
-      tenantId: 'tenant-1', rfqId: 'rfq-1', senderId: 'buyer-1', senderName: 'Buyer', senderRole: 'PROCUREMENT_MANAGER',
+      tenantId: 'tenant-1', rfqId: 'rfq-1', senderId: 'buyer-1', senderName: UI_STRINGS.appLoginPageConstants.buyer, senderRole: 'PROCUREMENT_MANAGER',
       message: 'Please clarify', attachments: JSON.stringify([{ name: 'scope.pdf' }]), isVendorSent: false, vendorId: 'vendor-2',
     } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'CLARIFICATION_MESSAGE_SENT', entityId: 'rfq-1', projectId: 'project-1' }));
@@ -115,7 +117,7 @@ describe('RFQ clarification messages', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' });
     db.rfqMessage.create.mockResolvedValueOnce({ id: 'message-2', senderName: 'Vendor Representative', senderRole: 'VENDOR' });
     await postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Vendor reply', vendorId: 'vendor-2', isVendorSent: false } ), params);
-    expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ vendorId: 'vendor-1', isVendorSent: true, senderRole: 'VENDOR', message: 'Vendor reply' }) });
+    expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ vendorId: 'vendor-1', isVendorSent: true, senderRole: UI_STRINGS.common.vENDOR, message: 'Vendor reply' }) });
   });
 
   it('reports errors raised while writing a message', async () => {
@@ -139,10 +141,10 @@ describe('negotiation buyer decisions', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(recordDecision(request('http://localhost/api/decision', {}))).resolves.toBe(denied);
-    await expect(recordDecision(request('http://localhost/api/decision', {}))).resolves.toEqual({ ok: false, error: 'Round ID and Decision are required', status: 400 });
-    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'MAYBE' }))).resolves.toEqual({ ok: false, error: 'Decision must be ACCEPTED, REJECTED, or FINAL_ACCEPTANCE_PENDING', status: 400 });
+    await expect(recordDecision(request('http://localhost/api/decision', {}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.roundIDAndDecisionAreRequired, status: 400 });
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'MAYBE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.decisionMustBeACCEPTEDREJECTEDOrFINALACCEPTANCEPENDING, status: 400 });
     db.negotiationRound.findFirst.mockResolvedValueOnce(null);
-    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'ACCEPTED' }))).resolves.toEqual({ ok: false, error: 'Negotiation round not found or access denied', status: 404 });
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'ACCEPTED' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.negotiationRoundNotFoundOrAccessDenied, status: 404 });
   });
 
   it('accepts a final offer, updates its quote, posts a message, audits, and notifies', async () => {
@@ -162,7 +164,7 @@ describe('negotiation buyer decisions', () => {
       ok: true, data: { round: updated, decision: 'ACCEPTED', statusLabel: expect.stringContaining('PPO Awaited') },
     });
     expect(db.negotiationRound.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'round-1', tenantId: 'tenant-1' } }));
-    expect(db.negotiationRound.update).toHaveBeenCalledWith({ where: { id: 'round-1' }, data: expect.objectContaining({ buyerDecision: 'ACCEPTED', buyerDecisionRemarks: 'Approved', status: 'CONCLUDED', nextResponsibleParty: 'BUYER' }) });
+    expect(db.negotiationRound.update).toHaveBeenCalledWith({ where: { id: 'round-1' }, data: expect.objectContaining({ buyerDecision: 'ACCEPTED', buyerDecisionRemarks: UI_STRINGS.common.approved, status: UI_STRINGS.common.cONCLUDED, nextResponsibleParty: 'BUYER' }) });
     expect(db.quote.update).toHaveBeenCalledWith({ where: { id: 'quote-1' }, data: { status: 'ACCEPTED' } });
     expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ rfqId: 'rfq-1', vendorId: 'vendor-1', isVendorSent: false, message: expect.stringContaining('500') }) });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'BUYER_DECISION_ACCEPTED', entityId: 'round-1' }));
@@ -228,20 +230,20 @@ describe('standard BOQ download', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="Standard_BOQ_RETAIL_Store_Fitout.xlsx"');
     expect(response.headers.get('Cache-Control')).toBe('no-store, max-age=0');
-    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true, sector: 'RETAIL', category: { in: ['Electrical', 'Plumbing'] } } }));
-    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true, category: { in: ['Electrical', 'Plumbing'] } } }));
+    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true, sector: 'RETAIL', category: { in: [UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, 'Plumbing'] } } }));
+    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true, category: { in: [UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, 'Plumbing'] } } }));
 
     const workbook = XLSX.read(Buffer.from(await response.arrayBuffer()), { type: 'buffer' });
-    expect(workbook.SheetNames).toEqual(['BOQ', 'INSTRUCTIONS', 'MASTER_DATA']);
+    expect(workbook.SheetNames).toEqual([UI_STRINGS.common.bOQ, 'INSTRUCTIONS', 'MASTER_DATA']);
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets.BOQ) as Record<string, unknown>[];
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual(expect.objectContaining({ 'S.No.': 1, 'Item Code': 'ELE-1', Quantity: '', 'Area / Zone': 'L1', '_ProjectID': 'project-1', '_ProjectCode': 'P-1', '_CostCentreCode': 'CC-1', '_Sector': 'RETAIL' }));
-    expect(rows[1]).toEqual(expect.objectContaining({ 'S.No.': 2, 'Item Code': 'PL-1', 'Sub-category': '', 'Benchmark Rate (Ref)': '' }));
+    expect(rows[0]).toEqual(expect.objectContaining({ [UI_STRINGS.common.sNo2]: 1, [UI_STRINGS.common.itemCode]: 'ELE-1', Quantity: '', 'Area / Zone': UI_STRINGS.componentsProcurementCommercialWorkspace.l1, '_ProjectID': 'project-1', '_ProjectCode': 'P-1', '_CostCentreCode': 'CC-1', '_Sector': 'RETAIL' }));
+    expect(rows[1]).toEqual(expect.objectContaining({ [UI_STRINGS.common.sNo2]: 2, [UI_STRINGS.common.itemCode]: 'PL-1', [UI_STRINGS.common.subCategory]: '', 'Benchmark Rate (Ref)': '' }));
     const instructions = XLSX.utils.sheet_to_json(workbook.Sheets.INSTRUCTIONS, { header: 1 }) as unknown[][];
     expect(instructions).toContainEqual(['Project Name:', 'Retail Store']);
     expect(instructions).toContainEqual(['Cost Centre:', expect.stringContaining('Ground Floor')]);
     const masterRows = XLSX.utils.sheet_to_json(workbook.Sheets.MASTER_DATA) as Record<string, unknown>[];
-    expect(masterRows[0]).toEqual(expect.objectContaining({ 'Approved UOM Code': 'MTR', 'Standard Category': 'Electrical', 'Sub-categories': 'Wiring' }));
+    expect(masterRows[0]).toEqual(expect.objectContaining({ 'Approved UOM Code': 'MTR', 'Standard Category': UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, 'Sub-categories': 'Wiring' }));
   });
 
   it('uses general active items when there are no category matches and emits blank reference rows', async () => {

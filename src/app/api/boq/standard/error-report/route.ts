@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, isApiContext, apiError } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
     const { issues, fileName } = body;
 
     if (!issues || !Array.isArray(issues) || issues.length === 0) {
-      return apiError('No issues to generate error report for.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardErrorReportRoute.noIssuesToGenerateErrorReportFor, 400);
     }
 
     const reportRows = issues.map((iss: any, idx: number) => ({
@@ -51,6 +54,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    return apiError(err.message || 'Failed to generate error report.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateErrorReport }), 500);
   }
 }

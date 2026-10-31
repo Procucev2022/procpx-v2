@@ -2,9 +2,8 @@
 // proCPX — Mandatory Regression Test Suite: Vendor Revised Quote Submission Verification
 // Covers all 10 mandatory conditions from prompt Section 6.
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

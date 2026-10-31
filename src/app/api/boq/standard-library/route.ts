@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('STANDARD_BOQ_VIEW');
@@ -65,7 +68,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (rawItems.length === 0) {
-      return apiError('At least one standard BOQ item is required.', 400);
+      return apiError(UI_STRINGS.appApiBoqStandardLibraryRoute.atLeastOneStandardBOQItemIsRequired, 400);
     }
 
     // Validate all items before saving
@@ -88,27 +91,27 @@ export async function POST(req: NextRequest) {
       const uom = it.uom?.trim()?.toUpperCase();
 
       if (!itemCode) {
-        return apiError(`Line #${itemNum}: Item code is required.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeIsRequired, { "itemNum": itemNum }), 400);
       }
       if (!standardDescription) {
-        return apiError(`Line #${itemNum} (${itemCode}): Standard item description is required.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeStandardItemDescriptionIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400);
       }
       if (!category) {
-        return apiError(`Line #${itemNum} (${itemCode}): Category is required.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeCategoryIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400);
       }
       if (!validCatNames.has(category.toLowerCase())) {
         return apiError(
-          `Line #${itemNum} (${itemCode}): Category "${category}" does not exist in Category Master. Categories must be created via Category Creation first.`,
+          interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeCategoryCategoryDoesNotExistInCategoryMasterCategoriesMustBeCreatedViaCategoryCreationFirst, { "itemNum": itemNum, "itemCode": itemCode, "category": category }),
           400
         );
       }
       if (!uom) {
-        return apiError(`Line #${itemNum} (${itemCode}): UOM is required.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeUOMIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400);
       }
 
       // Check duplicate within the incoming batch
       if (seenCodes.has(itemCode.toLowerCase())) {
-        return apiError(`Duplicate item code detected within submission: "${itemCode}".`, 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.duplicateItemCodeDetectedWithinSubmissionItemCode, { "itemCode": itemCode }), 409);
       }
       seenCodes.add(itemCode.toLowerCase());
 
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingInDb) {
-        return apiError(`Item code "${itemCode}" already exists in the central Standard BOQ Master.`, 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.itemCodeItemCodeAlreadyExistsInTheCentralStandardBOQMaster, { "itemCode": itemCode }), 409);
       }
 
       sanitizedItems.push({
@@ -159,7 +162,7 @@ export async function POST(req: NextRequest) {
           entityType: 'BOQ' as any,
           entityId: createdItems[0]?.id || 'STANDARD_BOQ',
           action: 'CREATE',
-          description: `Created ${createdItems.length} standard BOQ line items in central Standard BOQ Master (Sector: ${sanitizedItems[0]?.sector}, Category: ${sanitizedItems[0]?.category})`,
+          description: interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.createdLengthStandardBOQLineItemsInCentralStandardBOQMasterSectorSectorCategoryCategory, { "length": createdItems.length, "sector": sanitizedItems[0]?.sector, "category": sanitizedItems[0]?.category }),
           newValue: JSON.stringify({ count: createdItems.length, codes: sanitizedItems.map(s => s.itemCode) }),
         },
       });
@@ -169,13 +172,13 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess(
       {
-        message: `Successfully created ${createdItems.length} standard BOQ line items.`,
+        message: interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.successfullyCreatedLengthStandardBOQLineItems, { "length": createdItems.length }),
         count: createdItems.length,
         items: createdItems,
       },
       201
     );
   } catch (err: any) {
-    return apiError(err.message || 'Failed to add standard BOQ items.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddStandardBoqItems }), 500);
   }
 }

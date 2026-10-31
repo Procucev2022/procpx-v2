@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { GET } from '../src/app/api/financial/budget-vs-actual/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -84,11 +86,11 @@ describe('budget versus actual report route', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(GET(request('?projectId=project-1'))).resolves.toBe(denied);
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'projectId is required', status: 400 });
+    await expect(GET(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, status: 400 });
     expect(db.project.findFirst).not.toHaveBeenCalled();
 
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(request('?projectId=foreign-project'))).resolves.toEqual({ ok: false, error: 'Project not found', status: 404 });
+    await expect(GET(request('?projectId=foreign-project'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound, status: 404 });
     expect(db.project.findFirst).toHaveBeenCalledWith({
       where: { id: 'foreign-project', tenantId: 'tenant-1' }, include: { costCentres: true },
     });
@@ -101,14 +103,14 @@ describe('budget versus actual report route', () => {
       kpis: { totalBudget: 1200, totalCommitted: 800, totalActual: 1250, totalRemaining: -50, totalBudgetVariance: -50 },
     } });
     expect(db.budgetTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      tenantId: 'tenant-1', projectId: 'project-1', status: { in: ['APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
-      costCentreId: 'cc-1', category: 'Electrical',
+      tenantId: 'tenant-1', projectId: 'project-1', status: { in: [UI_STRINGS.common.aPPROVED, 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
+      costCentreId: 'cc-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
     } }));
     expect(db.ppoLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      tenantId: 'tenant-1', projectId: 'project-1', status: { not: 'CANCELLED' }, costCentreId: 'cc-1', category: 'Electrical',
+      tenantId: 'tenant-1', projectId: 'project-1', status: { not: 'CANCELLED' }, costCentreId: 'cc-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
     } }));
     expect(db.actualCostTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      tenantId: 'tenant-1', projectId: 'project-1', status: { in: ['APPROVED', 'VERIFIED'] }, costCentreId: 'cc-1', category: 'Electrical',
+      tenantId: 'tenant-1', projectId: 'project-1', status: { in: [UI_STRINGS.common.aPPROVED, 'VERIFIED'] }, costCentreId: 'cc-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
     } }));
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
       tenantId: 'tenant-1', isDeleted: false, revision: { boq: { projectId: 'project-1' }, costCentreId: 'cc-1' },
@@ -130,8 +132,8 @@ describe('budget versus actual report route', () => {
     expect(data.costCentresSummary[0]).toMatchObject({ id: 'cc-1', budgetAmount: 1000, actualAmount: 1200, costPerSqFtBudget: 10, costPerSqFtActual: 12 });
     expect(data.costCentresSummary[1]).toMatchObject({ id: 'cc-2', areaSqFt: 0, costPerSqFtBudget: 0, costPerSqFtActual: 0 });
     expect(data.categoriesSummary).toEqual(expect.arrayContaining([
-      expect.objectContaining({ category: 'Electrical', budgetAmount: 1000, actualAmount: 1200 }),
-      expect.objectContaining({ category: 'General', budgetAmount: 200, actualAmount: 50 }),
+      expect.objectContaining({ category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, budgetAmount: 1000, actualAmount: 1200 }),
+      expect.objectContaining({ category: UI_STRINGS.common.general, budgetAmount: 200, actualAmount: 50 }),
     ]));
     expect(successResult).toHaveBeenCalledWith(expect.objectContaining({ lineReports: expect.any(Array) }));
   });
@@ -146,7 +148,7 @@ describe('budget versus actual report route', () => {
       totalBudget: 0, totalCommitted: 0, totalActual: 0, totalRemaining: 0, totalVariancePercent: 0,
     }, lineReports: [], categoriesSummary: [] } });
     expect(db.budgetTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      tenantId: 'tenant-1', projectId: 'project-1', status: { in: ['APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
+      tenantId: 'tenant-1', projectId: 'project-1', status: { in: [UI_STRINGS.common.aPPROVED, 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
     } }));
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
       tenantId: 'tenant-1', isDeleted: false, revision: { boq: { projectId: 'project-1' } },

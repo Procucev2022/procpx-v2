@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import FormSection from '@/components/ui/FormSection';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function CreatePrPage() {
   const router = useRouter();
@@ -98,7 +101,7 @@ export default function CreatePrPage() {
   const handleCreatePr = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProjectId || !selectedBoqId) {
-      setError('Please select a project and source BOQ.');
+      setError(UI_STRINGS.appAppPrNewPage.pleaseSelectAProjectAndSourceBOQ);
       return;
     }
     setCreating(true);
@@ -116,7 +119,7 @@ export default function CreatePrPage() {
           costCentreId: selectedCostCentreId || null,
           boqId: selectedBoqId,
           revisionId: revisionId || null,
-          title: prTitle.trim() || (selectedBoq ? `${selectedBoq.title || 'Procurement Package'} PR` : 'Commercial PR'),
+          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": prTitle.trim() || (selectedBoq ? `${selectedBoq.title || 'Procurement Package'} PR` : 'Commercial PR') }),
           requiredDate: requiredDate || null,
           deliveryLocation: deliveryLocation.trim() || null,
         }),
@@ -124,7 +127,7 @@ export default function CreatePrPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to create PR');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToCreatePr }));
       }
 
       await res.json();
@@ -139,8 +142,8 @@ export default function CreatePrPage() {
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
       <PageHeader
-        title="Create Procurement Request"
-        subtitle="Derive a new Procurement Request directly from a validated BOQ source baseline"
+        title={UI_STRINGS.appAppPrNewPage.createProcurementRequest}
+        subtitle={UI_STRINGS.appAppPrNewPage.deriveANewProcurementRequestDirectlyFromAValidatedBOQSourceBaseline}
         backHref="/pr"
         backLabel="← Back to PR Register"
       />
@@ -148,17 +151,11 @@ export default function CreatePrPage() {
       {/* BOQ Studio Callout */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 flex justify-between items-center">
         <div>
-          <div className="font-semibold text-sm text-slate-900">
-            Need to prepare or modify standard line items first?
-          </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Use BOQ Studio to download standard BOQ, refine specifications with AI, and estimate costs.
-          </div>
+          <div className="font-semibold text-sm text-slate-900">{UI_STRINGS.appAppPrNewPage.needToPrepareOrModifyStandardLineItemsFirst}</div>
+          <div className="text-xs text-slate-500 mt-1">{UI_STRINGS.appAppPrNewPage.useBOQStudioToDownloadStandardBOQRefineSpecificationsWithAIAndEstimateCosts}</div>
         </div>
         <Link href="/boq/studio" className="btn btn-secondary btn-sm flex items-center gap-2">
-          <Sparkles size={14} className="text-blue-600" />
-          Launch BOQ Studio
-        </Link>
+          <Sparkles size={14} className="text-blue-600" />{UI_STRINGS.appAppPrNewPage.launchBOQStudio}</Link>
       </div>
 
       {error && (
@@ -171,38 +168,38 @@ export default function CreatePrPage() {
       {/* PR Form */}
       <form onSubmit={handleCreatePr}>
         <FormSection
-          title="Project & Cost Centre Baseline"
-          subtitle="Select the commercial project and cost allocation code for this package"
+          title={UI_STRINGS.appAppPrNewPage.projectCostCentreBaseline}
+          subtitle={UI_STRINGS.appAppPrNewPage.selectTheCommercialProjectAndCostAllocationCodeForThisPackage}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-group">
-              <label className="form-label">Project <span className="required">*</span></label>
+              <label className="form-label">{UI_STRINGS.appAppPrNewPage.project}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
               <select
                 className="form-control"
                 value={selectedProjectId}
                 onChange={e => setSelectedProjectId(e.target.value)}
                 required
               >
-                <option value="">Select Project...</option>
+                <option value="">{UI_STRINGS.appAppPrNewPage.selectProject}</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.projectCode} — {p.name}
+                    {p.projectCode}{UI_STRINGS.common.copyq9aflv}{p.name}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Cost Centre</label>
+              <label className="form-label">{UI_STRINGS.common.costCentre2}</label>
               <select
                 className="form-control"
                 value={selectedCostCentreId}
                 onChange={e => setSelectedCostCentreId(e.target.value)}
               >
-                <option value="">Select Cost Centre...</option>
+                <option value="">{UI_STRINGS.appAppPrNewPage.selectCostCentre}</option>
                 {costCentres.map(cc => (
                   <option key={cc.id} value={cc.id}>
-                    {cc.code || cc.costCentreCode} — {cc.name}
+                    {cc.code || cc.costCentreCode}{UI_STRINGS.common.copyq9aflv}{cc.name}
                   </option>
                 ))}
               </select>
@@ -211,54 +208,48 @@ export default function CreatePrPage() {
         </FormSection>
 
         <FormSection
-          title="BOQ Specification Source"
-          subtitle="Link to the approved or draft BOQ containing the line items"
+          title={UI_STRINGS.appAppPrNewPage.bOQSpecificationSource}
+          subtitle={UI_STRINGS.appAppPrNewPage.linkToTheApprovedOrDraftBOQContainingTheLineItems}
         >
           <div className="form-group">
-            <label className="form-label">Source BOQ Baseline <span className="required">*</span></label>
+            <label className="form-label">{UI_STRINGS.appAppPrNewPage.sourceBOQBaseline}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
             <select
               className="form-control"
               value={selectedBoqId}
               onChange={e => setSelectedBoqId(e.target.value)}
               required
             >
-              <option value="">Select Source BOQ...</option>
+              <option value="">{UI_STRINGS.appAppPrNewPage.selectSourceBOQ}</option>
               {boqs.map(b => (
                 <option key={b.id} value={b.id}>
-                  {b.boqCode} — {b.title || 'BOQ Baseline'} ({b.status})
-                </option>
+                  {b.boqCode}{UI_STRINGS.common.copyq9aflv}{b.title || UI_STRINGS.appAppPrNewPage.bOQBaseline}{UI_STRINGS.common.copy1b3t0c5}{b.status}{UI_STRINGS.common.copyc7zu6c}</option>
               ))}
             </select>
             {boqs.length === 0 && selectedProjectId && (
-              <p className="text-xs text-amber-600 mt-2">
-                No BOQs found for this project.{' '}
-                <Link href={`/boq/studio?projectId=${selectedProjectId}`} className="text-blue-600 underline">
-                  Create a BOQ in Studio
-                </Link>{' '}
-                first.
-              </p>
+              <p className="text-xs text-amber-600 mt-2">{UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject}{' '}
+                <Link href={`/boq/studio?projectId=${selectedProjectId}`} className="text-blue-600 underline">{UI_STRINGS.appAppPrNewPage.createABOQInStudio}</Link>{' '}{UI_STRINGS.appAppPrNewPage.first}</p>
             )}
           </div>
 
           <div className="form-group">
-            <label className="form-label">PR Title / Subject</label>
+            <label className="form-label">{UI_STRINGS.appAppPrNewPage.pRTitleSubject}</label>
             <input
               type="text"
               className="form-control"
               value={prTitle}
               onChange={e => setPrTitle(e.target.value)}
-              placeholder="e.g. Electrical & Civil Fitout Procurement"
+              placeholder={UI_STRINGS.appAppPrNewPage.eGElectricalCivilFitoutProcurement}
             />
           </div>
         </FormSection>
 
         <FormSection
-          title="Delivery & Procurement Schedule"
-          subtitle="Specify site fulfillment timelines and destination store"
+          title={UI_STRINGS.appAppPrNewPage.deliveryProcurementSchedule}
+          subtitle={UI_STRINGS.appAppPrNewPage.specifySiteFulfillmentTimelinesAndDestinationStore}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-group">
-              <label className="form-label">Required By Date</label>
+              <label className="form-label">{UI_STRINGS.appAppPrNewPage.requiredByDate}</label>
               <input
                 type="date"
                 className="form-control"
@@ -268,22 +259,20 @@ export default function CreatePrPage() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Delivery Location</label>
+              <label className="form-label">{UI_STRINGS.appAppPrNewPage.deliveryLocation}</label>
               <input
                 type="text"
                 className="form-control"
                 value={deliveryLocation}
                 onChange={e => setDeliveryLocation(e.target.value)}
-                placeholder="e.g. Site Store - Unit 402"
+                placeholder={UI_STRINGS.appAppPrNewPage.eGSiteStoreUnit402}
               />
             </div>
           </div>
         </FormSection>
 
         <div className="flex justify-end gap-3 mt-6">
-          <Link href="/pr" className="btn btn-secondary">
-            Cancel
-          </Link>
+          <Link href="/pr" className="btn btn-secondary">{UI_STRINGS.common.cancel}</Link>
           <button
             type="submit"
             disabled={creating || !selectedBoqId}
@@ -291,7 +280,7 @@ export default function CreatePrPage() {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
             <Send size={15} />
-            {creating ? 'Creating PR...' : 'Create Procurement Request'}
+            {creating ? UI_STRINGS.appAppPrNewPage.creatingPR : UI_STRINGS.appAppPrNewPage.createProcurementRequest}
           </button>
         </div>
       </form>

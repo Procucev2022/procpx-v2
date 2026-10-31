@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { GET } from '../src/app/api/boq/template/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/api-utils', () => ({ requireAuth: jest.fn(), isApiContext: jest.fn() }));
 
@@ -38,12 +40,12 @@ describe('standard BOQ spreadsheet template route', () => {
 
     const boqRows = XLSX.utils.sheet_to_json(workbook.Sheets.BOQ_Data) as Record<string, unknown>[];
     expect(boqRows).toHaveLength(3);
-    expect(boqRows[0]).toEqual(expect.objectContaining({ 'Project ID *': 'CPX-P-000001', 'Cost Centre Code *': 'CC-001', 'Category *': 'Civil & Interior', 'UOM *': 'SQFT', 'Quantity *': 20000 }));
-    expect(boqRows[2]).toEqual(expect.objectContaining({ 'Category *': 'HVAC', 'Item Code': 'HVA-AC-001', 'Quantity *': 20 }));
+    expect(boqRows[0]).toEqual(expect.objectContaining({ 'Project ID *': 'CPX-P-000001', 'Cost Centre Code *': 'CC-001', [UI_STRINGS.appAppMastersStandardBoqPage.category]: UI_STRINGS.common.civilInterior, [UI_STRINGS.common.uOM2]: 'SQFT', [UI_STRINGS.appAppBoqStudioPage.quantity]: 20000 }));
+    expect(boqRows[2]).toEqual(expect.objectContaining({ [UI_STRINGS.appAppMastersStandardBoqPage.category]: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.hVAC, [UI_STRINGS.common.itemCode]: 'HVA-AC-001', [UI_STRINGS.appAppBoqStudioPage.quantity]: 20 }));
 
     const referenceRows = XLSX.utils.sheet_to_json(workbook.Sheets.Reference_Taxonomy, { header: 1 }) as unknown[][];
-    expect(referenceRows[0]).toEqual(['Category', 'Standard Sub-categories']);
+    expect(referenceRows[0]).toEqual([UI_STRINGS.common.category2, 'Standard Sub-categories']);
     expect(referenceRows).toHaveLength(15);
-    expect(referenceRows[1][0]).toBe('Civil & Interior');
+    expect(referenceRows[1][0]).toBe(UI_STRINGS.common.civilInterior);
   });
 });

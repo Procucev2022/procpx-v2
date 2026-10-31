@@ -3,6 +3,8 @@ import { POST } from '../src/app/api/boq/standard/generate/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createNextBoqRevision } from '../src/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -60,11 +62,11 @@ describe('generate BOQ from standard upload API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(request({}))).resolves.toBe(denied);
-    await expect(POST(request({ validLines: [{ description: 'Item' }] }))).resolves.toEqual({ ok: false, error: 'Project ID is required.', status: 400 });
-    await expect(POST(request({ projectId: 'project-1', validLines: [] }))).resolves.toEqual({ ok: false, error: 'No valid line items to generate BOQ from.', status: 400 });
-    await expect(POST(request({ projectId: 'project-1', validLines: 'invalid' }))).resolves.toEqual({ ok: false, error: 'No valid line items to generate BOQ from.', status: 400 });
+    await expect(POST(request({ validLines: [{ description: 'Item' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectIDIsRequired, status: 400 });
+    await expect(POST(request({ projectId: 'project-1', validLines: [] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqStandardGenerateRoute.noValidLineItemsToGenerateBOQFrom, status: 400 });
+    await expect(POST(request({ projectId: 'project-1', validLines: 'invalid' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqStandardGenerateRoute.noValidLineItemsToGenerateBOQFrom, status: 400 });
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ projectId: 'foreign', validLines: [{ description: 'Item' }] }))).resolves.toEqual({ ok: false, error: 'Project not found.', status: 404 });
+    await expect(POST(request({ projectId: 'foreign', validLines: [{ description: 'Item' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404 });
   });
 
   it('reuses an empty revision shell, normalizes quantities, links category/UOM rows, and calculates quality', async () => {
@@ -81,16 +83,16 @@ describe('generate BOQ from standard upload API', () => {
     });
     expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'cc-1', projectId: 'project-1', tenantId: 'tenant-1' } });
     expect(db.boq.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'boq-1' }, data: expect.objectContaining({
-      title: 'Old title', description: 'fit out', purpose: 'BUDGET', category: 'Electrical', costCentreId: 'cc-1', scope: '  fit out  ',
+      title: 'Old title', description: 'fit out', purpose: UI_STRINGS.componentsSidebar.bUDGET, category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, costCentreId: 'cc-1', scope: '  fit out  ',
     }) }));
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-0' }, data: expect.objectContaining({
       costCentreId: 'cc-1', status: 'DRAFT', preparationStatus: 'STANDARDISED', sourceReference: 'Uploaded: standard.xlsx',
       totalLines: 6, validLines: 3, warningLines: 3, errorLines: 0, qualityScore: 50,
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      lineNumber: '1', itemCode: 'STD-L1', originalDescription: 'Cable', standardDescription: 'Cable', quantity: null,
-      aiUnitCost: 20, aiTotalCost: null, categoryId: 'cat-electrical', uomId: null, uomRaw: 'NOS', validationStatus: 'QUANTITY_REQUIRED',
-      validationMessages: JSON.stringify([{ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: 'Quantity is required before budgeting or PR.' }]),
+      lineNumber: UI_STRINGS.common.copyefwnq4, itemCode: 'STD-L1', originalDescription: 'Cable', standardDescription: 'Cable', quantity: null,
+      aiUnitCost: 20, aiTotalCost: null, categoryId: 'cat-electrical', uomId: null, uomRaw: UI_STRINGS.common.nOS, validationStatus: 'QUANTITY_REQUIRED',
+      validationMessages: JSON.stringify([{ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: UI_STRINGS.common.quantityIsRequiredBeforeBudgetingOrPR }]),
     }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(4, { data: expect.objectContaining({ quantity: null, validationStatus: 'QUANTITY_REQUIRED', aiTotalCost: null }) });
     expect(db.boqLine.create).toHaveBeenNthCalledWith(5, { data: expect.objectContaining({ quantity: 0, aiTotalCost: null, validationStatus: 'WARNING' }) });
@@ -98,7 +100,7 @@ describe('generate BOQ from standard upload API', () => {
       itemCode: 'P-1', quantity: 2, aiUnitCost: 10, aiTotalCost: 20, categoryId: 'cat-electrical', uomId: 'uom-mtr',
       validationStatus: 'REVIEW', brand: 'Acme', model: 'M1', location: 'North', drawingReference: 'D-1', remarks: 'Check',
     }) });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityType: 'BOQ', entityId: 'boq-1', action: 'BOQ_GENERATED_FROM_STANDARD_DOWNLOAD_UPLOAD' }) });
+    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityType: UI_STRINGS.common.bOQ, entityId: 'boq-1', action: 'BOQ_GENERATED_FROM_STANDARD_DOWNLOAD_UPLOAD' }) });
     expect(makeRevision).not.toHaveBeenCalled();
   });
 
@@ -111,7 +113,7 @@ describe('generate BOQ from standard upload API', () => {
       validLines: [{ quantity: 2, benchmarkRate: 0 }],
     }))).resolves.toMatchObject({ ok: true, status: 201, data: { boqId: 'boq-new', revisionId: 'revision-new' } });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      boqCode: 'BOQ-000006', title: 'General — Retail Store', purpose: 'BUDGET', category: 'General', costCentreId: null,
+      boqCode: 'BOQ-000006', title: 'General — Retail Store', purpose: UI_STRINGS.componentsSidebar.bUDGET, category: UI_STRINGS.common.general, costCentreId: null,
     }), include: { revisions: true } });
     expect(makeRevision).toHaveBeenCalledWith(expect.objectContaining({
       boqId: 'boq-new', costCentreId: null, status: 'DRAFT', sourceReference: 'Standard BOQ Download & Upload',
@@ -119,7 +121,7 @@ describe('generate BOQ from standard upload API', () => {
     }));
     expect(db.boqLine.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       originalDescription: 'Standard Item', standardDescription: 'Standard Item', specification: '', aiSuggestedDescription: 'Standard Item',
-      aiUnitCost: null, aiTotalCost: null, uomRaw: 'NOS', quantity: 2,
+      aiUnitCost: null, aiTotalCost: null, uomRaw: UI_STRINGS.common.nOS, quantity: 2,
     }) });
   });
 
@@ -137,7 +139,7 @@ describe('generate BOQ from standard upload API', () => {
     });
     expect(db.costCentre.findFirst).not.toHaveBeenCalled();
     expect(db.boq.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      title: 'General — Retail Store', description: 'Retained description', purpose: 'BUDGET', category: 'General', costCentreId: 'old-cc', scope: 'Existing scope',
+      title: 'General — Retail Store', description: 'Retained description', purpose: UI_STRINGS.componentsSidebar.bUDGET, category: UI_STRINGS.common.general, costCentreId: 'old-cc', scope: 'Existing scope',
     }) }));
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-0' }, data: expect.objectContaining({
       costCentreId: 'old-cc', sourceReference: 'Standard BOQ Download & Upload', notes: expect.stringContaining('(Retail - Standard)'),
@@ -158,7 +160,7 @@ describe('generate BOQ from standard upload API', () => {
       validLines: [{ itemDescription: 'Stone', quantity: '2.5', benchmarkRate: '3' }],
     }))).resolves.toMatchObject({ ok: true, data: { totalLines: 1 } });
     expect(db.boq.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'boq-1' }, data: expect.objectContaining({
-      title: 'Custom', description: 'Details', purpose: 'PR', category: 'Civil',
+      title: 'Custom', description: UI_STRINGS.appAppBoqStudioPage.details, purpose: 'PR', category: 'Civil',
     }) }));
     expect(makeRevision).toHaveBeenCalledWith(expect.objectContaining({ budgetStatus: 'NOT_ADDED_TO_BUDGET', prStatus: 'PR_DRAFT' }));
 

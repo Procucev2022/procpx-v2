@@ -5,6 +5,8 @@ import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-
 import { hasPermission } from '../src/lib/permissions';
 import { createAuditLog } from '../src/lib/audit';
 import { getUserAuthorizedProjectIds } from '../src/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -72,13 +74,13 @@ describe('vendor detail route', () => {
     await expect(GET({} as NextRequest, params())).resolves.toBe(denied);
 
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(GET({} as NextRequest, params('missing'))).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied.', status: 404 });
+    await expect(GET({} as NextRequest, params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied2, status: 404 });
 
     permission.mockReturnValue(false);
-    await expect(PUT(putRequest({}), params())).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
+    await expect(PUT(putRequest({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
     permission.mockReturnValueOnce(true);
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(PUT(putRequest({}), params('missing'))).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied.', status: 404 });
+    await expect(PUT(putRequest({}), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied2, status: 404 });
   });
 
   it('parses ratings, hides unapproved ratings from procurement users, and filters eligible PPOs', async () => {
@@ -170,11 +172,11 @@ describe('vendor detail route', () => {
     expect(updatedResult).toMatchObject({ ok: true, data: { message: 'Vendor profile updated successfully.' } });
     expect(db.vendor.findFirst).toHaveBeenCalledWith({ where: { id: 'vendor-1', OR: [{ tenantId: 'tenant-1' }, { vendorType: 'PROCUCEV_VENDOR' }] } });
     expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: {
-      name: 'New Vendor', contactPerson: null, email: 'new@example.test', phone: null, categories: ['Electrical'],
-      operatingLocation: 'North', city: 'Delhi', state: 'DL', country: 'India', legalStructure: 'Private Limited',
+      name: 'New Vendor', contactPerson: null, email: 'new@example.test', phone: null, categories: [UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical],
+      operatingLocation: 'North', city: 'Delhi', state: 'DL', country: UI_STRINGS.common.india, legalStructure: 'Private Limited',
       gstin: null, pan: null, website: null, address: ' New address ', experienceYears: null,
       turnoverCrores: null, capabilities: '["testing"]', serviceCoverage: JSON.stringify({ areas: ['North'] }),
-      clientReferences: 'Client A', certifications: ['ISO'], documents: JSON.stringify({ certificate: 'doc-1' }), status: 'ACTIVE',
+      clientReferences: 'Client A', certifications: ['ISO'], documents: JSON.stringify({ certificate: 'doc-1' }), status: UI_STRINGS.common.aCTIVE,
     } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'VENDOR_UPDATED', entityId: 'vendor-1' }));
   });
@@ -184,13 +186,13 @@ describe('vendor detail route', () => {
     permission.mockImplementation((_role: string, name: string) => name === 'VENDOR_PROFILE_EDIT');
     await expect(PUT(putRequest({}), params())).resolves.toMatchObject({ ok: true });
     expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: {
-      name: 'Northwind', contactPerson: 'Alice', email: 'alice@example.test', phone: '111', categories: 'Electrical',
-      operatingLocation: 'West', city: 'Pune', state: 'MH', country: 'India', legalStructure: 'LLP', gstin: 'GST-1', pan: 'PAN-1',
+      name: 'Northwind', contactPerson: 'Alice', email: 'alice@example.test', phone: '111', categories: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
+      operatingLocation: 'West', city: 'Pune', state: 'MH', country: UI_STRINGS.common.india, legalStructure: 'LLP', gstin: 'GST-1', pan: 'PAN-1',
       website: 'https://example.test', address: 'Old address', experienceYears: 4, turnoverCrores: 12,
-      capabilities: '[]', serviceCoverage: '[]', clientReferences: '[]', certifications: '[]', documents: '[]', status: 'ACTIVE',
+      capabilities: '[]', serviceCoverage: '[]', clientReferences: '[]', certifications: '[]', documents: '[]', status: UI_STRINGS.common.aCTIVE,
     } });
-    expect(permission).toHaveBeenCalledWith('VENDOR', 'VENDOR_MANAGE');
-    expect(permission).toHaveBeenCalledWith('VENDOR', 'VENDOR_PROFILE_EDIT');
+    expect(permission).toHaveBeenCalledWith(UI_STRINGS.common.vENDOR, 'VENDOR_MANAGE');
+    expect(permission).toHaveBeenCalledWith(UI_STRINGS.common.vENDOR, 'VENDOR_PROFILE_EDIT');
   });
 
   it('returns a PUT server error when updating the vendor fails', async () => {

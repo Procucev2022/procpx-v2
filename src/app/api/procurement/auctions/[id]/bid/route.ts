@@ -1,9 +1,13 @@
 // app/api/procurement/auctions/[id]/bid/route.ts
 // Server-authoritative bid acceptance engine: Reverse, Forward, Sealed Bid, Rolling Auto-Extension & Bid Limits
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -16,7 +20,7 @@ export async function POST(
 
   try {
     if (ctx.role === 'PROJECT_USER' || ctx.role === 'PROJECT_APPROVER') {
-      return apiError('Project Users have read-only observer access and cannot submit bids.', 403);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.projectUsersHaveReadOnlyObserverAccessAndCannotSubmitBids, 403);
     }
 
     const body = await req.json();
@@ -35,18 +39,18 @@ export async function POST(
       });
 
       if (!vendorRecord) {
-        return apiError('Vendor profile not found for this account.', 403);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorProfileNotFoundForThisAccount, 403);
       }
       vendorId = vendorRecord.id;
     } else {
       if (!vendorId) {
-        return apiError('Vendor ID is required.', 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIDIsRequired, 400);
       }
     }
 
     const numericBid = Number(bidAmount);
     if (isNaN(numericBid) || numericBid <= 0) {
-      return apiError('Please enter a valid positive bid amount.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.pleaseEnterAValidPositiveBidAmount, 400);
     }
 
     const auction = await prisma.auction.findFirst({
@@ -63,45 +67,45 @@ export async function POST(
     });
 
     if (!auction) {
-      return apiError('Auction not found or access denied.', 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionNotFoundOrAccessDenied, 404);
     }
 
     const now = new Date();
 
     if (auction.status === 'PAUSED') {
-      return apiError('Bidding is temporarily paused by the auction administrator.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.biddingIsTemporarilyPausedByTheAuctionAdministrator, 400);
     }
     if (auction.status === 'CLOSED' || auction.status === 'COMPLETED') {
-      return apiError('This auction has concluded. Further bids cannot be accepted.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasConcludedFurtherBidsCannotBeAccepted, 400);
     }
     if (auction.status === 'CANCELLED') {
-      return apiError('This auction has been cancelled.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasBeenCancelled, 400);
     }
     if (auction.status === 'SCHEDULED' && now < auction.startTime) {
-      return apiError(`Auction has not started yet. Starts at ${auction.startTime.toISOString()}.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionHasNotStartedYetStartsAtToISOString, { "toISOString": auction.startTime.toISOString() }), 400);
     }
     if (now >= auction.endTime) {
       await prisma.auction.update({ where: { id }, data: { status: 'CLOSED' } });
-      return apiError('Auction time has expired. No further bids are accepted.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionTimeHasExpiredNoFurtherBidsAreAccepted, 400);
     }
 
     const participantRecord = auction.vendors[0];
     if (!participantRecord) {
-      return apiError('Vendor is not invited to participate in this auction.', 403);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, 403);
     }
 
     if (!participantRecord.termsAcceptedAt) {
-      return apiError('You must review and accept the auction Terms & Conditions before placing your first bid.', 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.youMustReviewAndAcceptTheAuctionTermsConditionsBeforePlacingYourFirstBid, 400);
     }
 
     const vendorBids = auction.bids.filter((b) => b.vendorId === vendorId);
     if (auction.auctionType === 'SEALED_BID') {
       if (vendorBids.length > 0) {
-        return apiError('Sealed Bid Protocol: You have already submitted your single permitted sealed bid for this auction.', 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.sealedBidProtocolYouHaveAlreadySubmittedYourSinglePermittedSealedBidForThisAuction, 400);
       }
     } else if (auction.hasBidLimit && auction.maxBidsPerParticipant) {
       if (vendorBids.length >= auction.maxBidsPerParticipant) {
-        return apiError(`Bid limit reached. You have placed all ${auction.maxBidsPerParticipant} permitted bids for this auction.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidLimitReachedYouHavePlacedAllMaxBidsPerParticipantPermittedBidsForThisAuction, { "maxBidsPerParticipant": auction.maxBidsPerParticipant }), 400);
       }
     }
 
@@ -111,11 +115,11 @@ export async function POST(
 
     if (isItemWise) {
       if (!auctionItemId) {
-        return apiError('Item ID is required for an Item-Wise auction bid.', 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.itemIDIsRequiredForAnItemWiseAuctionBid, 400);
       }
       targetItem = auction.items.find((i) => i.id === auctionItemId);
       if (!targetItem) {
-        return apiError('Selected auction item was not found.', 404);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.selectedAuctionItemWasNotFound, 404);
       }
       currentReference = targetItem.currentLeadingBid
         ? Number(targetItem.currentLeadingBid)
@@ -132,7 +136,7 @@ export async function POST(
       if (isFirstBid && auction.hasStartPrice && currentReference > 0) {
         if (numericBid > currentReference) {
           return apiError(
-            `First bid cannot exceed the configured starting ceiling price of ${auction.currency} ${currentReference.toLocaleString('en-IN')}`,
+            interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.firstBidCannotExceedTheConfiguredStartingCeilingPriceOfCurrencyToLocaleString, { "currency": auction.currency, "toLocaleString": currentReference.toLocaleString(I18N_CONFIG.defaultLocale) }),
             400
           );
         }
@@ -141,7 +145,7 @@ export async function POST(
         const maxAllowed = currentReference - minDec;
         if (numericBid > maxAllowed) {
           return apiError(
-            `Bid ${auction.currency} ${numericBid.toLocaleString('en-IN')} must be at least ${auction.currency} ${minDec.toLocaleString('en-IN')} lower than current leading bid ${auction.currency} ${currentReference.toLocaleString('en-IN')}. Maximum allowed: ${auction.currency} ${maxAllowed.toLocaleString('en-IN')}.`,
+            interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidCurrencyToLocaleStringMustBeAtLeastCurrency2ToLocaleString2LowerThanCurrentLeadingBidCurrency3ToLocaleString3MaximumAllowedCurrency4ToLocaleString4, { "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "currency2": auction.currency, "toLocaleString2": minDec.toLocaleString(I18N_CONFIG.defaultLocale), "currency3": auction.currency, "toLocaleString3": currentReference.toLocaleString(I18N_CONFIG.defaultLocale), "currency4": auction.currency, "toLocaleString4": maxAllowed.toLocaleString(I18N_CONFIG.defaultLocale) }),
             400
           );
         }
@@ -150,7 +154,7 @@ export async function POST(
       if (isFirstBid && auction.hasStartPrice && currentReference > 0) {
         if (numericBid < currentReference) {
           return apiError(
-            `First bid cannot be lower than the configured starting floor price of ${auction.currency} ${currentReference.toLocaleString('en-IN')}`,
+            interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.firstBidCannotBeLowerThanTheConfiguredStartingFloorPriceOfCurrencyToLocaleString, { "currency": auction.currency, "toLocaleString": currentReference.toLocaleString(I18N_CONFIG.defaultLocale) }),
             400
           );
         }
@@ -159,7 +163,7 @@ export async function POST(
         const minAllowed = currentReference + minInc;
         if (numericBid < minAllowed) {
           return apiError(
-            `Bid ${auction.currency} ${numericBid.toLocaleString('en-IN')} must be at least ${auction.currency} ${minInc.toLocaleString('en-IN')} higher than current leading bid ${auction.currency} ${currentReference.toLocaleString('en-IN')}. Minimum allowed: ${auction.currency} ${minAllowed.toLocaleString('en-IN')}.`,
+            interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidCurrencyToLocaleStringMustBeAtLeastCurrency2ToLocaleString2HigherThanCurrentLeadingBidCurrency3ToLocaleString3MinimumAllowedCurrency4ToLocaleString4, { "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "currency2": auction.currency, "toLocaleString2": minInc.toLocaleString(I18N_CONFIG.defaultLocale), "currency3": auction.currency, "toLocaleString3": currentReference.toLocaleString(I18N_CONFIG.defaultLocale), "currency4": auction.currency, "toLocaleString4": minAllowed.toLocaleString(I18N_CONFIG.defaultLocale) }),
             400
           );
         }
@@ -243,7 +247,7 @@ export async function POST(
       entityType: 'AUCTION',
       entityId: auction.id,
       action: extended ? 'AUCTION_BID_AND_AUTO_EXTENDED' : 'AUCTION_BID_SUBMITTED',
-      description: `Bid #${bidCount} of ${auction.currency} ${numericBid.toLocaleString('en-IN')} accepted from ${bid.vendor.name} in auction ${auction.auctionNumber}${extended ? ` (Triggered ${auction.autoExtensionMinutes}m rolling extension until ${newScheduledEnd.toISOString()})` : ''}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidBidCountOfCurrencyToLocaleStringAcceptedFromNameInAuctionAuctionNumberValue6, { "bidCount": bidCount, "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "name": bid.vendor.name, "auctionNumber": auction.auctionNumber, "value6": extended ? ` (Triggered ${auction.autoExtensionMinutes}m rolling extension until ${newScheduledEnd.toISOString()})` : '' }),
       newValue: {
         bidAmount: numericBid,
         bidNumber: bidCount,
@@ -271,6 +275,6 @@ export async function POST(
     }, 201);
   } catch (error: any) {
     console.error('Error submitting auction bid:', error);
-    return apiError(error.message || 'Failed to submit bid', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitBid }), 500);
   }
 }

@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import BoqUploadPage from '../src/app/(app)/boq/upload/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockSearchParam = jest.fn();
 const mockRouterPush = jest.fn();
@@ -69,9 +73,9 @@ describe('BOQ upload wizard page', () => {
   it('requires a project before accepting files and links back to the BOQ register', async () => {
     mockSearchParam.mockReturnValue(null);
     render(<BoqUploadPage />);
-    expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/boq');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.back) })).toHaveAttribute('href', '/boq');
     uploadFile();
-    expect(await screen.findByText('Project ID is missing. Please navigate from a project.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.projectIDIsMissingPleaseNavigateFromAProject))).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -80,11 +84,11 @@ describe('BOQ upload wizard page', () => {
     render(<BoqUploadPage />);
     uploadFile();
     expect(await screen.findByText('Unsupported workbook')).toBeInTheDocument();
-    expect(screen.getByText('Step 1: Upload BOQ File')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.step1UploadBOQFile))).toBeInTheDocument();
 
     uploadResponse = response({}, false);
     uploadFile(file('retry.csv'));
-    expect(await screen.findByText('BOQ upload failed. Please verify the file format.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.boqUploadFailedPleaseVerifyTheFileFormat))).toBeInTheDocument();
   });
 
   it('handles drag states and imports the uploaded workbook with auto-mapped columns', async () => {
@@ -100,27 +104,27 @@ describe('BOQ upload wizard page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
 
     uploadFile();
-    await screen.findByText('Step 2: Map Columns');
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.step2MapColumns));
     const uploadCall = fetchMock.mock.calls.find(([url]) => url === '/api/boq/upload');
     const form = uploadCall?.[1].body as FormData;
     expect(form.get('projectId')).toBe('project-1');
     expect(form.get('boqId')).toBe('boq-1');
     expect(form.get('file')).toBeInstanceOf(File);
-    expect(screen.getByText('Preview (first 5 rows)')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.previewFirst5Rows))).toBeInTheDocument();
     expect(screen.getByText('Line 1')).toBeInTheDocument();
     expect(screen.getAllByRole('combobox')).toHaveLength(16);
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'Alternates' } });
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'Code' } });
-    fireEvent.click(screen.getByRole('button', { name: /Import BOQ/ }));
-    expect(await screen.findByText('BOQ Imported Successfully')).toBeInTheDocument();
-    expect(screen.getByText('Total Lines')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqUploadPage.importBOQ) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.bOQImportedSuccessfully))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.totalLines))).toBeInTheDocument();
     expect(screen.getByText('90%')).toBeInTheDocument();
     const importCall = fetchMock.mock.calls.find(([url]) => url === '/api/boq/import');
     expect(JSON.parse(importCall?.[1].body)).toEqual({
       revisionId: 'revision-1', sheetName: 'Alternates',
-      columnMapping: expect.objectContaining({ description: 'Item Desc', uom: 'Unit', quantity: 'Nos.' }),
+      columnMapping: expect.objectContaining({ description: 'Item Desc', uom: UI_STRINGS.common.unit, quantity: 'Nos.' }),
     });
-    fireEvent.click(screen.getByRole('button', { name: /Open BOQ Workspace/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.bOQWorkspace) }));
     expect(mockRouterPush).toHaveBeenCalledWith('/boq/revision-1');
   });
 
@@ -130,13 +134,13 @@ describe('BOQ upload wizard page', () => {
     fetchMock.mockImplementationOnce(() => new Promise(resolve => { finishUpload = resolve; }));
     render(<BoqUploadPage />);
     fireEvent.change(document.querySelector<HTMLInputElement>('#file-input')!, { target: { files: [file('loading.csv')] } });
-    expect(screen.getByText('Uploading and analysing file...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.uploadingAndAnalysingFile))).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/boq/upload', expect.objectContaining({ method: 'POST' })));
     await act(async () => finishUpload(response({ ...uploadBody, sheets: [] })));
-    expect(await screen.findByText('Step 2: Map Columns')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.step2MapColumns))).toBeInTheDocument();
     const form = fetchMock.mock.calls[0][1].body as FormData;
     expect(form.get('boqId')).toBeNull();
-    expect(screen.queryByText('Sheet to Import')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.sheetToImport))).not.toBeInTheDocument();
   });
 
   it('validates required column mappings and returns to mapping after import failure', async () => {
@@ -147,24 +151,24 @@ describe('BOQ upload wizard page', () => {
     importResponse = response({ error: 'Rows contain invalid quantities' }, false);
     render(<BoqUploadPage />);
     uploadFile(file('partial.csv'));
-    await screen.findByText('Step 2: Map Columns');
-    expect(screen.queryByText('Preview (first 5 rows)')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Import BOQ/ }));
-    expect(await screen.findByText('Column mapping is incomplete. Please map Description, UOM and Quantity.')).toBeInTheDocument();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.step2MapColumns));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.previewFirst5Rows))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqUploadPage.importBOQ) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.columnMappingIsIncompletePleaseMapDescriptionUOMAndQuantity))).toBeInTheDocument();
 
     fireEvent.change(screen.getAllByRole('combobox')[4], { target: { value: 'Name' } });
     fireEvent.change(screen.getAllByRole('combobox')[6], { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: /Import BOQ/ }));
-    expect(await screen.findByText('Column mapping is incomplete. Please map UOM.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqUploadPage.importBOQ) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.columnMappingIsIncompletePleaseMapUOM))).toBeInTheDocument();
 
     fireEvent.change(screen.getAllByRole('combobox')[6], { target: { value: 'Unit' } });
     fireEvent.change(screen.getAllByRole('combobox')[7], { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: /Import BOQ/ }));
-    expect(await screen.findByText('Column mapping is incomplete. Please map Quantity.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqUploadPage.importBOQ) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.columnMappingIsIncompletePleaseMapQuantity))).toBeInTheDocument();
 
     fireEvent.change(screen.getAllByRole('combobox')[7], { target: { value: 'Qty' } });
-    fireEvent.click(screen.getByRole('button', { name: /Import BOQ/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqUploadPage.importBOQ) }));
     expect(await screen.findByText('Rows contain invalid quantities')).toBeInTheDocument();
-    expect(screen.getByText('Step 2: Map Columns')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqUploadPage.step2MapColumns))).toBeInTheDocument();
   });
 });

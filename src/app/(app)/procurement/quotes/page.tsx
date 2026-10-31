@@ -7,6 +7,9 @@ import { FileText, MessageSquare } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function QuotesHubPage() {
   const [quotes, setQuotes] = useState<any[]>([]);
@@ -33,35 +36,34 @@ export default function QuotesHubPage() {
     <div>
       <PageHeader
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'Quotes' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.appAppProcurementQuotesPage.quotes },
         ]}
-        title="Quote Responses & Commercial Evaluations"
-        description="Supplier item-rate bids, tax structures, revisions ledger, and comparative commercial variance."
+        title={UI_STRINGS.appAppProcurementQuotesPage.quoteResponsesCommercialEvaluations}
+        description={UI_STRINGS.appAppProcurementQuotesPage.supplierItemRateBidsTaxStructuresRevisionsLedgerAndComparativeCommercialVariance}
         actions={
           <Link href="/procurement/rfqs" className="btn btn-secondary">
-            <FileText size={16} /> View Active RFQs
-          </Link>
+            <FileText size={16} />{UI_STRINGS.appAppProcurementQuotesPage.viewActiveRFQs}</Link>
         }
       />
 
       <Card
-        title={`All Submitted Quotations (${quotes.length})`}
-        subtitle="Version-controlled quotes received against approved BOQ baselines"
+        title={interpolateUiString(UI_STRINGS.appAppProcurementQuotesPage.allSubmittedQuotationsLength, { "length": quotes.length })}
+        subtitle={UI_STRINGS.appAppProcurementQuotesPage.versionControlledQuotesReceivedAgainstApprovedBOQBaselines}
         noPadding
       >
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13, color: '#64748b' }}>Loading quotes...</div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appAppProcurementQuotesPage.loadingQuotes}</div>
           </div>
         ) : quotes.length === 0 ? (
           <div style={{ padding: 32 }}>
             <EmptyState
               icon={<MessageSquare size={36} strokeWidth={1.5} color="#94a3b8" />}
-              title="No Quotes Submitted Yet"
-              description="Once invited vendors submit commercial rates against released RFQs, bids appear here."
-              actionText="View Sourcing RFQs"
+              title={UI_STRINGS.appAppProcurementQuotesPage.noQuotesSubmittedYet}
+              description={UI_STRINGS.appAppProcurementQuotesPage.onceInvitedVendorsSubmitCommercialRatesAgainstReleasedRFQsBidsAppearHere}
+              actionText={UI_STRINGS.common.viewSourcingRFQs}
               actionHref="/procurement/rfqs"
             />
           </div>
@@ -70,16 +72,16 @@ export default function QuotesHubPage() {
             <table className="table enterprise-table">
               <thead>
                 <tr>
-                  <th style={{ width: 140 }}>Quote Number</th>
-                  <th>Vendor</th>
-                  <th style={{ width: 140 }}>RFQ Package</th>
-                  <th style={{ width: 90 }}>Version</th>
-                  <th style={{ width: 130, textAlign: 'right' }}>Base Amount</th>
-                  <th style={{ width: 110, textAlign: 'right' }}>Tax</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>Grand Total</th>
-                  <th style={{ maxWidth: 200 }}>Commercial Terms</th>
-                  <th style={{ width: 120 }}>Submitted Date</th>
-                  <th style={{ width: 140, textAlign: 'right' }}>Actions</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.common.quoteNumber}</th>
+                  <th>{UI_STRINGS.common.vendor}</th>
+                  <th style={{ width: 140 }}>{UI_STRINGS.appAppProcurementQuotesPage.rFQPackage}</th>
+                  <th style={{ width: 90 }}>{UI_STRINGS.common.version}</th>
+                  <th style={{ width: 130, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementQuotesPage.baseAmount}</th>
+                  <th style={{ width: 110, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementQuotesPage.tax}</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementQuotesPage.grandTotal}</th>
+                  <th style={{ maxWidth: 200 }}>{UI_STRINGS.common.commercialTerms}</th>
+                  <th style={{ width: 120 }}>{UI_STRINGS.appAppProcurementQuotesPage.submittedDate}</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,15 +101,14 @@ export default function QuotesHubPage() {
                       </Link>
                     </td>
                     <td>
-                      <span className="badge badge-info font-mono">v{q.quoteVersion}</span>
+                      <span className="badge badge-info font-mono">{UI_STRINGS.common.v}{q.quoteVersion}</span>
                     </td>
-                    <td style={{ textAlign: 'right' }}>₹ {q.totalBaseAmount?.toLocaleString()}</td>
-                    <td style={{ textAlign: 'right' }}>₹ {q.taxAmount?.toLocaleString()}</td>
-                    <td style={{ fontWeight: 700, textAlign: 'right', color: '#059669' }}>
-                      ₹ {q.totalQuoteAmount?.toLocaleString()}
+                    <td style={{ textAlign: 'right' }}>{UI_STRINGS.common.copytfdhmk}{q.totalBaseAmount?.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{UI_STRINGS.common.copytfdhmk}{q.taxAmount?.toLocaleString()}</td>
+                    <td style={{ fontWeight: 700, textAlign: 'right', color: '#059669' }}>{UI_STRINGS.common.copy1g8b5tg}{q.totalQuoteAmount?.toLocaleString()}
                     </td>
                     <td style={{ fontSize: 12, color: '#475569', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={q.commercialTerms}>
-                      {q.commercialTerms || 'Standard commercial terms'}
+                      {q.commercialTerms || UI_STRINGS.appAppProcurementQuotesPage.standardCommercialTerms}
                     </td>
                     <td className="text-muted" style={{ fontSize: 12 }}>
                       {new Date(q.createdAt).toLocaleDateString()}
@@ -116,9 +117,7 @@ export default function QuotesHubPage() {
                       <Link
                         href={`/procurement/rfqs/${q.rfqId}?tab=compare`}
                         className="btn btn-secondary btn-sm"
-                      >
-                        Compare in RFQ →
-                      </Link>
+                      >{UI_STRINGS.appAppProcurementQuotesPage.compareInRFQ}</Link>
                     </td>
                   </tr>
                 ))}

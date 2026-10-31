@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createWorkflowNotification } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_APPROVE');
@@ -15,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { reason } = body;
 
     if (!reason || !reason.trim()) {
-      return apiError('Mandatory reason for reverting for correction must be provided.', 400);
+      return apiError(UI_STRINGS.appApiPrIdRevertRoute.mandatoryReasonForRevertingForCorrectionMustBeProvided, 400);
     }
 
     const pr = await prisma.procurementRequest.findFirst({
@@ -27,10 +30,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
-    if (!pr) return apiError('Procurement Request not found.', 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
 
     if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
-      return apiError(`Cannot revert BOQ in status ${pr.status}. Expected PR_PENDING_PROJECT_APPROVAL.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.cannotRevertBOQInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400);
     }
 
     const trimmedReason = reason.trim();
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         entityType: 'PR',
         entityId: pr.id,
         action: 'PR_RETURNED_FOR_CORRECTION',
-        description: `BOQ ${pr.prNumber} (${pr.title}) REVERTED FOR CORRECTION by Project Approver. Reason: "${trimmedReason}"`,
+        description: interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.bOQPrNumberTitleREVERTEDFORCORRECTIONByProjectApproverReasonTrimmedReason, { "prNumber": pr.prNumber, "title": pr.title, "trimmedReason": trimmedReason }),
         newValue: JSON.stringify({
           prNumber: pr.prNumber,
           status: 'PR_RETURNED_FOR_CORRECTION',
@@ -90,8 +93,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await createWorkflowNotification({
       tenantId: ctx.tenantId,
       userId: pr.requestedBy,
-      title: `BOQ Returned for Correction: ${pr.prNumber}`,
-      message: `${ctx.userName || 'Project Approver'} returned BOQ ${pr.prNumber} for correction: "${trimmedReason}"`,
+      title: interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.bOQReturnedForCorrectionPrNumber, { "prNumber": pr.prNumber }),
+      message: interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.value1ReturnedBOQPrNumberForCorrectionTrimmedReason, { "value1": ctx.userName || UI_STRINGS.common.projectApprover, "prNumber": pr.prNumber, "trimmedReason": trimmedReason }),
       type: 'WARNING',
       entityType: 'PR',
       entityId: pr.id,
@@ -103,10 +106,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       success: true,
       pr: updated,
       status: 'PR_RETURNED_FOR_CORRECTION',
-      message: `BOQ ${pr.prNumber} successfully returned for correction to the Project User.`,
+      message: interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.bOQPrNumberSuccessfullyReturnedForCorrectionToTheProjectUser, { "prNumber": pr.prNumber }),
     });
   } catch (err: any) {
     console.error('Error reverting BOQ for correction:', err);
-    return apiError(err.message || 'Failed to revert BOQ for correction.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToRevertBoqForCorrection }), 500);
   }
 }

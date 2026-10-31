@@ -1,8 +1,12 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { signOut } from 'next-auth/react';
 import TopNav from '../src/components/ui/TopNav';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next-auth/react', () => ({ signOut: jest.fn() }));
 jest.mock('next/link', () => ({
@@ -64,47 +68,47 @@ describe('TopNav', () => {
     fireEvent.blur(search);
     expect(search).toHaveStyle({ border: '1px solid rgb(203, 213, 225)' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    expect(screen.getByText('Workflow Notifications (12)')).toBeInTheDocument();
-    expect(screen.getByText('9+')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.notifications) }));
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.componentsUiTopNav.workflowNotificationsWithUnreadCount, { unreadCount: 12 }))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.copyatifd9))).toBeInTheDocument();
     expect(screen.getByText('PR-17')).toBeInTheDocument();
     expect(screen.getByText('Review the scope')).toBeInTheDocument();
     expect(screen.getByText('Rate locked').parentElement?.parentElement).toHaveStyle({ background: 'rgb(255, 255, 255)' });
-    fireEvent.click(screen.getByRole('link', { name: /View/ }));
-    expect(screen.queryByText('Workflow Notifications (12)')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark all as read' }));
+    fireEvent.click(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.view) }));
+    expect(screen.queryByText(interpolateUiString(UI_STRINGS.componentsUiTopNav.workflowNotificationsWithUnreadCount, { unreadCount: 12 }))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.notifications) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.markAllAsRead) }));
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('/api/notifications', expect.objectContaining({ method: 'PUT' })));
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Mark all as read' })).not.toBeInTheDocument());
-    expect(screen.getByText(/Workflow Notifications/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.markAllAsRead) })).not.toBeInTheDocument());
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.workflowNotifications))).toBeInTheDocument();
 
     act(() => jest.advanceTimersByTime(15_000));
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(3));
-    await waitFor(() => expect(screen.getByText('No notifications yet. Workflow updates will appear here.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.noNotificationsYetWorkflowUpdatesWillAppearHere))).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /Ada Lovelace/ }));
-    expect(screen.getByText('Signed in as')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).toBeInTheDocument();
     expect(screen.getByText('ada@example.test')).toBeInTheDocument();
     expect(screen.getByText('PROJECT USER')).toBeInTheDocument();
-    const profile = screen.getByRole('link', { name: 'Profile' });
+    const profile = screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.profile) });
     fireEvent.mouseOver(profile);
     expect(profile).toHaveStyle({ background: 'rgb(248, 250, 252)' });
     fireEvent.mouseOut(profile);
     expect(profile).toHaveStyle({ background: 'transparent' });
     fireEvent.click(profile);
-    expect(screen.queryByText('Signed in as')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Ada Lovelace/ }));
-    const auditLink = screen.getByRole('link', { name: 'Security & Audit' });
+    const auditLink = screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.securityAudit) });
     fireEvent.mouseOver(auditLink);
     fireEvent.mouseOut(auditLink);
     fireEvent.click(auditLink);
-    expect(screen.queryByText('Signed in as')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Ada Lovelace/ }));
-    const signOutButton = screen.getByRole('button', { name: 'Sign Out' });
+    const signOutButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.signOut) });
     fireEvent.mouseOver(signOutButton);
     fireEvent.mouseOut(signOutButton);
     fireEvent.click(signOutButton);
-    expect(signOutMock).toHaveBeenCalledWith({ callbackUrl: '/login' });
+    expect(signOutMock).toHaveBeenCalledWith({ callbackUrl: UI_STRINGS.libAuth.login });
   });
 
   it('uses fallback initials and ignores failed notification requests', async () => {
@@ -115,8 +119,8 @@ describe('TopNav', () => {
     const { rerender } = render(<TopNav user={{ role: 'VENDOR', tenantName: 'Vendor Tenant' }} />);
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(1));
     expect(screen.getByText('CP')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    expect(screen.getByText('No notifications yet. Workflow updates will appear here.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.notifications) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.noNotificationsYetWorkflowUpdatesWillAppearHere))).toBeInTheDocument();
 
     rerender(<TopNav user={{ name: '', role: 'VENDOR', tenantName: 'Vendor Tenant' }} />);
     act(() => jest.advanceTimersByTime(15_000));
@@ -135,10 +139,10 @@ describe('TopNav', () => {
       .mockRejectedValueOnce(new Error('network unavailable'));
     render(<TopNav user={baseUser} />);
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark all as read' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.notifications) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.markAllAsRead) }));
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(2));
-    expect(screen.getByText('Workflow Notifications (1)')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark all as read' })).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.componentsUiTopNav.workflowNotificationsWithUnreadCount, { unreadCount: 1 }))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.markAllAsRead) })).toBeInTheDocument();
   });
 });

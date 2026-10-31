@@ -5,6 +5,8 @@ import { isApiContext, requireAuth } from '../src/lib/api-utils';
 import bcrypt from 'bcryptjs';
 import { GET as listUsers, POST as createUser } from '../src/app/api/admin/users/route';
 import { PUT } from '../src/app/api/admin/users/[id]/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: { user: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() } },
@@ -65,19 +67,19 @@ describe('admin user update route', () => {
     await expect(createUser(makeRequest({}, 'POST'))).resolves.toBe(denied);
 
     const create = (body: unknown) => createUser(makeRequest(body, 'POST'));
-    await expect(create({ email: ' ' })).resolves.toEqual({ ok: false, error: 'Email is required.', status: 400 });
-    await expect(create({ email: 'ada@example.test', name: ' ' })).resolves.toEqual({ ok: false, error: 'Name is required.', status: 400 });
-    await expect(create({ email: 'ada@example.test', name: 'Ada' })).resolves.toEqual({ ok: false, error: 'Role is required.', status: 400 });
+    await expect(create({ email: ' ' })).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersRoute.emailIsRequired, status: 400 });
+    await expect(create({ email: 'ada@example.test', name: ' ' })).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersRoute.nameIsRequired, status: 400 });
+    await expect(create({ email: 'ada@example.test', name: 'Ada' })).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersRoute.roleIsRequired, status: 400 });
     await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'BUYER', password: 'short' })).resolves.toEqual({
-      ok: false, error: 'Password must be at least 8 characters.', status: 400,
+      ok: false, error: UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters, status: 400,
     });
     await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'BUYER' })).resolves.toEqual({
-      ok: false, error: 'Password must be at least 8 characters.', status: 400,
+      ok: false, error: UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters, status: 400,
     });
 
     userDb.findFirst.mockResolvedValueOnce({ id: 'existing' });
     await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'BUYER', password: 'long-password' })).resolves.toEqual({
-      ok: false, error: 'A user with this email already exists.', status: 400,
+      ok: false, error: UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists, status: 400,
     });
 
     userDb.findFirst.mockResolvedValueOnce(null);
@@ -89,7 +91,7 @@ describe('admin user update route', () => {
     expect(userDb.create).toHaveBeenCalledWith({
       data: {
         tenantId: 'tenant-1', email: 'ada@example.test', name: 'Ada Lovelace', role: 'BUYER',
-        passwordHash: 'hashed-secret', status: 'ACTIVE', createdBy: 'editor-1',
+        passwordHash: 'hashed-secret', status: UI_STRINGS.common.aCTIVE, createdBy: 'editor-1',
       },
       select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
     });
@@ -102,7 +104,7 @@ describe('admin user update route', () => {
     await expect(PUT(makeRequest({}), params)).resolves.toBe(denied);
 
     userDb.findFirst.mockResolvedValueOnce(null);
-    await expect(PUT(makeRequest({}), params)).resolves.toEqual({ ok: false, error: 'User not found', status: 404 });
+    await expect(PUT(makeRequest({}), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersIdRoute.userNotFound, status: 404 });
     expect(userDb.findFirst).toHaveBeenCalledWith({ where: { id: 'user-1', tenantId: 'tenant-1' } });
     expect(userDb.update).not.toHaveBeenCalled();
   });
@@ -117,13 +119,13 @@ describe('admin user update route', () => {
     });
     expect(userDb.update).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      data: { name: 'New name', role: 'BUYER', status: 'ACTIVE', updatedBy: 'editor-1' },
+      data: { name: 'New name', role: 'BUYER', status: UI_STRINGS.common.aCTIVE, updatedBy: 'editor-1' },
       select: { id: true, email: true, name: true, role: true, status: true, updatedAt: true },
     });
     expect(audit).toHaveBeenCalledWith({
-      tenantId: 'tenant-1', userId: 'editor-1', entityType: 'USER', entityId: 'user-1', action: 'UPDATE',
+      tenantId: 'tenant-1', userId: 'editor-1', entityType: UI_STRINGS.appAppAuditPage.uSER, entityId: 'user-1', action: UI_STRINGS.appAppAuditPage.uPDATE,
       description: 'User member@example.test updated (Role: BUYER, Status: ACTIVE)',
-      oldValue: { role: 'BUYER', status: 'ACTIVE' }, newValue: { role: 'BUYER', status: 'ACTIVE' },
+      oldValue: { role: 'BUYER', status: UI_STRINGS.common.aCTIVE }, newValue: { role: 'BUYER', status: UI_STRINGS.common.aCTIVE },
     });
   });
 

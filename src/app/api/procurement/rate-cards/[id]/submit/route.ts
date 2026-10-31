@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(
   req: NextRequest,
@@ -20,16 +23,16 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError('Rate Card not found', 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
     if (rateCard.items.length === 0) {
-      return apiError('Cannot submit rate card with no items', 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.cannotSubmitRateCardWithNoItems, 400);
     }
 
     const submittableStatuses = ['DRAFT', 'RETURNED_FOR_CORRECTION', 'NEGOTIATION', 'UNDER_REVIEW'];
     if (!submittableStatuses.includes(rateCard.status)) {
-      return apiError(`Rate Card cannot be submitted from status: ${rateCard.status}`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardCannotBeSubmittedFromStatusStatus, { "status": rateCard.status }), 400);
     }
 
     let remarks = 'Submitted for Level 1 Project Approval';
@@ -78,13 +81,13 @@ export async function POST(
       entityType: 'VENDOR',
       entityId: rateCard.vendorId,
       action: 'RATE_CARD_SUBMITTED',
-      description: `Rate Card ${rateCard.rateCardNumber} submitted for Level 1 Project Approval`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardRateCardNumberSubmittedForLevel1ProjectApproval, { "rateCardNumber": rateCard.rateCardNumber }),
       newValue: { status: 'PENDING_PROJECT_APPROVAL', level: 'LEVEL_1_PROJECT' },
     });
 
-    return apiSuccess({ rateCard: updated, message: 'Rate Card submitted for Project Approval' });
+    return apiSuccess({ rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardSubmittedForProjectApproval });
   } catch (error: any) {
     console.error('Error submitting rate card:', error);
-    return apiError(error.message || 'Failed to submit rate card', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCard }), 500);
   }
 }

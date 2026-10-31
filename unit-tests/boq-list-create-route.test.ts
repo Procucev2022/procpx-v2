@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '../src/app/api/boq/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -96,20 +98,20 @@ describe('BOQ list and create API', () => {
 
   it('validates required project, cost centre, title, category, and purpose fields', async () => {
     const base = { projectId: 'project-1', costCentreId: 'cc-1', title: 'Electrical', category: 'Electrical', purpose: 'BUDGET' };
-    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: 'Project is required', status: 400 });
-    await expect(POST(postRequest({ ...base, costCentreId: '' }))).resolves.toEqual({ ok: false, error: 'Cost Centre is required', status: 400 });
-    await expect(POST(postRequest({ ...base, title: '  ' }))).resolves.toEqual({ ok: false, error: 'BOQ Title / Name is required', status: 400 });
-    await expect(POST(postRequest({ ...base, category: '' }))).resolves.toEqual({ ok: false, error: 'BOQ Category is required', status: 400 });
-    await expect(POST(postRequest({ ...base, category: [] }))).resolves.toEqual({ ok: false, error: 'BOQ Category is required', status: 400 });
-    await expect(POST(postRequest({ ...base, purpose: 'INVALID' }))).resolves.toEqual({ ok: false, error: 'BOQ Purpose (BUDGET or PR) is required', status: 400 });
+    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.projectIsRequired, status: 400 });
+    await expect(POST(postRequest({ ...base, costCentreId: '' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.costCentreIsRequired, status: 400 });
+    await expect(POST(postRequest({ ...base, title: '  ' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.bOQTitleNameIsRequired, status: 400 });
+    await expect(POST(postRequest({ ...base, category: '' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.bOQCategoryIsRequired, status: 400 });
+    await expect(POST(postRequest({ ...base, category: [] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.bOQCategoryIsRequired, status: 400 });
+    await expect(POST(postRequest({ ...base, purpose: 'INVALID' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.bOQPurposeBUDGETOrPRIsRequired, status: 400 });
   });
 
   it('checks project and cost-centre tenancy and ownership before creating records', async () => {
     const body = { projectId: 'project-1', costCentreId: 'cc-1', title: 'Electrical', category: 'Electrical', purpose: 'PR' };
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest(body))).resolves.toEqual({ ok: false, error: 'Project not found or accessible', status: 404 });
+    await expect(POST(postRequest(body))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.projectNotFoundOrAccessible, status: 404 });
     db.costCentre.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest(body))).resolves.toEqual({ ok: false, error: 'Cost Centre does not belong to the selected Project', status: 400 });
+    await expect(POST(postRequest(body))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.costCentreDoesNotBelongToTheSelectedProject, status: 400 });
     expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'cc-1', projectId: 'project-1', tenantId: 'tenant-1' } });
     expect(db.boq.create).not.toHaveBeenCalled();
   });
@@ -124,14 +126,14 @@ describe('BOQ list and create API', () => {
     expect(db.boq.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', projectId: 'project-1' } });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-1', costCentreId: 'cc-1', boqCode: 'BOQ-P1-001', title: 'Store Electrical',
-      description: 'L1 areas', category: 'Power, Lighting', scope: 'L1 areas', purpose: 'BUDGET', status: 'DRAFT', createdBy: 'buyer@example.com',
+      description: 'L1 areas', category: 'Power, Lighting', scope: 'L1 areas', purpose: UI_STRINGS.componentsSidebar.bUDGET, status: 'DRAFT', createdBy: 'buyer@example.com',
     }) });
     expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', boqId: 'boq-1', costCentreId: 'cc-1', revisionNumber: 0, revisionCode: 'R0',
+      tenantId: 'tenant-1', boqId: 'boq-1', costCentreId: 'cc-1', revisionNumber: 0, revisionCode: UI_STRINGS.common.r0,
       budgetStatus: 'BUDGET_DRAFT', prStatus: 'PR_NOT_CREATED', createdById: 'user-1',
       notes: JSON.stringify({ sector: 'RETAIL', projectType: 'Store', areaSqFt: 100, floorZone: 'Ground', requiredDate: null, referenceDrawing: null, remarks: null }),
     }) });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityType: 'BOQ', entityId: 'boq-1', action: 'BOQ_CREATED' }) });
+    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityType: UI_STRINGS.common.bOQ, entityId: 'boq-1', action: 'BOQ_CREATED' }) });
   });
 
   it('creates PR-purpose BOQs from explicit optional values and survives audit logging failures', async () => {

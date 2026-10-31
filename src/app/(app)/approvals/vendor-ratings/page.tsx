@@ -30,6 +30,9 @@ import {
   X,
 } from 'lucide-react';
 import type { VendorRatingItem } from "@app-types/app/(app)/approvals/vendor-ratings/page.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function VendorRatingsApprovalsPage() {
@@ -67,11 +70,11 @@ export default function VendorRatingsApprovalsPage() {
           setCounts(cMetrics);
         }
       } else {
-        toast.error('Failed to load vendor performance approvals queue.');
+        toast.error(UI_STRINGS.common.userMessages.failedToLoadVendorPerformanceApprovalsQueue);
       }
     } catch (err: any) {
       console.error(err);
-      toast.error('Network error while loading approvals queue.');
+      toast.error(UI_STRINGS.common.userMessages.networkErrorWhileLoadingApprovalsQueue);
     } finally {
       setLoading(false);
     }
@@ -127,10 +130,10 @@ export default function VendorRatingsApprovalsPage() {
       if (res.ok) {
         toast.success(
           action === 'ACCEPT'
-            ? 'Performance assessment accepted! Published to vendor scorecard.'
+            ? UI_STRINGS.common.userMessages.performanceAssessmentAcceptedPublishedToVendorScorecard
             : (action === 'RETURN'
-              ? 'Assessment returned to submitter for correction.'
-              : 'Assessment rejected.'),
+              ? UI_STRINGS.common.userMessages.assessmentReturnedToSubmitterForCorrection
+              : UI_STRINGS.common.userMessages.assessmentRejected),
           selectedRating.ppo?.ppoNumber
         );
         setSelectedRating(null);
@@ -149,21 +152,17 @@ export default function VendorRatingsApprovalsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Vendor Performance Approvals"
+        title={UI_STRINGS.appAppApprovalsVendorRatingsPage.vendorPerformanceApprovals}
         breadcrumbs={[
-          { label: 'Approvals', href: '/approvals/boq-pr' },
-          { label: 'Vendor Performance Approvals' },
+          { label: UI_STRINGS.common.approvals, href: '/approvals/boq-pr' },
+          { label: UI_STRINGS.appAppApprovalsVendorRatingsPage.vendorPerformanceApprovals },
         ]}
-        subtitle="Review PPO-level vendor performance assessments, category ratings, improvement feedback, and published ratings."
+        subtitle={UI_STRINGS.appAppApprovalsVendorRatingsPage.reviewPPOLevelVendorPerformanceAssessmentsCategoryRatingsImprovementFeedbackAndPublishedRatings}
         actions={
           <div className="flex items-center gap-2">
             <Link href="/approvals/boq-pr" className="btn btn-secondary text-xs">
-              <CheckSquare className="w-3.5 h-3.5" style={{ marginRight: 6 }} />
-              BOQ Approvals
-            </Link>
-            <Link href="/approvals/rate-cards" className="btn btn-secondary text-xs">
-              Rate Card Approvals
-            </Link>
+              <CheckSquare className="w-3.5 h-3.5" style={{ marginRight: 6 }} />{UI_STRINGS.common.bOQApprovals}</Link>
+            <Link href="/approvals/rate-cards" className="btn btn-secondary text-xs">{UI_STRINGS.appAppApprovalsVendorRatingsPage.rateCardApprovals}</Link>
             <button onClick={fetchQueue} className="btn btn-secondary text-xs">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -175,55 +174,53 @@ export default function VendorRatingsApprovalsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Awaiting Decision</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppApprovalsVendorRatingsPage.awaitingDecision}</span>
             <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-slate-900">{counts.pendingCount}</span>
-            <span className="text-xs text-amber-600 font-medium">Pending Approvals</span>
+            <span className="text-xs text-amber-600 font-medium">{UI_STRINGS.appAppApprovalsVendorRatingsPage.pendingApprovals}</span>
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Approved Ratings</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{UI_STRINGS.common.approvedRatings}</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-slate-900">{counts.approvedCount}</span>
-            <span className="text-xs text-emerald-600 font-medium">Published to Scorecard</span>
+            <span className="text-xs text-emerald-600 font-medium">{UI_STRINGS.appAppApprovalsVendorRatingsPage.publishedToScorecard}</span>
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Returned for Edit</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppApprovalsVendorRatingsPage.returnedForEdit}</span>
             <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
               <RotateCcw className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-slate-900">{counts.returnedCount}</span>
-            <span className="text-xs text-purple-600 font-medium">Awaiting Corrections</span>
+            <span className="text-xs text-purple-600 font-medium">{UI_STRINGS.appAppApprovalsVendorRatingsPage.awaitingCorrections}</span>
           </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Evaluated PPO Value</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppApprovalsVendorRatingsPage.evaluatedPPOValue}</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-xl font-bold font-mono text-slate-900">
-              ₹{(counts.totalEvaluatedValue / 100000).toFixed(1)}L
-            </span>
-            <span className="text-xs text-slate-500">Approved orders</span>
+            <span className="text-xl font-bold font-mono text-slate-900">{UI_STRINGS.common.copy1g8b5tg}{(counts.totalEvaluatedValue / 100000).toFixed(1)}{UI_STRINGS.common.l}</span>
+            <span className="text-xs text-slate-500">{UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedOrders}</span>
           </div>
         </div>
       </div>
@@ -238,40 +235,32 @@ export default function VendorRatingsApprovalsPage() {
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === 'SUBMITTED' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Pending Approval ({counts.pendingCount})
-            </button>
+            >{UI_STRINGS.appAppApprovalsVendorRatingsPage.pendingApproval}{counts.pendingCount}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               onClick={() => setActiveTab('APPROVED')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === 'APPROVED' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Approved ({counts.approvedCount})
-            </button>
+            >{UI_STRINGS.common.approved2}{counts.approvedCount}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               onClick={() => setActiveTab('RETURNED_FOR_CORRECTION')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === 'RETURNED_FOR_CORRECTION' ? 'bg-white text-purple-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              Returned ({counts.returnedCount})
-            </button>
+            >{UI_STRINGS.appAppApprovalsVendorRatingsPage.returned2}{counts.returnedCount}{UI_STRINGS.common.copyc7zu6c}</button>
             <button
               onClick={() => setActiveTab('ALL')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
-            >
-              All Records ({counts.totalCount})
-            </button>
+            >{UI_STRINGS.appAppApprovalsVendorRatingsPage.allRecords}{counts.totalCount}{UI_STRINGS.common.copyc7zu6c}</button>
           </div>
 
           <div className="relative w-full md:w-72">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by PPO, vendor, or project..."
+              placeholder={UI_STRINGS.appAppApprovalsVendorRatingsPage.searchByPPOVendorOrProject}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
@@ -283,16 +272,16 @@ export default function VendorRatingsApprovalsPage() {
         {loading ? (
           <div className="p-12 text-center text-slate-500">
             <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
-            <p className="text-xs font-semibold">Loading vendor performance approvals...</p>
+            <p className="text-xs font-semibold">{UI_STRINGS.appAppApprovalsVendorRatingsPage.loadingVendorPerformanceApprovals}</p>
           </div>
         ) : filteredRatings.length === 0 ? (
           <div className="p-12 text-center">
             <Award className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <h4 className="text-sm font-bold text-slate-800">No Assessments Found</h4>
+            <h4 className="text-sm font-bold text-slate-800">{UI_STRINGS.appAppApprovalsVendorRatingsPage.noAssessmentsFound}</h4>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
               {activeTab === 'SUBMITTED'
-                ? 'There are currently no vendor performance ratings awaiting Project Approver review.'
-                : 'No performance rating records matched the active filter criteria.'}
+                ? UI_STRINGS.appAppApprovalsVendorRatingsPage.thereAreCurrentlyNoVendorPerformanceRatingsAwaitingProjectApproverReview
+                : UI_STRINGS.appAppApprovalsVendorRatingsPage.noPerformanceRatingRecordsMatchedTheActiveFilterCriteria}
             </p>
           </div>
         ) : (
@@ -300,14 +289,14 @@ export default function VendorRatingsApprovalsPage() {
             <table className="w-full text-xs text-left">
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">PPO Reference</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Vendor Name</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Project / Cost Centre</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-right">PPO Value</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-center">Weighted Score</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">Submitted By</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-center">Status</th>
-                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-right">Action</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">{UI_STRINGS.common.pPOReference}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">{UI_STRINGS.common.vendorName}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">{UI_STRINGS.common.projectCostCentre2}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-right">{UI_STRINGS.common.pPOValue}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-center">{UI_STRINGS.appAppApprovalsVendorRatingsPage.weightedScore}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px]">{UI_STRINGS.common.submittedBy}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-center">{UI_STRINGS.common.status}</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[11px] text-right">{UI_STRINGS.common.action}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -328,35 +317,28 @@ export default function VendorRatingsApprovalsPage() {
                       <span className="font-mono text-[10px] text-slate-400">{item.vendor?.code}</span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-medium text-slate-800 block">{item.ppo?.project?.name || 'Project'}</span>
-                      <span className="text-[11px] text-slate-500">{item.ppo?.costCentre?.name || 'Cost Centre'}</span>
+                      <span className="font-medium text-slate-800 block">{item.ppo?.project?.name || UI_STRINGS.common.project}</span>
+                      <span className="text-[11px] text-slate-500">{item.ppo?.costCentre?.name || UI_STRINGS.common.costCentre2}</span>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono font-semibold text-slate-900">
-                      ₹{item.ppo?.totalValue?.toLocaleString() || 0}
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-slate-900">{UI_STRINGS.common.copy1g8b5tg}{item.ppo?.totalValue?.toLocaleString() || 0}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono font-bold text-xs bg-amber-50 text-amber-800 border border-amber-200">
                         <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                        <span>{item.overallScore} / 5.0</span>
+                        <span>{item.overallScore}{UI_STRINGS.common.copy6hoc4p}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-slate-800 font-medium block">{item.ratedByName || 'Project User'}</span>
+                      <span className="text-slate-800 font-medium block">{item.ratedByName || UI_STRINGS.common.projectUser}</span>
                       <span className="text-[11px] text-slate-500">{new Date(item.ratedAt).toLocaleDateString()}</span>
                     </td>
                     <td className="py-3 px-4 text-center">
                       {item.status === 'SUBMITTED' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                          Pending Approval
-                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">{UI_STRINGS.common.pendingApproval}</span>
                       ) : item.status === 'APPROVED' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          Approved
-                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">{UI_STRINGS.common.approved}</span>
                       ) : item.status === 'RETURNED_FOR_CORRECTION' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                          Returned
-                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">{UI_STRINGS.appAppApprovalsVendorRatingsPage.returned}</span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                           {item.status}
@@ -372,7 +354,7 @@ export default function VendorRatingsApprovalsPage() {
                             : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
                         }`}
                       >
-                        {item.status === 'SUBMITTED' ? 'Review & Decide →' : 'View Assessment'}
+                        {item.status === 'SUBMITTED' ? UI_STRINGS.appAppApprovalsVendorRatingsPage.reviewDecide : UI_STRINGS.appAppApprovalsVendorRatingsPage.viewAssessment}
                       </button>
                     </td>
                   </tr>
@@ -395,22 +377,18 @@ export default function VendorRatingsApprovalsPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-slate-900">
-                      Vendor Performance Assessment Review
-                    </h3>
+                    <h3 className="text-base font-bold text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.vendorPerformanceAssessmentReview}</h3>
                     <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                       {selectedRating.ppo?.ppoNumber}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Order execution review for <strong>{selectedRating.vendor?.name}</strong> submitted by {selectedRating.ratedByName || 'Project User'}.
-                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{UI_STRINGS.appAppApprovalsVendorRatingsPage.orderExecutionReviewFor}<strong>{selectedRating.vendor?.name}</strong>{UI_STRINGS.appAppApprovalsVendorRatingsPage.submittedBy}{selectedRating.ratedByName || UI_STRINGS.common.projectUser}{UI_STRINGS.common.copyby08hd}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedRating(null)}
-                aria-label="Close review"
+                aria-label={UI_STRINGS.appAppApprovalsVendorRatingsPage.closeReview}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -429,22 +407,21 @@ export default function VendorRatingsApprovalsPage() {
               {/* Status Header Banner */}
               <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
                 <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Current Workflow Stage</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.currentWorkflowStage}</span>
                   <div className="flex items-center gap-2 mt-1">
                     <StatusBadge status={selectedRating.status} />
-                    <span className="text-xs text-slate-600">
-                      Submitted on {new Date(selectedRating.ratedAt).toLocaleString()} by <strong>{selectedRating.ratedByName}</strong>
+                    <span className="text-xs text-slate-600">{UI_STRINGS.appAppApprovalsVendorRatingsPage.submittedOn}{new Date(selectedRating.ratedAt).toLocaleString()}{UI_STRINGS.common.by}<strong>{selectedRating.ratedByName}</strong>
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Weighted Result</span>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.weightedResult}</span>
                     <div className="flex items-center justify-end gap-1 font-mono font-bold text-lg text-slate-900 mt-0.5">
                       <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
                       <span>{selectedRating.overallScore}</span>
-                      <span className="text-xs text-slate-400 font-normal">/ 5.0</span>
+                      <span className="text-xs text-slate-400 font-normal">{UI_STRINGS.common.copybqfq57}</span>
                     </div>
                   </div>
                 </div>
@@ -455,35 +432,32 @@ export default function VendorRatingsApprovalsPage() {
                 <div className="bg-blue-50/80 border-b border-blue-100 px-5 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-blue-700" />
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Section A: Order & Scope Information
-                    </h4>
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{UI_STRINGS.appAppApprovalsVendorRatingsPage.sectionAOrderScopeInformation}</h4>
                   </div>
-                  <span className="text-[11px] text-blue-600 font-medium">PPO Commercial Profile</span>
+                  <span className="text-[11px] text-blue-600 font-medium">{UI_STRINGS.appAppApprovalsVendorRatingsPage.pPOCommercialProfile}</span>
                 </div>
 
                 <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-500 font-medium block">PPO Number & Title</span>
+                    <span className="text-slate-500 font-medium block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.pPONumberTitle}</span>
                     <strong className="text-slate-900 block font-mono mt-0.5">{selectedRating.ppo?.ppoNumber}</strong>
                     <span className="text-slate-600 truncate block mt-0.5">{selectedRating.ppo?.title}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 font-medium block">Vendor & Classification</span>
+                    <span className="text-slate-500 font-medium block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.vendorClassification}</span>
                     <strong className="text-slate-900 block mt-0.5">{selectedRating.vendor?.name}</strong>
                     <span className="text-slate-500 block">{selectedRating.vendor?.vendorType}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 font-medium block">Project & Cost Centre</span>
+                    <span className="text-slate-500 font-medium block">{UI_STRINGS.common.projectCostCentre}</span>
                     <strong className="text-slate-900 block mt-0.5">{selectedRating.ppo?.project?.name}</strong>
                     <span className="text-slate-500 block">{selectedRating.ppo?.costCentre?.name}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 font-medium block">PPO Value (Executed)</span>
-                    <strong className="text-slate-900 block font-mono text-sm mt-0.5">
-                      ₹{selectedRating.ppo?.totalValue?.toLocaleString() || 0}
+                    <span className="text-slate-500 font-medium block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.pPOValueExecuted}</span>
+                    <strong className="text-slate-900 block font-mono text-sm mt-0.5">{UI_STRINGS.common.copy1g8b5tg}{selectedRating.ppo?.totalValue?.toLocaleString() || 0}
                     </strong>
-                    <span className="text-emerald-600 font-medium block">Order Completed</span>
+                    <span className="text-emerald-600 font-medium block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.orderCompleted}</span>
                   </div>
                 </div>
               </div>
@@ -491,10 +465,8 @@ export default function VendorRatingsApprovalsPage() {
               {/* 5 RATING CATEGORIES & SPECIFIC COMMENTS */}
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                 <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Category Ratings & Individual Observations
-                  </h4>
-                  <span className="text-[11px] text-slate-500">Weight breakdown: 30% / 25% / 20% / 15% / 10%</span>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{UI_STRINGS.appAppApprovalsVendorRatingsPage.categoryRatingsIndividualObservations}</h4>
+                  <span className="text-[11px] text-slate-500">{UI_STRINGS.appAppApprovalsVendorRatingsPage.weightBreakdown3025201510}</span>
                 </div>
 
                 <div className="p-4 space-y-4">
@@ -502,21 +474,21 @@ export default function VendorRatingsApprovalsPage() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">1</span>
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">{UI_STRINGS.common.copyefwnq4}</span>
                         <div>
-                          <strong className="text-xs text-slate-900">Quality of Goods / Work (30%)</strong>
-                          <span className="text-[11px] text-slate-500 block">Workmanship, material quality, specifications compliance, defects</span>
+                          <strong className="text-xs text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.qualityOfGoodsWork30}</strong>
+                          <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.workmanshipMaterialQualitySpecificationsComplianceDefects}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-800">
                         <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                        <span>{selectedRating.qualityScore} / 5</span>
+                        <span>{selectedRating.qualityScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                       </div>
                     </div>
                     <div className="mt-2.5 pt-2 border-t border-slate-200/60">
-                      <span className="text-[11px] font-semibold text-slate-500 block">Project User Comments:</span>
+                      <span className="text-[11px] font-semibold text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.projectUserComments}</span>
                       <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap bg-white p-2.5 rounded border border-slate-200">
-                        {selectedRating.qualityComments || 'No specific quality observations noted.'}
+                        {selectedRating.qualityComments || UI_STRINGS.appAppApprovalsVendorRatingsPage.noSpecificQualityObservationsNoted}
                       </p>
                     </div>
                   </div>
@@ -525,21 +497,21 @@ export default function VendorRatingsApprovalsPage() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">2</span>
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">{UI_STRINGS.common.copyf9vgt1}</span>
                         <div>
-                          <strong className="text-xs text-slate-900">Delivery & Time (25%)</strong>
-                          <span className="text-[11px] text-slate-500 block">Delivery timelines, delays, liquidated damages, schedule adherence</span>
+                          <strong className="text-xs text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.deliveryTime25}</strong>
+                          <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.deliveryTimelinesDelaysLiquidatedDamagesScheduleAdherence}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-800">
                         <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                        <span>{selectedRating.deliveryScore} / 5</span>
+                        <span>{selectedRating.deliveryScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                       </div>
                     </div>
                     <div className="mt-2.5 pt-2 border-t border-slate-200/60">
-                      <span className="text-[11px] font-semibold text-slate-500 block">Project User Comments:</span>
+                      <span className="text-[11px] font-semibold text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.projectUserComments}</span>
                       <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap bg-white p-2.5 rounded border border-slate-200">
-                        {selectedRating.deliveryComments || 'No specific delivery delays or issues recorded.'}
+                        {selectedRating.deliveryComments || UI_STRINGS.appAppApprovalsVendorRatingsPage.noSpecificDeliveryDelaysOrIssuesRecorded}
                       </p>
                     </div>
                   </div>
@@ -548,21 +520,21 @@ export default function VendorRatingsApprovalsPage() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">3</span>
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">{UI_STRINGS.common.copyezvv42}</span>
                         <div>
-                          <strong className="text-xs text-slate-900">Cost & Commercial (20%)</strong>
-                          <span className="text-[11px] text-slate-500 block">Agreed rates compliance, cost control, billing accuracy, commercial compliance</span>
+                          <strong className="text-xs text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.costCommercial20}</strong>
+                          <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.agreedRatesComplianceCostControlBillingAccuracyCommercialCompliance}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-800">
                         <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                        <span>{selectedRating.commercialComplianceScore} / 5</span>
+                        <span>{selectedRating.commercialComplianceScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                       </div>
                     </div>
                     <div className="mt-2.5 pt-2 border-t border-slate-200/60">
-                      <span className="text-[11px] font-semibold text-slate-500 block">Project User Comments:</span>
+                      <span className="text-[11px] font-semibold text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.projectUserComments}</span>
                       <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap bg-white p-2.5 rounded border border-slate-200">
-                        {selectedRating.commercialComments || 'Invoices matched agreed PPO rate structure.'}
+                        {selectedRating.commercialComments || UI_STRINGS.appAppApprovalsVendorRatingsPage.invoicesMatchedAgreedPPORateStructure}
                       </p>
                     </div>
                   </div>
@@ -571,21 +543,21 @@ export default function VendorRatingsApprovalsPage() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">4</span>
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">{UI_STRINGS.common.copydlxun7}</span>
                         <div>
-                          <strong className="text-xs text-slate-900">Documentation & Closure (10%)</strong>
-                          <span className="text-[11px] text-slate-500 block">Invoices, statutory documents, test certificates, handover records</span>
+                          <strong className="text-xs text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.documentationClosure10}</strong>
+                          <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.invoicesStatutoryDocumentsTestCertificatesHandoverRecords}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-800">
                         <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                        <span>{selectedRating.documentationClosureScore} / 5</span>
+                        <span>{selectedRating.documentationClosureScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                       </div>
                     </div>
                     <div className="mt-2.5 pt-2 border-t border-slate-200/60">
-                      <span className="text-[11px] font-semibold text-slate-500 block">Project User Comments:</span>
+                      <span className="text-[11px] font-semibold text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.projectUserComments}</span>
                       <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap bg-white p-2.5 rounded border border-slate-200">
-                        {selectedRating.documentationComments || 'Documentation delivered per contract requirements.'}
+                        {selectedRating.documentationComments || UI_STRINGS.appAppApprovalsVendorRatingsPage.documentationDeliveredPerContractRequirements}
                       </p>
                     </div>
                   </div>
@@ -594,21 +566,21 @@ export default function VendorRatingsApprovalsPage() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">5</span>
+                        <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center">{UI_STRINGS.common.copydby8y8}</span>
                         <div>
-                          <strong className="text-xs text-slate-900">Responsiveness & Coordination (15%)</strong>
-                          <span className="text-[11px] text-slate-500 block">Site communication, issue resolution, escalation coordination</span>
+                          <strong className="text-xs text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.responsivenessCoordination15}</strong>
+                          <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.siteCommunicationIssueResolutionEscalationCoordination}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-800">
                         <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                        <span>{selectedRating.responsivenessScore} / 5</span>
+                        <span>{selectedRating.responsivenessScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                       </div>
                     </div>
                     <div className="mt-2.5 pt-2 border-t border-slate-200/60">
-                      <span className="text-[11px] font-semibold text-slate-500 block">Project User Comments:</span>
+                      <span className="text-[11px] font-semibold text-slate-500 block">{UI_STRINGS.appAppApprovalsVendorRatingsPage.projectUserComments}</span>
                       <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap bg-white p-2.5 rounded border border-slate-200">
-                        {selectedRating.responsivenessComments || 'Communication was prompt and constructive.'}
+                        {selectedRating.responsivenessComments || UI_STRINGS.appAppApprovalsVendorRatingsPage.communicationWasPromptAndConstructive}
                       </p>
                     </div>
                   </div>
@@ -620,15 +592,13 @@ export default function VendorRatingsApprovalsPage() {
                 <div className="bg-amber-50/80 border-b border-amber-200 px-5 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-700" />
-                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                      Overall Areas for Improvement & Recommendations
-                    </h4>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{UI_STRINGS.common.overallAreasForImprovementRecommendations}</h4>
                   </div>
-                  <span className="text-[11px] text-amber-800 font-medium">Forward-looking corrective actions</span>
+                  <span className="text-[11px] text-amber-800 font-medium">{UI_STRINGS.appAppApprovalsVendorRatingsPage.forwardLookingCorrectiveActions}</span>
                 </div>
                 <div className="p-4">
                   <p className="text-xs text-slate-800 whitespace-pre-wrap bg-amber-50/30 p-3.5 rounded-lg border border-amber-100 font-medium leading-relaxed">
-                    {selectedRating.overallImprovement || selectedRating.comments || 'No explicit corrective actions requested.'}
+                    {selectedRating.overallImprovement || selectedRating.comments || UI_STRINGS.appAppApprovalsVendorRatingsPage.noExplicitCorrectiveActionsRequested}
                   </p>
                 </div>
               </div>
@@ -638,34 +608,32 @@ export default function VendorRatingsApprovalsPage() {
                 <div className="bg-slate-100 border-b border-slate-200 px-5 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-slate-700" />
-                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                      Section B: Project Approver Comments
-                    </h4>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{UI_STRINGS.appAppApprovalsVendorRatingsPage.sectionBProjectApproverComments}</h4>
                   </div>
                   <span className="text-[11px] text-slate-500">
-                    {selectedRating.status === 'APPROVED' ? 'Recorded Approval Justification' : 'Approver Observations / Required Corrections'}
+                    {selectedRating.status === 'APPROVED' ? UI_STRINGS.appAppApprovalsVendorRatingsPage.recordedApprovalJustification : UI_STRINGS.appAppApprovalsVendorRatingsPage.approverObservationsRequiredCorrections}
                   </span>
                 </div>
                 <div className="p-4">
                   {selectedRating.status === 'APPROVED' ? (
                     <div className="bg-emerald-50/50 border border-emerald-200 p-3.5 rounded-lg text-xs">
-                      <span className="font-semibold text-emerald-800 block">
-                        Approved by {selectedRating.approvedByName || 'Project Approver'} on {selectedRating.approvedAt ? new Date(selectedRating.approvedAt).toLocaleString() : 'N/A'}:
-                      </span>
+                      <span className="font-semibold text-emerald-800 block">{interpolateUiString(UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedByNameOnDate, {
+                        name: selectedRating.approvedByName || UI_STRINGS.common.projectApprover,
+                        date: selectedRating.approvedAt ? new Date(selectedRating.approvedAt).toLocaleString() : UI_STRINGS.appAppApprovalsVendorRatingsPage.nA,
+                      })}{UI_STRINGS.common.copyhhsact}</span>
                       <p className="text-slate-800 mt-1 whitespace-pre-wrap">
-                        {selectedRating.approverComments || 'Approved with no additional remarks.'}
+                        {selectedRating.approverComments || UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedWithNoAdditionalRemarks}
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                        Approver Review Remarks <span className="text-slate-400 font-normal">(Required if returning or rejecting)</span>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1.5">{UI_STRINGS.appAppApprovalsVendorRatingsPage.approverReviewRemarks}<span className="text-slate-400 font-normal">{UI_STRINGS.appAppApprovalsVendorRatingsPage.requiredIfReturningOrRejecting}</span>
                       </label>
                       <textarea
                         rows={3}
                         value={approverComments}
                         onChange={(e) => setApproverComments(e.target.value)}
-                        placeholder="Record justification for accepting this assessment, or detailed reasons/corrections required if returning to Project User..."
+                        placeholder={UI_STRINGS.appAppApprovalsVendorRatingsPage.recordJustificationForAcceptingThisAssessmentOrDetailedReasonsCorrectionsRequiredIfReturningToProjectUser}
                         className="w-full text-xs border border-slate-300 rounded-lg p-3 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600 font-medium"
                       />
                     </div>
@@ -676,15 +644,12 @@ export default function VendorRatingsApprovalsPage() {
               {/* Audit / Decision History */}
               {selectedRating.decisionHistory && selectedRating.decisionHistory.length > 0 && (
                 <div className="border border-slate-200 rounded-xl overflow-hidden bg-white p-4">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
-                    Decision & Audit Trail
-                  </span>
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">{UI_STRINGS.appAppApprovalsVendorRatingsPage.decisionAuditTrail}</span>
                   <div className="space-y-2">
                     {selectedRating.decisionHistory.map((h: any, idx: number) => (
                       <div key={idx} className="text-xs flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-100">
                         <div>
-                          <strong className="text-slate-800">{h.action}</strong> by {h.performedByName} ({h.performedByRole})
-                          {h.comments && <span className="text-slate-500 block text-[11px] mt-0.5">&quot;{h.comments}&quot;</span>}
+                          <strong className="text-slate-800">{h.action}</strong>{UI_STRINGS.common.by}{h.performedByName}{UI_STRINGS.common.copy1b3t0c5}{h.performedByRole}{UI_STRINGS.common.copyc7zu6c}{h.comments && <span className="text-slate-500 block text-[11px] mt-0.5">{UI_STRINGS.appAppApprovalsVendorRatingsPage.quot}{h.comments}{UI_STRINGS.appAppApprovalsVendorRatingsPage.quot}</span>}
                         </div>
                         <span className="text-[11px] text-slate-400 font-mono">
                           {new Date(h.timestamp).toLocaleString()}
@@ -702,9 +667,7 @@ export default function VendorRatingsApprovalsPage() {
                 type="button"
                 onClick={() => setSelectedRating(null)}
                 className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-              >
-                Close
-              </button>
+              >{UI_STRINGS.common.close}</button>
 
               {selectedRating.status === 'SUBMITTED' && (
                 <div className="flex items-center gap-3">
@@ -714,9 +677,7 @@ export default function VendorRatingsApprovalsPage() {
                     onClick={() => handleDecision('RETURN')}
                     className="px-4 py-2 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Return for Correction
-                  </button>
+                    <RotateCcw className="w-3.5 h-3.5" />{UI_STRINGS.appAppApprovalsVendorRatingsPage.returnForCorrection}</button>
 
                   <button
                     type="button"
@@ -724,9 +685,7 @@ export default function VendorRatingsApprovalsPage() {
                     onClick={() => handleDecision('REJECT')}
                     className="px-4 py-2 text-xs font-semibold rounded-lg bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    <XCircle className="w-3.5 h-3.5" />
-                    Reject Assessment
-                  </button>
+                    <XCircle className="w-3.5 h-3.5" />{UI_STRINGS.appAppApprovalsVendorRatingsPage.rejectAssessment}</button>
 
                   <button
                     type="button"
@@ -734,9 +693,7 @@ export default function VendorRatingsApprovalsPage() {
                     onClick={() => setConfirmAcceptOpen(true)}
                     className="px-5 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Accept Rating
-                  </button>
+                    <CheckCircle2 className="w-3.5 h-3.5" />{UI_STRINGS.common.acceptRating}</button>
                 </div>
               )}
             </div>
@@ -751,23 +708,18 @@ export default function VendorRatingsApprovalsPage() {
             <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto mb-3">
               <CheckCircle2 className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">Confirm Performance Rating Acceptance</h3>
-            <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-              Are you sure you want to approve this <strong>{selectedRating.overallScore}/5.0</strong> performance evaluation for{' '}
-              <strong>{selectedRating.vendor?.name}</strong> on order <strong>{selectedRating.ppo?.ppoNumber}</strong>?
-            </p>
+            <h3 className="text-base font-bold text-slate-900">{UI_STRINGS.appAppApprovalsVendorRatingsPage.confirmPerformanceRatingAcceptance}</h3>
+            <p className="text-xs text-slate-600 mt-2 leading-relaxed">{UI_STRINGS.appAppApprovalsVendorRatingsPage.areYouSureYouWantToApproveThis}<strong>{selectedRating.overallScore}{UI_STRINGS.appAppApprovalsVendorRatingsPage.copy161iq2v}</strong>{UI_STRINGS.appAppApprovalsVendorRatingsPage.performanceEvaluationFor}{' '}
+              <strong>{selectedRating.vendor?.name}</strong>{UI_STRINGS.appAppApprovalsVendorRatingsPage.onOrder}<strong>{selectedRating.ppo?.ppoNumber}</strong>{UI_STRINGS.common.copyg3u9vy}</p>
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-3 text-left">
-              <strong>Notice:</strong> Once accepted, this assessment will be locked against editing, and its weighted score will immediately be published to the vendor&apos;s scorecard and PPO history.
-            </p>
+              <strong>{UI_STRINGS.appAppApprovalsVendorRatingsPage.notice}</strong>{UI_STRINGS.appAppApprovalsVendorRatingsPage.onceAcceptedThisAssessmentWillBeLockedAgainstEditingAndItsWeightedScoreWillImmediatelyBePublishedToTheVendorAposSScorecardAndPPOHistory}</p>
 
             <div className="flex items-center justify-center gap-3 mt-5">
               <button
                 type="button"
                 onClick={() => setConfirmAcceptOpen(false)}
                 className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                Back to Review
-              </button>
+              >{UI_STRINGS.common.backToReview}</button>
               <button
                 type="button"
                 disabled={submittingDecision}
@@ -776,11 +728,9 @@ export default function VendorRatingsApprovalsPage() {
               >
                 {submittingDecision ? (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Publishing...
-                  </>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />{UI_STRINGS.appAppApprovalsVendorRatingsPage.publishing}</>
                 ) : (
-                  'Confirm & Publish Score'
+                  UI_STRINGS.appAppApprovalsVendorRatingsPage.confirmPublishScore
                 )}
               </button>
             </div>

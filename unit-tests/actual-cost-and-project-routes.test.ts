@@ -4,6 +4,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { GET as listActualCosts, POST as createActualCost } from '../src/app/api/actual-costs/route';
 import { GET as listProjects, POST as createProject } from '../src/app/api/projects/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -46,7 +48,7 @@ describe('actual cost API', () => {
     db.actualCostTransaction.findMany.mockResolvedValueOnce(rows);
     await expect(listActualCosts(request('http://localhost/api/actual-costs?projectId=p1&costCentreId=cc1&boqLineId=bl1&ppoId=ppo1&source=GRN&status=APPROVED'))).resolves.toEqual({ ok: true, data: rows, status: 200 });
     expect(db.actualCostTransaction.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', projectId: 'p1', costCentreId: 'cc1', boqLineId: 'bl1', ppoId: 'ppo1', source: 'GRN', status: 'APPROVED' },
+      where: { tenantId: 'tenant-1', projectId: 'p1', costCentreId: 'cc1', boqLineId: 'bl1', ppoId: 'ppo1', source: 'GRN', status: UI_STRINGS.common.aPPROVED },
       orderBy: { actualDate: 'desc' },
       include: expect.objectContaining({ project: expect.any(Object), ppoLine: expect.any(Object), vendor: expect.any(Object) }),
     }));
@@ -61,7 +63,7 @@ describe('actual cost API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(createActualCost(request('http://localhost/api/actual-costs', {}))).resolves.toBe(denied);
     await expect(createActualCost(request('http://localhost/api/actual-costs', { projectId: 'p1', category: 'Electrical' }))).resolves.toEqual({
-      ok: false, error: 'Project, category, actualQuantity, and actualUnitRate are required', status: 400,
+      ok: false, error: UI_STRINGS.appApiActualCostsRoute.projectCategoryActualQuantityAndActualUnitRateAreRequired, status: 400,
     });
 
     db.actualCostTransaction.count.mockResolvedValueOnce(3);
@@ -75,7 +77,7 @@ describe('actual cost API', () => {
       ppoId: 'ppo-1', ppoLineId: 'ppo-line-1', vendorId: 'vendor-1',
     }))).resolves.toEqual({ ok: true, data: transaction, status: 201 });
     expect(db.actualCostTransaction.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', transactionCode: expect.stringMatching(/^ACT-\d{4}-000004$/), projectId: 'p1', costCentreId: 'cc1', category: 'Electrical',
+      tenantId: 'tenant-1', transactionCode: expect.stringMatching(/^ACT-\d{4}-000004$/), projectId: 'p1', costCentreId: 'cc1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
       actualQuantity: 2, actualUnitRate: 5, actualAmount: 10, taxAmount: 1.5, totalActualAmount: 11.5, actualDate: new Date('2025-03-02T00:00:00.000Z'),
       erpDate: new Date('2025-03-01T00:00:00.000Z'), documents: JSON.stringify([{ name: 'invoice.pdf' }]), createdBy: 'Test User',
     }) });
@@ -89,7 +91,7 @@ describe('actual cost API', () => {
       projectId: 'p1', category: 'Civil', actualQuantity: 1, actualUnitRate: 2, actualAmount: '20', documents: 'uploaded-documents',
     }));
     expect(db.actualCostTransaction.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      actualAmount: 20, totalActualAmount: 20, taxAmount: 0, source: 'MANUAL_ADJUSTMENT', status: 'APPROVED', documents: 'uploaded-documents',
+      actualAmount: 20, totalActualAmount: 20, taxAmount: 0, source: 'MANUAL_ADJUSTMENT', status: UI_STRINGS.common.aPPROVED, documents: 'uploaded-documents',
       costCentreId: null, subcategory: null, erpDate: null, remarks: null,
     }) });
     db.actualCostTransaction.count.mockRejectedValueOnce(new Error('actual cost unavailable'));
@@ -117,7 +119,7 @@ describe('project listing and creation', () => {
       ok: true, data: { data: [{ id: 'project-1' }], total: 25, page: 2, pageSize: 5, totalPages: 5 }, status: 200,
     });
     expect(db.project.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', OR: [{ name: { contains: 'Retail' } }, { projectCode: { contains: 'Retail' } }, { city: { contains: 'Retail' } }], status: 'ACTIVE', sector: 'RETAIL' },
+      where: { tenantId: 'tenant-1', OR: [{ name: { contains: UI_STRINGS.appAppBoqStudioPage.retail } }, { projectCode: { contains: UI_STRINGS.appAppBoqStudioPage.retail } }, { city: { contains: UI_STRINGS.appAppBoqStudioPage.retail } }], status: UI_STRINGS.common.aCTIVE, sector: 'RETAIL' },
       orderBy: { createdAt: 'desc' }, skip: 5, take: 5, include: expect.objectContaining({ boqs: expect.any(Object), _count: { select: { team: true } } }),
     }));
   });
@@ -127,9 +129,9 @@ describe('project listing and creation', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toBe(denied);
-    await expect(createProject(request('http://localhost/api/projects', { name: '  ', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: 'Project name is required.', status: 400 });
-    await expect(createProject(request('http://localhost/api/projects', { name: 'Project', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: 'Sector is required.', status: 400 });
-    await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL' }))).resolves.toEqual({ ok: false, error: 'Project type is required.', status: 400 });
+    await expect(createProject(request('http://localhost/api/projects', { name: '  ', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNameIsRequired, status: 400 });
+    await expect(createProject(request('http://localhost/api/projects', { name: 'Project', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.sectorIsRequired, status: 400 });
+    await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectTypeIsRequired, status: 400 });
   });
 
   it('generates the next unused project code and stores normalized project fields', async () => {
@@ -145,11 +147,11 @@ describe('project listing and creation', () => {
     expect(db.project.findFirst).toHaveBeenNthCalledWith(1, { where: { tenantId: 'tenant-1', projectCode: 'CPX-P-000008' }, select: { id: true } });
     expect(db.project.findFirst).toHaveBeenNthCalledWith(2, { where: { tenantId: 'tenant-1', projectCode: 'CPX-P-000009' }, select: { id: true } });
     expect(db.project.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', projectCode: 'CPX-P-000009', name: 'Retail Store', description: 'Details', location: 'Pune', address: 'Road 1', city: 'Pune', state: 'MH',
-      country: 'India', areaSqFt: 1200.5, costCentre: 'CC-1', projectOwner: 'Owner', budget: 50000, currency: 'INR', businessUnit: 'BU', numberOfFloors: 2, numberOfUnits: 12,
+      tenantId: 'tenant-1', projectCode: 'CPX-P-000009', name: 'Retail Store', description: UI_STRINGS.appAppBoqStudioPage.details, location: 'Pune', address: 'Road 1', city: 'Pune', state: 'MH',
+      country: UI_STRINGS.common.india, areaSqFt: 1200.5, costCentre: 'CC-1', projectOwner: UI_STRINGS.appAppDashboardPage.owner, budget: 50000, currency: UI_STRINGS.common.iNR, businessUnit: 'BU', numberOfFloors: 2, numberOfUnits: 12,
       status: 'DRAFT', createdBy: 'user-1',
     }) });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'CREATE', entityId: 'project-1', newValue: { projectCode: 'CPX-P-000009', name: 'Retail Store', sector: 'RETAIL', projectType: 'STORE' } }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.cREATE, entityId: 'project-1', newValue: { projectCode: 'CPX-P-000009', name: 'Retail Store', sector: 'RETAIL', projectType: 'STORE' } }));
   });
 
   it('retries code collisions and returns conflict after the retry limit', async () => {
@@ -165,7 +167,7 @@ describe('project listing and creation', () => {
     db.project.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     db.project.findFirst.mockResolvedValue(null);
     db.project.create.mockRejectedValueOnce({ code: 'P2002' }).mockRejectedValueOnce({ code: 'P2002' }).mockRejectedValueOnce({ code: 'P2002' });
-    await expect(createProject(request('http://localhost/api/projects', { name: 'Conflict', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: 'A project with this project code already exists. Please retry.', status: 409 });
+    await expect(createProject(request('http://localhost/api/projects', { name: 'Conflict', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProjectsRoute.aProjectWithThisProjectCodeAlreadyExistsPleaseRetry, status: 409 });
   });
 
   it('handles malformed optional project values and unexpected errors', async () => {

@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/vendor-portal/auctions/page.tsx
 // Vendor Portal: Invited Auctions, Live Bidding, and Results Register
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -20,6 +21,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export default function VendorAuctionsPage() {
   const toast = useToast();
@@ -41,7 +44,7 @@ export default function VendorAuctionsPage() {
         setAuctions(data.auctions);
       }
     } catch (err: any) {
-      toast.error({ title: 'Error', message: 'Failed to load invited auctions' });
+      toast.error({ title: UI_STRINGS.common.error, message: UI_STRINGS.appAppVendorPortalAuctionsPage.failedToLoadInvitedAuctions });
     } finally {
       setLoading(false);
     }
@@ -71,7 +74,7 @@ export default function VendorAuctionsPage() {
   const formatIST = (dateStr: string) => {
     if (!dateStr) return '—';
     try {
-      return new Date(dateStr).toLocaleString('en-IN', {
+      return new Date(dateStr).toLocaleString(I18N_CONFIG.defaultLocale, {
         timeZone: 'Asia/Kolkata',
         day: '2-digit',
         month: 'short',
@@ -88,11 +91,11 @@ export default function VendorAuctionsPage() {
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
       <PageHeader
-        title="Vendor Auctions & Bidding Portal"
-        subtitle="View invited auction packages, review commercial terms, participate in live reverse / forward / sealed bidding"
+        title={UI_STRINGS.appAppVendorPortalAuctionsPage.vendorAuctionsBiddingPortal}
+        subtitle={UI_STRINGS.appAppVendorPortalAuctionsPage.viewInvitedAuctionPackagesReviewCommercialTermsParticipateInLiveReverseForwardSealedBidding}
         breadcrumbs={[
-          { label: 'Vendor Portal', href: '/vendor-portal/dashboard' },
-          { label: 'Auctions' },
+          { label: UI_STRINGS.common.vendorPortal, href: '/vendor-portal/dashboard' },
+          { label: UI_STRINGS.common.auctions },
         ]}
         actions={
           <button
@@ -101,8 +104,7 @@ export default function VendorAuctionsPage() {
             className="btn btn-secondary btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh Telemetry
-          </button>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refreshTelemetry}</button>
         }
       />
 
@@ -110,11 +112,11 @@ export default function VendorAuctionsPage() {
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', padding: '0 16px' }}>
           {[
-            { id: 'LIVE', label: 'Live Bidding Room', count: liveCount, pulse: liveCount > 0 },
-            { id: 'UPCOMING', label: 'Upcoming Scheduled', count: upcomingCount },
-            { id: 'MY_BIDS', label: 'My Placed Bids' },
-            { id: 'COMPLETED', label: 'Completed & Results', count: completedCount },
-            { id: 'INVITATIONS', label: 'All Invitations', count: auctions.length },
+            { id: 'LIVE', label: UI_STRINGS.appAppVendorPortalAuctionsPage.liveBiddingRoom, count: liveCount, pulse: liveCount > 0 },
+            { id: 'UPCOMING', label: UI_STRINGS.appAppVendorPortalAuctionsPage.upcomingScheduled, count: upcomingCount },
+            { id: 'MY_BIDS', label: UI_STRINGS.appAppVendorPortalAuctionsPage.myPlacedBids },
+            { id: 'COMPLETED', label: UI_STRINGS.appAppVendorPortalAuctionsPage.completedResults, count: completedCount },
+            { id: 'INVITATIONS', label: UI_STRINGS.appAppVendorPortalAuctionsPage.allInvitations, count: auctions.length },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -173,7 +175,7 @@ export default function VendorAuctionsPage() {
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input
               type="text"
-              placeholder="Search by Auction #, Title, RFQ..."
+              placeholder={UI_STRINGS.appAppVendorPortalAuctionsPage.searchByAuctionTitleRFQ}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="form-control"
@@ -185,15 +187,13 @@ export default function VendorAuctionsPage() {
         {/* Table */}
         {loading ? (
           <div style={{ padding: 60, textAlign: 'center', color: '#64748b' }}>
-            <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            Loading invited auctions...
-          </div>
+            <div className="spinner" style={{ margin: '0 auto 12px' }} />{UI_STRINGS.appAppVendorPortalAuctionsPage.loadingInvitedAuctions}</div>
         ) : filteredAuctions.length === 0 ? (
           <div style={{ padding: 48 }}>
             <EmptyState
               icon={<Gavel size={36} color="#94a3b8" />}
-              title="No Auctions in this Tab"
-              description="You will see invited auctions here when procurement teams schedule bidding events."
+              title={UI_STRINGS.appAppVendorPortalAuctionsPage.noAuctionsInThisTab}
+              description={UI_STRINGS.appAppVendorPortalAuctionsPage.youWillSeeInvitedAuctionsHereWhenProcurementTeamsScheduleBiddingEvents}
             />
           </div>
         ) : (
@@ -201,15 +201,15 @@ export default function VendorAuctionsPage() {
             <table className="data-table enterprise-table" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
-                  <th style={{ width: 140, padding: '10px 14px', textAlign: 'left' }}>Auction ID</th>
-                  <th style={{ minWidth: 200, padding: '10px 14px', textAlign: 'left' }}>Event Title</th>
-                  <th style={{ width: 130, padding: '10px 14px', textAlign: 'left' }}>Linked RFQ</th>
-                  <th style={{ width: 130, padding: '10px 14px', textAlign: 'left' }}>Auction Type</th>
-                  <th style={{ width: 130, padding: '10px 14px', textAlign: 'left' }}>Category</th>
-                  <th style={{ width: 170, padding: '10px 14px', textAlign: 'left' }}>Scheduled Start (IST)</th>
-                  <th style={{ width: 170, padding: '10px 14px', textAlign: 'left' }}>Scheduled End (IST)</th>
-                  <th style={{ width: 120, padding: '10px 14px', textAlign: 'center' }}>Status</th>
-                  <th style={{ width: 140, padding: '10px 14px', textAlign: 'right' }}>Action</th>
+                  <th style={{ width: 140, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.common.auctionID}</th>
+                  <th style={{ minWidth: 200, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.appAppVendorPortalAuctionsPage.eventTitle}</th>
+                  <th style={{ width: 130, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.appAppVendorPortalAuctionsPage.linkedRFQ}</th>
+                  <th style={{ width: 130, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.common.auctionType}</th>
+                  <th style={{ width: 130, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.common.category2}</th>
+                  <th style={{ width: 170, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.appAppVendorPortalAuctionsPage.scheduledStartIST}</th>
+                  <th style={{ width: 170, padding: '10px 14px', textAlign: 'left' }}>{UI_STRINGS.appAppVendorPortalAuctionsPage.scheduledEndIST}</th>
+                  <th style={{ width: 120, padding: '10px 14px', textAlign: 'center' }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ width: 140, padding: '10px 14px', textAlign: 'right' }}>{UI_STRINGS.common.action}</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,8 +229,7 @@ export default function VendorAuctionsPage() {
                       <td style={{ padding: '10px 14px' }}>
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{auc.title}</div>
                         {auc.currentLowestBid && (
-                          <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 2 }}>
-                            Current Leading: {auc.currency} {Number(auc.currentLowestBid).toLocaleString('en-IN')}
+                          <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 2 }}>{UI_STRINGS.appAppVendorPortalAuctionsPage.currentLeading}{auc.currency} {Number(auc.currentLowestBid).toLocaleString(I18N_CONFIG.defaultLocale)}
                           </div>
                         )}
                       </td>
@@ -239,11 +238,11 @@ export default function VendorAuctionsPage() {
                       </td>
                       <td style={{ padding: '10px 14px' }}>
                         <span className="badge badge-info" style={{ fontSize: 11 }}>
-                          {auc.auctionType === 'REVERSE_AUCTION' ? 'Reverse' : auc.auctionType === 'FORWARD_AUCTION' ? 'Forward' : 'Sealed Bid'}
+                          {auc.auctionType === 'REVERSE_AUCTION' ? UI_STRINGS.common.reverse : auc.auctionType === 'FORWARD_AUCTION' ? UI_STRINGS.common.forward : UI_STRINGS.common.sealedBid}
                         </span>
                       </td>
                       <td style={{ padding: '10px 14px', fontSize: 12 }}>
-                        {auc.auctionCategory === 'ITEM_WISE' ? 'Item Wise' : 'RFQ Total Wise'}
+                        {auc.auctionCategory === 'ITEM_WISE' ? UI_STRINGS.common.itemWise : UI_STRINGS.common.rFQTotalWise}
                       </td>
                       <td style={{ padding: '10px 14px', fontSize: 12, color: '#334155' }}>
                         {formatIST(auc.startTime)}
@@ -266,7 +265,7 @@ export default function VendorAuctionsPage() {
                             fontWeight: 600,
                           }}
                         >
-                          {isLive ? 'Enter Bidding Room →' : 'View Details'}
+                          {isLive ? UI_STRINGS.appAppVendorPortalAuctionsPage.enterBiddingRoom : UI_STRINGS.common.viewDetails}
                         </Link>
                       </td>
                     </tr>

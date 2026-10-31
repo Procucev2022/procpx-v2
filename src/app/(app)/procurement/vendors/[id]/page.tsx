@@ -42,6 +42,9 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { VendorData, PerformanceSummary } from "@app-types/app/(app)/procurement/vendors/[id]/page.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 function VendorProfileContent() {
@@ -147,7 +150,7 @@ function VendorProfileContent() {
       const res = await fetch(`/api/procurement/vendors/${vendorId}`);
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to load vendor profile');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToLoadVendorProfile }));
       }
       const v = data.vendor || data.data?.vendor;
       setVendor(v);
@@ -228,7 +231,7 @@ function VendorProfileContent() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'AI Evaluation failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.aiEvaluationFailed }));
       }
 
       const evalReport = data.report || data.aiEvaluation || data.data?.aiEvaluation;
@@ -278,9 +281,9 @@ function VendorProfileContent() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit evaluation');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSubmitEvaluation }));
       }
-      toast.success('Vendor details submitted successfully.', vendor?.code, selectedQualificationStatus);
+      toast.success(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, vendor?.code, selectedQualificationStatus);
       setEvaluationFeedback('Vendor details submitted successfully.');
       await fetchVendorProfile();
     } catch (err: any) {
@@ -392,15 +395,15 @@ function VendorProfileContent() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to record PPO rating');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToRecordPpoRating }));
       }
       setShowRateModal(false);
       setEditingRating(null);
       setPpoRatingFeedback(null);
       toast.success(
         action === 'SUBMIT'
-          ? 'Performance assessment submitted for Project Approval.'
-          : 'Performance assessment draft saved successfully.',
+          ? UI_STRINGS.common.userMessages.performanceAssessmentSubmittedForProjectApproval
+          : UI_STRINGS.common.userMessages.performanceAssessmentDraftSavedSuccessfully,
         vendor?.code
       );
       await fetchVendorProfile();
@@ -415,7 +418,7 @@ function VendorProfileContent() {
   async function handleApproverDecision(action: 'ACCEPT' | 'RETURN' | 'REJECT') {
     if (!viewRatingModal?.id) return;
     if ((action === 'RETURN' || action === 'REJECT') && !approverComments.trim()) {
-      setDecisionError('Please provide review comments explaining the reason for return/rejection.');
+      setDecisionError(UI_STRINGS.appAppProcurementVendorsIdPage.pleaseProvideReviewCommentsExplainingTheReasonForReturnRejection);
       return;
     }
     try {
@@ -432,14 +435,14 @@ function VendorProfileContent() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to process approver decision');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToProcessApproverDecision }));
       }
       toast.success(
         action === 'ACCEPT'
-          ? 'Performance assessment accepted and published successfully.'
+          ? UI_STRINGS.common.userMessages.performanceAssessmentAcceptedAndPublishedSuccessfully
           : action === 'RETURN'
-          ? 'Performance assessment returned for correction.'
-          : 'Performance assessment rejected.',
+          ? UI_STRINGS.common.userMessages.performanceAssessmentReturnedForCorrection
+          : UI_STRINGS.common.userMessages.performanceAssessmentRejected,
         viewRatingModal?.ppo?.ppoNumber
       );
       setConfirmAcceptOpen(false);
@@ -464,13 +467,13 @@ function VendorProfileContent() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to save changes');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSaveChanges }));
       }
-      toast.success('Vendor details submitted successfully.', vendor?.code);
+      toast.success(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, vendor?.code);
       setShowEditModal(false);
       await fetchVendorProfile();
     } catch (err: any) {
-      alert(`Error updating profile: ${err.message}`);
+      alert(interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.errorUpdatingProfileMessage, { "message": err.message }));
     } finally {
       setSavingEdit(false);
     }
@@ -480,7 +483,7 @@ function VendorProfileContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[360px] gap-3">
         <RefreshCw className="w-8 h-8 text-blue-700 animate-spin" />
-        <p className="text-sm text-slate-500 font-medium">Loading vendor profile...</p>
+        <p className="text-sm text-slate-500 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.loadingVendorProfile2}</p>
       </div>
     );
   }
@@ -490,14 +493,13 @@ function VendorProfileContent() {
       <div className="w-full">
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-xl mx-auto">
           <AlertCircle className="w-8 h-8 text-red-600 mx-auto mb-2" />
-          <h2 className="text-base font-semibold text-red-900">Unable to load vendor profile</h2>
-          <p className="text-sm text-red-700 mt-1">{error || 'Vendor record not found or access denied.'}</p>
+          <h2 className="text-base font-semibold text-red-900">{UI_STRINGS.appAppProcurementVendorsIdPage.unableToLoadVendorProfile}</h2>
+          <p className="text-sm text-red-700 mt-1">{error || UI_STRINGS.appAppProcurementVendorsIdPage.vendorRecordNotFoundOrAccessDenied}</p>
           <Link
             href="/procurement/vendors"
             className="inline-flex items-center gap-2 mt-4 px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-xs"
           >
-            <ArrowLeft className="w-4 h-4" /> Return to Vendor Directory
-          </Link>
+            <ArrowLeft className="w-4 h-4" />{UI_STRINGS.appAppProcurementVendorsIdPage.returnToVendorDirectory}</Link>
         </div>
       </div>
     );
@@ -514,14 +516,13 @@ function VendorProfileContent() {
               href="/procurement/vendors"
               className="hover:text-blue-700 flex items-center gap-1 font-semibold text-slate-600 transition-colors"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Vendor Directory
-            </Link>
-            <span className="text-slate-300">/</span>
+              <ArrowLeft className="w-3.5 h-3.5" />{UI_STRINGS.common.vendorDirectory}</Link>
+            <span className="text-slate-300">{UI_STRINGS.common.copybo0mse}</span>
             <span className="font-semibold text-slate-800">{vendor.name}</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Vendor Code:</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{UI_STRINGS.common.vendorCode2}</span>
             <span className="font-mono text-xs bg-slate-100 text-slate-800 px-2.5 py-1 rounded font-semibold border border-slate-200">
               {vendor.code}
             </span>
@@ -540,14 +541,10 @@ function VendorProfileContent() {
               {/* Vendor Type Badge */}
               {vendor.vendorType === 'CLIENT_VENDOR' ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                  Client Vendor
-                </span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />{UI_STRINGS.common.clientVendor}</span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                  <Globe className="w-3.5 h-3.5 text-blue-600" />
-                  Procucev Vendor
-                </span>
+                  <Globe className="w-3.5 h-3.5 text-blue-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.procucevVendor}</span>
               )}
 
               {/* Onboarding Status Badge */}
@@ -557,7 +554,7 @@ function VendorProfileContent() {
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
                 <Clock className="w-3.5 h-3.5" />
-                {vendor.onboardingStatus === 'ONBOARDED' ? 'Profile Complete' : 'Profile Incomplete / Draft'}
+                {vendor.onboardingStatus === 'ONBOARDED' ? UI_STRINGS.appAppProcurementVendorsIdPage.profileComplete : UI_STRINGS.appAppProcurementVendorsIdPage.profileIncompleteDraft}
               </span>
 
               {/* Qualification Status Badge */}
@@ -607,9 +604,7 @@ function VendorProfileContent() {
               }}
               className="btn btn-secondary text-xs"
             >
-              <Edit3 className="w-3.5 h-3.5" style={{ marginRight: 6 }} />
-              Edit Profile
-            </button>
+              <Edit3 className="w-3.5 h-3.5" style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementVendorsIdPage.editProfile}</button>
             <button
               type="button"
               onClick={handleRunAiEvaluation}
@@ -618,14 +613,10 @@ function VendorProfileContent() {
             >
               {aiEvaluating ? (
                 <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ marginRight: 6 }} />
-                  Analyzing Evidence...
-                </>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementVendorsIdPage.analyzingEvidence}</>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5" style={{ marginRight: 6 }} />
-                  Run AI Evaluation
-                </>
+                  <Sparkles className="w-3.5 h-3.5" style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementVendorsIdPage.runAIEvaluation}</>
               )}
             </button>
           </div>
@@ -635,30 +626,30 @@ function VendorProfileContent() {
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600 pt-3 border-t border-slate-100">
           <div className="flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400 font-medium">Category:</span>
-            <span className="font-semibold text-slate-800">{vendor.categories || 'General Procurement'}</span>
+            <span className="text-slate-400 font-medium">{UI_STRINGS.common.category3}</span>
+            <span className="font-semibold text-slate-800">{vendor.categories || UI_STRINGS.appAppProcurementVendorsIdPage.generalProcurement}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400 font-medium">Contact Person:</span>
-            <span className="font-medium text-slate-800">{vendor.contactPerson || 'Not Assigned'}</span>
+            <span className="text-slate-400 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.contactPerson}</span>
+            <span className="font-medium text-slate-800">{vendor.contactPerson || UI_STRINGS.appAppProcurementVendorsIdPage.notAssigned}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Mail className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400 font-medium">Email:</span>
-            <span className="font-medium text-slate-800">{vendor.email || 'Not Provided'}</span>
+            <span className="text-slate-400 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.email}</span>
+            <span className="font-medium text-slate-800">{vendor.email || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided}</span>
           </div>
           {vendor.phone && (
             <div className="flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400 font-medium">Phone:</span>
+              <span className="text-slate-400 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.phone2}</span>
               <span className="text-slate-800">{vendor.phone}</span>
             </div>
           )}
           {vendor.operatingLocation && (
             <div className="flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400 font-medium">Location:</span>
+              <span className="text-slate-400 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.location}</span>
               <span className="text-slate-800">{vendor.operatingLocation}</span>
             </div>
           )}
@@ -689,20 +680,18 @@ function VendorProfileContent() {
           >
             <Award size={18} color="#2563eb" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>
-                Vendor Qualification Score
-              </div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.vendorQualificationScore}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {vendor.qualificationScore !== null && vendor.qualificationScore !== undefined ? `${vendor.qualificationScore}%` : 'Not Evaluated'}
+                  {vendor.qualificationScore !== null && vendor.qualificationScore !== undefined ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.qualificationScore, { "qualificationScore": vendor.qualificationScore }) : UI_STRINGS.common.notEvaluated}
                 </span>
                 {vendor.qualificationScore !== null && vendor.qualificationScore !== undefined && (
-                  <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>/ 100</span>
+                  <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copytl3a3d}</span>
                 )}
                 <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>
                   {vendor.qualificationScore !== null && vendor.qualificationScore !== undefined
-                    ? vendor.qualificationScore >= 80 ? 'Recommended' : vendor.qualificationScore >= 65 ? 'Conditional' : 'Review Required'
-                    : 'Pending'}
+                    ? vendor.qualificationScore >= 80 ? UI_STRINGS.appAppProcurementVendorsIdPage.recommended : vendor.qualificationScore >= 65 ? UI_STRINGS.appAppProcurementVendorsIdPage.conditional : UI_STRINGS.appAppProcurementVendorsIdPage.reviewRequired
+                    : UI_STRINGS.common.pending}
                 </span>
               </div>
             </div>
@@ -723,20 +712,18 @@ function VendorProfileContent() {
           >
             <Star size={18} color="#ea580c" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>
-                PPO Performance
-              </div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.common.pPOPerformance}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                  {performanceSummary?.averagePpoRating !== null && performanceSummary?.averagePpoRating !== undefined ? `${performanceSummary.averagePpoRating}` : 'Not Evaluated'}
+                  {performanceSummary?.averagePpoRating !== null && performanceSummary?.averagePpoRating !== undefined ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.averagePpoRating, { "averagePpoRating": performanceSummary.averagePpoRating }) : UI_STRINGS.common.notEvaluated}
                 </span>
                 {performanceSummary?.averagePpoRating !== null && performanceSummary?.averagePpoRating !== undefined && (
-                  <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>/ 5.0</span>
+                  <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.common.copybqfq57}</span>
                 )}
                 <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>
                   {performanceSummary?.ppoRatingsCount
-                    ? `${performanceSummary.ppoRatingsCount} rated order${performanceSummary.ppoRatingsCount > 1 ? 's' : ''}`
-                    : 'No orders rated'}
+                    ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.ppoRatingsCountRatedOrderValue2, { "ppoRatingsCount": performanceSummary.ppoRatingsCount, "value2": performanceSummary.ppoRatingsCount > 1 ? 's' : '' })
+                    : UI_STRINGS.appAppProcurementVendorsIdPage.noOrdersRated}
                 </span>
               </div>
             </div>
@@ -757,18 +744,14 @@ function VendorProfileContent() {
           >
             <CheckCircle2 size={18} color="#0d9488" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>
-                Completed PPOs / Orders
-              </div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.completedPPOsOrders}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#0d9488', fontFamily: 'monospace' }}>
                   {performanceSummary?.ppoRatingsCount || vendor.ppos?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'ACCEPTED').length || eligiblePpos.length || 0}
                 </span>
-                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>
-                  / {vendor.ppos?.length || (performanceSummary?.ppoRatingsCount ? performanceSummary.ppoRatingsCount : 0)} orders
-                </span>
+                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.common.copybo0mse}{vendor.ppos?.length || (performanceSummary?.ppoRatingsCount ? performanceSummary.ppoRatingsCount : 0)}{UI_STRINGS.appAppProcurementVendorsIdPage.orders}</span>
                 <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>
-                  {eligiblePpos.length > 0 ? `${eligiblePpos.length} eligible` : 'Completed'}
+                  {eligiblePpos.length > 0 ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthEligible, { "length": eligiblePpos.length }) : UI_STRINGS.common.completed}
                 </span>
               </div>
             </div>
@@ -789,12 +772,10 @@ function VendorProfileContent() {
           >
             <ShieldCheck size={18} color="#123B7A" style={{ flexShrink: 0 }} />
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>
-                Evaluation Status
-              </div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationStatus}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {vendor.qualificationStatus ? vendor.qualificationStatus.replace(/_/g, ' ') : 'NOT EVALUATED'}
+                  {vendor.qualificationStatus ? vendor.qualificationStatus.replace(/_/g, ' ') : UI_STRINGS.common.nOTEVALUATED}
                 </span>
               </div>
             </div>
@@ -824,7 +805,7 @@ function VendorProfileContent() {
           }}
         >
           <Building2 size={15} color={activeTab === 'overview' ? '#2563eb' : '#64748b'} />
-          <span>Overview</span>
+          <span>{UI_STRINGS.appAppProcurementVendorsIdPage.overview}</span>
         </button>
 
         <button
@@ -847,7 +828,7 @@ function VendorProfileContent() {
           }}
         >
           <Sparkles size={15} color={activeTab === 'evaluation' ? '#2563eb' : '#64748b'} />
-          <span>Evaluation & AI</span>
+          <span>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationAI}</span>
         </button>
 
         <button
@@ -870,7 +851,7 @@ function VendorProfileContent() {
           }}
         >
           <Star size={15} color={activeTab === 'performance' ? '#2563eb' : '#64748b'} />
-          <span>PPO Performance</span>
+          <span>{UI_STRINGS.common.pPOPerformance}</span>
           <span
             style={{
               fontSize: 11,
@@ -905,7 +886,7 @@ function VendorProfileContent() {
           }}
         >
           <FileText size={15} color={activeTab === 'documents' ? '#2563eb' : '#64748b'} />
-          <span>Documents & Audit</span>
+          <span>{UI_STRINGS.appAppProcurementVendorsIdPage.documentsAudit}</span>
           <span
             style={{
               fontSize: 11,
@@ -940,7 +921,7 @@ function VendorProfileContent() {
           }}
         >
           <Layers size={15} color={activeTab === 'sourcing-dashboard' ? '#2563eb' : '#64748b'} />
-          <span>Sourcing & Orders (Preview)</span>
+          <span>{UI_STRINGS.appAppProcurementVendorsIdPage.sourcingOrdersPreview}</span>
         </button>
       </div>
 
@@ -963,40 +944,40 @@ function VendorProfileContent() {
           <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
               <Building2 size={16} color="#2563eb" />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>Legal Identity</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.legalIdentity}</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-xs">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vendor Legal Name</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.vendorLegalName}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.name}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vendor Code</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.vendorCode}</span>
                 <span className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: '#1e40af' }}>{vendor.code}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vendor Classification</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.vendorClassification}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.vendorType === 'CLIENT_VENDOR' ? 'Client Vendor' : 'Procucev Vendor'}
+                  {vendor.vendorType === 'CLIENT_VENDOR' ? UI_STRINGS.common.clientVendor : UI_STRINGS.appAppProcurementVendorsIdPage.procucevVendor}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Legal Structure</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.legalStructure}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.legalStructure || 'Not provided'}
+                  {vendor.legalStructure || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Onboarding Status</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.onboardingStatus}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.onboardingStatus === 'ONBOARDED' ? 'Profile Complete' : 'Profile Incomplete / Draft'}
+                  {vendor.onboardingStatus === 'ONBOARDED' ? UI_STRINGS.appAppProcurementVendorsIdPage.profileComplete : UI_STRINGS.appAppProcurementVendorsIdPage.profileIncompleteDraft}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Qualification Status</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.qualificationStatus}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.qualificationStatus ? vendor.qualificationStatus.replace(/_/g, ' ') : 'Not Evaluated'}
+                  {vendor.qualificationStatus ? vendor.qualificationStatus.replace(/_/g, ' ') : UI_STRINGS.common.notEvaluated}
                 </span>
               </div>
             </div>
@@ -1006,30 +987,30 @@ function VendorProfileContent() {
           <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
               <UserCheck size={16} color="#2563eb" />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>Contact Information</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.contactInformation}</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-xs">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Contact Person</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.contactPerson || 'Not provided'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.contactPerson}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.contactPerson || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Email</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.email || 'Not provided'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.email}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.email || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Phone</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.phone || 'Not provided'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.phone}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.phone || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Operating Location</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.operatingLocation || 'Not provided'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.operatingLocation}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.operatingLocation || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}</span>
               </div>
               <div className="sm:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Business Address</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.businessAddress}</span>
                 <div style={{ fontSize: 13, color: '#0f172a', lineHeight: 1.5 }}>
-                  {vendor.address || 'Not provided'}
+                  {vendor.address || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}
                 </div>
               </div>
             </div>
@@ -1039,34 +1020,34 @@ function VendorProfileContent() {
           <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
               <Layers size={16} color="#2563eb" />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>Business Profile</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.common.businessProfile}</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-xs">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Primary Category</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.categories || 'Not specified'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.primaryCategory}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.categories || UI_STRINGS.common.notSpecified}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Service Coverage</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.serviceCoverage || 'Not specified'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.serviceCoverage}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{vendor.serviceCoverage || UI_STRINGS.common.notSpecified}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Years in Operation</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.yearsInOperation}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.experienceYears ? `${vendor.experienceYears} Years` : 'Not specified'}
+                  {vendor.experienceYears ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.experienceYearsYears, { "experienceYears": vendor.experienceYears }) : UI_STRINGS.common.notSpecified}
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Annual Turnover</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.annualTurnover}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.turnoverCrores ? `₹ ${vendor.turnoverCrores} Crores` : 'Not specified'}
+                  {vendor.turnoverCrores ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.turnoverCroresCrores, { "turnoverCrores": vendor.turnoverCrores }) : UI_STRINGS.common.notSpecified}
                 </span>
               </div>
               <div className="sm:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Capabilities</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.capabilities}</span>
                 <div style={{ fontSize: 13, color: '#0f172a', lineHeight: 1.5 }}>
-                  {vendor.capabilities || 'No declared capabilities on file.'}
+                  {vendor.capabilities || UI_STRINGS.appAppProcurementVendorsIdPage.noDeclaredCapabilitiesOnFile}
                 </div>
               </div>
             </div>
@@ -1076,52 +1057,48 @@ function VendorProfileContent() {
           <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f1f5f9', paddingBottom: 10 }}>
               <ShieldCheck size={16} color="#2563eb" />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>Compliance & References</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.complianceReferences}</h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-xs">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>GSTIN</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.gSTIN}</span>
                 {vendor.gstin ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{vendor.gstin}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 4, border: '1px solid #bbf7d0' }}>
-                      Validated
-                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 4, border: '1px solid #bbf7d0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.validated}</span>
                   </div>
                 ) : (
-                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>Not provided</span>
+                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}</span>
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>PAN</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.pAN}</span>
                 {vendor.pan ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span className="font-mono" style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{vendor.pan}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 4, border: '1px solid #bbf7d0' }}>
-                      Validated
-                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 6px', borderRadius: 4, border: '1px solid #bbf7d0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.validated}</span>
                   </div>
                 ) : (
-                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>Not provided</span>
+                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.notProvided2}</span>
                 )}
               </div>
               <div className="sm:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Registration and Certification Status</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.registrationAndCertificationStatus}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                  {vendor.certifications || 'None reported'}
+                  {vendor.certifications || UI_STRINGS.appAppProcurementVendorsIdPage.noneReported}
                 </span>
               </div>
               <div className="sm:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Previous Clients</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.previousClients}</span>
                 <div style={{ fontSize: 13, color: '#0f172a', lineHeight: 1.5 }}>
-                  {vendor.clientReferences ? vendor.clientReferences.split('\n')[0] : 'None reported'}
+                  {vendor.clientReferences ? vendor.clientReferences.split('\n')[0] : UI_STRINGS.appAppProcurementVendorsIdPage.noneReported}
                 </div>
               </div>
               <div className="sm:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>References</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.references}</span>
                 <div style={{ fontSize: 13, color: '#0f172a', lineHeight: 1.5 }}>
-                  {vendor.clientReferences || 'No customer references declared on file.'}
+                  {vendor.clientReferences || UI_STRINGS.appAppProcurementVendorsIdPage.noCustomerReferencesDeclaredOnFile}
                 </div>
               </div>
             </div>
@@ -1150,13 +1127,9 @@ function VendorProfileContent() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 840 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Sparkles size={16} color="#2563eb" />
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Standard 6-Rubric Vendor Evaluation Framework
-                </h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.standard6RubricVendorEvaluationFramework}</h3>
               </div>
-              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.5 }}>
-                Weights: Business Profile (15%), Financial Strength (20%), Previous Clients (20%), References (15%), Technical Capability (20%), Compliance & Risk (10%). AI extracts facts from evidence; Category Manager retains final human approval.
-              </p>
+              <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.5 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.weightsBusinessProfile15FinancialStrength20PreviousClients20References15TechnicalCapability20ComplianceRisk10AIExtractsFactsFromEvidenceCategoryManagerRetainsFinalHumanApproval}</p>
             </div>
             <button
               onClick={handleRunAiEvaluation}
@@ -1175,12 +1148,12 @@ function VendorProfileContent() {
               {aiEvaluating ? (
                 <>
                   <RefreshCw size={14} className="animate-spin" />
-                  <span>Analyzing Profile...</span>
+                  <span>{UI_STRINGS.appAppProcurementVendorsIdPage.analyzingProfile}</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={14} />
-                  <span>Run AI-Assisted Evaluation</span>
+                  <span>{UI_STRINGS.appAppProcurementVendorsIdPage.runAIAssistedEvaluation}</span>
                 </>
               )}
             </button>
@@ -1229,12 +1202,10 @@ function VendorProfileContent() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Sparkles size={16} color="#d97706" />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                    AI Evidence Extraction & Analysis Summary
-                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.aIEvidenceExtractionAnalysisSummary}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Recommendation:</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.recommendation}</span>
                   <span
                     style={{
                       fontSize: 11,
@@ -1248,9 +1219,7 @@ function VendorProfileContent() {
                   >
                     {aiResult.qualificationOutcome}
                   </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    Score: {aiResult.overallWeightedScore}%
-                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.score}{aiResult.overallWeightedScore}{UI_STRINGS.common.copy8w4luo}</span>
                 </div>
               </div>
 
@@ -1263,8 +1232,7 @@ function VendorProfileContent() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '12px 14px' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <CheckCircle2 size={14} color="#16a34a" /> Verified Strengths
-                  </span>
+                    <CheckCircle2 size={14} color="#16a34a" />{UI_STRINGS.appAppProcurementVendorsIdPage.verifiedStrengths}</span>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: '#334155', lineHeight: 1.5, listStyleType: 'disc' }}>
                     {aiResult.strengths?.map((s: string, idx: number) => (
                       <li key={idx} style={{ marginBottom: 4 }}>{s}</li>
@@ -1274,8 +1242,7 @@ function VendorProfileContent() {
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '12px 14px' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#92400e', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <AlertTriangle size={14} color="#d97706" /> Verification Gaps
-                  </span>
+                    <AlertTriangle size={14} color="#d97706" />{UI_STRINGS.appAppProcurementVendorsIdPage.verificationGaps}</span>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: '#334155', lineHeight: 1.5, listStyleType: 'disc' }}>
                     {(aiResult.verificationGaps || aiResult.missingEvidenceGaps)?.map((g: string, idx: number) => (
                       <li key={idx} style={{ marginBottom: 4 }}>{g}</li>
@@ -1285,15 +1252,14 @@ function VendorProfileContent() {
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '12px 14px' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <AlertCircle size={14} color="#dc2626" /> Critical Risks
-                  </span>
+                    <AlertCircle size={14} color="#dc2626" />{UI_STRINGS.appAppProcurementVendorsIdPage.criticalRisks}</span>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: '#334155', lineHeight: 1.5, listStyleType: 'disc' }}>
                     {((aiResult.criticalRiskFlags || aiResult.riskFactors)?.length > 0) ? (
                       (aiResult.criticalRiskFlags || aiResult.riskFactors).map((r: string, idx: number) => (
                         <li key={idx} style={{ marginBottom: 4 }}>{r}</li>
                       ))
                     ) : (
-                      <li>No critical statutory risk flags detected.</li>
+                      <li>{UI_STRINGS.appAppProcurementVendorsIdPage.noCriticalStatutoryRiskFlagsDetected}</li>
                     )}
                   </ul>
                 </div>
@@ -1316,20 +1282,13 @@ function VendorProfileContent() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Evaluation Criteria Scorecard
-                </h3>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>
-                  Calibrate score (0–100) for each standard rubric. Score contributes proportionally to overall qualification.
-                </p>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationCriteriaScorecard}</h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.calibrateScore0100ForEachStandardRubricScoreContributesProportionallyToOverallQualification}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Weighted Score:
-                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.weightedScore}</span>
                 <span style={{ fontSize: 18, fontWeight: 700, color: '#1e40af', fontFamily: 'monospace' }}>
-                  {calculatedOverallScore}%
-                </span>
+                  {calculatedOverallScore}{UI_STRINGS.common.copy8w4luo}</span>
               </div>
             </div>
 
@@ -1337,21 +1296,11 @@ function VendorProfileContent() {
               <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #B8C9DC', background: '#ffffff' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '28%' }}>
-                      Evaluation Criterion
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '36%' }}>
-                      Assessment / Evidence
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em', width: '12%' }}>
-                      Score (0–100)
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em', width: '12%' }}>
-                      Contribution
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em', width: '12%' }}>
-                      Evaluation Status
-                    </th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '28%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationCriterion}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '36%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.assessmentEvidence}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em', width: '12%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.score0100}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em', width: '12%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.contribution}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em', width: '12%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationStatus}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1359,55 +1308,61 @@ function VendorProfileContent() {
                     {
                       key: 'businessProfile' as const,
                       num: 1,
-                      title: 'Business Profile & Experience',
+                      title: UI_STRINGS.appAppProcurementVendorsIdPage.businessProfileExperience,
                       weight: 0.15,
-                      description: 'Years of operation, legal incorporation, geographic coverage, and operational infrastructure.',
+                      description: UI_STRINGS.appAppProcurementVendorsIdPage.yearsOfOperationLegalIncorporationGeographicCoverageAndOperationalInfrastructure,
                       evidence: aiResult?.criteria?.businessProfile?.rationale || aiResult?.criteria?.businessProfile?.evidenceFound?.join(', ') || aiResult?.rubricScores?.businessProfile?.evidenceCitation || null,
                     },
                     {
                       key: 'financialStrength' as const,
                       num: 2,
-                      title: 'Financial Strength',
+                      title: UI_STRINGS.appAppProcurementVendorsIdPage.financialStrength,
                       weight: 0.20,
-                      description: 'Annual turnover, solvency indicators, liquidity, audited balance sheet stability.',
+                      description: UI_STRINGS.appAppProcurementVendorsIdPage.annualTurnoverSolvencyIndicatorsLiquidityAuditedBalanceSheetStability,
                       evidence: aiResult?.criteria?.financialStrength?.rationale || aiResult?.criteria?.financialStrength?.evidenceFound?.join(', ') || aiResult?.rubricScores?.financialStrength?.evidenceCitation || null,
                     },
                     {
                       key: 'previousClients' as const,
                       num: 3,
-                      title: 'Previous Clients & Project Experience',
+                      title: UI_STRINGS.appAppProcurementVendorsIdPage.previousClientsProjectExperience,
                       weight: 0.20,
-                      description: 'Customer track record, order values, completion history, similar scope execution.',
+                      description: UI_STRINGS.appAppProcurementVendorsIdPage.customerTrackRecordOrderValuesCompletionHistorySimilarScopeExecution,
                       evidence: aiResult?.criteria?.previousClients?.rationale || aiResult?.criteria?.previousClients?.evidenceFound?.join(', ') || aiResult?.rubricScores?.previousClients?.evidenceCitation || null,
                     },
                     {
                       key: 'references' as const,
                       num: 4,
-                      title: 'References & Verifiable Track Record',
+                      title: UI_STRINGS.appAppProcurementVendorsIdPage.referencesVerifiableTrackRecord,
                       weight: 0.15,
-                      description: 'Direct reference verification, client contacts, feedback reliability, performance certificates.',
+                      description: UI_STRINGS.appAppProcurementVendorsIdPage.directReferenceVerificationClientContactsFeedbackReliabilityPerformanceCertificates,
                       evidence: aiResult?.criteria?.references?.rationale || aiResult?.criteria?.references?.evidenceFound?.join(', ') || aiResult?.rubricScores?.references?.evidenceCitation || null,
                     },
                     {
                       key: 'technicalCapability' as const,
                       num: 5,
-                      title: 'Technical / Category Capability',
+                      title: UI_STRINGS.appAppProcurementVendorsIdPage.technicalCategoryCapability,
                       weight: 0.20,
-                      description: 'Category expertise, machinery/facilities, workforce capability, quality standards (ISO).',
+                      description: UI_STRINGS.appAppProcurementVendorsIdPage.categoryExpertiseMachineryFacilitiesWorkforceCapabilityQualityStandardsISO,
                       evidence: aiResult?.criteria?.technicalCapability?.rationale || aiResult?.criteria?.technicalCapability?.evidenceFound?.join(', ') || aiResult?.rubricScores?.technicalCapability?.evidenceCitation || null,
                     },
                     {
                       key: 'complianceRisk' as const,
                       num: 6,
-                      title: 'Compliance & Risk',
+                      title: UI_STRINGS.appAppProcurementVendorsIdPage.complianceRisk,
                       weight: 0.10,
-                      description: 'Statutory tax filing, litigation check, sanctions, regulatory licences, document authenticity.',
+                      description: UI_STRINGS.appAppProcurementVendorsIdPage.statutoryTaxFilingLitigationCheckSanctionsRegulatoryLicencesDocumentAuthenticity,
                       evidence: aiResult?.criteria?.complianceRisk?.rationale || aiResult?.criteria?.complianceRisk?.evidenceFound?.join(', ') || aiResult?.rubricScores?.complianceRisk?.evidenceCitation || null,
                     },
                   ].map((rubric) => {
                     const score = rubricScores[rubric.key];
                     const contribution = (score * rubric.weight).toFixed(1);
-                    const statusLabel = score >= 70 ? 'Satisfactory' : score >= 50 ? 'Conditional' : score > 0 ? 'Review Required' : 'Pending';
+                    const statusLabel = score >= 70
+                      ? UI_STRINGS.appAppProcurementVendorsIdPage.satisfactory
+                      : score >= 50
+                      ? UI_STRINGS.appAppProcurementVendorsIdPage.conditional
+                      : score > 0
+                      ? UI_STRINGS.appAppProcurementVendorsIdPage.reviewRequired
+                      : UI_STRINGS.common.pending;
                     const statusBg = score >= 70 ? '#f0fdf4' : score >= 50 ? '#fffbeb' : score > 0 ? '#fef2f2' : '#f8fafc';
                     const statusBorder = score >= 70 ? '#bbf7d0' : score >= 50 ? '#fde68a' : score > 0 ? '#fecaca' : '#e2e8f0';
                     const statusColor = score >= 70 ? '#166534' : score >= 50 ? '#92400e' : score > 0 ? '#991b1b' : '#64748b';
@@ -1417,7 +1372,7 @@ function VendorProfileContent() {
                         <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', verticalAlign: 'top' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                              {rubric.num}. {rubric.title}
+                              {rubric.num}{UI_STRINGS.appAppProcurementVendorsIdPage.copy15km32b}{rubric.title}
                             </span>
                             <span
                               style={{
@@ -1430,8 +1385,7 @@ function VendorProfileContent() {
                                 borderRadius: 4,
                               }}
                             >
-                              {(rubric.weight * 100).toFixed(0)}% Weight
-                            </span>
+                              {(rubric.weight * 100).toFixed(0)}{UI_STRINGS.appAppProcurementVendorsIdPage.weight}</span>
                           </div>
                           <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0 0', lineHeight: 1.4 }}>
                             {rubric.description}
@@ -1443,18 +1397,14 @@ function VendorProfileContent() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                               <BoqDescriptionCell
                                 text={rubric.evidence}
-                                title={`${rubric.title} Evidence`}
+                                title={interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.titleEvidence, { "title": rubric.title })}
                                 maxWidth={300}
                                 clampLines={2}
                               />
-                              <span style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>
-                                Source: AI Verification Evidence
-                              </span>
+                              <span style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.sourceAIVerificationEvidence}</span>
                             </div>
                           ) : (
-                            <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
-                              Pending AI evaluation or document review
-                            </span>
+                            <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.pendingAIEvaluationOrDocumentReview}</span>
                           )}
                         </td>
 
@@ -1482,11 +1432,8 @@ function VendorProfileContent() {
 
                         <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
                           <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                            {contribution}%
-                          </span>
-                          <span style={{ display: 'block', fontSize: 10, color: '#64748b' }}>
-                            of {(rubric.weight * 100).toFixed(0)}% max
-                          </span>
+                            {contribution}{UI_STRINGS.common.copy8w4luo}</span>
+                          <span style={{ display: 'block', fontSize: 10, color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.of}{(rubric.weight * 100).toFixed(0)}{UI_STRINGS.appAppProcurementVendorsIdPage.max}</span>
                         </td>
 
                         <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
@@ -1511,15 +1458,10 @@ function VendorProfileContent() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
-                    <td colSpan={2} style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'right', fontSize: 12, color: '#0f172a' }}>
-                      Overall Weighted Score (Sum of Contributions):
-                    </td>
+                    <td colSpan={2} style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'right', fontSize: 12, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.overallWeightedScoreSumOfContributions}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'center', fontFamily: 'monospace', fontSize: 15, color: '#1e40af', fontWeight: 700 }}>
-                      {calculatedOverallScore}%
-                    </td>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'center', fontSize: 11, color: '#64748b' }}>
-                      Max: 100.0%
-                    </td>
+                      {calculatedOverallScore}{UI_STRINGS.common.copy8w4luo}</td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'center', fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.max1000}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '12px 14px', textAlign: 'center' }}>
                       <span
                         style={{
@@ -1533,7 +1475,7 @@ function VendorProfileContent() {
                           color: calculatedOverallScore >= 80 ? '#166534' : calculatedOverallScore >= 65 ? '#92400e' : '#991b1b',
                         }}
                       >
-                        {calculatedOverallScore >= 80 ? 'Recommended' : calculatedOverallScore >= 65 ? 'Conditional' : 'Review Required'}
+                        {calculatedOverallScore >= 80 ? UI_STRINGS.appAppProcurementVendorsIdPage.recommended : calculatedOverallScore >= 65 ? UI_STRINGS.appAppProcurementVendorsIdPage.conditional : UI_STRINGS.appAppProcurementVendorsIdPage.reviewRequired}
                       </span>
                     </td>
                   </tr>
@@ -1566,32 +1508,20 @@ function VendorProfileContent() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Category Manager Qualification Decision & Governance
-                </h3>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>
-                  The LLM never makes the final qualification decision. Authorised review is required.
-                </p>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.categoryManagerQualificationDecisionGovernance}</h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.theLLMNeverMakesTheFinalQualificationDecisionAuthorisedReviewIsRequired}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
-                  80–100 Recommended
-                </span>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
-                  65–79 Conditional
-                </span>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                  &lt;65 Not Recommended
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copy1ex52lq}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copy123finh}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.lt65NotRecommended}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Formal Qualification Status *
-                  </label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.formalQualificationStatus}</label>
                   <select
                     value={selectedQualificationStatus}
                     onChange={(e) => setSelectedQualificationStatus(e.target.value)}
@@ -1606,16 +1536,14 @@ function VendorProfileContent() {
                       color: '#0f172a',
                     }}
                   >
-                    <option value="QUALIFIED">QUALIFIED — Approved for RFQ & PPO awards</option>
-                    <option value="CONDITIONALLY_QUALIFIED">CONDITIONALLY_QUALIFIED — Additional reviews or safeguards required</option>
-                    <option value="NOT_QUALIFIED">NOT_QUALIFIED — Disqualified / Ineligible</option>
+                    <option value="QUALIFIED">{UI_STRINGS.appAppProcurementVendorsIdPage.qUALIFIEDApprovedForRFQPPOAwards}</option>
+                    <option value="CONDITIONALLY_QUALIFIED">{UI_STRINGS.appAppProcurementVendorsIdPage.cONDITIONALLYQUALIFIEDAdditionalReviewsOrSafeguardsRequired}</option>
+                    <option value="NOT_QUALIFIED">{UI_STRINGS.appAppProcurementVendorsIdPage.nOTQUALIFIEDDisqualifiedIneligible}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Evaluation Outcome Classification
-                  </label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationOutcomeClassification}</label>
                   <select
                     value={selectedQualificationOutcome}
                     onChange={(e) => setSelectedQualificationOutcome(e.target.value)}
@@ -1630,23 +1558,21 @@ function VendorProfileContent() {
                       color: '#0f172a',
                     }}
                   >
-                    <option value="RECOMMENDED">RECOMMENDED</option>
-                    <option value="CONDITIONAL">CONDITIONAL</option>
-                    <option value="NOT_RECOMMENDED">NOT_RECOMMENDED</option>
+                    <option value="RECOMMENDED">{UI_STRINGS.appAppProcurementVendorsIdPage.rECOMMENDED}</option>
+                    <option value="CONDITIONAL">{UI_STRINGS.appAppProcurementVendorsIdPage.cONDITIONAL}</option>
+                    <option value="NOT_RECOMMENDED">{UI_STRINGS.appAppProcurementVendorsIdPage.nOTRECOMMENDED}</option>
                   </select>
                 </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Evaluation Remarks & Audit Notes
-                  </label>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.evaluationRemarksAuditNotes}</label>
                   <textarea
                     rows={3}
                     value={decisionRemarks}
                     onChange={(e) => setDecisionRemarks(e.target.value)}
-                    placeholder="Enter formal justification, verification notes, or conditional stipulations..."
+                    placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.enterFormalJustificationVerificationNotesOrConditionalStipulations}
                     style={{
                       width: '100%',
                       fontSize: 12,
@@ -1677,12 +1603,12 @@ function VendorProfileContent() {
                     {submittingEvaluation ? (
                       <>
                         <RefreshCw size={14} className="animate-spin" />
-                        <span>Recording Decision...</span>
+                        <span>{UI_STRINGS.appAppProcurementVendorsIdPage.recordingDecision}</span>
                       </>
                     ) : (
                       <>
                         <Check size={14} />
-                        <span>Commit Qualification Decision ({calculatedOverallScore}%)</span>
+                        <span>{UI_STRINGS.appAppProcurementVendorsIdPage.commitQualificationDecision}{calculatedOverallScore}{UI_STRINGS.common.copy1y4e1t7}</span>
                       </>
                     )}
                   </button>
@@ -1710,8 +1636,7 @@ function VendorProfileContent() {
           >
             <Info size={16} color="#b45309" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
-              <strong>Order Execution Rating:</strong> PPO Performance ratings evaluate actual project deliveries across 5 criteria (Quality 30%, Delivery 25%, Commercial 20%, Responsiveness 15%, Documentation 10% on a 1–5 scale). It is maintained independently from the initial vendor qualification score.
-            </div>
+              <strong>{UI_STRINGS.appAppProcurementVendorsIdPage.orderExecutionRating}</strong>{UI_STRINGS.appAppProcurementVendorsIdPage.pPOPerformanceRatingsEvaluateActualProjectDeliveriesAcross5CriteriaQuality30Delivery25Commercial20Responsiveness15Documentation10OnA15ScaleItIsMaintainedIndependentlyFromTheInitialVendorQualificationScore}</div>
           </div>
 
           {/* Aggregated Performance Metrics Card */}
@@ -1738,12 +1663,8 @@ function VendorProfileContent() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Aggregated Performance Scorecard
-                </h3>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>
-                  Synthesized across {performanceSummary?.ppoRatingsCount || 0} completed procurement orders.
-                </p>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard}</h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.synthesizedAcross}{performanceSummary?.ppoRatingsCount || 0}{UI_STRINGS.appAppProcurementVendorsIdPage.completedProcurementOrders}</p>
               </div>
 
               {eligiblePpos.length > 0 && currentUserRole !== 'PROCUREMENT_USER' && (
@@ -1761,88 +1682,76 @@ function VendorProfileContent() {
                   }}
                 >
                   <Star size={14} />
-                  <span>Rate Completed Order ({eligiblePpos.length} Available)</span>
+                  <span>{UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder}{eligiblePpos.length}{UI_STRINGS.appAppProcurementVendorsIdPage.available}</span>
                 </button>
               )}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Overall Rating
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.overallRating}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {performanceSummary?.averagePpoRating !== null ? performanceSummary?.averagePpoRating : '—'}
+                    {performanceSummary?.averagePpoRating !== null ? performanceSummary?.averagePpoRating : UI_STRINGS.common.copy4s9bsz}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>/ 5.0</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.common.copybqfq57}</span>
                 </div>
-                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>Weighted Summary</span>
+                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.weightedSummary}</span>
               </div>
 
               <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Quality (30%)
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.quality30}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {performanceSummary?.avgQuality !== null ? performanceSummary?.avgQuality : '—'}
+                    {performanceSummary?.avgQuality !== null ? performanceSummary?.avgQuality : UI_STRINGS.common.copy4s9bsz}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>/ 5</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copyfctprx}</span>
                 </div>
-                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>Material & specs</span>
+                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.materialSpecs}</span>
               </div>
 
               <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Delivery (25%)
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.delivery25}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {performanceSummary?.avgDelivery !== null ? performanceSummary?.avgDelivery : '—'}
+                    {performanceSummary?.avgDelivery !== null ? performanceSummary?.avgDelivery : UI_STRINGS.common.copy4s9bsz}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>/ 5</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copyfctprx}</span>
                 </div>
-                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>Schedule milestone</span>
+                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.scheduleMilestone}</span>
               </div>
 
               <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Commercial (20%)
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.commercial20}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {performanceSummary?.avgCommercial !== null ? performanceSummary?.avgCommercial : '—'}
+                    {performanceSummary?.avgCommercial !== null ? performanceSummary?.avgCommercial : UI_STRINGS.common.copy4s9bsz}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>/ 5</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copyfctprx}</span>
                 </div>
-                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>Billing & contracts</span>
+                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.billingContracts}</span>
               </div>
 
               <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Resp. (15%)
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.resp15}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {performanceSummary?.avgResponsiveness !== null ? performanceSummary?.avgResponsiveness : '—'}
+                    {performanceSummary?.avgResponsiveness !== null ? performanceSummary?.avgResponsiveness : UI_STRINGS.common.copy4s9bsz}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>/ 5</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copyfctprx}</span>
                 </div>
-                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>Response speed</span>
+                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.responseSpeed}</span>
               </div>
 
               <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '10px 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Docs (10%)
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.docs10}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
                   <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {performanceSummary?.avgDocumentation !== null ? performanceSummary?.avgDocumentation : '—'}
+                    {performanceSummary?.avgDocumentation !== null ? performanceSummary?.avgDocumentation : UI_STRINGS.common.copy4s9bsz}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>/ 5</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.copyfctprx}</span>
                 </div>
-                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>Handovers & closure</span>
+                <span style={{ fontSize: 10, color: '#64748b', display: 'block', marginTop: 2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.handoversClosure}</span>
               </div>
             </div>
           </div>
@@ -1860,12 +1769,8 @@ function VendorProfileContent() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Individual Order Rating History ({vendor.ppoRatings?.length || 0})
-                </h3>
-                <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0 0' }}>
-                  PPO-specific performance evaluations and approver decisions.
-                </p>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.individualOrderRatingHistory}{vendor.ppoRatings?.length || 0}{UI_STRINGS.common.copyc7zu6c}</h3>
+                <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.pPOSpecificPerformanceEvaluationsAndApproverDecisions}</p>
               </div>
             </div>
 
@@ -1874,27 +1779,13 @@ function VendorProfileContent() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #B8C9DC', background: '#ffffff', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        PPO Reference
-                      </th>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Project / Cost Centre
-                      </th>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Order Value
-                      </th>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Overall Score
-                      </th>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Workflow Status
-                      </th>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Submitter & Date
-                      </th>
-                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Actions
-                      </th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.pPOReference}</th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.projectCostCentre2}</th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.orderValue}</th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.overallScore}</th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.workflowStatus}</th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.submitterDate}</th>
+                      <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.common.actions}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1919,14 +1810,14 @@ function VendorProfileContent() {
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px' }}>
                             <span style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', display: 'block' }}>
-                              {rating.ppo?.project?.name || 'General Project'}
+                              {rating.ppo?.project?.name || UI_STRINGS.common.generalProject}
                             </span>
                             <span style={{ fontSize: 11, color: '#64748b' }}>
-                              {rating.ppo?.costCentre?.name || rating.ppo?.costCentre?.code || 'Cost Centre'}
+                              {rating.ppo?.costCentre?.name || rating.ppo?.costCentre?.code || UI_STRINGS.common.costCentre2}
                             </span>
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
-                            {rating.ppo?.totalValue ? `₹ ${rating.ppo.totalValue.toLocaleString()}` : '—'}
+                            {rating.ppo?.totalValue ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": rating.ppo.totalValue.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                             <span
@@ -1945,38 +1836,32 @@ function VendorProfileContent() {
                               }}
                             >
                               <Star size={12} className={isApproved ? 'fill-emerald-600 text-emerald-600' : 'fill-amber-500 text-amber-500'} />
-                              {rating.overallScore} / 5.0
-                            </span>
+                              {rating.overallScore}{UI_STRINGS.common.copy6hoc4p}</span>
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                             {isApproved && (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Approved
-                              </span>
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.approved}</span>
                             )}
                             {isSubmitted && (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                <Clock className="w-3 h-3 text-amber-600" /> Submitted for Approval
-                              </span>
+                                <Clock className="w-3 h-3 text-amber-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.submittedForApproval}</span>
                             )}
                             {isReturned && (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                <RotateCcw className="w-3 h-3 text-rose-600" /> Returned for Correction
-                              </span>
+                                <RotateCcw className="w-3 h-3 text-rose-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.returnedForCorrection}</span>
                             )}
                             {isDraft && (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                <FileText className="w-3 h-3 text-slate-500" /> Draft
-                              </span>
+                                <FileText className="w-3 h-3 text-slate-500" />{UI_STRINGS.appAppProcurementVendorsIdPage.draft}</span>
                             )}
                             {isRejected && (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200">
-                                <XCircle className="w-3 h-3 text-red-600" /> Rejected
-                              </span>
+                                <XCircle className="w-3 h-3 text-red-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.rejected}</span>
                             )}
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b', fontSize: 11 }}>
-                            <span className="font-medium text-slate-800 block">{rating.ratedByName || 'Project User'}</span>
+                            <span className="font-medium text-slate-800 block">{rating.ratedByName || UI_STRINGS.common.projectUser}</span>
                             <span className="text-slate-400 text-[10px]">{new Date(rating.ratedAt).toLocaleDateString()}</span>
                           </td>
                           <td style={{ border: '1px solid #B8C9DC', padding: '8px 12px', textAlign: 'center' }}>
@@ -1984,27 +1869,24 @@ function VendorProfileContent() {
                               <button
                                 onClick={() => openViewRatingModal(rating)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-                                title="View complete submitted assessment and approver feedback"
+                                title={UI_STRINGS.appAppProcurementVendorsIdPage.viewCompleteSubmittedAssessmentAndApproverFeedback}
                               >
-                                <Eye className="w-3 h-3" /> View Assessment
-                              </button>
+                                <Eye className="w-3 h-3" />{UI_STRINGS.appAppProcurementVendorsIdPage.viewAssessment}</button>
                               {canUserEdit && (
                                 <button
                                   onClick={() => openEditRatingModal(rating)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors"
-                                  title="Edit assessment and resubmit"
+                                  title={UI_STRINGS.appAppProcurementVendorsIdPage.editAssessmentAndResubmit}
                                 >
-                                  <Edit3 className="w-3 h-3 text-slate-600" /> Edit / Resubmit
-                                </button>
+                                  <Edit3 className="w-3 h-3 text-slate-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.editResubmit}</button>
                               )}
                               {canApproverReview && (
                                 <button
                                   onClick={() => openViewRatingModal(rating)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded hover:bg-amber-100 transition-colors"
-                                  title="Review submitted assessment and record decision"
+                                  title={UI_STRINGS.appAppProcurementVendorsIdPage.reviewSubmittedAssessmentAndRecordDecision}
                                 >
-                                  <CheckSquare className="w-3 h-3 text-amber-700" /> Review & Decide
-                                </button>
+                                  <CheckSquare className="w-3 h-3 text-amber-700" />{UI_STRINGS.appAppProcurementVendorsIdPage.reviewDecide}</button>
                               )}
                             </div>
                           </td>
@@ -2017,13 +1899,11 @@ function VendorProfileContent() {
             ) : (
               <div style={{ padding: '36px 20px', textAlign: 'center' }}>
                 <Star size={32} color="#cbd5e1" style={{ margin: '0 auto 10px auto' }} />
-                <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>
-                  No PPO Performance Ratings Recorded
-                </h4>
+                <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.noPPOPerformanceRatingsRecorded}</h4>
                 <p style={{ fontSize: 12, color: '#64748b', margin: 0, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
                   {eligiblePpos.length > 0 && currentUserRole !== 'PROCUREMENT_USER'
-                    ? `${eligiblePpos.length} completed purchase order(s) are eligible for performance review. Click 'Rate Completed Order' above.`
-                    : 'Ratings are recorded after an issued purchase order (PPO) reaches completion and are approved by the Project Approver.'}
+                    ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthCompletedPurchaseOrderSAreEligibleForPerformanceReviewClickRateCompletedOrderAbove, { "length": eligiblePpos.length })
+                    : UI_STRINGS.appAppProcurementVendorsIdPage.ratingsAreRecordedAfterAnIssuedPurchaseOrderPPOReachesCompletionAndAreApprovedByTheProjectApprover}
                 </p>
               </div>
             )}
@@ -2047,36 +1927,24 @@ function VendorProfileContent() {
               }}
             >
               <FileCheck2 size={16} color="#2563eb" />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                Statutory Documents & Certifications
-              </h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.statutoryDocumentsCertifications}</h3>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #B8C9DC', background: '#ffffff', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Document / Requirement
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Reference / Evidence
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Verification Status
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Source / Notes
-                    </th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.documentRequirement}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.referenceEvidence}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.verificationStatus}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.sourceNotes}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr style={{ background: '#ffffff' }}>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      GST Registration Certificate
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.gSTRegistrationCertificate}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#1e40af' }}>
-                      {vendor.gstin || 'Not Provided'}
+                      {vendor.gstin || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided}
                     </td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                       <span
@@ -2091,20 +1959,16 @@ function VendorProfileContent() {
                           color: vendor.gstin ? '#166534' : '#64748b',
                         }}
                       >
-                        {vendor.gstin ? 'Verified' : 'Pending'}
+                        {vendor.gstin ? UI_STRINGS.common.verified : UI_STRINGS.common.pending}
                       </span>
                     </td>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>
-                      Portal Validation
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.portalValidation}</td>
                   </tr>
 
                   <tr style={{ background: '#ffffff' }}>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      PAN Card Copy
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.pANCardCopy}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#1e40af' }}>
-                      {vendor.pan || 'Not Provided'}
+                      {vendor.pan || UI_STRINGS.appAppProcurementVendorsIdPage.notProvided}
                     </td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                       <span
@@ -2119,20 +1983,16 @@ function VendorProfileContent() {
                           color: vendor.pan ? '#166534' : '#64748b',
                         }}
                       >
-                        {vendor.pan ? 'Verified' : 'Pending'}
+                        {vendor.pan ? UI_STRINGS.common.verified : UI_STRINGS.common.pending}
                       </span>
                     </td>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>
-                      Income Tax Verification
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.incomeTaxVerification}</td>
                   </tr>
 
                   <tr style={{ background: '#ffffff' }}>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      Company Profile & Vintage
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.companyProfileVintage}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#0f172a' }}>
-                      {vendor.experienceYears ? `${vendor.experienceYears} Years Vintage` : 'Not Submitted'}
+                      {vendor.experienceYears ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.experienceYearsYearsVintage, { "experienceYears": vendor.experienceYears }) : UI_STRINGS.appAppProcurementVendorsIdPage.notSubmitted}
                     </td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                       <span
@@ -2147,20 +2007,16 @@ function VendorProfileContent() {
                           color: vendor.experienceYears ? '#166534' : '#64748b',
                         }}
                       >
-                        {vendor.experienceYears ? 'Provided' : 'Optional'}
+                        {vendor.experienceYears ? UI_STRINGS.appAppProcurementVendorsIdPage.provided : UI_STRINGS.appAppProcurementVendorsIdPage.optional}
                       </span>
                     </td>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>
-                      Corporate Profile
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.corporateProfile}</td>
                   </tr>
 
                   <tr style={{ background: '#ffffff' }}>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      Audited Financial Statements
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.auditedFinancialStatements}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#0f172a' }}>
-                      {vendor.turnoverCrores ? `₹ ${vendor.turnoverCrores} Crores Turnover` : 'Not Uploaded'}
+                      {vendor.turnoverCrores ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.turnoverCroresCroresTurnover, { "turnoverCrores": vendor.turnoverCrores }) : UI_STRINGS.appAppProcurementVendorsIdPage.notUploaded}
                     </td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                       <span
@@ -2175,20 +2031,16 @@ function VendorProfileContent() {
                           color: vendor.turnoverCrores ? '#166534' : '#64748b',
                         }}
                       >
-                        {vendor.turnoverCrores ? 'Provided' : 'Pending'}
+                        {vendor.turnoverCrores ? UI_STRINGS.appAppProcurementVendorsIdPage.provided : UI_STRINGS.common.pending}
                       </span>
                     </td>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>
-                      CA Attested Balance Sheet
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.cAAttestedBalanceSheet}</td>
                   </tr>
 
                   <tr style={{ background: '#ffffff' }}>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      Statutory Certifications
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.statutoryCertifications}</td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#0f172a' }}>
-                      {vendor.certifications || 'None reported'}
+                      {vendor.certifications || UI_STRINGS.appAppProcurementVendorsIdPage.noneReported}
                     </td>
                     <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', textAlign: 'center' }}>
                       <span
@@ -2203,12 +2055,10 @@ function VendorProfileContent() {
                           color: vendor.certifications ? '#166534' : '#64748b',
                         }}
                       >
-                        {vendor.certifications ? 'Recorded' : 'None'}
+                        {vendor.certifications ? UI_STRINGS.common.recorded : UI_STRINGS.common.none}
                       </span>
                     </td>
-                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>
-                      ISO / Industry Credentials
-                    </td>
+                    <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#64748b' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.iSOIndustryCredentials}</td>
                   </tr>
                 </tbody>
               </table>
@@ -2228,27 +2078,17 @@ function VendorProfileContent() {
               }}
             >
               <Clock size={16} color="#2563eb" />
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                Governance & Audit History ({auditLogs.length})
-              </h3>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.governanceAuditHistory}{auditLogs.length}{UI_STRINGS.common.copyc7zu6c}</h3>
             </div>
 
             <div style={{ overflowX: 'auto', maxHeight: 380 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #B8C9DC', background: '#ffffff', fontSize: 12 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '22%' }}>
-                      Timestamp
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '22%' }}>
-                      Action / Event
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '38%' }}>
-                      Description & Outcome
-                    </th>
-                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '18%' }}>
-                      Actor / User
-                    </th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '22%' }}>{UI_STRINGS.common.timestamp}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '22%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.actionEvent}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '38%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.descriptionOutcome}</th>
+                    <th style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', width: '18%' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.actorUser}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2264,21 +2104,19 @@ function VendorProfileContent() {
                         <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', color: '#334155' }}>
                           <BoqDescriptionCell
                             text={log.description}
-                            title="Audit Event Detail"
+                            title={UI_STRINGS.appAppProcurementVendorsIdPage.auditEventDetail}
                             maxWidth={220}
                             clampLines={2}
                           />
                         </td>
                         <td style={{ border: '1px solid #B8C9DC', padding: '10px 14px', fontSize: 11, color: '#64748b' }}>
-                          {log.user ? `${log.user.name} (${log.user.role})` : 'System'}
+                          {log.user ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.nameRole, { "name": log.user.name, "role": log.user.role }) : UI_STRINGS.common.system}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} style={{ border: '1px solid #B8C9DC', padding: '24px 14px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
-                        No audit trail records found.
-                      </td>
+                      <td colSpan={4} style={{ border: '1px solid #B8C9DC', padding: '24px 14px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.noAuditTrailRecordsFound}</td>
                     </tr>
                   )}
                 </tbody>
@@ -2297,11 +2135,9 @@ function VendorProfileContent() {
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                  {editingRating ? 'Edit & Resubmit Performance Assessment' : 'Rate Completed Purchase Order Performance'}
+                  {editingRating ? UI_STRINGS.appAppProcurementVendorsIdPage.editResubmitPerformanceAssessment : UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedPurchaseOrderPerformance}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  5-criteria weighted order execution evaluation (Quality 30%, Delivery 25%, Commercial 20%, Responsiveness 15%, Documentation 10%).
-                </p>
+                <p className="text-xs text-slate-500 mt-0.5">{UI_STRINGS.common.copyjcbnww}</p>
               </div>
               <button
                 type="button"
@@ -2310,9 +2146,7 @@ function VendorProfileContent() {
                   setEditingRating(null);
                 }}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-lg font-bold leading-none"
-              >
-                ✕
-              </button>
+              >{UI_STRINGS.common.copy4i33ao}</button>
             </div>
 
             {/* Scrollable Body */}
@@ -2322,10 +2156,10 @@ function VendorProfileContent() {
                 <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-xs">
                   <div className="flex items-center gap-2 font-bold text-rose-800 mb-1">
                     <RotateCcw className="w-4 h-4 text-rose-600" />
-                    <span>Returned for Correction by Project Approver</span>
+                    <span>{UI_STRINGS.appAppProcurementVendorsIdPage.returnedForCorrectionByProjectApprover}</span>
                   </div>
                   <p className="text-rose-700 leading-relaxed">
-                    <strong>Approver Comments:</strong> {editingRating.approverComments || editingRating.returnReason || 'Please review and adjust criteria ratings or provide more detail in the areas for improvement.'}
+                    <strong>{UI_STRINGS.appAppProcurementVendorsIdPage.approverComments}</strong> {editingRating.approverComments || editingRating.returnReason || UI_STRINGS.appAppProcurementVendorsIdPage.pleaseReviewAndAdjustCriteriaRatingsOrProvideMoreDetailInTheAreasForImprovement}
                   </p>
                 </div>
               )}
@@ -2339,13 +2173,11 @@ function VendorProfileContent() {
 
               {/* PPO Selection / Information */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Select Completed Purchase Order (PPO) <span className="text-red-600">*</span>
+                <label className="text-xs font-bold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.selectCompletedPurchaseOrderPPO}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 {editingRating ? (
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800">
-                    <span className="font-mono text-blue-700 font-bold">{editingRating.ppo?.ppoNumber}</span> — {editingRating.ppo?.title} (Value: ₹{editingRating.ppo?.totalValue?.toLocaleString() || 0})
-                  </div>
+                    <span className="font-mono text-blue-700 font-bold">{editingRating.ppo?.ppoNumber}</span>{UI_STRINGS.common.copyq9aflv}{editingRating.ppo?.title}{UI_STRINGS.appAppProcurementVendorsIdPage.value}{editingRating.ppo?.totalValue?.toLocaleString() || 0}{UI_STRINGS.common.copyc7zu6c}</div>
                 ) : (
                   <select
                     value={selectedPpoId}
@@ -2353,11 +2185,10 @@ function VendorProfileContent() {
                     className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-800 font-semibold focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     required
                   >
-                    <option value="">-- Choose Completed PPO to Evaluate --</option>
+                    <option value="">{UI_STRINGS.appAppProcurementVendorsIdPage.chooseCompletedPPOToEvaluate}</option>
                     {eligiblePpos.map((ppo: any) => (
                       <option key={ppo.id} value={ppo.id}>
-                        {ppo.ppoNumber} — {ppo.title} (Value: ₹{ppo.totalValue?.toLocaleString() || 0})
-                      </option>
+                        {ppo.ppoNumber}{UI_STRINGS.common.copyq9aflv}{ppo.title}{UI_STRINGS.appAppProcurementVendorsIdPage.value}{ppo.totalValue?.toLocaleString() || 0}{UI_STRINGS.common.copyc7zu6c}</option>
                     ))}
                   </select>
                 )}
@@ -2366,20 +2197,16 @@ function VendorProfileContent() {
               {/* Section 1: 5 Weighted Rating Criteria */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    1. Order Execution Criteria Ratings (1–5 Scale)
-                  </h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">{UI_STRINGS.appAppProcurementVendorsIdPage.copy5wnvrv}</h4>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded">
                     <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    <span>
-                      Live Weighted Score: {(
+                    <span>{UI_STRINGS.appAppProcurementVendorsIdPage.liveWeightedScore}{(
                         (ppoRatingForm.qualityScore * 0.30) +
                         (ppoRatingForm.deliveryScore * 0.25) +
                         (ppoRatingForm.commercialComplianceScore * 0.20) +
                         (ppoRatingForm.responsivenessScore * 0.15) +
                         (ppoRatingForm.documentationClosureScore * 0.10)
-                      ).toFixed(2)} / 5.0
-                    </span>
+                      ).toFixed(2)}{UI_STRINGS.common.copy6hoc4p}</span>
                   </div>
                 </div>
 
@@ -2387,86 +2214,86 @@ function VendorProfileContent() {
                   {/* Quality */}
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-bold text-slate-900">Quality of Goods / Work (30%) <span className="text-red-600">*</span></span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.qualityOfGoodsWork30}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span></span>
                       <select
                         value={ppoRatingForm.qualityScore}
                         onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, qualityScore: Number(e.target.value) })}
                         className="text-xs font-bold border border-slate-300 rounded px-2 py-1 bg-white"
                       >
                         {[5, 4, 3, 2, 1].map((s) => (
-                          <option key={s} value={s}>{s} / 5</option>
+                          <option key={s} value={s}>{s}{UI_STRINGS.common.copy1oc1xgf}</option>
                         ))}
                       </select>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">Workmanship, material quality, specs & defects</span>
+                    <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppProcurementVendorsIdPage.workmanshipMaterialQualitySpecsDefects}</span>
                   </div>
 
                   {/* Delivery */}
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-bold text-slate-900">Delivery & Time (25%) <span className="text-red-600">*</span></span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.deliveryTime25}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span></span>
                       <select
                         value={ppoRatingForm.deliveryScore}
                         onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, deliveryScore: Number(e.target.value) })}
                         className="text-xs font-bold border border-slate-300 rounded px-2 py-1 bg-white"
                       >
                         {[5, 4, 3, 2, 1].map((s) => (
-                          <option key={s} value={s}>{s} / 5</option>
+                          <option key={s} value={s}>{s}{UI_STRINGS.common.copy1oc1xgf}</option>
                         ))}
                       </select>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">Delivery timelines, milestone delays & schedule adherence</span>
+                    <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppProcurementVendorsIdPage.deliveryTimelinesMilestoneDelaysScheduleAdherence}</span>
                   </div>
 
                   {/* Commercial */}
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-bold text-slate-900">Cost & Commercial (20%) <span className="text-red-600">*</span></span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.costCommercial20}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span></span>
                       <select
                         value={ppoRatingForm.commercialComplianceScore}
                         onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, commercialComplianceScore: Number(e.target.value) })}
                         className="text-xs font-bold border border-slate-300 rounded px-2 py-1 bg-white"
                       >
                         {[5, 4, 3, 2, 1].map((s) => (
-                          <option key={s} value={s}>{s} / 5</option>
+                          <option key={s} value={s}>{s}{UI_STRINGS.common.copy1oc1xgf}</option>
                         ))}
                       </select>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">Agreed rates, cost control, billing & commercial compliance</span>
+                    <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppProcurementVendorsIdPage.agreedRatesCostControlBillingCommercialCompliance}</span>
                   </div>
 
                   {/* Responsiveness */}
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-bold text-slate-900">Responsiveness & Coordination (15%) <span className="text-red-600">*</span></span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.responsivenessCoordination15}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span></span>
                       <select
                         value={ppoRatingForm.responsivenessScore}
                         onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, responsivenessScore: Number(e.target.value) })}
                         className="text-xs font-bold border border-slate-300 rounded px-2 py-1 bg-white"
                       >
                         {[5, 4, 3, 2, 1].map((s) => (
-                          <option key={s} value={s}>{s} / 5</option>
+                          <option key={s} value={s}>{s}{UI_STRINGS.common.copy1oc1xgf}</option>
                         ))}
                       </select>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">Communication, issue resolution & site coordination</span>
+                    <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppProcurementVendorsIdPage.communicationIssueResolutionSiteCoordination}</span>
                   </div>
 
                   {/* Documentation */}
                   <div className="p-3 rounded-lg border border-slate-200 bg-white md:col-span-2">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-bold text-slate-900">Documentation & Closure (10%) <span className="text-red-600">*</span></span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.documentationClosure10}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span></span>
                       <select
                         value={ppoRatingForm.documentationClosureScore}
                         onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, documentationClosureScore: Number(e.target.value) })}
                         className="text-xs font-bold border border-slate-300 rounded px-2 py-1 bg-white"
                       >
                         {[5, 4, 3, 2, 1].map((s) => (
-                          <option key={s} value={s}>{s} / 5</option>
+                          <option key={s} value={s}>{s}{UI_STRINGS.common.copy1oc1xgf}</option>
                         ))}
                       </select>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">Invoices, statutory documents, test certificates & handover records</span>
+                    <span className="text-[11px] text-slate-500 block">{UI_STRINGS.appAppProcurementVendorsIdPage.invoicesStatutoryDocumentsTestCertificatesHandoverRecords}</span>
                   </div>
                 </div>
               </div>
@@ -2475,91 +2302,81 @@ function VendorProfileContent() {
               <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/60 space-y-4">
                 <div className="border-b border-slate-200 pb-2">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
-                    <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
-                    Performance Feedback & Areas for Improvement
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Provide specific qualitative observations for each assessment area and actionable improvement recommendations.
-                  </p>
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.performanceFeedbackAreasForImprovement}</h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{UI_STRINGS.appAppProcurementVendorsIdPage.provideSpecificQualitativeObservationsForEachAssessmentAreaAndActionableImprovementRecommendations}</p>
                 </div>
 
                 {/* Individual Category Comment Boxes */}
                 <div className="space-y-3.5">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Quality Feedback & Observations <span className="text-red-600">*</span>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.qualityFeedbackObservations}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <textarea
                       rows={2}
                       value={ppoRatingForm.qualityComments}
                       onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, qualityComments: e.target.value })}
-                      placeholder="Comments on workmanship, material quality, specifications compliance and defects observed..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.commentsOnWorkmanshipMaterialQualitySpecificationsComplianceAndDefectsObserved}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Delivery & Time Adherence Feedback <span className="text-red-600">*</span>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.deliveryTimeAdherenceFeedback}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <textarea
                       rows={2}
                       value={ppoRatingForm.deliveryComments}
                       onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, deliveryComments: e.target.value })}
-                      placeholder="Comments on delivery timelines, schedule adherence, milestone tracking and delays..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.commentsOnDeliveryTimelinesScheduleAdherenceMilestoneTrackingAndDelays}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Cost & Commercial Compliance Feedback <span className="text-red-600">*</span>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.costCommercialComplianceFeedback}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <textarea
                       rows={2}
                       value={ppoRatingForm.commercialComments}
                       onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, commercialComments: e.target.value })}
-                      placeholder="Comments on agreed rates adherence, cost control, billing accuracy and commercial compliance..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.commentsOnAgreedRatesAdherenceCostControlBillingAccuracyAndCommercialCompliance}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Documentation & Handover Feedback <span className="text-red-600">*</span>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.documentationHandoverFeedback}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <textarea
                       rows={2}
                       value={ppoRatingForm.documentationComments}
                       onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, documentationComments: e.target.value })}
-                      placeholder="Comments on tax invoices, statutory documents, test certificates, warranty certificates and handover records..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.commentsOnTaxInvoicesStatutoryDocumentsTestCertificatesWarrantyCertificatesAndHandoverRecords}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Responsiveness & Coordination Feedback <span className="text-red-600">*</span>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.responsivenessCoordinationFeedback}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <textarea
                       rows={2}
                       value={ppoRatingForm.responsivenessComments}
                       onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, responsivenessComments: e.target.value })}
-                      placeholder="Comments on communication turnaround, issue resolution, escalation handling and site coordination..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.commentsOnCommunicationTurnaroundIssueResolutionEscalationHandlingAndSiteCoordination}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     />
                   </div>
 
                   {/* Larger Box: Overall Areas for Improvement */}
                   <div className="pt-2 border-t border-slate-200">
-                    <label className="text-xs font-bold text-slate-900 block mb-1">
-                      Overall Areas for Improvement, Corrective Actions & Future Recommendations <span className="text-red-600">*</span>
+                    <label className="text-xs font-bold text-slate-900 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.overallAreasForImprovementCorrectiveActionsFutureRecommendations}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <textarea
                       rows={3}
                       value={ppoRatingForm.overallImprovement}
                       onChange={(e) => setPpoRatingForm({ ...ppoRatingForm, overallImprovement: e.target.value })}
-                      placeholder="Describe key improvement areas, expected corrective actions from vendor, and recommendations for future capex projects..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.describeKeyImprovementAreasExpectedCorrectiveActionsFromVendorAndRecommendationsForFutureCapexProjects}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 font-medium"
                     />
                   </div>
@@ -2576,9 +2393,7 @@ function VendorProfileContent() {
                   setEditingRating(null);
                 }}
                 className="btn btn-secondary text-xs"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
 
               <div className="flex items-center gap-2">
                 <button
@@ -2588,7 +2403,7 @@ function VendorProfileContent() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
                 >
                   <Save className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Save Draft</span>
+                  <span>{UI_STRINGS.common.saveDraft}</span>
                 </button>
                 <button
                   type="button"
@@ -2599,12 +2414,12 @@ function VendorProfileContent() {
                   {submittingPpoRating ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Submitting...</span>
+                      <span>{UI_STRINGS.common.submitting}</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5" />
-                      <span>Submit for Project Approval</span>
+                      <span>{UI_STRINGS.common.submitForProjectApproval}</span>
                     </>
                   )}
                 </button>
@@ -2622,49 +2437,38 @@ function VendorProfileContent() {
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h3 className="text-base font-bold text-slate-900">
-                    PPO Performance Assessment Detail
-                  </h3>
+                  <h3 className="text-base font-bold text-slate-900">{UI_STRINGS.common.pPOPerformanceAssessmentDetail}</h3>
                   <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
                     {viewRatingModal.ppo?.ppoNumber}
                   </span>
                   {viewRatingModal.status === 'APPROVED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Approved
-                    </span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.approved}</span>
                   )}
                   {viewRatingModal.status === 'SUBMITTED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                      <Clock className="w-3.5 h-3.5 text-amber-600" /> Submitted for Approval
-                    </span>
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.submittedForApproval}</span>
                   )}
                   {viewRatingModal.status === 'RETURNED_FOR_CORRECTION' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                      <RotateCcw className="w-3.5 h-3.5 text-rose-600" /> Returned for Correction
-                    </span>
+                      <RotateCcw className="w-3.5 h-3.5 text-rose-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.returnedForCorrection}</span>
                   )}
                   {viewRatingModal.status === 'DRAFT' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                      <FileText className="w-3.5 h-3.5 text-slate-500" /> Draft
-                    </span>
+                      <FileText className="w-3.5 h-3.5 text-slate-500" />{UI_STRINGS.appAppProcurementVendorsIdPage.draft}</span>
                   )}
                   {viewRatingModal.status === 'REJECTED' && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
-                      <XCircle className="w-3.5 h-3.5 text-red-600" /> Rejected
-                    </span>
+                      <XCircle className="w-3.5 h-3.5 text-red-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.rejected}</span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Comprehensive performance audit, scoring weights, evaluator feedback and approval records.
-                </p>
+                <p className="text-xs text-slate-500 mt-1">{UI_STRINGS.appAppProcurementVendorsIdPage.comprehensivePerformanceAuditScoringWeightsEvaluatorFeedbackAndApprovalRecords}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setViewRatingModal(null)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-lg font-bold leading-none"
-              >
-                ✕
-              </button>
+              >{UI_STRINGS.common.copy4i33ao}</button>
             </div>
 
             {/* Scrollable Content */}
@@ -2679,117 +2483,109 @@ function VendorProfileContent() {
               {/* Section A: Submitted Performance Assessment */}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 pb-1.5 flex items-center gap-2">
-                  <FileCheck2 className="w-4 h-4 text-blue-600" />
-                  A. Submitted Performance Assessment
-                </h4>
+                  <FileCheck2 className="w-4 h-4 text-blue-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.aSubmittedPerformanceAssessment}</h4>
 
                 {/* Metadata Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200">
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">PPO Number</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.common.pPONumber}</span>
                     <span className="font-mono font-bold text-blue-700">{viewRatingModal.ppo?.ppoNumber}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Vendor</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.common.vendor}</span>
                     <span className="font-semibold text-slate-800">{vendor.name}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Project</span>
-                    <span className="font-semibold text-slate-800">{viewRatingModal.ppo?.project?.name || 'General Project'}</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.common.project}</span>
+                    <span className="font-semibold text-slate-800">{viewRatingModal.ppo?.project?.name || UI_STRINGS.common.generalProject}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Cost Centre</span>
-                    <span className="font-semibold text-slate-800">{viewRatingModal.ppo?.costCentre?.name || viewRatingModal.ppo?.costCentre?.code || '—'}</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.common.costCentre2}</span>
+                    <span className="font-semibold text-slate-800">{viewRatingModal.ppo?.costCentre?.name || viewRatingModal.ppo?.costCentre?.code || UI_STRINGS.common.copy4s9bsz}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">PPO Value</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.common.pPOValue}</span>
                     <span className="font-mono font-bold text-slate-800">
-                      {viewRatingModal.ppo?.totalValue ? `₹ ${viewRatingModal.ppo.totalValue.toLocaleString()}` : '—'}
+                      {viewRatingModal.ppo?.totalValue ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": viewRatingModal.ppo.totalValue.toLocaleString() }) : UI_STRINGS.common.copy4s9bsz}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Evaluated By</span>
-                    <span className="font-semibold text-slate-800">{viewRatingModal.ratedByName || 'Project User'}</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.appAppProcurementVendorsIdPage.evaluatedBy}</span>
+                    <span className="font-semibold text-slate-800">{viewRatingModal.ratedByName || UI_STRINGS.common.projectUser}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Submission Date</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.common.submissionDate}</span>
                     <span className="font-semibold text-slate-800">{new Date(viewRatingModal.ratedAt).toLocaleDateString()}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Weighted Overall Score</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.appAppProcurementVendorsIdPage.weightedOverallScore}</span>
                     <span className="inline-flex items-center gap-1 font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                       <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                      {viewRatingModal.overallScore} / 5.0
-                    </span>
+                      {viewRatingModal.overallScore}{UI_STRINGS.common.copy6hoc4p}</span>
                   </div>
                 </div>
 
                 {/* 5 Assessment Areas with Individual Comments */}
                 <div className="space-y-3">
-                  <h5 className="text-xs font-bold text-slate-800">Criteria Ratings & Evaluator Feedback</h5>
+                  <h5 className="text-xs font-bold text-slate-800">{UI_STRINGS.appAppProcurementVendorsIdPage.criteriaRatingsEvaluatorFeedback}</h5>
                   
                   {/* Quality */}
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Quality of Goods / Work (30% weight)</span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.qualityOfGoodsWork30Weight}</span>
                       <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {viewRatingModal.qualityScore} / 5
-                      </span>
+                        {viewRatingModal.qualityScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                     </div>
                     <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed">
-                      {viewRatingModal.qualityComments || viewRatingModal.criteriaDetailsParsed?.qualityComments || 'No specific quality feedback recorded.'}
+                      {viewRatingModal.qualityComments || viewRatingModal.criteriaDetailsParsed?.qualityComments || UI_STRINGS.appAppProcurementVendorsIdPage.noSpecificQualityFeedbackRecorded}
                     </p>
                   </div>
 
                   {/* Delivery */}
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Delivery & Time Adherence (25% weight)</span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.deliveryTimeAdherence25Weight}</span>
                       <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {viewRatingModal.deliveryScore} / 5
-                      </span>
+                        {viewRatingModal.deliveryScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                     </div>
                     <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed">
-                      {viewRatingModal.deliveryComments || viewRatingModal.criteriaDetailsParsed?.deliveryComments || 'No specific delivery feedback recorded.'}
+                      {viewRatingModal.deliveryComments || viewRatingModal.criteriaDetailsParsed?.deliveryComments || UI_STRINGS.appAppProcurementVendorsIdPage.noSpecificDeliveryFeedbackRecorded}
                     </p>
                   </div>
 
                   {/* Commercial */}
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Cost & Commercial Compliance (20% weight)</span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.costCommercialCompliance20Weight}</span>
                       <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {viewRatingModal.commercialComplianceScore} / 5
-                      </span>
+                        {viewRatingModal.commercialComplianceScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                     </div>
                     <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed">
-                      {viewRatingModal.commercialComments || viewRatingModal.criteriaDetailsParsed?.commercialComments || 'No specific commercial compliance feedback recorded.'}
+                      {viewRatingModal.commercialComments || viewRatingModal.criteriaDetailsParsed?.commercialComments || UI_STRINGS.appAppProcurementVendorsIdPage.noSpecificCommercialComplianceFeedbackRecorded}
                     </p>
                   </div>
 
                   {/* Documentation */}
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Documentation & Closure (10% weight)</span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.documentationClosure10Weight}</span>
                       <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {viewRatingModal.documentationClosureScore} / 5
-                      </span>
+                        {viewRatingModal.documentationClosureScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                     </div>
                     <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed">
-                      {viewRatingModal.documentationComments || viewRatingModal.criteriaDetailsParsed?.documentationComments || 'No specific documentation feedback recorded.'}
+                      {viewRatingModal.documentationComments || viewRatingModal.criteriaDetailsParsed?.documentationComments || UI_STRINGS.appAppProcurementVendorsIdPage.noSpecificDocumentationFeedbackRecorded}
                     </p>
                   </div>
 
                   {/* Responsiveness */}
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-white space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Responsiveness & Coordination (15% weight)</span>
+                      <span className="text-xs font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.responsivenessCoordination15Weight}</span>
                       <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {viewRatingModal.responsivenessScore} / 5
-                      </span>
+                        {viewRatingModal.responsivenessScore}{UI_STRINGS.common.copy1oc1xgf}</span>
                     </div>
                     <p className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed">
-                      {viewRatingModal.responsivenessComments || viewRatingModal.criteriaDetailsParsed?.responsivenessComments || 'No specific responsiveness feedback recorded.'}
+                      {viewRatingModal.responsivenessComments || viewRatingModal.criteriaDetailsParsed?.responsivenessComments || UI_STRINGS.appAppProcurementVendorsIdPage.noSpecificResponsivenessFeedbackRecorded}
                     </p>
                   </div>
 
@@ -2797,10 +2593,10 @@ function VendorProfileContent() {
                   <div className="p-4 rounded-lg border border-blue-200 bg-blue-50/50 space-y-2">
                     <div className="flex items-center gap-1.5">
                       <MessageSquare className="w-4 h-4 text-blue-700" />
-                      <span className="text-xs font-bold text-blue-900">Overall Areas for Improvement, Corrective Actions & Future Recommendations</span>
+                      <span className="text-xs font-bold text-blue-900">{UI_STRINGS.appAppProcurementVendorsIdPage.overallAreasForImprovementCorrectiveActionsFutureRecommendations}</span>
                     </div>
                     <p className="text-xs text-slate-800 bg-white p-3 rounded border border-blue-200 leading-relaxed whitespace-pre-wrap">
-                      {viewRatingModal.overallImprovement || viewRatingModal.criteriaDetailsParsed?.overallImprovement || viewRatingModal.comments || 'No overall improvement remarks provided.'}
+                      {viewRatingModal.overallImprovement || viewRatingModal.criteriaDetailsParsed?.overallImprovement || viewRatingModal.comments || UI_STRINGS.appAppProcurementVendorsIdPage.noOverallImprovementRemarksProvided}
                     </p>
                   </div>
                 </div>
@@ -2809,23 +2605,23 @@ function VendorProfileContent() {
               {/* Section B: Approver Review Comments & Audit */}
               <div className="space-y-4 pt-2 border-t border-slate-200">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                  <CheckSquare className="w-4 h-4 text-purple-600" />
-                  B. Project Approver Comments & Decision
-                </h4>
+                  <CheckSquare className="w-4 h-4 text-purple-600" />{UI_STRINGS.appAppProcurementVendorsIdPage.bProjectApproverCommentsDecision}</h4>
 
                 {/* If already decided */}
                 {(viewRatingModal.status === 'APPROVED' || viewRatingModal.status === 'RETURNED_FOR_CORRECTION' || viewRatingModal.status === 'REJECTED') && (
                   <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">Recorded Approver Remarks</span>
+                      <span className="font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.recordedApproverRemarks}</span>
                       {viewRatingModal.approvedAt && (
-                        <span className="text-slate-400 text-[11px]">
-                          Approved on {new Date(viewRatingModal.approvedAt).toLocaleString()} by {viewRatingModal.approvedByName || 'Approver'}
+                        <span className="text-slate-400 text-[11px]">{interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.approvedOnDateByName, {
+                          date: new Date(viewRatingModal.approvedAt).toLocaleString(),
+                          name: viewRatingModal.approvedByName || UI_STRINGS.common.approver,
+                        })}
                         </span>
                       )}
                     </div>
                     <p className="text-slate-700 bg-white p-3 rounded border border-slate-200 leading-relaxed">
-                      {viewRatingModal.approverComments || viewRatingModal.criteriaDetailsParsed?.approverComments || viewRatingModal.returnReason || 'No approver comments recorded.'}
+                      {viewRatingModal.approverComments || viewRatingModal.criteriaDetailsParsed?.approverComments || viewRatingModal.returnReason || UI_STRINGS.appAppProcurementVendorsIdPage.noApproverCommentsRecorded}
                     </p>
                   </div>
                 )}
@@ -2833,43 +2629,39 @@ function VendorProfileContent() {
                 {/* If currently SUBMITTED and user is Project Approver or Admin */}
                 {viewRatingModal.status === 'SUBMITTED' && (currentUserRole === 'PROJECT_APPROVER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'CLIENT_ADMIN') && (
                   <div className="p-4 rounded-lg border border-purple-200 bg-purple-50/40 space-y-2">
-                    <label className="text-xs font-bold text-slate-900 block">
-                      Project Approver Comments <span className="text-red-600">*</span> (Mandatory for Return / Reject)
-                    </label>
+                    <label className="text-xs font-bold text-slate-900 block">{UI_STRINGS.appAppProcurementVendorsIdPage.projectApproverComments}<span className="text-red-600">{UI_STRINGS.common.copyd1yn99}</span>{UI_STRINGS.appAppProcurementVendorsIdPage.mandatoryForReturnReject}</label>
                     <textarea
                       rows={3}
                       value={approverComments}
                       onChange={(e) => setApproverComments(e.target.value)}
-                      placeholder="Record reason for accepting the assessment, or specific corrections / further evidence required for return/rejection..."
+                      placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.recordReasonForAcceptingTheAssessmentOrSpecificCorrectionsFurtherEvidenceRequiredForReturnRejection}
                       className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                     />
-                    <p className="text-[11px] text-slate-500">
-                      When accepting, these remarks are published to the audit trail. When returning, these comments guide the Project User's corrections.
-                    </p>
+                    <p className="text-[11px] text-slate-500">{UI_STRINGS.appAppProcurementVendorsIdPage.whenAcceptingTheseRemarksArePublishedToTheAuditTrailWhenReturningTheseCommentsGuideTheProjectUserSCorrections}</p>
                   </div>
                 )}
 
                 {/* Decision History Audit Log if available */}
                 {(viewRatingModal.decisionHistory?.length > 0 || viewRatingModal.criteriaDetailsParsed?.history?.length > 0) && (
                   <div className="space-y-2 pt-2">
-                    <span className="text-xs font-bold text-slate-700 block">Lifecycle Audit History</span>
+                    <span className="text-xs font-bold text-slate-700 block">{UI_STRINGS.appAppProcurementVendorsIdPage.lifecycleAuditHistory}</span>
                     <div className="border border-slate-200 rounded-lg overflow-hidden">
                       <table className="w-full text-xs text-left border-collapse">
                         <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 text-[11px]">
                           <tr>
-                            <th className="p-2.5">Action</th>
-                            <th className="p-2.5">User</th>
-                            <th className="p-2.5">Timestamp</th>
-                            <th className="p-2.5">Notes / Comments</th>
+                            <th className="p-2.5">{UI_STRINGS.common.action}</th>
+                            <th className="p-2.5">{UI_STRINGS.common.user}</th>
+                            <th className="p-2.5">{UI_STRINGS.common.timestamp}</th>
+                            <th className="p-2.5">{UI_STRINGS.appAppProcurementVendorsIdPage.notesComments}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
                           {(viewRatingModal.decisionHistory || viewRatingModal.criteriaDetailsParsed?.history || []).map((h: any, idx: number) => (
                             <tr key={idx} className="hover:bg-slate-50/50">
                               <td className="p-2.5 font-bold text-slate-800">{h.action}</td>
-                              <td className="p-2.5 text-slate-600">{h.performedByName || h.performedByRole || 'User'}</td>
+                              <td className="p-2.5 text-slate-600">{h.performedByName || h.performedByRole || UI_STRINGS.common.user}</td>
                               <td className="p-2.5 text-slate-500 font-mono text-[11px]">{new Date(h.timestamp).toLocaleString()}</td>
-                              <td className="p-2.5 text-slate-700">{h.comments || h.notes || '—'}</td>
+                              <td className="p-2.5 text-slate-700">{h.comments || h.notes || UI_STRINGS.common.copy4s9bsz}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2886,9 +2678,7 @@ function VendorProfileContent() {
                 type="button"
                 onClick={() => setViewRatingModal(null)}
                 className="btn btn-secondary text-xs"
-              >
-                Close
-              </button>
+              >{UI_STRINGS.common.close}</button>
 
               <div className="flex items-center gap-2">
                 {/* If status is SUBMITTED and user has approver rights */}
@@ -2901,7 +2691,7 @@ function VendorProfileContent() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-300 rounded-lg hover:bg-rose-100 transition-colors"
                     >
                       <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Reject / Return for Correction</span>
+                      <span>{UI_STRINGS.appAppProcurementVendorsIdPage.rejectReturnForCorrection}</span>
                     </button>
                     <button
                       type="button"
@@ -2910,7 +2700,7 @@ function VendorProfileContent() {
                       className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Accept Rating</span>
+                      <span>{UI_STRINGS.common.acceptRating}</span>
                     </button>
                   </>
                 )}
@@ -2927,7 +2717,7 @@ function VendorProfileContent() {
                     className="btn btn-primary text-xs inline-flex items-center gap-1.5"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>Edit Assessment</span>
+                    <span>{UI_STRINGS.appAppProcurementVendorsIdPage.editAssessment}</span>
                   </button>
                 )}
               </div>
@@ -2944,17 +2734,15 @@ function VendorProfileContent() {
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div className="text-center space-y-1">
-              <h4 className="text-base font-bold text-slate-900">Confirm Vendor Rating Acceptance</h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Are you sure you want to approve this performance assessment for PPO <strong className="font-mono text-blue-700">{viewRatingModal.ppo?.ppoNumber}</strong>?
-              </p>
+              <h4 className="text-base font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.confirmVendorRatingAcceptance}</h4>
+              <p className="text-xs text-slate-600 leading-relaxed">{UI_STRINGS.appAppProcurementVendorsIdPage.areYouSureYouWantToApproveThisPerformanceAssessmentForPPO}<strong className="font-mono text-blue-700">{viewRatingModal.ppo?.ppoNumber}</strong>{UI_STRINGS.common.copyg3u9vy}</p>
             </div>
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
-              <p className="font-bold">Workflow Actions on Acceptance:</p>
+              <p className="font-bold">{UI_STRINGS.appAppProcurementVendorsIdPage.workflowActionsOnAcceptance}</p>
               <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-800">
-                <li>Locks the assessment against ordinary editing.</li>
-                <li>Publishes weighted score ({viewRatingModal.overallScore} / 5.0) to vendor scorecard.</li>
-                <li>Makes approved rating available to Procurement Users in read-only mode.</li>
+                <li>{UI_STRINGS.appAppProcurementVendorsIdPage.locksTheAssessmentAgainstOrdinaryEditing}</li>
+                <li>{UI_STRINGS.appAppProcurementVendorsIdPage.publishesWeightedScore}{viewRatingModal.overallScore}{UI_STRINGS.appAppProcurementVendorsIdPage.copy1yzf9h9}</li>
+                <li>{UI_STRINGS.appAppProcurementVendorsIdPage.makesApprovedRatingAvailableToProcurementUsersInReadOnlyMode}</li>
               </ul>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -2963,9 +2751,7 @@ function VendorProfileContent() {
                 disabled={submittingDecision}
                 onClick={() => setConfirmAcceptOpen(false)}
                 className="btn btn-secondary text-xs"
-              >
-                Cancel
-              </button>
+              >{UI_STRINGS.common.cancel}</button>
               <button
                 type="button"
                 disabled={submittingDecision}
@@ -2975,12 +2761,12 @@ function VendorProfileContent() {
                 {submittingDecision ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Accepting...</span>
+                    <span>{UI_STRINGS.appAppProcurementVendorsIdPage.accepting}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirm Acceptance</span>
+                    <span>{UI_STRINGS.appAppProcurementVendorsIdPage.confirmAcceptance}</span>
                   </>
                 )}
               </button>
@@ -3014,22 +2800,20 @@ function VendorProfileContent() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">Edit Vendor Profile</h3>
+                    <h3 className="text-sm font-bold text-slate-900">{UI_STRINGS.appAppProcurementVendorsIdPage.editVendorProfile}</h3>
                     {vendor?.code && (
                       <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                         {vendor.code}
                       </span>
                     )}
                   </div>
-                  <p className="text-[12px] text-slate-500 mt-0.5">
-                    Update core contact details, operational categories, and statutory compliance records.
-                  </p>
+                  <p className="text-[12px] text-slate-500 mt-0.5">{UI_STRINGS.appAppProcurementVendorsIdPage.updateCoreContactDetailsOperationalCategoriesAndStatutoryComplianceRecords}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                aria-label="Close modal"
+                aria-label={UI_STRINGS.appAppProcurementVendorsIdPage.closeModal}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -3044,130 +2828,114 @@ function VendorProfileContent() {
                   <div className="bg-blue-50/80 border-b border-blue-100 px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Building2 className="w-3.5 h-3.5 text-blue-700" />
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Section 1: Vendor & Contact Information
-                      </h4>
+                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{UI_STRINGS.appAppProcurementVendorsIdPage.section1VendorContactInformation}</h4>
                     </div>
-                    <span className="text-[11px] text-blue-600 font-medium">Core Identity & Operations</span>
+                    <span className="text-[11px] text-blue-600 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.coreIdentityOperations}</span>
                   </div>
 
                   <div className="p-3.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Row 1: Legal Name (spans 2 cols) */}
                     <div className="md:col-span-2">
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Vendor Legal / Business Name <span className="text-red-500">*</span>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.vendorLegalBusinessName}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                       </label>
                       <input
                         type="text"
                         value={editForm.name || ''}
                         onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. Apex Infrastructure & Contracting Pvt Ltd"
+                        placeholder={UI_STRINGS.common.eGApexInfrastructureContractingPvtLtd}
                         required
                       />
                     </div>
 
                     {/* Row 1: Classification */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Vendor Classification <span className="text-red-500">*</span>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.vendorClassification}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                       </label>
                       <select
                         value={editForm.vendorType || 'CLIENT_VENDOR'}
                         onChange={(e) => setEditForm({ ...editForm, vendorType: e.target.value })}
                         className="form-control"
                       >
-                        <option value="CLIENT_VENDOR">Client Vendor (Nominated)</option>
-                        <option value="PROCUCEV_VENDOR">Procucev Network Vendor</option>
+                        <option value="CLIENT_VENDOR">{UI_STRINGS.appAppProcurementVendorsIdPage.clientVendorNominated}</option>
+                        <option value="PROCUCEV_VENDOR">{UI_STRINGS.common.procucevNetworkVendor}</option>
                       </select>
                     </div>
 
                     {/* Row 2: Contact Person */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Primary Contact Person
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.primaryContactPerson}</label>
                       <input
                         type="text"
                         value={editForm.contactPerson || ''}
                         onChange={(e) => setEditForm({ ...editForm, contactPerson: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. Rajesh Sharma"
+                        placeholder={UI_STRINGS.common.eGRajeshSharma}
                       />
                     </div>
 
                     {/* Row 2: Email */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Contact Email
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.contactEmail}</label>
                       <input
                         type="email"
                         value={editForm.email || ''}
                         onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. contact@apexinfra.com"
+                        placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.eGContactApexinfraCom}
                       />
                     </div>
 
                     {/* Row 2: Phone */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Mobile / Phone Number
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.mobilePhoneNumber}</label>
                       <input
                         type="text"
                         value={editForm.phone || ''}
                         onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. +91 98765 43210"
+                        placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.eG919876543210}
                       />
                     </div>
 
                     {/* Row 3: Categories Handled */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Primary Categories / Trade
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.primaryCategoriesTrade}</label>
                       <input
                         type="text"
                         value={editForm.categories || ''}
                         onChange={(e) => setEditForm({ ...editForm, categories: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. Civil & Interior, Structural Steel"
+                        placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.eGCivilInteriorStructuralSteel}
                       />
                     </div>
 
                     {/* Row 3: Operating Location */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Operating Location (City / Region)
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.operatingLocationCityRegion}</label>
                       <input
                         type="text"
                         value={editForm.operatingLocation || ''}
                         onChange={(e) => setEditForm({ ...editForm, operatingLocation: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. Hyderabad, Telangana"
+                        placeholder={UI_STRINGS.common.eGHyderabadTelangana}
                       />
                     </div>
 
                     {/* Row 3: Service Coverage */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Service Coverage
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.serviceCoverage}</label>
                       <select
                         value={editForm.serviceCoverage || 'Pan-India'}
                         onChange={(e) => setEditForm({ ...editForm, serviceCoverage: e.target.value })}
                         className="form-control"
                       >
-                        <option value="Pan-India">Pan-India</option>
-                        <option value="Regional (South)">Regional (South)</option>
-                        <option value="Regional (North)">Regional (North)</option>
-                        <option value="Regional (West)">Regional (West)</option>
-                        <option value="Regional (East)">Regional (East)</option>
-                        <option value="State-Only">State-Only</option>
+                        <option value="Pan-India">{UI_STRINGS.common.panIndia}</option>
+                        <option value="Regional (South)">{UI_STRINGS.appAppProcurementVendorsIdPage.regionalSouth}</option>
+                        <option value="Regional (North)">{UI_STRINGS.appAppProcurementVendorsIdPage.regionalNorth}</option>
+                        <option value="Regional (West)">{UI_STRINGS.appAppProcurementVendorsIdPage.regionalWest}</option>
+                        <option value="Regional (East)">{UI_STRINGS.appAppProcurementVendorsIdPage.regionalEast}</option>
+                        <option value="State-Only">{UI_STRINGS.appAppProcurementVendorsIdPage.stateOnly}</option>
                       </select>
                     </div>
                   </div>
@@ -3178,97 +2946,83 @@ function VendorProfileContent() {
                   <div className="bg-emerald-50/80 border-b border-emerald-100 px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                        Section 2: Business & Statutory Details
-                      </h4>
+                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{UI_STRINGS.appAppProcurementVendorsIdPage.section2BusinessStatutoryDetails}</h4>
                     </div>
-                    <span className="text-[11px] text-emerald-700 font-medium">Compliance & Commercial Standing</span>
+                    <span className="text-[11px] text-emerald-700 font-medium">{UI_STRINGS.appAppProcurementVendorsIdPage.complianceCommercialStanding}</span>
                   </div>
 
                   <div className="p-3.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Row 1: Legal Structure */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Legal Structure
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.legalStructure}</label>
                       <select
                         value={editForm.legalStructure || 'PRIVATE_LIMITED'}
                         onChange={(e) => setEditForm({ ...editForm, legalStructure: e.target.value })}
                         className="form-control"
                       >
-                        <option value="PRIVATE_LIMITED">Private Limited (Pvt Ltd)</option>
-                        <option value="PUBLIC_LIMITED">Public Limited (Ltd)</option>
-                        <option value="PARTNERSHIP">Partnership Firm</option>
-                        <option value="SOLE_PROPRIETORSHIP">Proprietorship</option>
-                        <option value="LLP">LLP (Limited Liability Partnership)</option>
-                        <option value="JOINT_VENTURE">Joint Venture</option>
+                        <option value="PRIVATE_LIMITED">{UI_STRINGS.common.privateLimitedPvtLtd}</option>
+                        <option value="PUBLIC_LIMITED">{UI_STRINGS.common.publicLimitedLtd}</option>
+                        <option value="PARTNERSHIP">{UI_STRINGS.common.partnershipFirm}</option>
+                        <option value="SOLE_PROPRIETORSHIP">{UI_STRINGS.common.proprietorship}</option>
+                        <option value="LLP">{UI_STRINGS.common.lLPLimitedLiabilityPartnership}</option>
+                        <option value="JOINT_VENTURE">{UI_STRINGS.common.jointVenture}</option>
                       </select>
                     </div>
 
                     {/* Row 1: GSTIN */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        GSTIN (15 Digits)
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.gSTIN15Digits}</label>
                       <input
                         type="text"
                         maxLength={15}
                         value={editForm.gstin || ''}
                         onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value.toUpperCase() })}
                         className="form-control font-mono uppercase font-semibold"
-                        placeholder="e.g. 36AABCA1234F1Z5"
+                        placeholder={UI_STRINGS.common.eG36AABCA1234F1Z5}
                       />
                     </div>
 
                     {/* Row 1: PAN */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        PAN (10 Digits)
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.pAN10Digits}</label>
                       <input
                         type="text"
                         maxLength={10}
                         value={editForm.pan || ''}
                         onChange={(e) => setEditForm({ ...editForm, pan: e.target.value.toUpperCase() })}
                         className="form-control font-mono uppercase font-semibold"
-                        placeholder="e.g. AABCA1234F"
+                        placeholder={UI_STRINGS.common.eGAABCA1234F}
                       />
                     </div>
 
                     {/* Row 2: Website */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Company Website
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.companyWebsite}</label>
                       <input
                         type="url"
                         value={editForm.website || ''}
                         onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
                         className="form-control"
-                        placeholder="https://company.com"
+                        placeholder={UI_STRINGS.common.httpsCompanyCom}
                       />
                     </div>
 
                     {/* Row 2: Years in Operation */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Years in Operation
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.appAppProcurementVendorsIdPage.yearsInOperation}</label>
                       <input
                         type="number"
                         min={0}
                         value={editForm.experienceYears ?? ''}
                         onChange={(e) => setEditForm({ ...editForm, experienceYears: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. 10"
+                        placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.eG10}
                       />
                     </div>
 
                     {/* Row 2: Annual Turnover */}
                     <div>
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Annual Turnover (₹ Crores)
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.annualTurnoverCrores}</label>
                       <input
                         type="number"
                         step="0.1"
@@ -3276,38 +3030,34 @@ function VendorProfileContent() {
                         value={editForm.turnoverCrores ?? ''}
                         onChange={(e) => setEditForm({ ...editForm, turnoverCrores: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. 25.5"
+                        placeholder={UI_STRINGS.common.eG255}
                       />
                     </div>
 
                     {/* Row 3: Registered Business Address (Full Width) */}
                     <div className="col-span-full">
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Registered Business Address
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.registeredBusinessAddress}</label>
                       <textarea
                         rows={2}
                         maxLength={500}
                         value={editForm.address || ''}
                         onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
                         className="form-control"
-                        placeholder="Complete registered corporate office address with PIN code"
+                        placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.completeRegisteredCorporateOfficeAddressWithPINCode}
                         style={{ height: 'auto', minHeight: 48 }}
                       />
                     </div>
 
                     {/* Row 4: Product / Scope Capabilities (Full Width) */}
                     <div className="col-span-full">
-                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">
-                        Product / Scope Capabilities
-                      </label>
+                      <label className="text-[13px] font-semibold text-slate-700 block mb-1">{UI_STRINGS.common.productScopeCapabilities}</label>
                       <textarea
                         rows={2}
                         maxLength={500}
                         value={editForm.capabilities || ''}
                         onChange={(e) => setEditForm({ ...editForm, capabilities: e.target.value })}
                         className="form-control"
-                        placeholder="e.g. General civil contracting, interior fitouts, MEP engineering & turnkey project execution"
+                        placeholder={UI_STRINGS.appAppProcurementVendorsIdPage.eGGeneralCivilContractingInteriorFitoutsMEPEngineeringTurnkeyProjectExecution}
                         style={{ height: 'auto', minHeight: 48 }}
                       />
                     </div>
@@ -3319,16 +3069,14 @@ function VendorProfileContent() {
               <div className="px-5 py-2.5 border-t border-slate-200 bg-white flex items-center justify-between shrink-0">
                 <div className="text-xs text-slate-500 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                  <span>Updating directory record for <strong className="text-slate-800">{vendor?.name}</strong></span>
+                  <span>{UI_STRINGS.appAppProcurementVendorsIdPage.updatingDirectoryRecordFor}<strong className="text-slate-800">{vendor?.name}</strong></span>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
                     className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-2xs cursor-pointer"
-                  >
-                    Cancel
-                  </button>
+                  >{UI_STRINGS.common.cancel}</button>
                   <button
                     type="submit"
                     disabled={savingEdit}
@@ -3336,14 +3084,10 @@ function VendorProfileContent() {
                   >
                     {savingEdit ? (
                       <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Saving Changes...
-                      </>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />{UI_STRINGS.appAppProcurementVendorsIdPage.savingChanges}</>
                     ) : (
                       <>
-                        <Save className="w-3.5 h-3.5" />
-                        Save Changes
-                      </>
+                        <Save className="w-3.5 h-3.5" />{UI_STRINGS.common.saveChanges}</>
                     )}
                   </button>
                 </div>
@@ -3362,7 +3106,7 @@ export default function VendorProfilePage() {
       fallback={
         <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
           <div className="spinner" style={{ margin: '0 auto 12px' }} />
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Loading Vendor Profile...</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.loadingVendorProfile}</div>
         </div>
       }
     >

@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export async function GET(
   req: NextRequest,
@@ -13,7 +15,7 @@ export async function GET(
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
-  if (!id) return apiError('Line ID is required', 400);
+  if (!id) return apiError(UI_STRINGS.appApiBoqLinesIdRoute.lineIDIsRequired, 400);
 
   const line = await prisma.boqLine.findFirst({
     where: {
@@ -41,7 +43,7 @@ export async function GET(
   });
 
   if (!line) {
-    return apiError('BOQ line item not found', 404);
+    return apiError(UI_STRINGS.appApiBoqLinesIdRoute.bOQLineItemNotFound, 404);
   }
 
   const enrichedLine = {

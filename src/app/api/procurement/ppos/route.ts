@@ -1,5 +1,6 @@
 // app/api/procurement/ppos/route.ts
 // Purchase / Procurement Order (PPO) Generation from locked commercial baseline
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
@@ -8,13 +9,16 @@ import { notifyNextResponsibleParty } from '@/lib/notifications';
 
 import { hasPermission } from '@/lib/permissions';
 import { getUserAuthorizedProjectIds } from '@/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
 
   if (!hasPermission(ctx.role, 'PPO_VIEW') && !hasPermission(ctx.role, 'VENDOR_RATE_PPO')) {
-    return apiError('Forbidden: insufficient permissions', 403);
+    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
   }
 
   const { searchParams } = new URL(req.url);
@@ -117,7 +121,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching PPOs:', error);
-    return apiError(error.message || 'Failed to fetch PPOs', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpos }), 500);
   }
 }
 
@@ -139,7 +143,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId) {
-      return apiError('RFQ ID is required to generate PPO', 400);
+      return apiError(UI_STRINGS.appApiProcurementPposRoute.rFQIDIsRequiredToGeneratePPO, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -161,7 +165,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     // Evaluate latest quote per vendor to determine ranking and award details
@@ -182,7 +186,7 @@ export async function POST(req: NextRequest) {
         where: { id: awardRecommendationId, tenantId: ctx.tenantId },
         include: { recommendedVendor: true },
       });
-      if (!award) return apiError('Award recommendation not found', 404);
+      if (!award) return apiError(UI_STRINGS.common.awardRecommendationNotFound, 404);
       vendorId = award.recommendedVendorId;
       selectedQuote = latestQuoteMap.get(vendorId) || null;
     } else if (!vendorId && rfq.awards.length > 0) {
@@ -195,7 +199,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!vendorId || !selectedQuote) {
-      return apiError('Cannot generate PPO: No valid quotation found for the selected vendor', 400);
+      return apiError(UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, 400);
     }
 
     // Determine ranking at award time
@@ -206,7 +210,7 @@ export async function POST(req: NextRequest) {
     // Rule: If the selected vendor is not L1, require a mandatory justification note before submission
     if (!isL1 && (!justification || !justification.trim())) {
       return apiError(
-        `Vendor ${selectedQuote.vendor.name} is ranked L${rankAtAward}. A mandatory commercial justification is required when awarding / raising PPO for a non-L1 vendor.`,
+        interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.vendorNameIsRankedLRankAtAwardAMandatoryCommercialJustificationIsRequiredWhenAwardingRaisingPPOForANonL1Vendor, { "name": selectedQuote.vendor.name, "rankAtAward": rankAtAward }),
         400
       );
     }
@@ -223,7 +227,7 @@ export async function POST(req: NextRequest) {
 
     if (existingPpo) {
       return apiError(
-        `An active Purchase Order (${existingPpo.ppoNumber}) has already been raised for ${selectedQuote.vendor.name} on this RFQ.`,
+        interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.anActivePurchaseOrderPpoNumberHasAlreadyBeenRaisedForNameOnThisRFQ, { "ppoNumber": existingPpo.ppoNumber, "name": selectedQuote.vendor.name }),
         409
       );
     }
@@ -312,7 +316,7 @@ export async function POST(req: NextRequest) {
           vendorId,
           awardRecommendationId: awardId,
           ppoNumber,
-          title: `Purchase Order: ${rfq.title} (${vendorName} - Quote v${quoteVersion})`,
+          title: interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.purchaseOrderTitleVendorNameQuoteVQuoteVersion, { "title": rfq.title, "vendorName": vendorName, "quoteVersion": quoteVersion }),
           totalValue,
           currency: 'INR',
           status: initialStatus,
@@ -349,7 +353,7 @@ export async function POST(req: NextRequest) {
       entityType: 'PPO',
       entityId: ppo.id,
       action: 'PPO_CREATED',
-      description: `Purchase Order ${ppoNumber} raised for ${vendorName} (Rank: L${rankAtAward}, Quote v${quoteVersion}, ₹${totalValue.toLocaleString('en-IN')}) on RFQ ${rfq.rfqNumber}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.purchaseOrderPpoNumberRaisedForVendorNameRankLRankAtAwardQuoteVQuoteVersionToLocaleStringOnRFQRfqNumber, { "ppoNumber": ppoNumber, "vendorName": vendorName, "rankAtAward": rankAtAward, "quoteVersion": quoteVersion, "toLocaleString": totalValue.toLocaleString(I18N_CONFIG.defaultLocale), "rfqNumber": rfq.rfqNumber }),
       newValue: {
         ppoNumber,
         vendorId,
@@ -374,11 +378,11 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess({
       ppo,
-      message: `PPO ${ppoNumber} raised successfully for ${vendorName} (Quote v${quoteVersion})`,
+      message: interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.pPOPpoNumberRaisedSuccessfullyForVendorNameQuoteVQuoteVersion, { "ppoNumber": ppoNumber, "vendorName": vendorName, "quoteVersion": quoteVersion }),
       ppoNumber,
     }, 201);
   } catch (error: any) {
     console.error('Error generating PPO:', error);
-    return apiError(error.message || 'Failed to generate PPO', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToGeneratePpo }), 500);
   }
 }

@@ -11,6 +11,9 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { ToastType, ToastOptions, ToastInput, ToastItem, ToastContextType } from "@app-types/components/ui/Toast.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { ToastType, ToastOptions, ToastInput };
 
 
@@ -68,14 +71,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (input: ToastInput, recordNumber?: string, nextStage?: string) => {
       if (typeof input === 'object') {
         showToast({
-          type: 'success',
+          type: UI_STRINGS.common.success,
           ...input,
           durationMs: input.durationMs || input.duration || 5000,
         });
       } else {
         showToast({
-          type: 'success',
-          title: recordNumber ? `Confirmed: ${recordNumber}` : 'Action Successful',
+          type: UI_STRINGS.common.success,
+          title: recordNumber ? interpolateUiString(UI_STRINGS.componentsUiToast.confirmedRecordNumber, { "recordNumber": recordNumber }) : UI_STRINGS.componentsUiToast.actionSuccessful,
           message: input,
           recordNumber,
           nextStage,
@@ -86,17 +89,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 
   const error = useCallback(
-    (input: ToastInput, title: string = 'Action Failed') => {
+    (input: ToastInput, title: string = UI_STRINGS.componentsUiToast.actionFailed) => {
       if (typeof input === 'object') {
         showToast({
           ...input,
-          type: 'error',
-          title: input.title || title,
+          type: UI_STRINGS.common.error2,
+          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": input.title || title }),
           durationMs: input.durationMs || input.duration || 7000,
         });
       } else {
         showToast({
-          type: 'error',
+          type: UI_STRINGS.common.error2,
           title,
           message: input,
           durationMs: 7000,
@@ -107,17 +110,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 
   const warning = useCallback(
-    (input: ToastInput, title: string = 'Notice') => {
+    (input: ToastInput, title: string = UI_STRINGS.componentsUiToast.notice) => {
       if (typeof input === 'object') {
         showToast({
           ...input,
-          type: 'warning',
-          title: input.title || title,
+          type: UI_STRINGS.componentsUiToast.warning,
+          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": input.title || title }),
           durationMs: input.durationMs || input.duration || 6000,
         });
       } else {
         showToast({
-          type: 'warning',
+          type: UI_STRINGS.componentsUiToast.warning,
           title,
           message: input,
           durationMs: 6000,
@@ -128,17 +131,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 
   const info = useCallback(
-    (input: ToastInput, title: string = 'Information') => {
+    (input: ToastInput, title: string = UI_STRINGS.componentsUiToast.information) => {
       if (typeof input === 'object') {
         showToast({
           ...input,
-          type: 'info',
-          title: input.title || title,
+          type: UI_STRINGS.componentsUiToast.info,
+          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": input.title || title }),
           durationMs: input.durationMs || input.duration || 5000,
         });
       } else {
         showToast({
-          type: 'info',
+          type: UI_STRINGS.componentsUiToast.info,
           title,
           message: input,
         });
@@ -273,7 +276,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       border: '1px solid #e2e8f0',
                     }}
                   >
-                    <span>Next Stage:</span>
+                    <span>{UI_STRINGS.componentsUiToast.nextStage}</span>
                     <span style={{ color: accentColor }}>{toast.nextStage}</span>
                   </div>
                 )}
@@ -289,7 +292,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       gap: 4,
                     }}
                   >
-                    <span style={{ fontWeight: 600 }}>Vendor:</span>
+                    <span style={{ fontWeight: 600 }}>{UI_STRINGS.common.vendor2}</span>
                     <span>{toast.vendorName}</span>
                   </div>
                 )}
@@ -307,8 +310,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                         alignItems: 'center',
                         gap: 4,
                       }}
-                    >
-                      View Record <ArrowRight size={11} />
+                    >{UI_STRINGS.componentsUiToast.viewRecord}<ArrowRight size={11} />
                     </a>
                   </div>
                 )}
@@ -339,7 +341,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => dismissToast(toast.id)}
-                aria-label="Dismiss notification"
+                aria-label={UI_STRINGS.componentsUiToast.dismissNotification}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -367,7 +369,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
+    throw new Error(UI_STRINGS.componentsUiToast.useToastMustBeUsedWithinAToastProvider);
   }
   return context;
 }

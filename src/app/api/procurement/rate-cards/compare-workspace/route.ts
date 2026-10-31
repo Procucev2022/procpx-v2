@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('RATE_CARD_VIEW');
@@ -13,7 +16,7 @@ export async function GET(req: NextRequest) {
   const subcategory = searchParams.get('subcategory');
 
   if (!vendorId) {
-    return apiError('vendorId query parameter is required', 400);
+    return apiError(UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, 400);
   }
 
   try {
@@ -34,7 +37,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError('Vendor not found', 404);
+      return apiError(UI_STRINGS.common.vendorNotFound, 404);
     }
 
     // 2. Selected Vendor's Past Quotations
@@ -238,6 +241,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error in rate card compare-workspace:', error);
-    return apiError(error.message || 'Failed to fetch comparison workspace data', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData }), 500);
   }
 }

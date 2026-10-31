@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PposDeskPage from '../src/app/(app)/procurement/ppos/page';
@@ -94,35 +98,35 @@ describe('procurement PPO performance register', () => {
   it('renders the project register, searches all references, and filters every rating tab', async () => {
     render(<PposDeskPage />);
     expect(await screen.findByText('PPO-001')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'PPO Vendor Performance Rating' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementPposPage.pPOVendorPerformanceRating) })).toBeInTheDocument();
     expect(screen.getAllByText('(4.1/5)').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Approved').length).toBeGreaterThan(0);
-    expect(screen.getByText('Returned for Correction')).toBeInTheDocument();
-    expect(screen.getAllByText('Under Review').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Unrated').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.approved)).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.returnedForCorrection))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.underReview)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.unrated)).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /Action Required/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementPposPage.actionRequired, "", false) }));
     expect(screen.getByText('PPO-001')).toBeInTheDocument();
     expect(screen.getByText('PPO-003')).toBeInTheDocument();
     expect(screen.queryByText('PPO-002')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Drafts/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.drafts, "", false) }));
     expect(screen.getByText('PPO-002')).toBeInTheDocument();
     expect(screen.queryByText('PPO-001')).not.toBeInTheDocument();
-    fireEvent.click(within(screen.getByText('PPO-002').closest('tr')!).getByRole('button', { name: 'Resume Draft' }));
-    expect(screen.getByPlaceholderText('Observations on materials, finishes, defects and test certificates...')).toHaveValue('');
+    fireEvent.click(within(screen.getByText('PPO-002').closest('tr')!).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Resume","toLocaleString":"Draft"})) }));
+    expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnMaterialsFinishesDefectsAndTestCertificates))).toHaveValue('');
     expect(screen.getAllByRole('combobox')).toHaveLength(5);
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(screen.getByRole('button', { name: /Under Review/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.underReview, "", false) }));
     expect(screen.getByText('PPO-004')).toBeInTheDocument();
-    fireEvent.click(within(screen.getByText('PPO-004').closest('tr')!).getByRole('button', { name: 'View Rating' }));
-    expect(screen.getByText('PPO Performance Assessment Detail')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByText('PPO-004').closest('tr')!).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Rating"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pPOPerformanceAssessmentDetail))).toBeInTheDocument();
     const detailModal = document.querySelector('.fixed.inset-0') as HTMLElement;
     fireEvent.click(within(detailModal).getAllByRole('button')[0]);
-    fireEvent.click(screen.getByRole('button', { name: /Approved/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.aPPROVED, 'i') }));
     expect(screen.getByText('PPO-005')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /All Orders/ }));
-    const search = screen.getByPlaceholderText('Search PPO, Vendor, or Project...');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementPposPage.allOrders, "", false) }));
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.searchPPOVendorOrProject));
     fireEvent.change(search, { target: { value: 'North Supply' } });
     expect(screen.getByText('PPO-001')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'NP-01' } });
@@ -130,8 +134,8 @@ describe('procurement PPO performance register', () => {
     fireEvent.change(search, { target: { value: 'RFQ-100' } });
     expect(screen.getByText('PPO-001')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'not found' } });
-    expect(screen.getByText('No PPO records matching this filter.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Filters' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.noPPORecordsMatchingThisFilter))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementPposPage.resetFilters) }));
     expect(screen.getByText('PPO-001')).toBeInTheDocument();
   });
 
@@ -139,42 +143,42 @@ describe('procurement PPO performance register', () => {
     render(<PposDeskPage />);
     await screen.findByText('PPO-001');
     const unratedRow = screen.getByText('PPO-000').closest('tr')!;
-    fireEvent.click(within(unratedRow).getByRole('button', { name: 'Rate PPO' }));
-    expect(screen.getByText('Computed Overall Performance Rating')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
-    expect(await screen.findByText('Target vendor ID not found for this PPO.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(unratedRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Rate","toLocaleString":"PPO"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.computedOverallPerformanceRating))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.targetVendorIDNotFoundForThisPPO))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
     const returnedRow = screen.getByText('PPO-003').closest('tr')!;
-    fireEvent.click(within(returnedRow).getByRole('button', { name: 'Revise Rating' }));
-    expect(screen.getByText('Returned by Project Approver for Correction')).toBeInTheDocument();
-    expect(screen.getByText('Please review scores and category comments and resubmit.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(returnedRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Revise","toLocaleString":"Rating"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.returnedByProjectApproverForCorrection))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.pleaseReviewScoresAndCategoryCommentsAndResubmit))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
     const editRow = screen.getByText('PPO-001').closest('tr')!;
-    fireEvent.click(within(editRow).getByRole('button', { name: 'Rate PPO' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Project Approval' }));
+    fireEvent.click(within(editRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Rate","toLocaleString":"PPO"})) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitForProjectApproval) }));
     expect(await screen.findByText(/Please provide feedback or areas for improvement/)).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Summarize recurring issues, corrective actions, and recommendations for future orders...'), { target: { value: 'Keep delivery lead times stable' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.summarizeRecurringIssuesCorrectiveActionsAndRecommendationsForFutureOrders)), { target: { value: 'Keep delivery lead times stable' } });
     screen.getAllByRole('combobox').forEach((select) => fireEvent.change(select, { target: { value: '5' } }));
-    fireEvent.change(screen.getByPlaceholderText('Observations on milestone compliance, lead times and delays...'), { target: { value: 'Delivered on time' } });
-    fireEvent.change(screen.getByPlaceholderText('Observations on billing accuracy, invoices and variation claims...'), { target: { value: 'Invoices accurate' } });
-    fireEvent.change(screen.getByPlaceholderText('Observations on supervision, issue resolution and communication...'), { target: { value: 'Fast response' } });
-    fireEvent.change(screen.getByPlaceholderText('Observations on handover certificates, warranties and as-built documents...'), { target: { value: 'Documents complete' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnMilestoneComplianceLeadTimesAndDelays)), { target: { value: 'Delivered on time' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnBillingAccuracyInvoicesAndVariationClaims)), { target: { value: 'Invoices accurate' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnSupervisionIssueResolutionAndCommunication)), { target: { value: 'Fast response' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnHandoverCertificatesWarrantiesAndAsBuiltDocuments)), { target: { value: 'Documents complete' } });
     expect(screen.getByText('5.0')).toBeInTheDocument();
 
     postResponse = apiReply({});
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/procurement/vendors/vendor-1/ppo-ratings', expect.objectContaining({ method: 'POST' })));
     const draftPayload = JSON.parse(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')![1].body as string);
     expect(draftPayload).toMatchObject({ ppoId: '001', action: 'SAVE_DRAFT', qualityScore: 5, overallImprovement: 'Keep delivery lead times stable' });
-    expect(toastSuccess).toHaveBeenCalledWith('Performance rating draft saved for PPO-001.');
-    await waitFor(() => expect(screen.queryByText('Rate PPO Performance')).not.toBeInTheDocument());
+    expect(toastSuccess).toHaveBeenCalledWith(interpolateUiString(UI_STRINGS.common.userMessages.performanceRatingDraftSavedFor, {"ppoNumber":"PPO-001"}));
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.ratePPOPerformance))).not.toBeInTheDocument());
 
-    fireEvent.click(within(screen.getByText('PPO-001').closest('tr')!).getByRole('button', { name: 'Rate PPO' }));
-    fireEvent.change(screen.getByPlaceholderText('Observations on materials, finishes, defects and test certificates...'), { target: { value: 'Materials passed inspection' } });
+    fireEvent.click(within(screen.getByText('PPO-001').closest('tr')!).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Rate","toLocaleString":"PPO"})) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnMaterialsFinishesDefectsAndTestCertificates)), { target: { value: 'Materials passed inspection' } });
     postResponse = apiReply({});
-    fireEvent.click(screen.getByRole('button', { name: 'Submit for Project Approval' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitForProjectApproval) }));
     await waitFor(() => expect(toastSuccess).toHaveBeenLastCalledWith('Assessment submitted for Project Approval for PPO-001!'));
     const submitPayload = JSON.parse(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').pop()![1].body as string);
     expect(submitPayload).toMatchObject({ action: 'SUBMIT', qualityComments: 'Materials passed inspection' });
@@ -184,20 +188,20 @@ describe('procurement PPO performance register', () => {
     responseData = { ppos: allOrders, currentUserRole: 'PROCUREMENT_USER' };
     setApi();
     render(<PposDeskPage />);
-    expect(await screen.findByRole('heading', { name: 'Procurement Purchase Orders (PPO)' })).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Search PPO, Vendor, or Project...')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppProcurementPposPage.procurementPurchaseOrdersPPO) })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.searchPPOVendorOrProject))).not.toBeInTheDocument();
     await screen.findByText('PPO-005');
     const row = screen.getByText('PPO-005').closest('tr')!;
-    fireEvent.click(within(row).getByRole('button', { name: 'View Rating' }));
-    expect(screen.getByText('PPO Performance Assessment Detail')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Rating"})) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.pPOPerformanceAssessmentDetail))).toBeInTheDocument();
     expect(screen.getByText('Approved after review')).toBeInTheDocument();
-    expect(screen.getByText(/Approved by Alex Approver/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.approvedByNameOnDate))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
 
-    fireEvent.click(within(screen.getByText('PPO-006').closest('tr')!).getByRole('button', { name: 'View Rating' }));
-    expect(screen.queryByText('Overall Areas for Improvement & Recommendations:')).not.toBeInTheDocument();
-    expect(screen.queryByText('Project Approver Comments:')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(within(screen.getByText('PPO-006').closest('tr')!).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"View","toLocaleString":"Rating"})) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.overallAreasForImprovementRecommendations))).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.projectApproverComments))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
 
   });
 
@@ -206,13 +210,13 @@ describe('procurement PPO performance register', () => {
     responseData = { currentUserRole: 'PROJECT_USER', isProcurementUser: true };
     setApi();
     const missingData = render(<PposDeskPage />);
-    expect(await screen.findByText('No PPO records matching this filter.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.noPPORecordsMatchingThisFilter))).toBeInTheDocument();
     missingData.unmount();
 
     fetchMock.mockRejectedValueOnce(new Error('PPO service unavailable'));
     render(<PposDeskPage />);
     await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'PPO service unavailable' })));
-    expect(screen.getByText('No PPO records matching this filter.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.noPPORecordsMatchingThisFilter))).toBeInTheDocument();
     consoleSpy.mockRestore();
   });
 
@@ -222,20 +226,20 @@ describe('procurement PPO performance register', () => {
     setApi();
     render(<PposDeskPage />);
     await screen.findByText('PPO-009');
-    fireEvent.click(within(screen.getByText('PPO-009').closest('tr')!).getByRole('button', { name: 'Rate PPO' }));
-    fireEvent.change(screen.getByPlaceholderText('Observations on materials, finishes, defects and test certificates...'), { target: { value: 'Reviewed' } });
+    fireEvent.click(within(screen.getByText('PPO-009').closest('tr')!).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Rate","toLocaleString":"PPO"})) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.observationsOnMaterialsFinishesDefectsAndTestCertificates)), { target: { value: 'Reviewed' } });
     postResponse = apiReply({ error: 'Rating service rejected the draft' }, false);
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
     expect(await screen.findByText('Rating service rejected the draft')).toBeInTheDocument();
 
     postResponse = apiReply({}, false);
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
-    expect(await screen.findByText('Failed to record performance assessment.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToRecordPerformanceAssessment))).toBeInTheDocument();
 
     fetchMock.mockImplementation((url: string, init?: RequestInit) => init?.method === 'POST'
       ? Promise.reject(new Error('network offline'))
       : Promise.resolve(apiReply(responseData)));
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
     expect(await screen.findByText('network offline')).toBeInTheDocument();
     expect(consoleSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'network offline' }));
     consoleSpy.mockRestore();

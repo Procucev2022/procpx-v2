@@ -1,3 +1,4 @@
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
 /* Application constants extracted from lib/uom-standardise.ts. */
 
 // lib/uom-standardise.ts - UOM and Description normalisation rules
@@ -126,22 +127,22 @@ export const DESCRIPTION_RULES: Array<{ pattern: RegExp; standard: string; categ
 ];
 
 export const STANDARD_UOM_CODES = [
-  { code: 'NOS', name: 'Numbers', category: 'COUNT' },
-  { code: 'SQFT', name: 'Square Feet', category: 'AREA' },
-  { code: 'SQM', name: 'Square Metres', category: 'AREA' },
-  { code: 'RMT', name: 'Running Metres', category: 'LENGTH' },
-  { code: 'RFT', name: 'Running Feet', category: 'LENGTH' },
-  { code: 'MTR', name: 'Metres', category: 'LENGTH' },
-  { code: 'FT', name: 'Feet', category: 'LENGTH' },
-  { code: 'CUM', name: 'Cubic Metres', category: 'VOLUME' },
-  { code: 'LTR', name: 'Litres', category: 'VOLUME' },
-  { code: 'KG', name: 'Kilograms', category: 'WEIGHT' },
-  { code: 'TON', name: 'Tons', category: 'WEIGHT' },
-  { code: 'MT', name: 'Metric Tonnes', category: 'WEIGHT' },
-  { code: 'KVA', name: 'Kilovolt-ampere', category: 'ELECTRICAL' },
-  { code: 'KW', name: 'Kilowatt', category: 'ELECTRICAL' },
-  { code: 'KWH', name: 'Kilowatt-hour', category: 'ELECTRICAL' },
-  { code: 'LS', name: 'Lump Sum', category: 'OTHER' },
-  { code: 'LOT', name: 'Lot', category: 'OTHER' },
-  { code: 'POINT', name: 'Point', category: 'OTHER' },
+  { code: 'NOS', name: UI_STRINGS.libUomStandardiseConstants.numbers, category: 'COUNT' },
+  { code: 'SQFT', name: UI_STRINGS.libUomStandardiseConstants.squareFeet, category: 'AREA' },
+  { code: 'SQM', name: UI_STRINGS.libUomStandardiseConstants.squareMetres, category: 'AREA' },
+  { code: 'RMT', name: UI_STRINGS.libUomStandardiseConstants.runningMetres, category: 'LENGTH' },
+  { code: 'RFT', name: UI_STRINGS.libUomStandardiseConstants.runningFeet, category: 'LENGTH' },
+  { code: 'MTR', name: UI_STRINGS.libUomStandardiseConstants.metres, category: 'LENGTH' },
+  { code: 'FT', name: UI_STRINGS.libUomStandardiseConstants.feet, category: 'LENGTH' },
+  { code: 'CUM', name: UI_STRINGS.libUomStandardiseConstants.cubicMetres, category: 'VOLUME' },
+  { code: 'LTR', name: UI_STRINGS.libUomStandardiseConstants.litres, category: 'VOLUME' },
+  { code: 'KG', name: UI_STRINGS.libUomStandardiseConstants.kilograms, category: 'WEIGHT' },
+  { code: 'TON', name: UI_STRINGS.libUomStandardiseConstants.tons, category: 'WEIGHT' },
+  { code: 'MT', name: UI_STRINGS.libUomStandardiseConstants.metricTonnes, category: 'WEIGHT' },
+  { code: 'KVA', name: UI_STRINGS.libUomStandardiseConstants.kilovoltAmpere, category: 'ELECTRICAL' },
+  { code: 'KW', name: UI_STRINGS.libUomStandardiseConstants.kilowatt, category: 'ELECTRICAL' },
+  { code: 'KWH', name: UI_STRINGS.libUomStandardiseConstants.kilowattHour, category: 'ELECTRICAL' },
+  { code: 'LS', name: UI_STRINGS.libUomStandardiseConstants.lumpSum, category: 'OTHER' },
+  { code: 'LOT', name: UI_STRINGS.libUomStandardiseConstants.lot, category: 'OTHER' },
+  { code: 'POINT', name: UI_STRINGS.libUomStandardiseConstants.point, category: 'OTHER' },
 ];

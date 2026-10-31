@@ -7,7 +7,9 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // D1 uses SQLite's schema dialect. Prisma 6 requires a URL for generation;
+  // application connections use the Cloudflare D1 adapter, never this local path.
+  url      = "file:./.wrangler/d1-schema-placeholder.db"
 }
 
 // ============================================================

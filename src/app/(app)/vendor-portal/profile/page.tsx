@@ -20,6 +20,9 @@ import {
   Briefcase,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function VendorProfileSelfServicePage() {
   const toast = useToast();
@@ -57,7 +60,7 @@ export default function VendorProfileSelfServicePage() {
       const res = await fetch('/api/vendor-portal/me');
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to load company profile');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadCompanyProfile }));
       }
       const data = await res.json();
       const v = data.vendor;
@@ -83,7 +86,7 @@ export default function VendorProfileSelfServicePage() {
         turnoverCrores: v.turnoverCrores !== null ? String(v.turnoverCrores) : '',
       });
     } catch (e: any) {
-      setStatusMessage({ type: 'error', text: e.message });
+      setStatusMessage({ type: UI_STRINGS.common.error2, text: e.message });
     } finally {
       setLoading(false);
     }
@@ -110,14 +113,14 @@ export default function VendorProfileSelfServicePage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to save changes');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSaveChanges }));
       }
       const data = await res.json();
       setVendor(data.vendor);
-      toast.success('Vendor details submitted successfully.', data.vendor?.code);
-      setStatusMessage({ type: 'success', text: 'Vendor details submitted successfully.' });
+      toast.success(UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully, data.vendor?.code);
+      setStatusMessage({ type: UI_STRINGS.common.success, text: UI_STRINGS.appAppVendorPortalProfilePage.vendorDetailsSubmittedSuccessfully });
     } catch (e: any) {
-      setStatusMessage({ type: 'error', text: e.message });
+      setStatusMessage({ type: UI_STRINGS.common.error2, text: e.message });
     } finally {
       setSaving(false);
     }
@@ -128,7 +131,7 @@ export default function VendorProfileSelfServicePage() {
       <div style={{ padding: 40, textAlign: 'center' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)' }}>
           <RefreshCw size={20} className="animate-spin" />
-          <span>Loading company profile...</span>
+          <span>{UI_STRINGS.appAppVendorPortalProfilePage.loadingCompanyProfile}</span>
         </div>
       </div>
     );
@@ -138,7 +141,7 @@ export default function VendorProfileSelfServicePage() {
     return (
       <div style={{ padding: 32 }}>
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: 20, borderRadius: 8 }}>
-          {statusMessage?.text || 'Vendor profile could not be loaded.'}
+          {statusMessage?.text || UI_STRINGS.appAppVendorPortalProfilePage.vendorProfileCouldNotBeLoaded}
         </div>
       </div>
     );
@@ -203,11 +206,10 @@ export default function VendorProfileSelfServicePage() {
                     border: '1px solid #bbf7d0',
                   }}
                 >
-                  {vendor.onboardingStatus || 'ACTIVE'}
+                  {vendor.onboardingStatus || UI_STRINGS.common.aCTIVE}
                 </span>
               </div>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-                Partner with <strong>{vendor.tenant?.name || 'Enterprise Client'}</strong> • Categories: {vendor.categories || 'General Contracting & Sourcing'}
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>{UI_STRINGS.appAppVendorPortalProfilePage.partnerWith}<strong>{vendor.tenant?.name || UI_STRINGS.common.enterpriseClient}</strong>{UI_STRINGS.appAppVendorPortalProfilePage.categories}{vendor.categories || UI_STRINGS.appAppVendorPortalProfilePage.generalContractingSourcing}
               </p>
             </div>
           </div>
@@ -221,7 +223,7 @@ export default function VendorProfileSelfServicePage() {
           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', fontWeight: 600 }}
         >
           {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-          <span>{saving ? 'Saving...' : 'Save Profile Changes'}</span>
+          <span>{saving ? UI_STRINGS.common.saving : UI_STRINGS.appAppVendorPortalProfilePage.saveProfileChanges}</span>
         </button>
       </div>
 
@@ -253,58 +255,58 @@ export default function VendorProfileSelfServicePage() {
         <div className="card" style={{ padding: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShieldCheck size={18} style={{ color: '#2563eb' }} />
-            <span>Statutory Verification & Legal Identity</span>
+            <span>{UI_STRINGS.appAppVendorPortalProfilePage.statutoryVerificationLegalIdentity}</span>
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Legal Structure</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.common.legalStructure}</label>
               <select
                 name="legalStructure"
                 value={formData.legalStructure}
                 onChange={handleChange}
                 className="form-control"
               >
-                <option value="">Select Structure</option>
-                <option value="Private Limited Company">Private Limited Company</option>
-                <option value="Public Limited Company">Public Limited Company</option>
-                <option value="Limited Liability Partnership (LLP)">Limited Liability Partnership (LLP)</option>
-                <option value="Partnership Firm">Partnership Firm</option>
-                <option value="Sole Proprietorship">Sole Proprietorship</option>
+                <option value="">{UI_STRINGS.appAppVendorPortalProfilePage.selectStructure}</option>
+                <option value="Private Limited Company">{UI_STRINGS.appAppVendorPortalProfilePage.privateLimitedCompany}</option>
+                <option value="Public Limited Company">{UI_STRINGS.appAppVendorPortalProfilePage.publicLimitedCompany}</option>
+                <option value="Limited Liability Partnership (LLP)">{UI_STRINGS.appAppVendorPortalProfilePage.limitedLiabilityPartnershipLLP}</option>
+                <option value="Partnership Firm">{UI_STRINGS.common.partnershipFirm}</option>
+                <option value="Sole Proprietorship">{UI_STRINGS.appAppVendorPortalProfilePage.soleProprietorship}</option>
               </select>
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>GSTIN (Goods & Services Tax)</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.gSTINGoodsServicesTax}</label>
               <input
                 type="text"
                 name="gstin"
                 value={formData.gstin}
                 onChange={handleChange}
-                placeholder="e.g. 27AAACA1234A1Z5"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eG27AAACA1234A1Z5}
                 className="form-control"
                 style={{ textTransform: 'uppercase' }}
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Permanent Account Number (PAN)</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.permanentAccountNumberPAN}</label>
               <input
                 type="text"
                 name="pan"
                 value={formData.pan}
                 onChange={handleChange}
-                placeholder="e.g. AAACA1234A"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eGAAACA1234A}
                 className="form-control"
                 style={{ textTransform: 'uppercase' }}
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Corporate Website</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.corporateWebsite}</label>
               <div style={{ position: 'relative' }}>
                 <input
                   type="url"
                   name="website"
                   value={formData.website}
                   onChange={handleChange}
-                  placeholder="https://example.com"
+                  placeholder={UI_STRINGS.appAppVendorPortalProfilePage.httpsExampleCom}
                   className="form-control"
                   style={{ paddingLeft: 34 }}
                 />
@@ -318,29 +320,29 @@ export default function VendorProfileSelfServicePage() {
         <div className="card" style={{ padding: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Phone size={18} style={{ color: '#2563eb' }} />
-            <span>Authorized Contact Person</span>
+            <span>{UI_STRINGS.appAppVendorPortalProfilePage.authorizedContactPerson}</span>
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Contact Person Name</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.contactPersonName}</label>
               <input
                 type="text"
                 name="contactPerson"
                 value={formData.contactPerson}
                 onChange={handleChange}
-                placeholder="Authorized Signatory / Bid Representative"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.authorizedSignatoryBidRepresentative}
                 className="form-control"
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Primary Work Phone</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.primaryWorkPhone}</label>
               <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="+91 98765 43210"
+                  placeholder={UI_STRINGS.appAppVendorPortalProfilePage.copybtzdjf}
                   className="form-control"
                   style={{ paddingLeft: 34 }}
                 />
@@ -348,7 +350,7 @@ export default function VendorProfileSelfServicePage() {
               </div>
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Registered Work Email (Login Identifier)</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.registeredWorkEmailLoginIdentifier}</label>
               <div style={{ position: 'relative' }}>
                 <input
                   type="text"
@@ -359,9 +361,7 @@ export default function VendorProfileSelfServicePage() {
                 />
                 <Mail size={16} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-muted)' }} />
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Email identity is locked to your authenticated vendor account. Contact buyer to change login email.
-              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>{UI_STRINGS.appAppVendorPortalProfilePage.emailIdentityIsLockedToYourAuthenticatedVendorAccountContactBuyerToChangeLoginEmail}</span>
             </div>
           </div>
         </div>
@@ -370,50 +370,50 @@ export default function VendorProfileSelfServicePage() {
         <div className="card" style={{ padding: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <MapPin size={18} style={{ color: '#2563eb' }} />
-            <span>Registered Address & Service Coverage</span>
+            <span>{UI_STRINGS.appAppVendorPortalProfilePage.registeredAddressServiceCoverage}</span>
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             <div style={{ gridColumn: 'span 2' }}>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Full Registered Office Address</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.fullRegisteredOfficeAddress}</label>
               <textarea
                 name="address"
                 rows={2}
                 value={formData.address}
                 onChange={handleChange}
-                placeholder="Suite, Building, Street, Industrial Area"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.suiteBuildingStreetIndustrialArea}
                 className="form-control"
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>City</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.common.city}</label>
               <input
                 type="text"
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
-                placeholder="e.g. Mumbai, Bengaluru"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eGMumbaiBengaluru}
                 className="form-control"
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>State / Region</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.common.stateRegion}</label>
               <input
                 type="text"
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
-                placeholder="e.g. Maharashtra, Karnataka"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eGMaharashtraKarnataka}
                 className="form-control"
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Operating Location / Coverage Area</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.operatingLocationCoverageArea}</label>
               <input
                 type="text"
                 name="operatingLocation"
                 value={formData.operatingLocation}
                 onChange={handleChange}
-                placeholder="e.g. Pan-India, Western Region, Tier-1 Metro"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eGPanIndiaWesternRegionTier1Metro}
                 className="form-control"
               />
             </div>
@@ -424,62 +424,62 @@ export default function VendorProfileSelfServicePage() {
         <div className="card" style={{ padding: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Briefcase size={18} style={{ color: '#2563eb' }} />
-            <span>Commercial Capabilities & Experience</span>
+            <span>{UI_STRINGS.appAppVendorPortalProfilePage.commercialCapabilitiesExperience}</span>
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Industry Experience (Years)</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.industryExperienceYears}</label>
               <input
                 type="number"
                 name="experienceYears"
                 value={formData.experienceYears}
                 onChange={handleChange}
-                placeholder="e.g. 12"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eG12}
                 className="form-control"
               />
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Annual Turnover (₹ Crores)</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.common.annualTurnoverCrores}</label>
               <input
                 type="number"
                 step="0.01"
                 name="turnoverCrores"
                 value={formData.turnoverCrores}
                 onChange={handleChange}
-                placeholder="e.g. 45.50"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.eG4550}
                 className="form-control"
               />
             </div>
             <div style={{ gridColumn: 'span 2' }}>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Core Technical Capabilities</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.coreTechnicalCapabilities}</label>
               <textarea
                 name="capabilities"
                 rows={2}
                 value={formData.capabilities}
                 onChange={handleChange}
-                placeholder="Detail machinery, plant capacity, labor force strength, specialized execution skills"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.detailMachineryPlantCapacityLaborForceStrengthSpecializedExecutionSkills}
                 className="form-control"
               />
             </div>
             <div style={{ gridColumn: 'span 2' }}>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Past Client References & Major Projects</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.pastClientReferencesMajorProjects}</label>
               <textarea
                 name="clientReferences"
                 rows={2}
                 value={formData.clientReferences}
                 onChange={handleChange}
-                placeholder="List key corporate clients, enterprise projects completed, contact persons"
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.listKeyCorporateClientsEnterpriseProjectsCompletedContactPersons}
                 className="form-control"
               />
             </div>
             <div style={{ gridColumn: 'span 2' }}>
-              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>Quality & Safety Certifications</label>
+              <label className="form-label" style={{ fontSize: 13, fontWeight: 600 }}>{UI_STRINGS.appAppVendorPortalProfilePage.qualitySafetyCertifications}</label>
               <textarea
                 name="certifications"
                 rows={2}
                 value={formData.certifications}
                 onChange={handleChange}
-                placeholder="ISO 9001, ISO 14001, OHSAS 18001, LEED accredited, etc."
+                placeholder={UI_STRINGS.appAppVendorPortalProfilePage.iSO9001ISO14001OHSAS18001LEEDAccreditedEtc}
                 className="form-control"
               />
             </div>
@@ -495,7 +495,7 @@ export default function VendorProfileSelfServicePage() {
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', fontWeight: 600 }}
           >
             {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>{saving ? 'Saving...' : 'Save Profile Changes'}</span>
+            <span>{saving ? UI_STRINGS.common.saving : UI_STRINGS.appAppVendorPortalProfilePage.saveProfileChanges}</span>
           </button>
         </div>
       </form>

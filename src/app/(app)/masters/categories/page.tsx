@@ -19,6 +19,9 @@ import {
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import type { CategoryItem } from "@app-types/app/(app)/masters/categories/page.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function CategoryCreationPage() {
@@ -67,7 +70,7 @@ export default function CategoryCreationPage() {
         setCategories(data.data || data || []);
       }
     } catch (e: any) {
-      setNotification({ type: 'error', message: 'Failed to load categories.' });
+      setNotification({ type: 'error', message: UI_STRINGS.appAppMastersCategoriesPage.failedToLoadCategories });
     } finally {
       setLoading(false);
     }
@@ -92,12 +95,12 @@ export default function CategoryCreationPage() {
 
     const trimmedName = formData.name.trim();
     if (!trimmedName) {
-      setFormError('Category name is required.');
+      setFormError(UI_STRINGS.common.categoryNameIsRequired);
       return;
     }
 
     if (isSubcategory && !formData.parentId) {
-      setFormError('Please select a parent category for the subcategory.');
+      setFormError(UI_STRINGS.appAppMastersCategoriesPage.pleaseSelectAParentCategoryForTheSubcategory);
       return;
     }
 
@@ -107,13 +110,13 @@ export default function CategoryCreationPage() {
         c => c.name.toLowerCase() === trimmedName.toLowerCase()
       );
       if (duplicateTop) {
-        setFormError(`Top-level category "${trimmedName}" already exists.`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersCategoriesPage.topLevelCategoryTrimmedNameAlreadyExists, { "trimmedName": trimmedName }));
         return;
       }
     } else {
       const parent = categories.find(c => c.id === formData.parentId);
       if (parent && parent.children?.some(ch => ch.name.toLowerCase() === trimmedName.toLowerCase())) {
-        setFormError(`Subcategory "${trimmedName}" already exists under "${parent.name}".`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersCategoriesPage.subcategoryTrimmedNameAlreadyExistsUnderName, { "trimmedName": trimmedName, "name": parent.name }));
         return;
       }
     }
@@ -124,7 +127,7 @@ export default function CategoryCreationPage() {
         c => c.code?.toUpperCase() === codeUpper || c.children?.some(ch => ch.code?.toUpperCase() === codeUpper)
       );
       if (duplicateCode) {
-        setFormError(`Category code "${codeUpper}" is already in use.`);
+        setFormError(interpolateUiString(UI_STRINGS.appAppMastersCategoriesPage.categoryCodeCodeUpperIsAlreadyInUse, { "codeUpper": codeUpper }));
         return;
       }
     }
@@ -143,19 +146,19 @@ export default function CategoryCreationPage() {
 
       const json = await res.json();
       if (!res.ok) {
-        setFormError(json.error || 'Failed to create category.');
+        setFormError(interpolateUiString(UI_STRINGS.common.value1, { "value1": json.error || UI_STRINGS.common.userMessages.failedToCreateCategory }));
         return;
       }
 
       setNotification({
         type: 'success',
-        message: `Category "${trimmedName}" created successfully and synced to BOQ Studio.`,
+        message: interpolateUiString(UI_STRINGS.appAppMastersCategoriesPage.categoryTrimmedNameCreatedSuccessfullyAndSyncedToBOQStudio, { "trimmedName": trimmedName }),
       });
       setModalOpen(false);
       setFormData({ name: '', code: '', parentId: '' });
       loadCategories();
     } catch (e: any) {
-      setFormError(e.message || 'Network error creating category.');
+      setFormError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorCreatingCategory }));
     } finally {
       setSaving(false);
     }
@@ -174,11 +177,11 @@ export default function CategoryCreationPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Category Creation & Master Taxonomy"
-        subtitle="Central category taxonomy. Categories defined here automatically sync across Standard BOQ Creation, BOQ Studio, and Project Budget."
+        title={UI_STRINGS.appAppMastersCategoriesPage.categoryCreationMasterTaxonomy}
+        subtitle={UI_STRINGS.appAppMastersCategoriesPage.centralCategoryTaxonomyCategoriesDefinedHereAutomaticallySyncAcrossStandardBOQCreationBOQStudioAndProjectBudget}
         breadcrumbs={[
-          { label: 'Master Creation', href: '/masters/categories' },
-          { label: 'Category Master' },
+          { label: UI_STRINGS.common.masterCreation, href: '/masters/categories' },
+          { label: UI_STRINGS.appAppMastersCategoriesPage.categoryMaster },
         ]}
         actions={
           canEdit ? (
@@ -187,17 +190,15 @@ export default function CategoryCreationPage() {
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
               onClick={() => handleOpenAddModal()}
             >
-              <Plus size={16} /> Add Category
-            </button>
+              <Plus size={16} />{UI_STRINGS.common.addCategory}</button>
           ) : (
             <button
               type="button"
               className="btn btn-outline h-[40px] px-4 text-xs font-semibold inline-flex items-center gap-1.5 opacity-60 cursor-not-allowed"
               disabled
-              title="Restricted: Master Data Administrator or Category Manager role required"
+              title={UI_STRINGS.common.restrictedMasterDataAdministratorOrCategoryManagerRoleRequired}
             >
-              <Plus size={16} /> Add Category (Admin Only)
-            </button>
+              <Plus size={16} />{UI_STRINGS.appAppMastersCategoriesPage.addCategoryAdminOnly}</button>
           )
         }
       />
@@ -207,8 +208,7 @@ export default function CategoryCreationPage() {
         <div className="p-3.5 mb-6 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center gap-2.5">
           <ShieldAlert size={18} className="text-slate-500 shrink-0" />
           <div>
-            <strong className="text-slate-900">Read-Only Master View:</strong> Category taxonomy creation and edits are reserved for Master Data Administrators and Category Managers. All categories below are active and immediately available in BOQ Studio and Project Budget.
-          </div>
+            <strong className="text-slate-900">{UI_STRINGS.common.readOnlyMasterView}</strong>{UI_STRINGS.appAppMastersCategoriesPage.categoryTaxonomyCreationAndEditsAreReservedForMasterDataAdministratorsAndCategoryManagersAllCategoriesBelowAreActiveAndImmediatelyAvailableInBOQStudioAndProjectBudget}</div>
         </div>
       )}
 
@@ -232,21 +232,21 @@ export default function CategoryCreationPage() {
       {/* KPI Cards */}
       <SummaryCardGrid columns={3}>
         <SummaryCard
-          label="Top-Level Categories"
+          label={UI_STRINGS.appAppMastersCategoriesPage.topLevelCategories}
           value={categories.length}
-          secondary="Active in BOQ & Budget Workflows"
+          secondary={UI_STRINGS.appAppMastersCategoriesPage.activeInBOQBudgetWorkflows}
           accent="default"
         />
         <SummaryCard
-          label="Subcategories"
+          label={UI_STRINGS.common.subcategories}
           value={totalSubcategories}
-          secondary="Granular Procurement Classifications"
+          secondary={UI_STRINGS.appAppMastersCategoriesPage.granularProcurementClassifications}
           accent="blue"
         />
         <SummaryCard
-          label="Workflow Integration"
+          label={UI_STRINGS.appAppMastersCategoriesPage.workflowIntegration}
           value="100% Synced"
-          secondary="Standard BOQ, Studio & Project Budget"
+          secondary={UI_STRINGS.appAppMastersCategoriesPage.standardBOQStudioProjectBudget}
           accent="emerald"
         />
       </SummaryCardGrid>
@@ -258,7 +258,7 @@ export default function CategoryCreationPage() {
             <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: 12, top: 12 }} />
             <input
               type="text"
-              placeholder="Search category name, code, or subcategory..."
+              placeholder={UI_STRINGS.appAppMastersCategoriesPage.searchCategoryNameCodeOrSubcategory}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input-field"
@@ -272,37 +272,30 @@ export default function CategoryCreationPage() {
             onClick={loadCategories}
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
           >
-            <RefreshCw size={13} /> Refresh
-          </button>
+            <RefreshCw size={13} />{UI_STRINGS.common.refresh}</button>
         </div>
       </div>
 
       {/* Categories Tree Table */}
       <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-            Category Taxonomy Master Directory ({filteredCategories.length})
-          </h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppMastersCategoriesPage.categoryTaxonomyMasterDirectory}{filteredCategories.length}{UI_STRINGS.common.copyc7zu6c}</h3>
         </div>
 
         {loading ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>
-            Loading Category Master...
-          </div>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppMastersCategoriesPage.loadingCategoryMaster}</div>
         ) : filteredCategories.length === 0 ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>
-            No categories found matching your search.
-          </div>
+          <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppMastersCategoriesPage.noCategoriesFoundMatchingYourSearch}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ width: '100%', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', height: 40, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                  <th style={{ padding: '0 16px', width: 220 }}>Category Name</th>
-                  <th style={{ padding: '0 16px', width: 110 }}>Code</th>
-                  <th style={{ padding: '0 16px' }}>Subcategories</th>
-                  <th style={{ padding: '0 16px', width: 100 }}>Status</th>
-                  {canEdit && <th style={{ padding: '0 16px', textAlign: 'right', width: 160 }}>Action</th>}
+                  <th style={{ padding: '0 16px', width: 220 }}>{UI_STRINGS.appAppMastersCategoriesPage.categoryName}</th>
+                  <th style={{ padding: '0 16px', width: 110 }}>{UI_STRINGS.common.code}</th>
+                  <th style={{ padding: '0 16px' }}>{UI_STRINGS.common.subcategories}</th>
+                  <th style={{ padding: '0 16px', width: 100 }}>{UI_STRINGS.common.status}</th>
+                  {canEdit && <th style={{ padding: '0 16px', textAlign: 'right', width: 160 }}>{UI_STRINGS.common.action}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -320,7 +313,7 @@ export default function CategoryCreationPage() {
                           {cat.code}
                         </span>
                       ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
+                        <span style={{ color: '#94a3b8' }}>{UI_STRINGS.common.copy4s9bsz}</span>
                       )}
                     </td>
                     <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
@@ -342,20 +335,16 @@ export default function CategoryCreationPage() {
                               }}
                             >
                               {sub.name}
-                              {sub.code && <span style={{ color: '#64748b', fontSize: 10 }}>({sub.code})</span>}
+                              {sub.code && <span style={{ color: '#64748b', fontSize: 10 }}>{UI_STRINGS.common.copychzfvb}{sub.code}{UI_STRINGS.common.copyc7zu6c}</span>}
                             </span>
                           ))
                         ) : (
-                          <span style={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
-                            No subcategories defined
-                          </span>
+                          <span style={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>{UI_STRINGS.appAppMastersCategoriesPage.noSubcategoriesDefined}</span>
                         )}
                       </div>
                     </td>
                     <td style={{ padding: '14px 16px', verticalAlign: 'top' }}>
-                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#ecfdf5', color: '#047857' }}>
-                        ACTIVE
-                      </span>
+                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: '#ecfdf5', color: '#047857' }}>{UI_STRINGS.common.aCTIVE}</span>
                     </td>
                     {canEdit && (
                       <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'top' }}>
@@ -364,9 +353,7 @@ export default function CategoryCreationPage() {
                           className="btn btn-outline"
                           onClick={() => handleOpenAddModal(cat.id)}
                           style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600 }}
-                        >
-                          + Subcategory
-                        </button>
+                        >{UI_STRINGS.appAppMastersCategoriesPage.subcategory}</button>
                       </td>
                     )}
                   </tr>
@@ -385,7 +372,7 @@ export default function CategoryCreationPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Boxes size={20} color="#2563eb" />
                 <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                  {isSubcategory ? 'Add Subcategory' : 'Add Top-Level Category'}
+                  {isSubcategory ? UI_STRINGS.appAppMastersCategoriesPage.addSubcategory : UI_STRINGS.appAppMastersCategoriesPage.addTopLevelCategory}
                 </h3>
               </div>
               <button type="button" onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
@@ -402,9 +389,7 @@ export default function CategoryCreationPage() {
 
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                  Category Hierarchy Type:
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>{UI_STRINGS.appAppMastersCategoriesPage.categoryHierarchyType}</label>
                 <div style={{ display: 'flex', gap: 12 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                     <input
@@ -415,9 +400,7 @@ export default function CategoryCreationPage() {
                         setIsSubcategory(false);
                         setFormData(prev => ({ ...prev, parentId: '' }));
                       }}
-                    />
-                    Top-Level Category
-                  </label>
+                    />{UI_STRINGS.appAppMastersCategoriesPage.topLevelCategory}</label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                     <input
                       type="radio"
@@ -429,17 +412,13 @@ export default function CategoryCreationPage() {
                           setFormData(prev => ({ ...prev, parentId: categories[0].id }));
                         }
                       }}
-                    />
-                    Subcategory
-                  </label>
+                    />{UI_STRINGS.common.subcategory}</label>
                 </div>
               </div>
 
               {isSubcategory && (
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                    Parent Category *
-                  </label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppMastersCategoriesPage.parentCategory}</label>
                   <select
                     className="select-field"
                     value={formData.parentId}
@@ -447,10 +426,10 @@ export default function CategoryCreationPage() {
                     style={{ width: '100%', height: 38 }}
                     required
                   >
-                    <option value="">Select Parent Category...</option>
+                    <option value="">{UI_STRINGS.appAppMastersCategoriesPage.selectParentCategory}</option>
                     {categories.map(c => (
                       <option key={c.id} value={c.id}>
-                        {c.name} {c.code ? `(${c.code})` : ''}
+                        {c.name} {c.code ? interpolateUiString(UI_STRINGS.appAppMastersCategoriesPage.code, { "code": c.code }) : ''}
                       </option>
                     ))}
                   </select>
@@ -458,12 +437,10 @@ export default function CategoryCreationPage() {
               )}
 
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                  Category Name *
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppMastersCategoriesPage.categoryName2}</label>
                 <input
                   type="text"
-                  placeholder="e.g. Civil & Interior, HVAC, Signage"
+                  placeholder={UI_STRINGS.appAppMastersCategoriesPage.eGCivilInteriorHVACSignage}
                   value={formData.name}
                   onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   className="input-field"
@@ -473,25 +450,19 @@ export default function CategoryCreationPage() {
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
-                  Category Code
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppMastersCategoriesPage.categoryCode}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input
                     type="text"
-                    placeholder="Auto-generated on creation (e.g., CIV01, ELE01, SUB-01)"
+                    placeholder={UI_STRINGS.appAppMastersCategoriesPage.autoGeneratedOnCreationEGCIV01ELE01SUB01}
                     value={formData.code}
                     onChange={e => setFormData(prev => ({ ...prev, code: e.target.value }))}
                     className="input-field"
                     style={{ width: '100%', height: 38, background: '#f8fafc', color: '#334155' }}
                   />
-                  <span style={{ fontSize: 11, background: '#eff6ff', color: '#1d4ed8', padding: '4px 8px', borderRadius: 4, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    Auto-Generated
-                  </span>
+                  <span style={{ fontSize: 11, background: '#eff6ff', color: '#1d4ed8', padding: '4px 8px', borderRadius: 4, fontWeight: 700, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppMastersCategoriesPage.autoGenerated}</span>
                 </div>
-                <span style={{ fontSize: 11, color: '#64748b', marginTop: 4, display: 'block' }}>
-                  Category codes are automatically generated by the backend according to standard taxonomy conventions. You may leave this blank.
-                </span>
+                <span style={{ fontSize: 11, color: '#64748b', marginTop: 4, display: 'block' }}>{UI_STRINGS.appAppMastersCategoriesPage.categoryCodesAreAutomaticallyGeneratedByTheBackendAccordingToStandardTaxonomyConventionsYouMayLeaveThisBlank}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -500,16 +471,14 @@ export default function CategoryCreationPage() {
                   className="btn btn-outline"
                   onClick={() => setModalOpen(false)}
                   disabled={saving}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   className="btn btn-primary"
                   disabled={saving}
                   style={{ fontWeight: 700 }}
                 >
-                  {saving ? 'Saving...' : 'Save Category'}
+                  {saving ? UI_STRINGS.common.saving : UI_STRINGS.appAppMastersCategoriesPage.saveCategory}
                 </button>
               </div>
             </form>

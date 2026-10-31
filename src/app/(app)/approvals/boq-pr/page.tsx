@@ -1,5 +1,6 @@
 'use client';
 // src/app/(app)/approvals/boq-pr/page.tsx - PR Approvals Workspace for Project Approver
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -25,6 +26,9 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function BoqPrApprovalPage() {
   const toast = useToast();
@@ -75,10 +79,10 @@ export default function BoqPrApprovalPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Approval failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.approvalFailed }));
       }
-      toast.success('BOQ approved successfully.', selectedPr?.prNumber || prId, 'Released to Category Manager');
-      setStatusMessage('BOQ approved successfully.');
+      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully, selectedPr?.prNumber || prId, UI_STRINGS.common.userMessages.releasedToCategoryManager);
+      setStatusMessage(UI_STRINGS.common.bOQApprovedSuccessfully);
       setReviewModalOpen(false);
       loadQueue();
     } catch (err: any) {
@@ -101,12 +105,12 @@ export default function BoqPrApprovalPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Revert failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.revertFailed }));
       }
       setRevertModalOpen(false);
       setRevertReason('');
       setSelectedPr(null);
-      setStatusMessage('✓ BOQ successfully returned to Project User for correction.');
+      setStatusMessage(UI_STRINGS.common.bOQSuccessfullyReturnedToProjectUserForCorrection);
       loadQueue();
     } catch (err: any) {
       setActionError(err.message);
@@ -128,12 +132,12 @@ export default function BoqPrApprovalPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Rejection failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.rejectionFailed }));
       }
       setRejectModalOpen(false);
       setRejectReason('');
       setSelectedPr(null);
-      setStatusMessage('BOQ rejected and returned to requester with feedback remarks.');
+      setStatusMessage(UI_STRINGS.common.bOQRejectedAndReturnedToRequesterWithFeedbackRemarks);
       loadQueue();
     } catch (err: any) {
       setActionError(err.message);
@@ -161,36 +165,34 @@ export default function BoqPrApprovalPage() {
     <div className="page-container" style={{ padding: '24px 32px' }}>
       {/* Header */}
       <PageHeader
-        title="BOQ Approvals"
-        subtitle="Commercial BOQs awaiting Project Approver decision. Independent of budget approval workflow."
-        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>Project Approver</span>}
+        title={UI_STRINGS.common.bOQApprovals}
+        subtitle={UI_STRINGS.appAppApprovalsBoqPrPage.commercialBOQsAwaitingProjectApproverDecisionIndependentOfBudgetApprovalWorkflow}
+        badge={<span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>{UI_STRINGS.common.projectApprover}</span>}
         actions={
-          <Link href="/approvals/budget" className="btn btn-secondary" style={{ height: 40, display: 'inline-flex', alignItems: 'center' }}>
-            Switch to Budget Approvals
-          </Link>
+          <Link href="/approvals/budget" className="btn btn-secondary" style={{ height: 40, display: 'inline-flex', alignItems: 'center' }}>{UI_STRINGS.appAppApprovalsBoqPrPage.switchToBudgetApprovals}</Link>
         }
       />
 
       {/* KPI Cards */}
       <SummaryCardGrid columns={3} className="mb-6">
         <SummaryCard
-          label="Pending Queue"
+          label={UI_STRINGS.common.pendingQueue}
           value={loading ? '—' : `${queue.length} BOQs`}
-          secondary="Awaiting Project Approver sign-off"
+          secondary={UI_STRINGS.common.awaitingProjectApproverSignOff}
           icon={<Clock size={16} />}
           accent="amber"
         />
         <SummaryCard
-          label="Total Value Under Review"
-          value={loading ? '—' : `₹ ${totalValue.toLocaleString('en-IN')}`}
-          secondary="Aggregate estimated commitment"
+          label={UI_STRINGS.appAppApprovalsBoqPrPage.totalValueUnderReview}
+          value={loading ? '—' : `₹ ${totalValue.toLocaleString(I18N_CONFIG.defaultLocale)}`}
+          secondary={UI_STRINGS.appAppApprovalsBoqPrPage.aggregateEstimatedCommitment}
           icon={<FileSpreadsheet size={16} />}
           accent="emerald"
         />
         <SummaryCard
-          label="Clarifications Active"
+          label={UI_STRINGS.common.clarificationsActive}
           value={loading ? '—' : `${pendingClarifications} Inquiries`}
-          secondary="Queries pending resolution"
+          secondary={UI_STRINGS.common.queriesPendingResolution}
           icon={<HelpCircle size={16} />}
           accent="blue"
         />
@@ -202,7 +204,7 @@ export default function BoqPrApprovalPage() {
             <CheckCircle2 size={16} />
             <span>{statusMessage}</span>
           </div>
-          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>✕</button>
+          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -212,7 +214,7 @@ export default function BoqPrApprovalPage() {
             <AlertTriangle size={16} />
             <span>{actionError}</span>
           </div>
-          <button type="button" onClick={() => setActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>✕</button>
+          <button type="button" onClick={() => setActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -221,30 +223,26 @@ export default function BoqPrApprovalPage() {
         <table className="table" style={{ width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569', height: 42 }}>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>BOQ Code / ID</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>BOQ Name / Description</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Project</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Cost Centre</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Category</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Requester</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>BOQ Date</th>
-              <th style={{ padding: '0 16px', fontWeight: 600 }}>Status</th>
-              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>Actions</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.bOQCodeID}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.appAppApprovalsBoqPrPage.bOQNameDescription}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.project}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.costCentre2}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.category2}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>{UI_STRINGS.common.amount}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.requester}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.bOQDate}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600 }}>{UI_STRINGS.common.status}</th>
+              <th style={{ padding: '0 16px', fontWeight: 600, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-                  Loading BOQ approvals queue...
-                </td>
+                <td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppApprovalsBoqPrPage.loadingBOQApprovalsQueue}</td>
               </tr>
             ) : queue.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
-                  No BOQs awaiting Project Approver decision.
-                </td>
+                <td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppApprovalsBoqPrPage.noBOQsAwaitingProjectApproverDecision}</td>
               </tr>
             ) : (
               queue.map(pr => (
@@ -255,10 +253,10 @@ export default function BoqPrApprovalPage() {
                   </td>
                   <td style={{ padding: '0 16px', fontWeight: 600, color: '#0f172a' }}>
                     <div>{pr.title}</div>
-                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{pr.totalLines || 0} line items</div>
+                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{pr.totalLines || 0}{UI_STRINGS.common.lineItems}</div>
                   </td>
                   <td style={{ padding: '0 16px', color: '#334155' }}>
-                    <div style={{ fontWeight: 500 }}>{pr.project?.name || '—'}</div>
+                    <div style={{ fontWeight: 500 }}>{pr.project?.name || UI_STRINGS.common.copy4s9bsz}</div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>{pr.project?.projectCode}</div>
                   </td>
                   <td style={{ padding: '0 16px', color: '#0f172a' }}>
@@ -267,28 +265,23 @@ export default function BoqPrApprovalPage() {
                   </td>
                   <td style={{ padding: '0 16px' }}>
                     <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#334155', fontWeight: 500 }}>
-                      {(pr.categories || []).join(', ') || 'Standard'}
+                      {(pr.categories || []).join(', ') || UI_STRINGS.common.standard}
                     </span>
                   </td>
-                  <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                    ₹ {(pr.totalEstimatedValue || 0).toLocaleString('en-IN')}
+                  <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(pr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                   </td>
                   <td style={{ padding: '0 16px', color: '#334155' }}>
                     <div style={{ fontWeight: 600 }}>{pr.requesterName || pr.requestedBy}</div>
                     {pr.requesterEmail && <div style={{ fontSize: 11, color: '#64748b' }}>{pr.requesterEmail}</div>}
                   </td>
                   <td style={{ padding: '0 16px', color: '#64748b', fontSize: 12 }}>
-                    {new Date(pr.requestedDate || pr.createdAt).toLocaleDateString('en-IN')}
+                    {new Date(pr.requestedDate || pr.createdAt).toLocaleDateString(I18N_CONFIG.defaultLocale)}
                   </td>
                   <td style={{ padding: '0 16px' }}>
-                    <span className="badge badge-warning" style={{ fontSize: 11, padding: '3px 8px' }}>
-                      Under Review
-                    </span>
+                    <span className="badge badge-warning" style={{ fontSize: 11, padding: '3px 8px' }}>{UI_STRINGS.common.underReview}</span>
                     {pr.hasEnquiry && (
                       <div style={{ marginTop: 2 }}>
-                        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>
-                          Clarification Pending
-                        </span>
+                        <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>{UI_STRINGS.common.clarificationPending}</span>
                       </div>
                     )}
                   </td>
@@ -298,55 +291,50 @@ export default function BoqPrApprovalPage() {
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-                        title="Review complete BOQ details and line items"
+                        title={UI_STRINGS.common.reviewCompleteBOQDetailsAndLineItems}
                         onClick={() => {
                           setSelectedPr(pr);
                           setReviewModalOpen(true);
                         }}
                       >
-                        <Eye size={12} /> Review BOQ
-                      </button>
+                        <Eye size={12} />{UI_STRINGS.common.reviewBOQ}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#d97706', borderColor: '#fde68a', background: '#fffbeb' }}
-                        title="Send query or clarification to submitter"
+                        title={UI_STRINGS.common.sendQueryOrClarificationToSubmitter}
                         onClick={() => openEnquiry(pr)}
                       >
-                        <HelpCircle size={12} /> Message
-                      </button>
+                        <HelpCircle size={12} />{UI_STRINGS.common.message}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' }}
-                        title="Open communication and chat history"
+                        title={UI_STRINGS.common.openCommunicationAndChatHistory}
                         onClick={() => openChat(pr)}
                       >
-                        <MessageSquare size={12} /> Chat
-                      </button>
+                        <MessageSquare size={12} />{UI_STRINGS.common.chat}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#b45309', borderColor: '#fed7aa', background: '#fff7ed' }}
-                        title="Revert BOQ to Project User for correction"
+                        title={UI_STRINGS.common.revertBOQToProjectUserForCorrection}
                         onClick={() => {
                           setSelectedPr(pr);
                           setRevertModalOpen(true);
                         }}
                         disabled={processing}
                       >
-                        <RotateCcw size={12} /> Revert
-                      </button>
+                        <RotateCcw size={12} />{UI_STRINGS.common.revert}</button>
                       <button
                         type="button"
                         className="btn btn-primary btn-sm"
                         style={{ height: 28, padding: '0 10px', fontSize: 11, background: '#047857', borderColor: '#047857' }}
                         onClick={() => handleApprove(pr.id)}
                         disabled={processing}
-                        title="Approve BOQ and release to Category Manager"
+                        title={UI_STRINGS.common.approveBOQAndReleaseToCategoryManager}
                       >
-                        <CheckCircle2 size={12} /> Approve
-                      </button>
+                        <CheckCircle2 size={12} />{UI_STRINGS.common.approve}</button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
@@ -356,10 +344,9 @@ export default function BoqPrApprovalPage() {
                           setRejectModalOpen(true);
                         }}
                         disabled={processing}
-                        title="Reject BOQ with mandatory reason"
+                        title={UI_STRINGS.common.rejectBOQWithMandatoryReason}
                       >
-                        <XCircle size={12} /> Reject
-                      </button>
+                        <XCircle size={12} />{UI_STRINGS.common.reject}</button>
                     </div>
                   </td>
                 </tr>
@@ -375,12 +362,10 @@ export default function BoqPrApprovalPage() {
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 780, maxWidth: '92vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
-                <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                  BOQ Details: {selectedPr.prNumber}
+                <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.common.bOQDetails}{selectedPr.prNumber}
                 </h3>
                 <div style={{ fontSize: 12, color: '#64748b' }}>
-                  {selectedPr.title} • Cost Centre: {selectedPr.costCentre?.code} ({selectedPr.costCentre?.name})
-                </div>
+                  {selectedPr.title}{UI_STRINGS.common.costCentre}{selectedPr.costCentre?.code}{UI_STRINGS.common.copy1b3t0c5}{selectedPr.costCentre?.name}{UI_STRINGS.common.copyc7zu6c}</div>
               </div>
               <button type="button" onClick={() => setReviewModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={18} />
@@ -390,20 +375,20 @@ export default function BoqPrApprovalPage() {
             {/* PR Metadata Summary */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, padding: 12, background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0', marginBottom: 16 }}>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Source BOQ</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.boq?.boqCode} ({selectedPr.boqRevision?.revisionCode || 'R0'})</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.sourceBOQ}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.boq?.boqCode}{UI_STRINGS.common.copy1b3t0c5}{selectedPr.boqRevision?.revisionCode || UI_STRINGS.common.r0}{UI_STRINGS.common.copyc7zu6c}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Requester</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.requester}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.requesterName || selectedPr.requestedBy}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Total Line Items</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.lines?.length || 0} Lines</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.totalLineItems}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.lines?.length || 0}{UI_STRINGS.common.lines}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Requested Value</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#047857' }}>₹ {(selectedPr.totalEstimatedValue || 0).toLocaleString('en-IN')}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.requestedValue}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copytfdhmk}{(selectedPr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</div>
               </div>
             </div>
 
@@ -412,14 +397,14 @@ export default function BoqPrApprovalPage() {
               <table className="table" style={{ width: '100%', fontSize: 12 }}>
                 <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                   <tr style={{ height: 36, borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '0 10px', width: 45 }}>S.No.</th>
-                    <th style={{ padding: '0 10px' }}>Item Description</th>
-                    <th style={{ padding: '0 10px' }}>BOQ Description</th>
-                    <th style={{ padding: '0 10px' }}>Category</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Quantity</th>
-                    <th style={{ padding: '0 10px' }}>UOM</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Rate (₹)</th>
-                    <th style={{ padding: '0 10px', textAlign: 'right' }}>Total (₹)</th>
+                    <th style={{ padding: '0 10px', width: 45 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.itemDescription}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.bOQDescription}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.category2}</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                    <th style={{ padding: '0 10px' }}>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.rate}</th>
+                    <th style={{ padding: '0 10px', textAlign: 'right' }}>{UI_STRINGS.common.total}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -439,9 +424,8 @@ export default function BoqPrApprovalPage() {
                       <td style={{ padding: '0 10px', color: '#475569' }}>{line.category}</td>
                       <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 600 }}>{line.quantity}</td>
                       <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uom}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.estimatedRate || 0).toLocaleString('en-IN')}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                        ₹ {(line.estimatedValue || (line.quantity * (line.estimatedRate || 0))).toLocaleString('en-IN')}
+                      <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.estimatedRate || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</td>
+                      <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(line.estimatedValue || (line.quantity * (line.estimatedRate || 0))).toLocaleString(I18N_CONFIG.defaultLocale)}
                       </td>
                     </tr>
                   ))}
@@ -461,8 +445,7 @@ export default function BoqPrApprovalPage() {
                     openEnquiry(selectedPr);
                   }}
                 >
-                  <HelpCircle size={13} /> Ask Clarification
-                </button>
+                  <HelpCircle size={13} />{UI_STRINGS.common.askClarification}</button>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -471,8 +454,7 @@ export default function BoqPrApprovalPage() {
                     openChat(selectedPr);
                   }}
                 >
-                  <MessageSquare size={13} /> Chat with Requester
-                </button>
+                  <MessageSquare size={13} />{UI_STRINGS.common.chatWithRequester}</button>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -480,9 +462,7 @@ export default function BoqPrApprovalPage() {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setReviewModalOpen(false)}
-                >
-                  Close
-                </button>
+                >{UI_STRINGS.common.close}</button>
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -493,8 +473,7 @@ export default function BoqPrApprovalPage() {
                   }}
                   disabled={processing}
                 >
-                  <RotateCcw size={14} /> Revert for Correction
-                </button>
+                  <RotateCcw size={14} />{UI_STRINGS.common.revertForCorrection}</button>
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -505,8 +484,7 @@ export default function BoqPrApprovalPage() {
                   }}
                   disabled={processing}
                 >
-                  <XCircle size={14} /> Reject BOQ
-                </button>
+                  <XCircle size={14} />{UI_STRINGS.common.rejectBOQ}</button>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -514,8 +492,7 @@ export default function BoqPrApprovalPage() {
                   onClick={() => handleApprove(selectedPr.id)}
                   disabled={processing}
                 >
-                  <CheckCircle2 size={14} /> Approve & Release to Procurement
-                </button>
+                  <CheckCircle2 size={14} />{UI_STRINGS.common.approveReleaseToProcurement}</button>
               </div>
             </div>
           </div>
@@ -528,19 +505,15 @@ export default function BoqPrApprovalPage() {
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, maxWidth: '90vw', padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#b45309' }}>
               <RotateCcw size={20} />
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                Revert BOQ for Correction
-              </h3>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.common.revertBOQForCorrection}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>
-              Specify the correction instructions for <strong>{selectedPr.prNumber}</strong> ({selectedPr.title}). The BOQ will be returned to the submitting Project User with these feedback remarks.
-            </p>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>{UI_STRINGS.common.specifyTheCorrectionInstructionsFor}<strong>{selectedPr.prNumber}</strong>{UI_STRINGS.common.copy1b3t0c5}{selectedPr.title}{UI_STRINGS.common.theBOQWillBeReturnedToTheSubmittingProjectUserWithTheseFeedbackRemarks}</p>
 
             <form onSubmit={handleRevert}>
               <textarea
                 value={revertReason}
                 onChange={e => setRevertReason(e.target.value)}
-                placeholder="Specific reasons and correction instructions for Project User (mandatory)..."
+                placeholder={UI_STRINGS.common.specificReasonsAndCorrectionInstructionsForProjectUserMandatory}
                 rows={4}
                 required
                 style={{
@@ -563,16 +536,14 @@ export default function BoqPrApprovalPage() {
                     setRevertReason('');
                   }}
                   disabled={processing}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   className="btn btn-primary"
                   style={{ background: '#b45309', borderColor: '#b45309' }}
                   disabled={processing || !revertReason.trim()}
                 >
-                  {processing ? 'Reverting...' : 'Confirm Revert for Correction'}
+                  {processing ? UI_STRINGS.common.reverting : UI_STRINGS.common.confirmRevertForCorrection}
                 </button>
               </div>
             </form>
@@ -584,18 +555,14 @@ export default function BoqPrApprovalPage() {
       {rejectModalOpen && selectedPr && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, maxWidth: '90vw', padding: 24 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>
-              Reject Purchase Request
-            </h3>
-            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>
-              Please state the specific reason for rejecting <strong>{selectedPr.prNumber}</strong>. The request will be returned to the requester with these feedback remarks.
-            </p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px 0', color: '#0f172a' }}>{UI_STRINGS.common.rejectPurchaseRequest}</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px 0' }}>{UI_STRINGS.common.pleaseStateTheSpecificReasonForRejecting}<strong>{selectedPr.prNumber}</strong>{UI_STRINGS.common.theRequestWillBeReturnedToTheRequesterWithTheseFeedbackRemarks}</p>
 
             <form onSubmit={handleReject}>
               <textarea
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
-                placeholder="Reason for rejection (mandatory)..."
+                placeholder={UI_STRINGS.common.reasonForRejectionMandatory}
                 rows={4}
                 required
                 style={{
@@ -618,16 +585,14 @@ export default function BoqPrApprovalPage() {
                     setRejectReason('');
                   }}
                   disabled={processing}
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   className="btn btn-primary"
                   style={{ background: '#dc2626', borderColor: '#dc2626' }}
                   disabled={processing || !rejectReason.trim()}
                 >
-                  {processing ? 'Rejecting...' : 'Confirm Rejection'}
+                  {processing ? UI_STRINGS.common.rejecting : UI_STRINGS.common.confirmRejection}
                 </button>
               </div>
             </form>

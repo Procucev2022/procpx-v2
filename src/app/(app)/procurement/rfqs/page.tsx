@@ -10,6 +10,9 @@ import Card from '@/components/ui/Card';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShoppingBag, TrendingUp, CheckCircle2, Lock } from 'lucide-react';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 // Helper to calculate actual workflow stage from persisted records
 function getActualRfqWorkflowStage(rfq: any): { stage: string; bg: string; color: string; border: string } {
@@ -82,19 +85,17 @@ function RfqsListContent() {
     <div>
       <PageHeader
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'RFQs' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.common.rFQs },
         ]}
-        title="Request For Quotations (RFQs)"
-        description="Active sourcing packages, competitive quote evaluations, rate locking and commercial awards."
+        title={UI_STRINGS.appAppProcurementRfqsPage.requestForQuotationsRFQs}
+        description={UI_STRINGS.appAppProcurementRfqsPage.activeSourcingPackagesCompetitiveQuoteEvaluationsRateLockingAndCommercialAwards}
         actions={
           <div style={{ display: 'flex', gap: 10 }}>
             <Link href="/procurement/approved-boqs" className="btn btn-secondary">
-              <ClipboardCheck size={16} /> Sourcing Queue
-            </Link>
+              <ClipboardCheck size={16} />{UI_STRINGS.appAppProcurementRfqsPage.sourcingQueue}</Link>
             <Link href="/procurement/rfqs/new" className="btn btn-primary">
-              <Plus size={16} /> Create New RFQ
-            </Link>
+              <Plus size={16} />{UI_STRINGS.common.createNewRFQ}</Link>
           </div>
         }
       />
@@ -103,30 +104,30 @@ function RfqsListContent() {
       <div className="mb-6">
         <SummaryCardGrid columns={4}>
           <SummaryCard
-            label="Total RFQs"
+            label={UI_STRINGS.appAppProcurementRfqsPage.totalRFQs}
             value={rfqs.length}
-            secondary="All sourcing packages"
+            secondary={UI_STRINGS.appAppProcurementRfqsPage.allSourcingPackages}
             icon={<FileText size={16} />}
             accent="default"
           />
           <SummaryCard
-            label="In Market / Response"
+            label={UI_STRINGS.appAppProcurementRfqsPage.inMarketResponse}
             value={rfqs.filter(r => r.status === 'RELEASED' || r.status === 'VENDOR_RESPONSE_OPEN' || r.status === 'AWAITING_QUOTES').length}
-            secondary="Open for vendor quotes"
+            secondary={UI_STRINGS.appAppProcurementRfqsPage.openForVendorQuotes}
             icon={<ShoppingBag size={16} />}
             accent="blue"
           />
           <SummaryCard
-            label="Comparison & Negotiation"
+            label={UI_STRINGS.appAppProcurementRfqsPage.comparisonNegotiation}
             value={rfqs.filter(r => r.status === 'COMPARISON' || r.status === 'NEGOTIATION').length}
-            secondary="Commercial evaluations"
+            secondary={UI_STRINGS.appAppProcurementRfqsPage.commercialEvaluations}
             icon={<TrendingUp size={16} />}
             accent="amber"
           />
           <SummaryCard
-            label="Awarded / PPO"
+            label={UI_STRINGS.appAppProcurementRfqsPage.awardedPPO}
             value={rfqs.filter(r => r.status === 'AWARDED' || r.status === 'AWARD_APPROVED' || r.status === 'PPO_ISSUED' || r.status === 'FINAL_RATE_LOCKED').length}
-            secondary="Finalised commercial awards"
+            secondary={UI_STRINGS.appAppProcurementRfqsPage.finalisedCommercialAwards}
             icon={<CheckCircle2 size={16} />}
             accent="emerald"
           />
@@ -136,15 +137,15 @@ function RfqsListContent() {
       {/* Tabs Filter */}
       <div className="tabs" style={{ marginBottom: 16 }}>
         {[
-          { key: 'all', label: 'All RFQs' },
-          { key: 'active', label: 'Active Sourcing' },
-          { key: 'draft', label: 'Drafts' },
-          { key: 'released', label: 'Released' },
-          { key: 'comparison', label: 'Under Comparison' },
-          { key: 'negotiation', label: 'Under Negotiation' },
-          { key: 'final_rate_locked', label: 'Rate Locked' },
-          { key: 'awarded', label: 'Awarded / PPO' },
-          { key: 'rerfq', label: 'Re-RFQs' },
+          { key: 'all', label: UI_STRINGS.appAppProcurementRfqsPage.allRFQs },
+          { key: 'active', label: UI_STRINGS.appAppProcurementRfqsPage.activeSourcing },
+          { key: 'draft', label: UI_STRINGS.common.drafts },
+          { key: 'released', label: UI_STRINGS.appAppProcurementRfqsPage.released },
+          { key: 'comparison', label: UI_STRINGS.appAppProcurementRfqsPage.underComparison },
+          { key: 'negotiation', label: UI_STRINGS.appAppProcurementRfqsPage.underNegotiation },
+          { key: 'final_rate_locked', label: UI_STRINGS.appAppProcurementRfqsPage.rateLocked },
+          { key: 'awarded', label: UI_STRINGS.appAppProcurementRfqsPage.awardedPPO },
+          { key: 'rerfq', label: UI_STRINGS.appAppProcurementRfqsPage.reRFQs },
         ].map((t) => (
           <button
             key={t.key}
@@ -163,7 +164,7 @@ function RfqsListContent() {
           type="text"
           className="form-control"
           style={{ maxWidth: 440, height: 40 }}
-          placeholder="Search by RFQ number, title, package, or project..."
+          placeholder={UI_STRINGS.appAppProcurementRfqsPage.searchByRFQNumberTitlePackageOrProject}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -171,22 +172,22 @@ function RfqsListContent() {
 
       {/* Enterprise Data Table: Exactly 14 Columns in Specified Order */}
       <Card
-        title={`RFQ Sourcing Register (${rfqs.length})`}
-        subtitle="Persisted sourcing packages, competitive quote evaluations, rate locking and commercial awards"
+        title={interpolateUiString(UI_STRINGS.appAppProcurementRfqsPage.rFQSourcingRegisterLength, { "length": rfqs.length })}
+        subtitle={UI_STRINGS.appAppProcurementRfqsPage.persistedSourcingPackagesCompetitiveQuoteEvaluationsRateLockingAndCommercialAwards}
         noPadding
       >
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13, color: '#64748b' }}>Loading RFQs...</div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appAppProcurementRfqsPage.loadingRFQs}</div>
           </div>
         ) : rfqs.length === 0 ? (
           <div style={{ padding: 32 }}>
             <EmptyState
               icon={<FileText size={36} strokeWidth={1.5} color="#94a3b8" />}
-              title="No RFQs Found"
-              description="No RFQs matching this filter or search query. Create your first RFQ from an approved BOQ."
-              actionText="Create New RFQ"
+              title={UI_STRINGS.common.noRFQsFound}
+              description={UI_STRINGS.appAppProcurementRfqsPage.noRFQsMatchingThisFilterOrSearchQueryCreateYourFirstRFQFromAnApprovedBOQ}
+              actionText={UI_STRINGS.appAppProcurementRfqsPage.createNewRFQ}
               actionHref="/procurement/rfqs/new"
             />
           </div>
@@ -195,20 +196,20 @@ function RfqsListContent() {
             <table className="table enterprise-table" style={{ fontSize: 12, minWidth: 1540 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, whiteSpace: 'nowrap' }}>1. BOQ No.</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>2. RFQ No.</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 170, whiteSpace: 'nowrap' }}>3. Project</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 110, whiteSpace: 'nowrap' }}>4. Location</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 160, whiteSpace: 'nowrap' }}>5. Package / Trade</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>6. Cost Centre</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 100, whiteSpace: 'nowrap' }}>7. BOQ Revision</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'right', whiteSpace: 'nowrap' }}>8. Total BOQ Value</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 90, textAlign: 'center', whiteSpace: 'nowrap' }}>9. RFQ Lines</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 120, whiteSpace: 'nowrap' }}>10. Created / Issued Date</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 110, textAlign: 'center', whiteSpace: 'nowrap' }}>11. Invited Vendors</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'center', whiteSpace: 'nowrap' }}>12. Quotations Received</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 150, textAlign: 'center', whiteSpace: 'nowrap' }}>13. RFQ Status</th>
-                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'right', whiteSpace: 'nowrap' }}>14. Action</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copykuf8hr}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copygix47d}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 170, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy4iwgzl}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 110, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copymxa7o6}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, minWidth: 160, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy7yw641}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 140, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy1lr3euh}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 100, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy9nrxd7}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'right', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy1sw0lj6}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 90, textAlign: 'center', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy1c57vvi}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 120, whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copybw2n7c}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 110, textAlign: 'center', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copyj1q8n}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'center', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy1ya8f1u}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 150, textAlign: 'center', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copynkk4lk}</th>
+                  <th style={{ padding: '9px 12px', fontWeight: 700, width: 130, textAlign: 'right', whiteSpace: 'nowrap' }}>{UI_STRINGS.appAppProcurementRfqsPage.copy1r78230}</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,9 +246,7 @@ function RfqsListContent() {
                         </Link>
                         {rfq.isReRfq && (
                           <div style={{ marginTop: 2 }}>
-                            <span className="badge badge-warning" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px' }}>
-                              RE-RFQ
-                            </span>
+                            <span className="badge badge-warning" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px' }}>{UI_STRINGS.appAppProcurementRfqsPage.rERFQ}</span>
                           </div>
                         )}
                       </td>
@@ -283,14 +282,12 @@ function RfqsListContent() {
                       </td>
 
                       {/* 8. Total BOQ Value */}
-                      <td style={{ padding: '9px 12px', fontWeight: 700, textAlign: 'right', color: '#1E40AF', whiteSpace: 'nowrap' }}>
-                        ₹ {totalBoqValue.toLocaleString()}
+                      <td style={{ padding: '9px 12px', fontWeight: 700, textAlign: 'right', color: '#1E40AF', whiteSpace: 'nowrap' }}>{UI_STRINGS.common.copy1g8b5tg}{totalBoqValue.toLocaleString()}
                       </td>
 
                       {/* 9. RFQ Lines */}
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {rfqLinesCount} Lines
-                      </td>
+                        {rfqLinesCount}{UI_STRINGS.common.lines}</td>
 
                       {/* 10. Created / Issued Date */}
                       <td style={{ padding: '9px 12px', color: '#475569', whiteSpace: 'nowrap' }}>
@@ -299,8 +296,7 @@ function RfqsListContent() {
 
                       {/* 11. Invited Vendors */}
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap' }}>
-                        {invitedCount} Vendors
-                      </td>
+                        {invitedCount}{UI_STRINGS.appAppProcurementRfqsPage.vendors}</td>
 
                       {/* 12. Quotations Received */}
                       <td style={{ padding: '9px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -315,8 +311,7 @@ function RfqsListContent() {
                             border: `1px solid ${quotesCount > 0 ? '#BBF7D0' : '#CBD5E1'}`,
                           }}
                         >
-                          {quotesCount} Received
-                        </span>
+                          {quotesCount}{UI_STRINGS.appAppProcurementRfqsPage.received}</span>
                       </td>
 
                       {/* 13. RFQ Status */}
@@ -343,8 +338,7 @@ function RfqsListContent() {
                           href={`/procurement/rfqs/${rfq.id}`}
                           className="btn btn-primary btn-sm"
                           style={{ fontSize: 11, padding: '4px 10px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        >
-                          Open Workspace <ArrowRight size={12} />
+                        >{UI_STRINGS.appAppProcurementRfqsPage.openWorkspace}<ArrowRight size={12} />
                         </Link>
                       </td>
                     </tr>
@@ -361,7 +355,7 @@ function RfqsListContent() {
 
 export default function RfqsListPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>Loading RFQ Control Tower...</div>}>
+    <Suspense fallback={<div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.appAppProcurementRfqsPage.loadingRFQControlTower}</div>}>
       <RfqsListContent />
     </Suspense>
   );

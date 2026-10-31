@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { isApiContext, requireAuth } from '../src/lib/api-utils';
 import { GET, PUT } from '../src/app/api/notifications/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: { notification: { findMany: jest.fn(), count: jest.fn(), updateMany: jest.fn() } },
@@ -80,10 +82,10 @@ describe('notification listing and read-status routes', () => {
     await expect(PUT(makeRequest('/api/notifications', { markAllAsRead: true }))).resolves.toBe(denied);
 
     await expect(PUT(makeRequest('/api/notifications', {}))).resolves.toEqual({
-      ok: false, error: 'Either notificationId or markAllAsRead must be provided', status: 400,
+      ok: false, error: UI_STRINGS.appApiNotificationsRoute.eitherNotificationIdOrMarkAllAsReadMustBeProvided, status: 400,
     });
     await expect(PUT(makeRequest('/api/notifications', { markAllAsRead: true }))).resolves.toEqual({
-      ok: true, data: { success: true, message: 'All notifications marked as read' }, status: 200,
+      ok: true, data: { success: true, message: UI_STRINGS.appApiNotificationsRoute.allNotificationsMarkedAsRead }, status: 200,
     });
     expect(notificationDb.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: {
@@ -94,7 +96,7 @@ describe('notification listing and read-status routes', () => {
     }));
 
     await expect(PUT(makeRequest('/api/notifications', { notificationId: 'n-7' }))).resolves.toEqual({
-      ok: true, data: { success: true, message: 'Notification marked as read' }, status: 200,
+      ok: true, data: { success: true, message: UI_STRINGS.appApiNotificationsRoute.notificationMarkedAsRead }, status: 200,
     });
     expect(notificationDb.updateMany).toHaveBeenLastCalledWith({
       where: { id: 'n-7', tenantId: 'tenant-1' }, data: { isRead: true, readAt: expect.any(Date) },

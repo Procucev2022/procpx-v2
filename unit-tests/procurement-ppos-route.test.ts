@@ -6,6 +6,8 @@ import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
 import { hasPermission } from '../src/lib/permissions';
 import { getUserAuthorizedProjectIds } from '../src/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -90,7 +92,7 @@ describe('procurement PPO collection API', () => {
     await expect(GET(getRequest())).resolves.toBe(denied);
 
     permission.mockReturnValueOnce(false).mockReturnValueOnce(false);
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
 
     permission.mockImplementation((_role: string, key: string) => key === 'PPO_VIEW');
     authorizedProjects.mockResolvedValueOnce(['project-1', 'project-2']);
@@ -149,24 +151,24 @@ describe('procurement PPO collection API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest({}))).resolves.toBe(denied);
-    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: 'RFQ ID is required to generate PPO', status: 400 });
+    await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposRoute.rFQIDIsRequiredToGeneratePPO, status: 400 });
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ rfqId: 'missing' }))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(POST(postRequest({ rfqId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({ quotes: [] }));
-    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'Cannot generate PPO: No valid quotation found for the selected vendor', status: 400 });
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, status: 400 });
 
     db.awardRecommendation.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ rfqId: 'rfq-1', awardRecommendationId: 'missing-award' }))).resolves.toEqual({ ok: false, error: 'Award recommendation not found', status: 404 });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', awardRecommendationId: 'missing-award' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.awardRecommendationNotFound, status: 404 });
     db.awardRecommendation.findFirst.mockResolvedValueOnce({ id: 'award-unmatched', recommendedVendorId: 'unknown-vendor' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', awardRecommendationId: 'award-unmatched' }))).resolves.toEqual({
-      ok: false, error: 'Cannot generate PPO: No valid quotation found for the selected vendor', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, status: 400,
     });
     db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({
       awards: [{ id: 'award-unmatched', recommendedVendorId: 'unknown-vendor' }],
     }));
     await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({
-      ok: false, error: 'Cannot generate PPO: No valid quotation found for the selected vendor', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, status: 400,
     });
 
     const rankedRfq = rfqRecord({ quotes: [quote('vendor-1', 60, 2, [], 'Acme'), quote('vendor-1', 80, 1, [], 'Acme old'), quote('vendor-2', 50, 1, [], 'Beta')] });
@@ -189,7 +191,7 @@ describe('procurement PPO collection API', () => {
     } });
     expect(tx.awardRecommendation.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       recommendedVendorId: 'vendor-1', originalQuoteAmount: 60, benchmarkAmount: 100, totalSavingsAmount: 40,
-      savingsPercent: 40, status: 'APPROVED', commercialStatus: 'L1_LOWEST_BIDDER',
+      savingsPercent: 40, status: UI_STRINGS.common.aPPROVED, commercialStatus: 'L1_LOWEST_BIDDER',
     }) });
     const ppoCreate = tx.ppo.create.mock.calls[0][0];
     expect(ppoCreate.data).toMatchObject({

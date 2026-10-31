@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -13,7 +16,7 @@ export async function GET(req: NextRequest) {
   const contributionId = searchParams.get('contributionId');
 
   if (!prId && !contributionId) {
-    return apiError('Either prId or contributionId must be provided.', 400);
+    return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400);
   }
 
   try {
@@ -33,7 +36,7 @@ export async function GET(req: NextRequest) {
         where: { id: prId, tenantId: ctx.tenantId },
         select: { id: true, prNumber: true, requestedBy: true, createdAt: true },
       });
-      if (!pr) return apiError('Procurement Request not found.', 404);
+      if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
 
       const approvals = await prisma.pRApproval.findMany({
         where: { prId, tenantId: ctx.tenantId },
@@ -69,7 +72,7 @@ export async function GET(req: NextRequest) {
         where: { id: contributionId, tenantId: ctx.tenantId },
         select: { id: true, submittedBy: true, costCentreId: true, createdAt: true },
       });
-      if (!contribution) return apiError('Budget contribution not found.', 404);
+      if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
 
       const approvals = await prisma.budgetApproval.findMany({
         where: { contributionId, tenantId: ctx.tenantId },
@@ -99,7 +102,7 @@ export async function GET(req: NextRequest) {
       });
     }
   } catch (err: any) {
-    return apiError(err.message || 'Failed to fetch messages.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToFetchMessages }), 500);
   }
 }
 
@@ -112,11 +115,11 @@ export async function POST(req: NextRequest) {
     const { prId, contributionId, message, type = 'MESSAGE' } = body;
 
     if (!message || !message.trim()) {
-      return apiError('Message content cannot be empty.', 400);
+      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.messageContentCannotBeEmpty, 400);
     }
 
     if (!prId && !contributionId) {
-      return apiError('Either prId or contributionId must be provided.', 400);
+      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400);
     }
 
     const messageType = type === 'ENQUIRY' ? 'ENQUIRY' : 'MESSAGE';
@@ -127,7 +130,7 @@ export async function POST(req: NextRequest) {
         where: { id: prId, tenantId: ctx.tenantId },
         include: { costCentre: true },
       });
-      if (!pr) return apiError('Procurement Request not found.', 404);
+      if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
 
       const created = await prisma.pRApproval.create({
         data: {
@@ -148,7 +151,7 @@ export async function POST(req: NextRequest) {
           entityType: 'PR',
           entityId: prId,
           action: messageType === 'ENQUIRY' ? 'PR_ENQUIRY_SENT' : 'PR_MESSAGE_SENT',
-          description: `${messageType === 'ENQUIRY' ? 'Clarification requested' : 'Communication message'} on PR ${pr.prNumber}: "${text}"`,
+          description: interpolateUiString(UI_STRINGS.appApiApprovalsMessagesRoute.value1OnPRPrNumberText, { "value1": messageType === 'ENQUIRY' ? 'Clarification requested' : 'Communication message', "prNumber": pr.prNumber, "text": text }),
         },
       });
 
@@ -182,7 +185,7 @@ export async function POST(req: NextRequest) {
         where: { id: contributionId, tenantId: ctx.tenantId },
         include: { costCentre: true },
       });
-      if (!contribution) return apiError('Budget contribution not found.', 404);
+      if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
 
       const created = await prisma.budgetApproval.create({
         data: {
@@ -204,7 +207,7 @@ export async function POST(req: NextRequest) {
           entityType: 'BUDGET_CONTRIBUTION',
           entityId: contributionId,
           action: messageType === 'ENQUIRY' ? 'BUDGET_ENQUIRY_SENT' : 'BUDGET_MESSAGE_SENT',
-          description: `${messageType === 'ENQUIRY' ? 'Clarification requested' : 'Communication message'} on Budget Contribution (${contribution.costCentre.code}): "${text}"`,
+          description: interpolateUiString(UI_STRINGS.appApiApprovalsMessagesRoute.value1OnBudgetContributionCodeText, { "value1": messageType === 'ENQUIRY' ? 'Clarification requested' : 'Communication message', "code": contribution.costCentre.code, "text": text }),
         },
       });
 
@@ -233,6 +236,6 @@ export async function POST(req: NextRequest) {
       }, 201);
     }
   } catch (err: any) {
-    return apiError(err.message || 'Failed to send message.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSendMessage2 }), 500);
   }
 }

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { GET, PATCH } from '../src/app/api/boq/[revisionId]/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -88,7 +90,7 @@ describe('BOQ revision detail API', () => {
     });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce(null);
-    await expect(GET(getRequest(), params('missing'))).resolves.toEqual({ ok: false, error: 'BOQ or Revision not found.', status: 404 });
+    await expect(GET(getRequest(), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdRoute.bOQOrRevisionNotFound, status: 404 });
   });
 
   it('updates a BOQ directly with trimmed, nullable, array, and validated field values', async () => {
@@ -108,13 +110,13 @@ describe('BOQ revision detail API', () => {
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', boqId: 'boq-via-revision' });
     db.boq.update.mockResolvedValueOnce({ id: 'boq-via-revision' });
     await expect(PATCH(patchRequest({ description: ' note ', purpose: 'INVALID', category: 'Electrical' }), params())).resolves.toMatchObject({ ok: true });
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-via-revision' }, data: { description: 'note', category: 'Electrical' } });
+    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-via-revision' }, data: { description: 'note', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical } });
   });
 
   it('returns BOQ-not-found and reports both specific and generic patch failures', async () => {
     db.boq.findFirst.mockResolvedValueOnce(null);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(PATCH(patchRequest({}), params())).resolves.toEqual({ ok: false, error: 'BOQ not found', status: 404 });
+    await expect(PATCH(patchRequest({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdRoute.bOQNotFound, status: 404 });
 
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-1' });
     db.boq.update.mockRejectedValueOnce(new Error('write failed'));

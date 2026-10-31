@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
@@ -49,7 +52,7 @@ export async function GET(req: NextRequest) {
       unreadCount,
     });
   } catch (err: any) {
-    return apiError(err.message || 'Failed to fetch notifications', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToFetchNotifications }), 500);
   }
 }
 
@@ -77,7 +80,7 @@ export async function PUT(req: NextRequest) {
         },
       });
 
-      return apiSuccess({ success: true, message: 'All notifications marked as read' });
+      return apiSuccess({ success: true, message: UI_STRINGS.appApiNotificationsRoute.allNotificationsMarkedAsRead });
     }
 
     if (notificationId) {
@@ -92,11 +95,11 @@ export async function PUT(req: NextRequest) {
         },
       });
 
-      return apiSuccess({ success: true, message: 'Notification marked as read' });
+      return apiSuccess({ success: true, message: UI_STRINGS.appApiNotificationsRoute.notificationMarkedAsRead });
     }
 
-    return apiError('Either notificationId or markAllAsRead must be provided', 400);
+    return apiError(UI_STRINGS.appApiNotificationsRoute.eitherNotificationIdOrMarkAllAsReadMustBeProvided, 400);
   } catch (err: any) {
-    return apiError(err.message || 'Failed to update notification status', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateNotificationStatus }), 500);
   }
 }

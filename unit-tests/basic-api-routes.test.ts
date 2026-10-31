@@ -6,6 +6,8 @@ import { GET as getAudit } from '../src/app/api/audit/route';
 import { GET as getUoms, POST as createUom } from '../src/app/api/masters/uom/route';
 import { GET as getMe } from '../src/app/api/auth/me/route';
 import { GET as getVendorPpos } from '../src/app/api/vendor-portal/ppos/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -52,10 +54,10 @@ describe('basic API routes', () => {
     const result = await getAudit(request('/api/audit?page=2&pageSize=10&entityType=PR&action=APPROVED&projectId=project-1'));
 
     expect(prismaMock.auditLog.count).toHaveBeenCalledWith({ where: {
-      tenantId: 'tenant-1', entityType: 'PR', action: 'APPROVED', projectId: 'project-1',
+      tenantId: 'tenant-1', entityType: 'PR', action: UI_STRINGS.common.aPPROVED, projectId: 'project-1',
     } });
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', entityType: 'PR', action: 'APPROVED', projectId: 'project-1' },
+      where: { tenantId: 'tenant-1', entityType: 'PR', action: UI_STRINGS.common.aPPROVED, projectId: 'project-1' },
       skip: 10, take: 10, orderBy: { createdAt: 'desc' },
     }));
     expect(result).toEqual({ ok: true, data: { data: [{ id: 'log-1' }], total: 11, page: 2, pageSize: 10, totalPages: 2 }, status: 200 });
@@ -87,9 +89,9 @@ describe('basic API routes', () => {
     });
 
     await expect(createUom(request('/api/masters/uom', { method: 'POST', body: JSON.stringify({ code: '  ' }) })))
-      .resolves.toEqual({ ok: false, error: 'UOM code is required.', status: 400 });
+      .resolves.toEqual({ ok: false, error: UI_STRINGS.appApiMastersUomRoute.uOMCodeIsRequired, status: 400 });
     await expect(createUom(request('/api/masters/uom', { method: 'POST', body: JSON.stringify({ code: 'kg', name: '  ' }) })))
-      .resolves.toEqual({ ok: false, error: 'UOM name is required.', status: 400 });
+      .resolves.toEqual({ ok: false, error: UI_STRINGS.appApiMastersUomRoute.uOMNameIsRequired, status: 400 });
 
     const created = { id: 'uom-1', code: 'BOX' };
     prismaMock.uomMaster.create.mockResolvedValue(created);
@@ -102,7 +104,7 @@ describe('basic API routes', () => {
 
     await createUom(request('/api/masters/uom', { method: 'POST', body: JSON.stringify({ code: 'ea', name: 'Each', aliases: null, category: '' }) }));
     expect(prismaMock.uomMaster.create).toHaveBeenLastCalledWith({ data: {
-      tenantId: 'tenant-1', code: 'EA', name: 'Each', aliases: null, category: 'OTHER',
+      tenantId: 'tenant-1', code: 'EA', name: 'Each', aliases: null, category: UI_STRINGS.appAppProjectsIdPage.oTHER,
     } });
   });
 
@@ -126,7 +128,7 @@ describe('basic API routes', () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
     authMock.mockResolvedValue(null);
     await expect(getMe(request('/api/auth/me', { headers: { 'x-test-user-id': 'missing' } }))).resolves.toEqual({
-      ok: false, error: 'Unauthorized', status: 401,
+      ok: false, error: UI_STRINGS.appApiAuthMeRoute.unauthorized, status: 401,
     });
     authMock.mockResolvedValue({ user: { id: 'session-user', email: 'session@example.test' } });
     await expect(getMe(request('/api/auth/me'))).resolves.toEqual({
@@ -137,12 +139,12 @@ describe('basic API routes', () => {
   it('enforces vendor PPO account mapping and handles listing failures', async () => {
     requireAuthMock.mockResolvedValue({ tenantId: 'tenant-1', role: 'BUYER' });
     await expect(getVendorPpos(request('/api/vendor-portal/ppos'))).resolves.toEqual({
-      ok: false, error: 'Forbidden: Vendor Portal is accessible only to mapped vendor accounts', status: 403,
+      ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
     });
 
     requireAuthMock.mockResolvedValue({ tenantId: 'tenant-1', role: 'VENDOR' });
     await expect(getVendorPpos(request('/api/vendor-portal/ppos'))).resolves.toEqual({
-      ok: false, error: 'Vendor record not associated with this user account', status: 404,
+      ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404,
     });
 
     requireAuthMock.mockResolvedValue({ tenantId: 'tenant-1', role: 'BUYER', vendorId: 'vendor-1' });

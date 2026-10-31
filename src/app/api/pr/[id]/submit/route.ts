@@ -1,7 +1,11 @@
 // src/app/api/pr/[id]/submit/route.ts - Submit PR for Approval API
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_SUBMIT');
@@ -14,9 +18,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { costCentre: true },
   });
 
-  if (!pr) return apiError('Procurement Request not found.', 404);
+  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
   if (pr.status !== 'PR_DRAFT' && pr.status !== 'PR_RETURNED_FOR_CORRECTION') {
-    return apiError(`Cannot submit PR in status ${pr.status}. Expected PR_DRAFT or PR_RETURNED_FOR_CORRECTION.`, 400);
+    return apiError(interpolateUiString(UI_STRINGS.appApiPrIdSubmitRoute.cannotSubmitPRInStatusStatusExpectedPRDRAFTOrPRRETURNEDFORCORRECTION, { "status": pr.status }), 400);
   }
 
   const isResubmission = pr.status === 'PR_RETURNED_FOR_CORRECTION';
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       entityType: 'PR',
       entityId: pr.id,
       action: isResubmission ? 'PR_RESUBMITTED' : 'PR_SUBMITTED',
-      description: `BOQ ${pr.prNumber} ${isResubmission ? 'RESUBMITTED after correction' : 'submitted'} for Project Approver review (₹ ${pr.totalEstimatedValue.toLocaleString('en-IN')})`,
+      description: interpolateUiString(UI_STRINGS.appApiPrIdSubmitRoute.bOQPrNumberValue2ForProjectApproverReviewToLocaleString, { "prNumber": pr.prNumber, "value2": isResubmission ? 'RESUBMITTED after correction' : 'submitted', "toLocaleString": pr.totalEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
     },
   });
 

@@ -7,6 +7,8 @@ import { createAuditLog } from '../src/lib/audit';
 import { POST as standardiseRevision } from '../src/app/api/boq/[revisionId]/standardise/route';
 import { GET as getValidation, POST as validateRevision } from '../src/app/api/boq/[revisionId]/validate/route';
 import { POST as refineRevision } from '../src/app/api/boq/refine-ai/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -56,9 +58,9 @@ describe('BOQ revision standardisation', () => {
     isContext.mockReturnValueOnce(false);
     await expect(standardiseRevision(request(), params)).resolves.toBe(denied);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(standardiseRevision(request(), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(standardiseRevision(request(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', status: 'APPROVED' });
-    await expect(standardiseRevision(request(), params)).resolves.toEqual({ ok: false, error: 'Approved BOQs are immutable and cannot be standardised. Create a new revision.', status: 400 });
+    await expect(standardiseRevision(request(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdStandardiseRoute.approvedBOQsAreImmutableAndCannotBeStandardisedCreateANewRevision, status: 400 });
   });
 
   it('standardises descriptions, units, category and subcategory while preserving unchanged lines', async () => {
@@ -89,13 +91,13 @@ describe('BOQ revision standardisation', () => {
     } });
     expect(db.boqLine.update).toHaveBeenCalledTimes(2);
     expect(db.boqLine.update).toHaveBeenNthCalledWith(1, { where: { id: 'line-1' }, data: expect.objectContaining({
-      standardDescription: 'Commercial tile', uomId: 'uom-sqft', categoryId: 'cat-floor', subcategoryId: 'sub-floor', validationStatus: 'VALID',
+      standardDescription: 'Commercial tile', uomId: 'uom-sqft', categoryId: 'cat-floor', subcategoryId: 'sub-floor', validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
     }) });
     expect(db.boqLine.update).toHaveBeenNthCalledWith(2, { where: { id: 'line-3' }, data: expect.objectContaining({
       standardDescription: 'unknown item', uomId: null, categoryId: null, subcategoryId: null,
     }) });
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { validLines: 1, errorLines: 1, warningLines: 1, qualityScore: 75 } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'STANDARDISE', entityId: 'revision-1', projectId: 'project-1', newValue: { standardisedCount: 1, uomNormalisedCount: 1, qualityScore: 75 } }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.sTANDARDISE, entityId: 'revision-1', projectId: 'project-1', newValue: { standardisedCount: 1, uomNormalisedCount: 1, qualityScore: 75 } }));
   });
 });
 
@@ -123,12 +125,12 @@ describe('BOQ validation route', () => {
     summarize.mockReturnValueOnce(issues);
     db.boqRevision.update.mockResolvedValueOnce({ id: 'revision-1' });
     await expect(validateRevision(request(), params)).resolves.toEqual({ ok: true, data: { qualityScore: 67, totalLines: 3, validLines: 1, errorLines: 1, warningLines: 1, issues }, status: 200 });
-    expect(validateLine).toHaveBeenNthCalledWith(1, expect.objectContaining({ lineNumber: '1', isDuplicate: true, isInvalidUom: true }));
-    expect(validateLine).toHaveBeenNthCalledWith(2, expect.objectContaining({ lineNumber: '1', isDuplicate: true, isInvalidUom: false }));
+    expect(validateLine).toHaveBeenNthCalledWith(1, expect.objectContaining({ lineNumber: UI_STRINGS.common.copyefwnq4, isDuplicate: true, isInvalidUom: true }));
+    expect(validateLine).toHaveBeenNthCalledWith(2, expect.objectContaining({ lineNumber: UI_STRINGS.common.copyefwnq4, isDuplicate: true, isInvalidUom: false }));
     expect(validateLine).toHaveBeenNthCalledWith(3, expect.objectContaining({ lineNumber: '', isDuplicate: false, isInvalidUom: false }));
-    expect(summarize).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ lineNumber: '1', isDuplicate: true, isInvalidUom: true })]));
+    expect(summarize).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ lineNumber: UI_STRINGS.common.copyefwnq4, isDuplicate: true, isInvalidUom: true })]));
     expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { totalLines: 3, validLines: 1, errorLines: 1, warningLines: 1, qualityScore: 67 } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'VALIDATE', entityId: 'revision-1', projectId: 'project-1' }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.vALIDATE, entityId: 'revision-1', projectId: 'project-1' }));
   });
 
   it('checks access and missing revisions for validation and read-only quality details', async () => {
@@ -137,7 +139,7 @@ describe('BOQ validation route', () => {
     isContext.mockReturnValueOnce(false);
     await expect(validateRevision(request(), params)).resolves.toBe(denied);
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(validateRevision(request(), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(validateRevision(request(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
 
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
@@ -151,7 +153,7 @@ describe('BOQ validation route', () => {
     await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toMatchObject({ ok: true, data: { revision: { id: 'revision-latest' }, totalLines: 1 } });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce(null);
-    await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toEqual({ ok: false, error: 'Revision not found', status: 404 });
+    await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
   });
 });
 
@@ -167,11 +169,11 @@ describe('AI BOQ refinement route', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(refineRevision(request())).resolves.toBe(denied);
-    await expect(refineRevision(request('http://localhost/api/test', {}))).resolves.toEqual({ ok: false, error: 'BOQ Revision ID is required.', status: 400 });
+    await expect(refineRevision(request('http://localhost/api/test', {}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRefineAiRoute.bOQRevisionIDIsRequired, status: 400 });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(refineRevision(request('http://localhost/api/test', { boqRevisionId: 'missing' }))).resolves.toEqual({ ok: false, error: 'BOQ Revision not found.', status: 404 });
+    await expect(refineRevision(request('http://localhost/api/test', { boqRevisionId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
     db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'APPROVED' });
-    await expect(refineRevision(request('http://localhost/api/test', { boqRevisionId: 'approved' }))).resolves.toEqual({ ok: false, error: 'Approved BOQ revisions cannot be refined. Branch a new revision first.', status: 403 });
+    await expect(refineRevision(request('http://localhost/api/test', { boqRevisionId: 'approved' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRefineAiRoute.approvedBOQRevisionsCannotBeRefinedBranchANewRevisionFirst, status: 403 });
   });
 
   it('suggests all known catalog rules and auto-accepts suggestions meeting the threshold', async () => {

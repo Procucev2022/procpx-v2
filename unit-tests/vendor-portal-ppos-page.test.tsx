@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorPposPage from '../src/app/(app)/vendor-portal/ppos/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const originalFetch = global.fetch;
 const mockFetch = jest.fn();
@@ -71,24 +75,24 @@ describe('vendor purchase orders page', () => {
     let resolveRequest!: (value: ReturnType<typeof response>) => void;
     mockFetch.mockReturnValueOnce(new Promise((resolve) => { resolveRequest = resolve; }));
     render(<VendorPposPage />);
-    expect(screen.getByText('Loading purchase orders...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.loadingPurchaseOrders))).toBeInTheDocument();
     await act(async () => resolveRequest(loadResponse()));
     expect(await screen.findByText('PPO-001')).toBeInTheDocument();
-    expect(screen.getByText(/Accepted \(/)).toBeInTheDocument();
-    expect(screen.getByText('Query Raised')).toBeInTheDocument();
-    expect(screen.getAllByText('Awaiting Acceptance')).toHaveLength(2);
-    expect(screen.getAllByText('Direct Contract')).toHaveLength(2);
-    expect(screen.getAllByText('As agreed')).toHaveLength(3);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.accepted))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.queryRaised))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.awaitingAcceptance))).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.directContract))).toHaveLength(2);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.asAgreed))).toHaveLength(3);
     expect(screen.getByText('2 PPOs')).toBeInTheDocument();
 
     const issueRow = screen.getByText('PPO-002').closest('tr')!;
-    fireEvent.click(within(issueRow).getByTitle('Toggle Line Items'));
-    expect(screen.getByText('Order Line Items Detail:')).toBeInTheDocument();
+    fireEvent.click(within(issueRow).getByTitle(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.toggleLineItems)));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.orderLineItemsDetail))).toBeInTheDocument();
     expect(screen.getByText('Steel supports')).toBeInTheDocument();
-    expect(screen.getByText('18%')).toBeInTheDocument();
-    expect(screen.getByText('Reported Issue:')).toBeInTheDocument();
-    fireEvent.click(within(issueRow).getByTitle('Toggle Line Items'));
-    expect(screen.queryByText('Order Line Items Detail:')).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.copy1rannvv))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.reportedIssue))).toBeInTheDocument();
+    fireEvent.click(within(issueRow).getByTitle(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.toggleLineItems)));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.orderLineItemsDetail))).not.toBeInTheDocument();
 
     const scroller = document.querySelector('.table-responsive')!;
     fireEvent.wheel(scroller, { shiftKey: true, deltaY: 25 });
@@ -96,7 +100,7 @@ describe('vendor purchase orders page', () => {
     fireEvent.wheel(scroller, { shiftKey: false, deltaY: 5 });
     expect((scroller as HTMLElement).scrollLeft).toBe(25);
 
-    const search = screen.getByPlaceholderText('Search PPO #, Project...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.searchPPOProject));
     fireEvent.change(search, { target: { value: 'ppo-001' } });
     expect(screen.getByText('PPO-001')).toBeInTheDocument();
     expect(screen.queryByText('PPO-002')).not.toBeInTheDocument();
@@ -106,9 +110,9 @@ describe('vendor purchase orders page', () => {
     fireEvent.change(search, { target: { value: 'RFQ-202' } });
     expect(screen.getByText('PPO-002')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'does not exist' } });
-    expect(screen.getByText('No orders match your search query.')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.noOrdersMatchYourSearchQuery))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
   });
 
@@ -120,19 +124,19 @@ describe('vendor purchase orders page', () => {
 
     mockFetch.mockResolvedValueOnce({ ok: false, json: async () => { throw new Error('bad json'); } });
     render(<VendorPposPage />);
-    expect(await screen.findByText('Failed to load purchase orders')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders))).toBeInTheDocument();
   });
 
   it('accepts a PPO, sends the signatory and remarks, and reloads the register', async () => {
     render(<VendorPposPage />);
     await screen.findByText('PPO-003');
     const row = screen.getByText('PPO-003').closest('tr')!;
-    fireEvent.click(within(row).getByRole('button', { name: 'Accept PPO' }));
-    expect(screen.getByText('Formal Acceptance of PPO PPO-003')).toBeInTheDocument();
-    const confirm = screen.getByRole('button', { name: 'Confirm Order Acceptance' });
+    fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.acceptPPO) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.formalAcceptanceOfPPO))).toBeInTheDocument();
+    const confirm = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.confirmOrderAcceptance) });
     expect(confirm).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText('Full name of signing representative'), { target: { value: 'Sam Vendor' } });
-    fireEvent.change(screen.getByPlaceholderText('Production kickoff date, acknowledgement note...'), { target: { value: 'Start on Monday' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.fullNameOfSigningRepresentative)), { target: { value: 'Sam Vendor' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.productionKickoffDateAcknowledgementNote)), { target: { value: 'Start on Monday' } });
     mockFetch.mockImplementation((url: string, init?: RequestInit) => init?.method === 'POST'
       ? Promise.resolve(response({ ok: true }))
       : Promise.resolve(loadResponse()));
@@ -140,7 +144,7 @@ describe('vendor purchase orders page', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/ppos/003/vendor-accept', expect.objectContaining({ method: 'POST' })));
     const post = mockFetch.mock.calls.find(([url, init]) => init?.method === 'POST');
     expect(JSON.parse(post![1].body)).toEqual({ acceptedBy: 'Sam Vendor', vendorComments: 'Start on Monday' });
-    await waitFor(() => expect(screen.queryByText('Formal Acceptance of PPO PPO-003')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.formalAcceptanceOfPPO))).not.toBeInTheDocument());
     expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/ppos');
   });
 
@@ -149,37 +153,37 @@ describe('vendor purchase orders page', () => {
     render(<VendorPposPage />);
     await screen.findByText('PPO-003');
     const pendingRow = screen.getByText('PPO-003').closest('tr')!;
-    fireEvent.click(within(pendingRow).getByRole('button', { name: 'Accept PPO' }));
-    fireEvent.change(screen.getByPlaceholderText('Full name of signing representative'), { target: { value: 'Sam Vendor' } });
+    fireEvent.click(within(pendingRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.acceptPPO) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.fullNameOfSigningRepresentative)), { target: { value: 'Sam Vendor' } });
     mockFetch.mockImplementation((url: string, init?: RequestInit) => init?.method === 'POST'
       ? Promise.resolve(response({ error: 'Terms could not be accepted' }, false))
       : Promise.resolve(loadResponse()));
-    fireEvent.submit(screen.getByRole('button', { name: 'Confirm Order Acceptance' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.confirmOrderAcceptance) }).closest('form')!);
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Terms could not be accepted'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
     const issueRow = screen.getByText('PPO-002').closest('tr')!;
-    fireEvent.click(within(issueRow).getByRole('button', { name: 'Raise Issue' }));
+    fireEvent.click(within(issueRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.raiseIssue) }));
     const issueField = screen.getByPlaceholderText(/Specify the issue/);
     expect(issueField).toHaveValue('Confirm the delivery date');
     fireEvent.change(issueField, { target: { value: '   ' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Submit Issue to Buyer' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitIssueToBuyer) }).closest('form')!);
     expect(mockFetch).not.toHaveBeenCalledWith('/api/procurement/ppos/002/vendor-issue', expect.anything());
 
     fireEvent.change(issueField, { target: { value: 'Please confirm delivery in November' } });
     mockFetch.mockImplementation((url: string, init?: RequestInit) => init?.method === 'POST'
       ? Promise.resolve(response({ error: 'Issue service unavailable' }, false))
       : Promise.resolve(loadResponse()));
-    fireEvent.submit(screen.getByRole('button', { name: 'Submit Issue to Buyer' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitIssueToBuyer) }).closest('form')!);
     await waitFor(() => expect(alertSpy).toHaveBeenLastCalledWith('Issue service unavailable'));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
-    fireEvent.click(within(issueRow).getByRole('button', { name: 'Raise Issue' }));
+    fireEvent.click(within(issueRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.raiseIssue) }));
     fireEvent.change(screen.getByPlaceholderText(/Specify the issue/), { target: { value: 'Check line 3' } });
     mockFetch.mockImplementation((url: string, init?: RequestInit) => init?.method === 'POST'
       ? Promise.resolve(response({ ok: true }))
       : Promise.resolve(loadResponse()));
-    fireEvent.submit(screen.getByRole('button', { name: 'Submit Issue to Buyer' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitIssueToBuyer) }).closest('form')!);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/ppos/002/vendor-issue', expect.objectContaining({ method: 'POST' })));
     const issuePost = mockFetch.mock.calls.filter(([url]) => url === '/api/procurement/ppos/002/vendor-issue').pop();
     expect(JSON.parse(issuePost![1].body)).toEqual({ issueRemarks: 'Check line 3' });

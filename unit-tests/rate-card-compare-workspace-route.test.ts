@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
 import { GET } from '../src/app/api/procurement/rate-cards/compare-workspace/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -53,9 +55,9 @@ describe('rate card comparison workspace API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(GET(request())).resolves.toBe(denied);
-    await expect(GET(request(''))).resolves.toEqual({ ok: false, error: 'vendorId query parameter is required', status: 400 });
+    await expect(GET(request(''))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, status: 400 });
     db.vendor.findUnique.mockResolvedValueOnce(null);
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'Vendor not found', status: 404 });
+    await expect(GET(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFound, status: 404 });
     expect(db.quote.findMany).not.toHaveBeenCalled();
   });
 
@@ -102,13 +104,13 @@ describe('rate card comparison workspace API', () => {
     const result = await GET(request('?vendorId=vendor-1&category=Electrical&subcategory=Cable'));
     expect(result).toMatchObject({ ok: true, data: { vendor, vendorPastQuotes: expect.any(Array), existingRateCards: expect.any(Array) } });
     expect(db.quote.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', vendorId: 'vendor-1', status: { in: ['SUBMITTED', 'ACCEPTED', 'UNDER_EVALUATION', 'REVISED'] } },
+      where: { tenantId: 'tenant-1', vendorId: 'vendor-1', status: { in: [UI_STRINGS.common.sUBMITTED, 'ACCEPTED', 'UNDER_EVALUATION', UI_STRINGS.componentsProcurementCommercialWorkspace.rEVISED] } },
       take: 20,
     }));
-    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', vendorId: 'vendor-1', category: 'Electrical' } }));
-    expect(db.ppoLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', category: 'Electrical' } }));
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', vendorId: 'vendor-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical } }));
+    expect(db.ppoLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical } }));
     expect(db.standardBoqItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', isActive: true, category: 'Electrical', subcategory: 'Cable' },
+      where: { tenantId: 'tenant-1', isActive: true, category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'Cable' },
     }));
 
     const data = (result as unknown as { data: Record<string, any[]> }).data;
@@ -123,7 +125,7 @@ describe('rate card comparison workspace API', () => {
     ]));
     expect(data.historicalPpoRates).toEqual(expect.arrayContaining([
       expect.objectContaining({ ppoNumber: 'PPO-1', vendorName: 'Cable Supplier', isSameVendor: true, orderDate: instant }),
-      expect.objectContaining({ ppoNumber: 'PPO', ppoTitle: '', vendorName: 'Vendor', isSameVendor: false, orderDate: instant }),
+      expect.objectContaining({ ppoNumber: 'PPO', ppoTitle: '', vendorName: UI_STRINGS.common.vendor, isSameVendor: false, orderDate: instant }),
     ]));
     expect(data.benchmarkRates[0]).toMatchObject({
       standardBoqItemId: 'std-1', description: 'Copper cable', benchmarkRate: 17,

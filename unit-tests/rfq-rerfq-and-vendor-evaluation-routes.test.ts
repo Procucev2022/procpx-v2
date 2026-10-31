@@ -8,6 +8,8 @@ import { POST as lockRates } from '../src/app/api/procurement/rfqs/[id]/lock-rat
 import { POST as createReRfq } from '../src/app/api/procurement/rfqs/[id]/re-rfq/route';
 import { POST as submitEvaluation } from '../src/app/api/procurement/vendors/[id]/evaluation/route';
 import { POST as evaluateVendorAi } from '../src/app/api/procurement/vendors/[id]/evaluate-ai/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -64,13 +66,13 @@ describe('RFQ final-rate lock and Re-RFQ endpoints', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toBe(denied);
-    await expect(lockRates(post({}), routeParams)).resolves.toEqual({ ok: false, error: 'Winning vendor ID is required to lock rates', status: 400 });
+    await expect(lockRates(post({}), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.winningVendorIDIsRequiredToLockRates, status: 400 });
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce({ estimatedBenchmarkValue: 1000, quotes: [] });
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toEqual({ ok: false, error: 'Vendor not found', status: 404 });
+    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFound, status: 404 });
   });
 
   it('locks a quoted vendor at the supplied final value and records savings', async () => {
@@ -105,10 +107,10 @@ describe('RFQ final-rate lock and Re-RFQ endpoints', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(createReRfq(post({ reason: 'reopen' }), routeParams)).resolves.toBe(denied);
-    await expect(createReRfq(post({ reason: '' }), routeParams)).resolves.toEqual({ ok: false, error: 'Mandatory justification reason is required for Re-RFQ', status: 400 });
-    await expect(createReRfq(post({ reason: '   ' }), routeParams)).resolves.toEqual({ ok: false, error: 'Mandatory justification reason is required for Re-RFQ', status: 400 });
+    await expect(createReRfq(post({ reason: '' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.mandatoryJustificationReasonIsRequiredForReRFQ, status: 400 });
+    await expect(createReRfq(post({ reason: '   ' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.mandatoryJustificationReasonIsRequiredForReRFQ, status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(createReRfq(post({ reason: 'Need revised terms' }), routeParams)).resolves.toEqual({ ok: false, error: 'Original RFQ not found or access denied', status: 404 });
+    await expect(createReRfq(post({ reason: 'Need revised terms' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.originalRFQNotFoundOrAccessDenied, status: 404 });
   });
 
   it('clones the RFQ scope, deadline, and original invitees when creating a Re-RFQ', async () => {
@@ -134,8 +136,8 @@ describe('RFQ final-rate lock and Re-RFQ endpoints', () => {
       lines: { create: [expect.objectContaining({ boqLineId: 'line-1', quantity: 5, benchmarkAmount: 500 })] },
     }) });
     expect(db.rfqVendor.createMany).toHaveBeenCalledWith({ data: [
-      expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-2', vendorId: 'vendor-1', invitationStatus: 'INVITED', submissionStatus: 'PENDING' }),
-      expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-2', vendorId: 'vendor-2', invitationStatus: 'INVITED', submissionStatus: 'PENDING' }),
+      expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-2', vendorId: 'vendor-1', invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED, submissionStatus: UI_STRINGS.common.pENDING }),
+      expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-2', vendorId: 'vendor-2', invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED, submissionStatus: UI_STRINGS.common.pENDING }),
     ] });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'RERFQ_CREATED', newValue: expect.objectContaining({ vendorCount: 2 }) }));
   });
@@ -175,10 +177,10 @@ describe('vendor qualification endpoints', () => {
     isContext.mockReturnValueOnce(false);
     await expect(submitEvaluation(post({ qualificationStatus: 'QUALIFIED' }), routeParams)).resolves.toBe(denied);
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(submitEvaluation(post({ qualificationStatus: 'QUALIFIED' }), routeParams)).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied.', status: 404 });
+    await expect(submitEvaluation(post({ qualificationStatus: 'QUALIFIED' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied2, status: 404 });
     db.vendor.findFirst.mockResolvedValueOnce(vendor);
     await expect(submitEvaluation(post({ qualificationStatus: 'PENDING' }), routeParams)).resolves.toEqual({
-      ok: false, error: 'A valid qualification status is required: QUALIFIED, CONDITIONALLY_QUALIFIED, or NOT_QUALIFIED.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementVendorsIdEvaluationRoute.aValidQualificationStatusIsRequiredQUALIFIEDCONDITIONALLYQUALIFIEDOrNOTQUALIFIED, status: 400,
     });
     expect(db.vendor.findFirst).toHaveBeenLastCalledWith({ where: { id: 'record-1', OR: [{ tenantId: 'tenant-1' }, { vendorType: 'PROCUCEV_VENDOR' }] } });
   });
@@ -223,7 +225,7 @@ describe('vendor qualification endpoints', () => {
     db.vendorEvaluation.create.mockResolvedValueOnce({ id: 'evaluation-explicit', qualificationOutcome: 'CONDITIONAL' });
     db.vendor.update.mockResolvedValueOnce(vendor);
     await submitEvaluation(post({ qualificationStatus: 'QUALIFIED', overallWeightedScore: 70, qualificationDecision: 'CONDITIONAL', criteriaDetails: 'manual review' }), routeParams);
-    expect(db.vendorEvaluation.create).toHaveBeenCalledWith({ data: expect.objectContaining({ overallWeightedScore: 70, qualificationOutcome: 'CONDITIONAL', criteriaDetails: 'manual review' }) });
+    expect(db.vendorEvaluation.create).toHaveBeenCalledWith({ data: expect.objectContaining({ overallWeightedScore: 70, qualificationOutcome: UI_STRINGS.appAppProcurementVendorsIdPage.cONDITIONAL, criteriaDetails: 'manual review' }) });
 
     db.vendor.findFirst.mockRejectedValueOnce(new Error('evaluation failed'));
     await expect(submitEvaluation(post({ qualificationStatus: 'QUALIFIED' }), routeParams)).resolves.toEqual({ ok: false, error: 'evaluation failed', status: 500 });
@@ -237,7 +239,7 @@ describe('vendor qualification endpoints', () => {
     isContext.mockReturnValueOnce(false);
     await expect(evaluateVendorAi(post({}), routeParams)).resolves.toBe(denied);
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(evaluateVendorAi(post({}), routeParams)).resolves.toEqual({ ok: false, error: 'Vendor not found or access denied.', status: 404 });
+    await expect(evaluateVendorAi(post({}), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied2, status: 404 });
 
     db.vendor.findFirst.mockResolvedValueOnce({ ...vendor, contactPerson: 'Buyer', email: 'acme@example.test', categories: ['Electrical'], documents: [] });
     evaluateProfile.mockReturnValueOnce(evaluationReport);
@@ -247,12 +249,12 @@ describe('vendor qualification endpoints', () => {
     await expect(evaluateVendorAi(post({}), routeParams)).resolves.toMatchObject({
       ok: true, data: { evaluation, report: evaluationReport, message: 'AI Evaluation completed. Suggested score: 78% (CONDITIONAL).' },
     });
-    expect(evaluateProfile).toHaveBeenCalledWith(expect.objectContaining({ id: 'vendor-1', email: 'acme@example.test', categories: ['Electrical'] }));
+    expect(evaluateProfile).toHaveBeenCalledWith(expect.objectContaining({ id: 'vendor-1', email: 'acme@example.test', categories: [UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical] }));
     expect(db.vendorEvaluation.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', vendorId: 'vendor-1', status: 'AI_GENERATED', overallWeightedScore: 78,
       criteriaDetails: JSON.stringify(evaluationReport.criteria), criticalRiskFlags: '[]',
     }) });
-    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: { qualificationStatus: 'PENDING_REVIEW', qualificationScore: 78, qualificationDecision: 'CONDITIONAL' } });
+    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: { qualificationStatus: UI_STRINGS.appAppProcurementVendorsPage.pENDINGREVIEW, qualificationScore: 78, qualificationDecision: UI_STRINGS.appAppProcurementVendorsIdPage.cONDITIONAL } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'VENDOR_AI_EVALUATED', entityId: 'vendor-1' }));
   });
 

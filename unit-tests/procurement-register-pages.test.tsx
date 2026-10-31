@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import QuotesHubPage from '../src/app/(app)/procurement/quotes/page';
@@ -35,9 +39,9 @@ describe('procurement register pages', () => {
     let finishRequest!: (value: unknown) => void;
     (global.fetch as jest.Mock).mockReturnValueOnce(new Promise(resolve => { finishRequest = resolve; }));
     const view = render(<QuotesHubPage />);
-    expect(screen.getByText('Loading quotes...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementQuotesPage.loadingQuotes))).toBeInTheDocument();
     await act(async () => finishRequest({ ok: true, json: async () => ({ quotes: [] }) }));
-    expect(screen.getByText('No Quotes Submitted Yet')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementQuotesPage.noQuotesSubmittedYet))).toBeInTheDocument();
     view.unmount();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ quotes: [{
@@ -48,13 +52,13 @@ describe('procurement register pages', () => {
     render(<QuotesHubPage />);
     expect(await screen.findByText('QT-001')).toBeInTheDocument();
     expect(screen.getByText('Acme')).toBeInTheDocument();
-    expect(screen.getByText('Standard commercial terms')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Compare in RFQ/ })).toHaveAttribute('href', '/procurement/rfqs/rfq-1?tab=compare');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementQuotesPage.standardCommercialTerms))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementQuotesPage.compareInRFQ, "", false) })).toHaveAttribute('href', '/procurement/rfqs/rfq-1?tab=compare');
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('offline'));
     render(<QuotesHubPage />);
-    expect(await screen.findByText('No Quotes Submitted Yet')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementQuotesPage.noQuotesSubmittedYet))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -76,23 +80,23 @@ describe('procurement register pages', () => {
     ] }) });
     render(<NegotiationsHubPage />);
     expect(await screen.findByText('RFQ-001')).toBeInTheDocument();
-    expect(screen.getByText('Total Negotiations')).toBeInTheDocument();
-    expect(screen.getByText('In Active Rounds')).toBeInTheDocument();
-    expect(screen.getByText('Rates Concluded / Locked')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementNegotiationsPage.totalNegotiations))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementNegotiationsPage.inActiveRounds))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementNegotiationsPage.ratesConcludedLocked))).toBeInTheDocument();
     expect(screen.getByText('1 rounds')).toBeInTheDocument();
     expect(screen.getAllByText(/—/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: /Negotiate/ })[0]).toHaveAttribute('href', '/procurement/rfqs/rfq-1?tab=negotiation');
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.common.negotiate, "", false) })[0]).toHaveAttribute('href', '/procurement/rfqs/rfq-1?tab=negotiation');
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     render(<NegotiationsHubPage />);
-    expect(await screen.findByText('No Negotiations Active')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementNegotiationsPage.noNegotiationsActive))).toBeInTheDocument();
     cleanup();
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('network down'));
     render(<NegotiationsHubPage />);
-    expect(await screen.findByText('No Negotiations Active')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementNegotiationsPage.noNegotiationsActive))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -101,9 +105,9 @@ describe('procurement register pages', () => {
     let finishList!: (value: unknown) => void;
     (global.fetch as jest.Mock).mockReturnValueOnce(new Promise(resolve => { finishList = resolve; }));
     const view = render(<AwardsDeskPage />);
-    expect(screen.getByText('Loading award recommendations...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.loadingAwardRecommendations))).toBeInTheDocument();
     await act(async () => finishList({ ok: true, json: async () => ({ awards: [] }) }));
-    expect(screen.getByText('No Award Recommendations Yet')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.noAwardRecommendationsYet))).toBeInTheDocument();
     view.unmount();
     (global.fetch as jest.Mock).mockClear();
 
@@ -117,11 +121,11 @@ describe('procurement register pages', () => {
     const activeView = render(<AwardsDeskPage />);
     expect(await screen.findByText('RFQ-001')).toBeInTheDocument();
     expect(screen.getByText('Acme')).toBeInTheDocument();
-    const approve = screen.getByRole('button', { name: 'Approve' });
+    const approve = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.approve) });
     fireEvent.click(approve);
     expect(approve).toBeDisabled();
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(
-      'PPO approved successfully by Finance.', 'RFQ-001', 'Ready for PPO Issuance',
+      UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfullyByFinance, 'RFQ-001', UI_STRINGS.common.userMessages.readyForPpoIssuance,
     ));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
     expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/awards');
@@ -130,51 +134,51 @@ describe('procurement register pages', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ awards: [{ ...award, status: 'APPROVED' }] }) });
     render(<AwardsDeskPage />);
     expect(await screen.findByText('RFQ-001')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.approve) })).not.toBeInTheDocument();
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ awards: [award] }) });
     render(<AwardsDeskPage />);
-    const reject = await screen.findByRole('button', { name: 'Reject' });
+    const reject = await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) });
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Finance service unavailable' }) });
     fireEvent.click(reject);
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Award Review Failed', message: 'Finance service unavailable', recordNumber: 'RFQ-001',
+    title: UI_STRINGS.appAppProcurementAwardsPage.awardReviewFailed, message: 'Finance service unavailable', recordNumber: 'RFQ-001',
     })));
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ awards: [award] }) });
     render(<AwardsDeskPage />);
-    const rejectAgain = await screen.findByRole('button', { name: 'Reject' });
+    const rejectAgain = await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) });
     (global.fetch as jest.Mock).mockRejectedValueOnce({});
     fireEvent.click(rejectAgain);
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'An error occurred while reviewing the award recommendation.',
+      message: UI_STRINGS.common.userMessages.anErrorOccurredWhileReviewingTheAwardRecommendation,
     })));
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ awards: [award] }) });
     render(<AwardsDeskPage />);
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) });
-    fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) }));
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Failed to review award recommendation',
+      message: UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation,
     })));
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ awards: [award] }) });
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     render(<AwardsDeskPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.reject2) }));
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(
-      'Award recommendation rejected.', 'RFQ-001', 'Commercial Review',
+      UI_STRINGS.common.userMessages.awardRecommendationRejected, 'RFQ-001', UI_STRINGS.common.userMessages.commercialReview,
     ));
     cleanup();
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('load failed'));
     render(<AwardsDeskPage />);
-    expect(await screen.findByText('No Award Recommendations Yet')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.noAwardRecommendationsYet))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -190,12 +194,12 @@ describe('procurement register pages', () => {
     (global.fetch as jest.Mock).mockResolvedValue({ json: async () => ({ data: [], total: 41 }) });
     const projectsView = render(<ProjectsPage />);
     expect(await screen.findByText('Retail Store')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'New Project' })).toHaveAttribute('href', '/projects/new');
+    expect(screen.getByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"New","toLocaleString":"Project"})) })).toHaveAttribute('href', '/projects/new');
     expect(screen.getByText('NEW BUILD')).toBeInTheDocument();
     expect(screen.getByText('Pune')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.next, "", false) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=2')));
     fireEvent.click(screen.getAllByRole('button')[0]);
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=1')));
@@ -207,7 +211,7 @@ describe('procurement register pages', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=2')));
     fireEvent.click(screen.getAllByRole('button')[3]);
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=3')));
-    fireEvent.change(screen.getByPlaceholderText('Search by name, code, city...'), { target: { value: 'Hotel' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProjectsPage.searchByNameCodeCity)), { target: { value: 'Hotel' } });
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=1')));
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'DRAFT' } });
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('status=DRAFT')));
@@ -219,17 +223,17 @@ describe('procurement register pages', () => {
       .mockResolvedValueOnce({ json: async () => ({ user: { role: 'VIEWER' } }) })
       .mockResolvedValueOnce({ json: async () => ({ total: 1 }) });
     render(<ProjectsPage />);
-    expect(await screen.findByText('No projects found')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'New Project' })).not.toBeInTheDocument();
-    expect(screen.getByText('1 Capex project in platform workspace')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsPage.noProjectsFound))).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"New","toLocaleString":"Project"})) })).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsPage.totalCapexProjectValue2InPlatformWorkspace, {"total":"1","value2":""})))).toBeInTheDocument();
     cleanup();
 
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({ json: async () => ({}) })
       .mockResolvedValueOnce({ json: async () => ({ data: [], total: 0 }) });
     render(<ProjectsPage />);
-    expect(await screen.findByText('No projects found')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'New Project' })).not.toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsPage.noProjectsFound))).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"New","toLocaleString":"Project"})) })).not.toBeInTheDocument();
     cleanup();
 
     (global.fetch as jest.Mock)
@@ -239,7 +243,7 @@ describe('procurement register pages', () => {
         areaSqFt: 0, status: 'DRAFT', boqs: [], updatedAt: '2025-05-01T00:00:00Z',
       }], total: 0 }) });
     render(<ProjectsPage />);
-    expect(await screen.findByText('Office')).toBeInTheDocument();
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.office))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.copy4s9bsz)).length).toBeGreaterThan(0);
   });
 });

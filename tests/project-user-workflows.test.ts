@@ -2,10 +2,9 @@
 // Automated Acceptance Test Suite for Project User BOQ Studio, Budget Formation, PR Creation & Dual Approval Workflows
 // Verifying all 40 scenarios specified in Section 59 of the architecture specification.
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { hasPermission, UserRole } from '../src/lib/permissions';
 
-const prisma = new PrismaClient();
 
 let passed = 0;
 let failed = 0;

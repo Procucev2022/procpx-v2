@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import NegotiationWorkspace, { NegotiationItem } from '../src/components/rate-cards/NegotiationWorkspace';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const items: NegotiationItem[] = [
   { id: 'line-1', itemCode: 'RC-01', description: 'Ceiling', specification: 'Moisture resistant board', uom: 'SQFT', qty: 10, buyerTargetRate: 100, latestVendorQuote: 95, currentBuyerOffer: 90 },
@@ -28,10 +32,10 @@ describe('rate card negotiation workspace', () => {
       onBack={onBack}
     />);
 
-    expect(screen.getByRole('heading', { name: 'Rate Card Negotiation (Item Level)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.rateCardNegotiationItemLevel) })).toBeInTheDocument();
     expect(screen.getByText('RC-TEST')).toBeInTheDocument();
     expect(screen.getByText('Test Vendor')).toBeInTheDocument();
-    expect(screen.getByText('Total Commercial Valuation:')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.totalCommercialValuation))).toBeInTheDocument();
     expect(screen.getAllByText('SQFT')).toHaveLength(2);
 
     fireEvent.change(document.querySelectorAll('input[type="number"]')[0], { target: { value: '80' } });
@@ -40,13 +44,13 @@ describe('rate card negotiation workspace', () => {
       items[1],
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Negotiation History & Round Audit' }));
-    expect(screen.getByText('Multi-Round Commercial Negotiation Audit Trail')).toBeInTheDocument();
-    expect(screen.getByText(/Vendor submitted Round 1 Quote/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Item-Level Offers & Calculations/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset to Target' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send Proposed Offer to Vendor' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.negotiationHistoryRoundAudit) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.multiRoundCommercialNegotiationAuditTrail))).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(UI_STRINGS.componentsRateCardsNegotiationWorkspace.vendorSubmittedRound1QuoteTotal515000.trim());
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.itemLevelOffersCalculations) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.resetToTarget) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.sendProposedOfferToVendor) }));
     fireEvent.click(screen.getByRole('button', { name: 'Back to Rate Cards' }));
 
     expect(onReset).toHaveBeenCalledTimes(1);
@@ -80,9 +84,9 @@ describe('rate card negotiation workspace', () => {
     />);
 
     expect(document.body).toHaveTextContent('0% vs Target');
-    expect(screen.getByText('Total Commercial Valuation:')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Negotiation History & Round Audit' }));
-    expect(screen.getByText('Governance History Summary:')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.totalCommercialValuation))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.negotiationHistoryRoundAudit) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsNegotiationWorkspace.governanceHistorySummary))).toBeInTheDocument();
     expect(screen.queryByText('RC-01')).not.toBeInTheDocument();
   });
 });

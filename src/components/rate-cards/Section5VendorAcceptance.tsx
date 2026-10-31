@@ -18,6 +18,9 @@ import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
 import type { VendorAcceptanceItem, Section5Props } from "@app-types/components/rate-cards/Section5VendorAcceptance.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function Section5VendorAcceptance({
@@ -28,11 +31,11 @@ export default function Section5VendorAcceptance({
   vendorName = 'Ramakrishna Interiors',
   vendorCode = 'VND-0006',
   items = [
-    { id: '1', itemCode: 'INT-001', description: 'Gypsum False Ceiling', specification: 'Supply & install 12.5mm Saint-Gobain Gyproc board on GI framework', uom: 'SQFT', qty: 500, agreedRate: 100 },
-    { id: '2', itemCode: 'INT-002', description: 'Vitrified Tiles 2x2 ft', specification: 'Kajaria 600x600mm double charged vitrified floor tiles with epoxy grout', uom: 'SQFT', qty: 1000, agreedRate: 88 },
-    { id: '3', itemCode: 'INT-003', description: 'Modular Partitions', specification: 'Full height double-glazed aluminum partition with 10mm toughened glass', uom: 'SQFT', qty: 300, agreedRate: 315 },
-    { id: '4', itemCode: 'INT-004', description: 'Wooden Carpentry', specification: 'Commercial ply with 1mm Merino/Greenlam decorative laminate finish', uom: 'SQFT', qty: 250, agreedRate: 405 },
-    { id: '5', itemCode: 'INT-005', description: 'Painting (Premium Emulsion)', specification: 'Two coats Asian Paints Royale Luxury Emulsion over primer & wall putty', uom: 'SQFT', qty: 2000, agreedRate: 68 },
+    { id: '1', itemCode: 'INT-001', description: UI_STRINGS.common.gypsumFalseCeiling, specification: 'Supply & install 12.5mm Saint-Gobain Gyproc board on GI framework', uom: 'SQFT', qty: 500, agreedRate: 100 },
+    { id: '2', itemCode: 'INT-002', description: UI_STRINGS.common.vitrifiedTiles2x2Ft, specification: 'Kajaria 600x600mm double charged vitrified floor tiles with epoxy grout', uom: 'SQFT', qty: 1000, agreedRate: 88 },
+    { id: '3', itemCode: 'INT-003', description: UI_STRINGS.common.modularPartitions, specification: 'Full height double-glazed aluminum partition with 10mm toughened glass', uom: 'SQFT', qty: 300, agreedRate: 315 },
+    { id: '4', itemCode: 'INT-004', description: UI_STRINGS.common.woodenCarpentry, specification: 'Commercial ply with 1mm Merino/Greenlam decorative laminate finish', uom: 'SQFT', qty: 250, agreedRate: 405 },
+    { id: '5', itemCode: 'INT-005', description: UI_STRINGS.common.paintingPremiumEmulsion, specification: 'Two coats Asian Paints Royale Luxury Emulsion over primer & wall putty', uom: 'SQFT', qty: 2000, agreedRate: 68 },
   ],
   agreement = {
     required: true,
@@ -95,41 +98,32 @@ export default function Section5VendorAcceptance({
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
-          <span className="w-8 h-8 rounded-full bg-[#0f52ba] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-            5
-          </span>
+          <span className="w-8 h-8 rounded-full bg-[#0f52ba] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">{UI_STRINGS.common.copydby8y8}</span>
           <div className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 leading-tight">
-                Vendor Acceptance (Vendor Portal View)
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Review the buyer-accepted rates and formalise your acceptance
-                {hasAgreement ? ' and execute the attached Rate Card Agreement' : ''} to route to Level 1 Project Approver.
-              </p>
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.vendorAcceptanceVendorPortalView}</h2>
+              <p className="text-sm text-slate-500 mt-1">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.reviewTheBuyerAcceptedRatesAndFormaliseYourAcceptance}{hasAgreement ? UI_STRINGS.componentsRateCardsSection5VendorAcceptance.andExecuteTheAttachedRateCardAgreement : ''}{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.toRouteToLevel1ProjectApprover}</p>
             </div>
-            <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold self-start sm:self-center">
-              Vendor Action Pending
-            </span>
+            <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold self-start sm:self-center">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.vendorActionPending}</span>
           </div>
         </div>
 
         {/* Metadata Banner */}
         <div className="bg-[#f8fafc] border border-slate-200 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <span className="text-slate-400 text-xs block font-bold uppercase">Rate Card ID</span>
+            <span className="text-slate-400 text-xs block font-bold uppercase">{UI_STRINGS.common.rateCardID}</span>
             <span className="font-bold text-slate-900 text-base">{rateCardId}</span>
           </div>
           <div>
-            <span className="text-slate-400 text-xs block font-bold uppercase">Category</span>
+            <span className="text-slate-400 text-xs block font-bold uppercase">{UI_STRINGS.common.category2}</span>
             <span className="text-slate-800 font-semibold">{category}</span>
           </div>
           <div>
-            <span className="text-slate-400 text-xs block font-bold uppercase">Contract Validity</span>
+            <span className="text-slate-400 text-xs block font-bold uppercase">{UI_STRINGS.common.contractValidity}</span>
             <span className="font-semibold text-slate-800">{validity}</span>
           </div>
           <div>
-            <span className="text-slate-400 text-xs block font-bold uppercase">Buyer Acceptance Date</span>
+            <span className="text-slate-400 text-xs block font-bold uppercase">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.buyerAcceptanceDate}</span>
             <span className="font-semibold text-blue-700">{buyerAcceptanceDate}</span>
           </div>
         </div>
@@ -145,15 +139,13 @@ export default function Section5VendorAcceptance({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-slate-900">
-                      {agreement.documentTitle || 'Master Rate Card Agreement'}
+                      {agreement.documentTitle || UI_STRINGS.componentsRateCardsSection5VendorAcceptance.masterRateCardAgreement}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white text-slate-700 border border-slate-200">
-                      {agreement.documentNumber || `MRA-${rateCardId}`}
+                      {agreement.documentNumber || interpolateUiString(UI_STRINGS.common.mRARateCardId, { "rateCardId": rateCardId })}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    Format: {agreement.type === 'UPLOAD' ? 'Uploaded Bilateral Document' : 'Generated Capex Master Template'} • Linked to revision v1.0
-                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.format}{agreement.type === 'UPLOAD' ? UI_STRINGS.componentsRateCardsSection5VendorAcceptance.uploadedBilateralDocument : UI_STRINGS.componentsRateCardsSection5VendorAcceptance.generatedCapexMasterTemplate}{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.linkedToRevisionV10}</div>
                 </div>
               </div>
 
@@ -163,7 +155,7 @@ export default function Section5VendorAcceptance({
                 className="h-9 px-4 bg-white border border-[#0f52ba] text-[#0f52ba] hover:bg-blue-50 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors shadow-2xs self-start sm:self-center"
               >
                 <Eye size={14} />
-                <span>Review Agreement Document</span>
+                <span>{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.reviewAgreementDocument}</span>
               </button>
             </div>
 
@@ -173,35 +165,29 @@ export default function Section5VendorAcceptance({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
                     <ShieldCheck size={16} className="text-[#0f52ba]" />
-                    <span>Authorized Vendor Digital Signature Execution</span>
+                    <span>{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.authorizedVendorDigitalSignatureExecution}</span>
                   </div>
-                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    Mandatory for Activation
-                  </span>
+                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.mandatoryForActivation}</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">
-                      Authorized Signatory Name
-                    </label>
+                    <label className="block text-slate-600 font-semibold mb-1">{UI_STRINGS.common.authorizedSignatoryName}</label>
                     <input
                       type="text"
                       value={signatoryName}
                       onChange={(e) => setSignatoryName(e.target.value)}
-                      placeholder="Full Name of Authorized Representative"
+                      placeholder={UI_STRINGS.componentsRateCardsSection5VendorAcceptance.fullNameOfAuthorizedRepresentative}
                       className="w-full h-9 px-3 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#0f52ba] text-slate-800"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">
-                      Designation / Role
-                    </label>
+                    <label className="block text-slate-600 font-semibold mb-1">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.designationRole}</label>
                     <input
                       type="text"
                       value={signatoryDesignation}
                       onChange={(e) => setSignatoryDesignation(e.target.value)}
-                      placeholder="Managing Partner, Director, or Power of Attorney"
+                      placeholder={UI_STRINGS.componentsRateCardsSection5VendorAcceptance.managingPartnerDirectorOrPowerOfAttorney}
                       className="w-full h-9 px-3 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#0f52ba] text-slate-800"
                     />
                   </div>
@@ -215,9 +201,7 @@ export default function Section5VendorAcceptance({
                     onChange={(e) => setAuthorizedConsent(e.target.checked)}
                     className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#0f52ba] focus:ring-[#0f52ba]"
                   />
-                  <label htmlFor="consent-check" className="cursor-pointer leading-relaxed">
-                    I confirm that I am authorized to bind <strong>{vendorName}</strong> ({vendorCode}) to all commercial terms, rates, and conditions contained in this Agreement.
-                  </label>
+                  <label htmlFor="consent-check" className="cursor-pointer leading-relaxed">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.iConfirmThatIAmAuthorizedToBind}<strong>{vendorName}</strong>{UI_STRINGS.common.copy1b3t0c5}{vendorCode}{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.toAllCommercialTermsRatesAndConditionsContainedInThisAgreement}</label>
                 </div>
               </div>
             )}
@@ -242,30 +226,14 @@ export default function Section5VendorAcceptance({
             </colgroup>
             <thead>
               <tr className="bg-[#f8fafc] text-slate-700 border-b border-slate-200 font-bold text-xs uppercase tracking-wider">
-                <th style={{ width: '55px' }} className="py-3 px-3 text-center border-r border-slate-200">
-                  S.No.
-                </th>
-                <th style={{ width: '110px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                  Item Code
-                </th>
-                <th style={{ width: '195px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                  Item Description
-                </th>
-                <th style={{ width: '215px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">
-                  BOQ Description
-                </th>
-                <th style={{ width: '75px' }} className="py-3 px-2.5 text-center border-r border-slate-200 whitespace-normal break-words leading-tight">
-                  UOM
-                </th>
-                <th style={{ width: '90px' }} className="py-3 px-3 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                  Quantity
-                </th>
-                <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">
-                  Agreed Rate (₹)
-                </th>
-                <th style={{ width: '145px' }} className="py-3 px-3.5 text-right whitespace-normal break-words leading-tight">
-                  Total (₹)
-                </th>
+                <th style={{ width: '55px' }} className="py-3 px-3 text-center border-r border-slate-200">{UI_STRINGS.common.sNo2}</th>
+                <th style={{ width: '110px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.itemCode}</th>
+                <th style={{ width: '195px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.itemDescription}</th>
+                <th style={{ width: '215px' }} className="py-3 px-3.5 border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.bOQDescription}</th>
+                <th style={{ width: '75px' }} className="py-3 px-2.5 text-center border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.uOM}</th>
+                <th style={{ width: '90px' }} className="py-3 px-3 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.quantity}</th>
+                <th style={{ width: '145px' }} className="py-3 px-3.5 text-right border-r border-slate-200 whitespace-normal break-words leading-tight">{UI_STRINGS.common.agreedRate}</th>
+                <th style={{ width: '145px' }} className="py-3 px-3.5 text-right whitespace-normal break-words leading-tight">{UI_STRINGS.common.total}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
@@ -280,7 +248,7 @@ export default function Section5VendorAcceptance({
                       {it.itemCode}
                     </td>
                     <td style={{ width: '195px' }} className="py-2.5 px-3.5 border-r border-slate-100 overflow-hidden">
-                      <LongTextCell text={it.description} title={`Item: ${it.itemCode} — Item Description`} subtitle="Core Master Description" maxWidth="100%" />
+                      <LongTextCell text={it.description} title={interpolateUiString(UI_STRINGS.componentsRateCardsSection5VendorAcceptance.itemItemCodeItemDescription, { "itemCode": it.itemCode })} subtitle={UI_STRINGS.componentsRateCardsSection5VendorAcceptance.coreMasterDescription} maxWidth="100%" />
                     </td>
                     <td style={{ width: '215px' }} className="py-2 px-3 border-r border-slate-100">
                       <BoqDescriptionCell
@@ -299,11 +267,9 @@ export default function Section5VendorAcceptance({
                     <td style={{ width: '90px' }} className="py-2.5 px-3 text-right text-slate-700 font-semibold border-r border-slate-100 font-mono whitespace-nowrap">
                       {it.qty.toLocaleString()}
                     </td>
-                    <td style={{ width: '145px' }} className="py-2.5 px-3.5 text-right font-bold text-slate-800 border-r border-slate-100 font-mono whitespace-nowrap">
-                      ₹ {it.agreedRate.toLocaleString()}
+                    <td style={{ width: '145px' }} className="py-2.5 px-3.5 text-right font-bold text-slate-800 border-r border-slate-100 font-mono whitespace-nowrap">{UI_STRINGS.common.copy1g8b5tg}{it.agreedRate.toLocaleString()}
                     </td>
-                    <td style={{ width: '145px' }} className="py-2.5 px-3.5 text-right font-bold text-slate-900 font-mono whitespace-nowrap">
-                      ₹ {lineAmt.toLocaleString()}
+                    <td style={{ width: '145px' }} className="py-2.5 px-3.5 text-right font-bold text-slate-900 font-mono whitespace-nowrap">{UI_STRINGS.common.copy1g8b5tg}{lineAmt.toLocaleString()}
                     </td>
                   </tr>
                 );
@@ -311,14 +277,9 @@ export default function Section5VendorAcceptance({
             </tbody>
             <tfoot>
               <tr className="bg-slate-100 font-bold border-t-2 border-slate-300 text-sm">
-                <td colSpan={6} className="py-3 px-3.5 text-slate-800 text-right uppercase tracking-wider text-xs border-r border-slate-200">
-                  Total Contract Valuation:
-                </td>
-                <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-slate-500 text-xs border-r border-slate-200">
-                  Agreed Sum
-                </td>
-                <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-[#0f52ba] font-extrabold text-base font-mono whitespace-nowrap">
-                  ₹ {total.toLocaleString()}
+                <td colSpan={6} className="py-3 px-3.5 text-slate-800 text-right uppercase tracking-wider text-xs border-r border-slate-200">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.totalContractValuation}</td>
+                <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-slate-500 text-xs border-r border-slate-200">{UI_STRINGS.common.agreedSum}</td>
+                <td style={{ width: '145px' }} className="py-3 px-3.5 text-right text-[#0f52ba] font-extrabold text-base font-mono whitespace-nowrap">{UI_STRINGS.common.copy1g8b5tg}{total.toLocaleString()}
                 </td>
               </tr>
             </tfoot>
@@ -327,14 +288,13 @@ export default function Section5VendorAcceptance({
 
         {/* Vendor Remarks */}
         <div className="space-y-1.5">
-          <label className="block text-sm font-semibold text-slate-700">
-            Vendor Remarks <span className="text-slate-400 font-normal">(Optional)</span>
+          <label className="block text-sm font-semibold text-slate-700">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.vendorRemarks}<span className="text-slate-400 font-normal">{UI_STRINGS.common.optional}</span>
           </label>
           <input
             type="text"
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            placeholder="Add any formal remarks, acknowledgments, or exceptions here..."
+            placeholder={UI_STRINGS.componentsRateCardsSection5VendorAcceptance.addAnyFormalRemarksAcknowledgmentsOrExceptionsHere}
             className="w-full h-10 px-3 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f52ba] text-slate-800 shadow-2xs"
           />
         </div>
@@ -342,18 +302,14 @@ export default function Section5VendorAcceptance({
 
       {/* Actions (Standard 40-44px buttons) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-slate-200">
-        <div className="text-xs text-slate-500 font-medium">
-          Sequential Routing: Vendor Acceptance moves request directly to <strong>Level 1: Project Approver</strong>.
-        </div>
+        <div className="text-xs text-slate-500 font-medium">{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.sequentialRoutingVendorAcceptanceMovesRequestDirectlyTo}<strong>{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.level1ProjectApprover}</strong>{UI_STRINGS.common.copyby08hd}</div>
 
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleReject}
             className="h-11 px-5 border border-red-300 text-red-600 hover:bg-red-50 rounded-lg font-semibold text-sm transition-colors shadow-2xs"
-          >
-            Reject with Comments
-          </button>
+          >{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.rejectWithComments}</button>
           <button
             type="button"
             onClick={handleAccept}
@@ -366,15 +322,15 @@ export default function Section5VendorAcceptance({
             {accepted ? (
               <>
                 <CheckCircle2 size={16} />
-                <span>Rate Card Accepted & Routed to Project Approver ✓</span>
+                <span>{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.rateCardAcceptedRoutedToProjectApprover}</span>
               </>
             ) : requiresSignature && authorizedConsent && signatoryName.trim() ? (
               <>
                 <ShieldCheck size={16} />
-                <span>Accept Terms & Digitally Sign Agreement</span>
+                <span>{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptTermsDigitallySignAgreement}</span>
               </>
             ) : (
-              <span>Accept Rate Card Schedule</span>
+              <span>{UI_STRINGS.componentsRateCardsSection5VendorAcceptance.acceptRateCardSchedule}</span>
             )}
           </button>
         </div>

@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import BoqLineDetailPage from '../src/app/(app)/boq/line/[id]/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockBack = jest.fn();
 let mockParams: Record<string, string> = { id: 'line-1' };
@@ -63,37 +67,37 @@ describe('BOQ line detail page', () => {
 
   it('renders full line, engineering cost, classification, diagnostics and traceability details', async () => {
     render(<BoqLineDetailPage />);
-    expect(await screen.findByRole('heading', { name: 'Line Item #5: Mild Steel Frame' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.lineItemLineNumberValue2) })).toBeInTheDocument();
     expect(screen.getByText(/hot dip galvanized/)).toBeInTheDocument();
-    expect(screen.getByText('Original Uploaded Description')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.originalUploadedDescription))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.copyezvv42, '', true))).toBeInTheDocument();
     expect(screen.getByText('Raw: kg')).toBeInTheDocument();
-    expect(screen.getAllByText('₹ 350').length).toBeGreaterThan(0);
-    expect(screen.getByText('Line-Item Cost Breakdown')).toBeInTheDocument();
-    expect(screen.getByText('Material Cost')).toBeInTheDocument();
-    expect(screen.getByText('Labour Cost')).toBeInTheDocument();
-    expect(screen.getByText('Other Charges')).toBeInTheDocument();
-    expect(screen.getByText('Contractor Margin')).toBeInTheDocument();
-    expect(screen.getAllByText(/300/).length).toBeGreaterThan(0);
-    expect(screen.getByText('92% Confidence')).toBeInTheDocument();
-    expect(screen.getByText('✓ Benchmark Eligible')).toBeInTheDocument();
+    expect(screen.getAllByText(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: `${UI_STRINGS.common.indianRupeeSymbol} `, amount: 350 })).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.lineItemCostBreakdown))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.materialCost))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.labourCost))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.otherCharges))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.contractorMargin))).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveTextContent('300');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.roundConfidence))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.benchmarkEligible))).toBeInTheDocument();
     expect(screen.getByText('Dimension missing')).toBeInTheDocument();
-    expect(screen.getByText('Confirm finish')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1))).toBeInTheDocument();
     expect(screen.getByText('Imported from legacy BOQ')).toBeInTheDocument();
-    expect(screen.getByText(/Sheet: Items/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.sheetSourceSheet))).toBeInTheDocument();
     expect(screen.getAllByText('BOQ-001').length).toBeGreaterThan(0);
     expect(screen.getByText('Plant Structural Works')).toBeInTheDocument();
     expect(screen.getByText('North Plant (NP-01)')).toBeInTheDocument();
     expect(screen.getByText(/CC-01/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Return to BOQ' })).toHaveAttribute('href', '/boq/studio?id=boq-1');
-    expect(screen.getByRole('link', { name: 'View in BOQ Workspace' })).toHaveAttribute('href', '/boq/studio?id=boq-1');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.returnToBOQ) })).toHaveAttribute('href', '/boq/studio?id=boq-1');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.viewInBOQWorkspace) })).toHaveAttribute('href', '/boq/studio?id=boq-1');
 
     jest.useFakeTimers();
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.copy) }));
     expect(mockClipboardWrite).toHaveBeenCalledWith(richLine.specification);
-    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.copied) })).toBeInTheDocument();
     act(() => jest.advanceTimersByTime(2000));
-    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.copy) })).toBeInTheDocument();
     jest.useRealTimers();
   });
 
@@ -106,18 +110,18 @@ describe('BOQ line detail page', () => {
     };
     global.fetch = jest.fn().mockResolvedValue(response({ line: legacyLine }));
     render(<BoqLineDetailPage />);
-    expect(await screen.findByRole('heading', { name: 'Line Item #0: Legacy item' })).toBeInTheDocument();
-    expect(screen.getByText('No technical specification text provided for this line.')).toBeInTheDocument();
-    expect(screen.getByText('Component estimate unavailable for this legacy rate. Total unit cost is maintained at ₹ 50.')).toBeInTheDocument();
-    expect(screen.getAllByText('₹ 100').length).toBeGreaterThan(0);
-    expect(screen.getByText('Verified Baseline')).toBeInTheDocument();
-    expect(screen.getByText('⚠ Non-benchmark')).toBeInTheDocument();
-    expect(screen.getByText('Engineered Cost')).toBeInTheDocument();
-    expect(screen.getByText('Method: Standard')).toBeInTheDocument();
-    expect(screen.getByText('Rule compliant')).toBeInTheDocument();
-    expect(screen.getAllByText('NOS').length).toBeGreaterThan(0);
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.lineItemLineNumberValue2) })).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.noTechnicalSpecificationTextProvidedForThisLine))).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppBoqLineIdPage.componentEstimateUnavailableForThisLegacyRateTotalUnitCostIsMaintainedAt, { amount: 50 }))).toBeInTheDocument();
+    expect(screen.getAllByText(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: `${UI_STRINGS.common.indianRupeeSymbol} `, amount: 100 })).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.verifiedBaseline))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.nonBenchmark))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.engineeredCost))).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppBoqLineIdPage.methodValue, { value: UI_STRINGS.common.standard }))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.ruleCompliant))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.nOS)).length).toBeGreaterThan(0);
     expect(screen.getByText('Legacy scope')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Return to BOQ' })).toHaveAttribute('href', '/boq/revision-2');
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.returnToBOQ) })).toHaveAttribute('href', '/boq/revision-2');
   });
 
   it('handles zero quantities and missing benchmark, classification and import values', async () => {
@@ -133,32 +137,32 @@ describe('BOQ line detail page', () => {
     };
     global.fetch = jest.fn().mockResolvedValue(response({ data: { line: minimalLine } }));
     render(<BoqLineDetailPage />);
-    expect(await screen.findByRole('heading', { name: 'Line Item #1: Unpriced allowance' })).toBeInTheDocument();
-    expect(screen.getByText('Quantity required to compute line total')).toBeInTheDocument();
-    expect(screen.getByText('— (Pending Qty)')).toBeInTheDocument();
-    expect(screen.getByText(/Rate:/)).toHaveTextContent('₹ 20');
-    expect(screen.getByText('Rule compliant')).toBeInTheDocument();
-    expect(screen.getByText('Commercial Package')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Return to BOQ' })).toHaveAttribute('href', '/boq');
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.lineItemLineNumberValue2) })).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.quantityRequiredToComputeLineTotal))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.pendingQty))).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppBoqLineIdPage.rateToLocaleString, { toLocaleString: '20' }))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.ruleCompliant))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.commercialPackage))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.returnToBOQ) })).toHaveAttribute('href', '/boq');
   });
 
   it('shows not-found states for failed, missing and unavailable line records', async () => {
     global.fetch = jest.fn().mockResolvedValue(response({ error: 'Access denied' }, false));
     const failed = render(<BoqLineDetailPage />);
-    expect(await screen.findByText('Line Item Not Found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.lineItemNotFound))).toBeInTheDocument();
     expect(screen.getByText('Access denied')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Go Back' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.goBack) }));
     expect(mockBack).toHaveBeenCalled();
     failed.unmount();
 
     global.fetch = jest.fn().mockResolvedValue(response({}, false));
     const genericFailure = render(<BoqLineDetailPage />);
-    expect(await screen.findByText('Failed to load line item details')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadLineItemDetails))).toBeInTheDocument();
     genericFailure.unmount();
 
     global.fetch = jest.fn().mockResolvedValue(response({}));
     const missing = render(<BoqLineDetailPage />);
-    expect(await screen.findByText('The requested BOQ line item does not exist or you do not have permission to view it.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.theRequestedBOQLineItemDoesNotExistOrYouDoNotHavePermissionToViewIt))).toBeInTheDocument();
     missing.unmount();
 
     global.fetch = jest.fn().mockRejectedValue(new Error('line service offline'));
@@ -167,13 +171,13 @@ describe('BOQ line detail page', () => {
 
     global.fetch = jest.fn().mockRejectedValue({});
     render(<BoqLineDetailPage />);
-    expect(await screen.findByText('An unexpected error occurred')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred))).toBeInTheDocument();
   });
 
   it('stays in loading state and skips the request when no line id exists', () => {
     mockParams = {};
     render(<BoqLineDetailPage />);
-    expect(screen.getByText('Loading line item details...')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqLineIdPage.loadingLineItemDetails))).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });

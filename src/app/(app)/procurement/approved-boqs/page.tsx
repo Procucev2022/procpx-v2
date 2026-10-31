@@ -8,6 +8,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function ApprovedBoqsPage() {
   const [loading, setLoading] = useState(true);
@@ -38,19 +41,17 @@ export default function ApprovedBoqsPage() {
     <div>
       <PageHeader
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'Approved BOQs' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.common.approvedBOQs },
         ]}
-        title="Approved Commercial Baselines — Sourcing Queue"
-        description="Controlled, client-approved BOQ revisions ready for RFQ packaging, supplier bidding, and rate discovery."
+        title={UI_STRINGS.appAppProcurementApprovedBoqsPage.approvedCommercialBaselinesSourcingQueue}
+        description={UI_STRINGS.appAppProcurementApprovedBoqsPage.controlledClientApprovedBOQRevisionsReadyForRFQPackagingSupplierBiddingAndRateDiscovery}
         actions={
           <div style={{ display: 'flex', gap: 10 }}>
             <Link href="/procurement/rfqs" className="btn btn-secondary">
-              <FileText size={16} /> View All RFQs
-            </Link>
+              <FileText size={16} />{UI_STRINGS.appAppProcurementApprovedBoqsPage.viewAllRFQs}</Link>
             <Link href="/procurement/rfqs/new" className="btn btn-primary">
-              <Plus size={16} /> Create New RFQ
-            </Link>
+              <Plus size={16} />{UI_STRINGS.common.createNewRFQ}</Link>
           </div>
         }
       />
@@ -71,13 +72,8 @@ export default function ApprovedBoqsPage() {
       >
         <ShieldCheck size={24} style={{ color: '#166534', flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <strong style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-            Governance-Locked Commercial Baselines:
-          </strong>
-          <div style={{ fontSize: 13, marginTop: 2, color: '#15803d' }}>
-            All quantities, descriptions, and benchmark budgets in approved revisions are strictly immutable.
-            Procurement teams can package lines into competitive RFQs without manual re-keying or discrepancies.
-          </div>
+          <strong style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.governanceLockedCommercialBaselines}</strong>
+          <div style={{ fontSize: 13, marginTop: 2, color: '#15803d' }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.allQuantitiesDescriptionsAndBenchmarkBudgetsInApprovedRevisionsAreStrictlyImmutableProcurementTeamsCanPackageLinesIntoCompetitiveRFQsWithoutManualReKeyingOrDiscrepancies}</div>
         </div>
       </div>
 
@@ -87,7 +83,7 @@ export default function ApprovedBoqsPage() {
           type="text"
           className="input"
           style={{ maxWidth: 440 }}
-          placeholder="Search project name, project code, or revision..."
+          placeholder={UI_STRINGS.appAppProcurementApprovedBoqsPage.searchProjectNameProjectCodeOrRevision}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -95,22 +91,22 @@ export default function ApprovedBoqsPage() {
 
       {/* Table Card */}
       <Card
-        title={`Commercial Baselines Available (${approvedBoqs.length})`}
-        subtitle="Approved by Project Approver and released to Procurement"
+        title={interpolateUiString(UI_STRINGS.appAppProcurementApprovedBoqsPage.commercialBaselinesAvailableLength, { "length": approvedBoqs.length })}
+        subtitle={UI_STRINGS.appAppProcurementApprovedBoqsPage.approvedByProjectApproverAndReleasedToProcurement}
         noPadding
       >
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            <div style={{ fontSize: 13, color: '#64748b' }}>Loading approved commercial baselines...</div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.loadingApprovedCommercialBaselines}</div>
           </div>
         ) : approvedBoqs.length === 0 ? (
           <div style={{ padding: 32 }}>
             <EmptyState
               icon={<ClipboardCheck size={36} strokeWidth={1.5} color="#94a3b8" />}
-              title="No Approved BOQs Found"
-              description="BOQs must be approved by the Project Approver to enter the procurement sourcing queue."
-              actionText="View Projects"
+              title={UI_STRINGS.appAppProcurementApprovedBoqsPage.noApprovedBOQsFound}
+              description={UI_STRINGS.appAppProcurementApprovedBoqsPage.bOQsMustBeApprovedByTheProjectApproverToEnterTheProcurementSourcingQueue}
+              actionText={UI_STRINGS.appAppProcurementApprovedBoqsPage.viewProjects}
               actionHref="/projects"
             />
           </div>
@@ -119,16 +115,16 @@ export default function ApprovedBoqsPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Project Name</th>
-                  <th style={{ width: 110 }}>Project Code</th>
-                  <th style={{ width: 120 }}>Location</th>
-                  <th style={{ width: 150 }}>Approved Revision</th>
-                  <th style={{ width: 160 }}>Approval Date & By</th>
-                  <th>Categories</th>
-                  <th style={{ width: 90 }}>Lines</th>
-                  <th style={{ width: 150, textAlign: 'right' }}>Benchmark Value</th>
-                  <th style={{ width: 110 }}>Active RFQs</th>
-                  <th style={{ width: 220, textAlign: 'right' }}>Sourcing Action</th>
+                  <th>{UI_STRINGS.common.projectName}</th>
+                  <th style={{ width: 110 }}>{UI_STRINGS.common.projectCode}</th>
+                  <th style={{ width: 120 }}>{UI_STRINGS.common.location}</th>
+                  <th style={{ width: 150 }}>{UI_STRINGS.common.approvedRevision}</th>
+                  <th style={{ width: 160 }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.approvalDateBy}</th>
+                  <th>{UI_STRINGS.common.categories}</th>
+                  <th style={{ width: 90 }}>{UI_STRINGS.common.lines3}</th>
+                  <th style={{ width: 150, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.benchmarkValue}</th>
+                  <th style={{ width: 110 }}>{UI_STRINGS.common.activeRFQs}</th>
+                  <th style={{ width: 220, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.sourcingAction}</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,40 +134,36 @@ export default function ApprovedBoqsPage() {
                       <div style={{ fontWeight: 600, color: '#0f172a' }}>{boq.projectName}</div>
                     </td>
                     <td className="font-mono text-muted">{boq.projectCode}</td>
-                    <td style={{ color: '#334155' }}>{boq.location || '—'}</td>
+                    <td style={{ color: '#334155' }}>{boq.location || UI_STRINGS.common.copy4s9bsz}</td>
                     <td>
                       <span className="badge badge-approved font-mono" style={{ fontWeight: 700 }}>
-                        {boq.approvedRevisionCode} (LOCKED)
-                      </span>
+                        {boq.approvedRevisionCode}{UI_STRINGS.appAppProcurementApprovedBoqsPage.lOCKED}</span>
                     </td>
                     <td>
                       <div style={{ fontSize: 12, fontWeight: 500, color: '#0f172a' }}>
-                        {boq.approvedAt ? new Date(boq.approvedAt).toLocaleDateString() : '—'}
+                        {boq.approvedAt ? new Date(boq.approvedAt).toLocaleDateString() : UI_STRINGS.common.copy4s9bsz}
                       </div>
-                      <div className="text-muted" style={{ fontSize: 11 }}>
-                        by {boq.approvedBy}
+                      <div className="text-muted" style={{ fontSize: 11 }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.by}{boq.approvedBy}
                       </div>
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {boq.categories.map((c: any, idx: number) => (
                           <span key={idx} className="badge badge-draft" style={{ fontSize: 11 }}>
-                            {c.category} ({c.lineCount})
-                          </span>
+                            {c.category}{UI_STRINGS.common.copy1b3t0c5}{c.lineCount}{UI_STRINGS.common.copyc7zu6c}</span>
                         ))}
                       </div>
                     </td>
                     <td>
-                      <strong>{boq.totalLines} lines</strong>
+                      <strong>{boq.totalLines}{UI_STRINGS.common.lines2}</strong>
                     </td>
-                    <td style={{ fontWeight: 700, textAlign: 'right', color: '#1e40af' }}>
-                      ₹ {boq.estimatedBenchmarkValue?.toLocaleString()}
+                    <td style={{ fontWeight: 700, textAlign: 'right', color: '#1e40af' }}>{UI_STRINGS.common.copy1g8b5tg}{boq.estimatedBenchmarkValue?.toLocaleString()}
                     </td>
                     <td>
                       {boq.rfqCount > 0 ? (
-                        <span className="badge badge-info">{boq.rfqCount} RFQs</span>
+                        <span className="badge badge-info">{boq.rfqCount}{UI_STRINGS.appAppProcurementApprovedBoqsPage.rFQs}</span>
                       ) : (
-                        <span className="badge badge-draft">None</span>
+                        <span className="badge badge-draft">{UI_STRINGS.common.none}</span>
                       )}
                     </td>
                     <td style={{ textAlign: 'right' }}>
@@ -181,14 +173,12 @@ export default function ApprovedBoqsPage() {
                           onClick={() => setSelectedBoq(selectedBoq?.id === boq.id ? null : boq)}
                           className="btn btn-secondary btn-sm"
                         >
-                          {selectedBoq?.id === boq.id ? 'Hide Scope' : 'Inspect Scope'}
+                          {selectedBoq?.id === boq.id ? UI_STRINGS.appAppProcurementApprovedBoqsPage.hideScope : UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope}
                         </button>
                         <Link
                           href={`/procurement/rfqs/new?revisionId=${boq.id}&projectId=${boq.projectId}`}
                           className="btn btn-primary btn-sm"
-                        >
-                          Create RFQ →
-                        </Link>
+                        >{UI_STRINGS.appAppProcurementApprovedBoqsPage.createRFQ}</Link>
                       </div>
                     </td>
                   </tr>
@@ -203,15 +193,13 @@ export default function ApprovedBoqsPage() {
       {selectedBoq && (
         <div style={{ marginTop: 24 }}>
           <Card
-            title={`Baseline Scope Inspection: ${selectedBoq.projectName} (${selectedBoq.approvedRevisionCode})`}
-            subtitle="Quantities, descriptions, and benchmark rates are locked and inherited into your RFQ"
+            title={interpolateUiString(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode, { "projectName": selectedBoq.projectName, "approvedRevisionCode": selectedBoq.approvedRevisionCode })}
+            subtitle={UI_STRINGS.appAppProcurementApprovedBoqsPage.quantitiesDescriptionsAndBenchmarkRatesAreLockedAndInheritedIntoYourRFQ}
             action={
               <Link
                 href={`/procurement/rfqs/new?revisionId=${selectedBoq.id}&projectId=${selectedBoq.projectId}`}
                 className="btn btn-primary btn-sm"
-              >
-                Package into RFQ →
-              </Link>
+              >{UI_STRINGS.appAppProcurementApprovedBoqsPage.packageIntoRFQ}</Link>
             }
             noPadding
           >
@@ -219,13 +207,13 @@ export default function ApprovedBoqsPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ width: 80 }}>S.No.</th>
-                    <th>Item Description</th>
-                    <th style={{ width: 140 }}>Category</th>
-                    <th style={{ width: 80 }}>UOM</th>
-                    <th style={{ width: 120, textAlign: 'right' }}>Quantity (Locked)</th>
-                    <th style={{ width: 130, textAlign: 'right' }}>Benchmark Rate</th>
-                    <th style={{ width: 140, textAlign: 'right' }}>Benchmark Amount</th>
+                    <th style={{ width: 80 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th>{UI_STRINGS.common.itemDescription}</th>
+                    <th style={{ width: 140 }}>{UI_STRINGS.common.category2}</th>
+                    <th style={{ width: 80 }}>{UI_STRINGS.common.uOM}</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>{UI_STRINGS.common.quantityLocked}</th>
+                    <th style={{ width: 130, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.benchmarkRate}</th>
+                    <th style={{ width: 140, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementApprovedBoqsPage.benchmarkAmount}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -240,9 +228,8 @@ export default function ApprovedBoqsPage() {
                       </td>
                       <td>{l.uom}</td>
                       <td style={{ fontWeight: 700, textAlign: 'right' }}>{l.quantity}</td>
-                      <td style={{ textAlign: 'right' }}>₹ {l.benchmarkRate?.toLocaleString()}</td>
-                      <td style={{ fontWeight: 700, textAlign: 'right', color: '#1e40af' }}>
-                        ₹ {l.benchmarkAmount?.toLocaleString()}
+                      <td style={{ textAlign: 'right' }}>{UI_STRINGS.common.copytfdhmk}{l.benchmarkRate?.toLocaleString()}</td>
+                      <td style={{ fontWeight: 700, textAlign: 'right', color: '#1e40af' }}>{UI_STRINGS.common.copy1g8b5tg}{l.benchmarkAmount?.toLocaleString()}
                       </td>
                     </tr>
                   ))}

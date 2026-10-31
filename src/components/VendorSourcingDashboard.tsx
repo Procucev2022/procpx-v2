@@ -1,6 +1,7 @@
 'use client';
 // src/components/VendorSourcingDashboard.tsx
 // Comprehensive Vendor Sourcing Dashboard, RFQ Register, Negotiation & PPO Acceptance Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -32,6 +33,9 @@ import {
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
 import type { VendorSourcingDashboardProps } from "@app-types/components/VendorSourcingDashboard.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 
 export default function VendorSourcingDashboard({
@@ -80,7 +84,7 @@ export default function VendorSourcingDashboard({
       const res = await fetch(`/api/procurement/vendors/${vendorId}/dashboard`);
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch vendor dashboard data');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }));
       }
       setDashboardData(data);
     } catch (err: any) {
@@ -115,15 +119,15 @@ export default function VendorSourcingDashboard({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to accept PPO');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToAcceptPpo }));
 
-      setPpoSuccessMsg(`Purchase Order ${selectedPpo.ppoNumber} formally accepted! Status updated to PPO Accepted — Order Execution.`);
+      setPpoSuccessMsg(interpolateUiString(UI_STRINGS.componentsVendorSourcingDashboard.purchaseOrderPpoNumberAcceptedStatusUpdated, { ppoNumber: selectedPpo.ppoNumber }));
       await fetchDashboard();
       setTimeout(() => {
         setShowAcceptPpoModal(false);
       }, 1500);
     } catch (err: any) {
-      alert(`Error accepting PPO: ${err.message}`);
+      alert(interpolateUiString(UI_STRINGS.componentsVendorSourcingDashboard.errorAcceptingPPOMessage, { "message": err.message }));
     } finally {
       setSubmittingAcceptPpo(false);
     }
@@ -152,13 +156,13 @@ export default function VendorSourcingDashboard({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit clarification');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSubmitClarification }));
 
-      alert(`Issue recorded and routed to buyer without accepting PPO.`);
+      alert(UI_STRINGS.componentsVendorSourcingDashboard.issueRecordedAndRoutedToBuyerWithoutAcceptingPPO);
       setShowIssueModal(false);
       await fetchDashboard();
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      alert(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": err.message }));
     } finally {
       setSubmittingIssue(false);
     }
@@ -168,7 +172,7 @@ export default function VendorSourcingDashboard({
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
         <Clock className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
-        <p className="text-sm">Loading persistent Vendor Dashboard & Sourcing records...</p>
+        <p className="text-sm">{UI_STRINGS.componentsVendorSourcingDashboard.loadingPersistentVendorDashboardSourcingRecords}</p>
       </div>
     );
   }
@@ -177,7 +181,7 @@ export default function VendorSourcingDashboard({
     return (
       <div style={{ padding: 24, background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 8, color: '#991b1b' }}>
         <AlertTriangle className="w-5 h-5 mb-1 text-red-600" />
-        <div className="font-semibold text-sm">Failed to load Vendor Dashboard</div>
+        <div className="font-semibold text-sm">{UI_STRINGS.componentsVendorSourcingDashboard.failedToLoadVendorDashboard}</div>
         <div className="text-xs mt-1">{error}</div>
       </div>
     );
@@ -214,85 +218,73 @@ export default function VendorSourcingDashboard({
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Layers className="w-5 h-5 text-blue-600" />
-            Vendor Sourcing & Order Fulfillment Pipeline
-          </h2>
-          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-            Persisted counts derived directly from production database records
-          </span>
+            <Layers className="w-5 h-5 text-blue-600" />{UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline}</h2>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.componentsVendorSourcingDashboard.persistedCountsDerivedDirectlyFromProductionDatabaseRecords}</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
           {/* 1. New RFQs */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">New RFQs</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.newRFQs}</div>
             <div className="text-2xl font-extrabold text-slate-900 mt-1 font-mono">{counts.newRfqs || 0}</div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-amber-500" /> Awaiting initial quotation
-            </div>
+              <Clock className="w-3 h-3 text-amber-500" />{UI_STRINGS.componentsVendorSourcingDashboard.awaitingInitialQuotation}</div>
           </div>
 
           {/* 2. Quotations Due Soon */}
           <div className="bg-white border border-amber-200 rounded-xl p-4 shadow-xs bg-amber-50/30">
-            <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Quotations Due Soon</div>
+            <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.quotationsDueSoon}</div>
             <div className="text-2xl font-extrabold text-amber-900 mt-1 font-mono">{counts.quotesDueSoon || 0}</div>
             <div className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3 text-amber-600" /> Deadline within 72 hours
-            </div>
+              <AlertTriangle className="w-3 h-3 text-amber-600" />{UI_STRINGS.componentsVendorSourcingDashboard.deadlineWithin72Hours}</div>
           </div>
 
           {/* 3. Quotes Submitted */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quotes Submitted</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.quotesSubmitted}</div>
             <div className="text-2xl font-extrabold text-blue-600 mt-1 font-mono">{counts.quotesSubmitted || 0}</div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <FileCheck2 className="w-3 h-3 text-blue-500" /> Under technical evaluation
-            </div>
+              <FileCheck2 className="w-3 h-3 text-blue-500" />{UI_STRINGS.componentsVendorSourcingDashboard.underTechnicalEvaluation}</div>
           </div>
 
           {/* 4. Negotiations Awaiting Vendor */}
           <div className="bg-white border border-indigo-200 rounded-xl p-4 shadow-xs bg-indigo-50/30">
-            <div className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">Negotiations Pending</div>
+            <div className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">{UI_STRINGS.common.negotiationsPending}</div>
             <div className="text-2xl font-extrabold text-indigo-900 mt-1 font-mono">{counts.negotiationsAwaitingVendor || 0}</div>
             <div className="text-[11px] text-indigo-700 mt-1 flex items-center gap-1">
-              <MessageSquare className="w-3 h-3 text-indigo-600" /> Counteroffer response required
-            </div>
+              <MessageSquare className="w-3 h-3 text-indigo-600" />{UI_STRINGS.componentsVendorSourcingDashboard.counterofferResponseRequired}</div>
           </div>
 
           {/* 5. Final Offers Awaiting Buyer */}
           <div className="bg-white border border-purple-200 rounded-xl p-4 shadow-xs bg-purple-50/30">
-            <div className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">Final Offers Submitted</div>
+            <div className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.finalOffersSubmitted}</div>
             <div className="text-2xl font-extrabold text-purple-900 mt-1 font-mono">{counts.finalOffersAwaitingBuyer || 0}</div>
             <div className="text-[11px] text-purple-700 mt-1 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-purple-600" /> Pending Buyer Decision
-            </div>
+              <Clock className="w-3 h-3 text-purple-600" />{UI_STRINGS.componentsVendorSourcingDashboard.pendingBuyerDecision}</div>
           </div>
 
           {/* 6. Quotes Accepted — PPO Awaited */}
           <div className="bg-white border border-emerald-200 rounded-xl p-4 shadow-xs bg-emerald-50/30">
-            <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Accepted — PPO Awaited</div>
+            <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.acceptedPPOAwaited}</div>
             <div className="text-2xl font-extrabold text-emerald-700 mt-1 font-mono">{counts.quotesAcceptedPpoAwaited || 0}</div>
             <div className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-emerald-600" /> Buyer accepted commercial offer
-            </div>
+              <Sparkles className="w-3 h-3 text-emerald-600" />{UI_STRINGS.componentsVendorSourcingDashboard.buyerAcceptedCommercialOffer}</div>
           </div>
 
           {/* 7. PPOs Awaiting Vendor Acceptance */}
           <div className="bg-white border border-blue-200 rounded-xl p-4 shadow-xs bg-blue-50/40">
-            <div className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">PPOs Awaiting Acceptance</div>
+            <div className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.pPOsAwaitingAcceptance}</div>
             <div className="text-2xl font-extrabold text-blue-700 mt-1 font-mono">{counts.pposAwaitingAcceptance || 0}</div>
             <div className="text-[11px] text-blue-700 mt-1 flex items-center gap-1">
-              <AlertCircle className="w-3 h-3 text-blue-600" /> Action required: Formal vendor sign-off
-            </div>
+              <AlertCircle className="w-3 h-3 text-blue-600" />{UI_STRINGS.componentsVendorSourcingDashboard.actionRequiredFormalVendorSignOff}</div>
           </div>
 
           {/* 8. Accepted PPOs */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Accepted PPOs (Active)</div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{UI_STRINGS.componentsVendorSourcingDashboard.acceptedPPOsActive}</div>
             <div className="text-2xl font-extrabold text-emerald-800 mt-1 font-mono">{counts.acceptedPpos || 0}</div>
             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Order execution & fulfillment
-            </div>
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />{UI_STRINGS.componentsVendorSourcingDashboard.orderExecutionFulfillment}</div>
           </div>
         </div>
       </div>
@@ -301,16 +293,11 @@ export default function VendorSourcingDashboard({
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              RFQ Register & Negotiation Status
-            </h3>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '3px 0 0' }}>
-              Invited sourcing events with persisted dates, buyer decisions, responsible party, and action triggers
-            </p>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.componentsVendorSourcingDashboard.rFQRegisterNegotiationStatus}</h3>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '3px 0 0' }}>{UI_STRINGS.componentsVendorSourcingDashboard.invitedSourcingEventsWithPersistedDatesBuyerDecisionsResponsiblePartyAndActionTriggers}</p>
           </div>
           <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded font-semibold border border-slate-200">
-            {rfqRegister.length} Invited RFQs
-          </span>
+            {rfqRegister.length}{UI_STRINGS.componentsVendorSourcingDashboard.invitedRFQs}</span>
         </div>
 
         <div
@@ -327,45 +314,43 @@ export default function VendorSourcingDashboard({
             <thead>
               <tr>
                 {/* 1. RFQ Received Date */}
-                <th style={{ width: 135 }}>RFQ Received Date</th>
+                <th style={{ width: 135 }}>{UI_STRINGS.common.rFQReceivedDate}</th>
 
                 {/* 2. RFQ Reference */}
-                <th style={{ width: 155 }}>RFQ Reference</th>
+                <th style={{ width: 155 }}>{UI_STRINGS.common.rFQReference}</th>
 
                 {/* 3. Project / Package */}
-                <th style={{ width: 180 }}>Project / Package</th>
+                <th style={{ width: 180 }}>{UI_STRINGS.common.projectPackage}</th>
 
                 {/* 4. Buyer / Client */}
-                <th style={{ width: 145 }}>Buyer / Client</th>
+                <th style={{ width: 145 }}>{UI_STRINGS.common.buyerClient}</th>
 
                 {/* 5. Submission Deadline */}
-                <th style={{ width: 135 }}>Submission Deadline</th>
+                <th style={{ width: 135 }}>{UI_STRINGS.common.submissionDeadline}</th>
 
                 {/* 6. Commercial Summary */}
-                <th style={{ width: 150, textAlign: 'right' }}>Commercial Summary</th>
+                <th style={{ width: 150, textAlign: 'right' }}>{UI_STRINGS.common.commercialSummary}</th>
 
                 {/* 7. Quote Status */}
-                <th style={{ width: 120, textAlign: 'center' }}>Quote Status</th>
+                <th style={{ width: 120, textAlign: 'center' }}>{UI_STRINGS.common.quoteStatus}</th>
 
                 {/* 8. Buyer Decision Status */}
-                <th style={{ width: 175, textAlign: 'center' }}>Buyer Decision Status</th>
+                <th style={{ width: 175, textAlign: 'center' }}>{UI_STRINGS.common.buyerDecisionStatus}</th>
 
                 {/* 9. Last Activity */}
-                <th style={{ width: 135 }}>Last Activity</th>
+                <th style={{ width: 135 }}>{UI_STRINGS.common.lastActivity}</th>
 
                 {/* 10. Next Action / Responsible Party */}
-                <th style={{ width: 170 }}>Next Action / Party</th>
+                <th style={{ width: 170 }}>{UI_STRINGS.common.nextActionParty}</th>
 
                 {/* 11. Available Actions */}
-                <th style={{ width: 220, textAlign: 'right' }}>Available Actions</th>
+                <th style={{ width: 220, textAlign: 'right' }}>{UI_STRINGS.common.availableActions}</th>
               </tr>
             </thead>
             <tbody>
               {rfqRegister.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>
-                    No RFQs found for this vendor.
-                  </td>
+                  <td colSpan={11} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>{UI_STRINGS.componentsVendorSourcingDashboard.noRFQsFoundForThisVendor}</td>
                 </tr>
               ) : (
                 rfqRegister.map((r: any) => {
@@ -387,12 +372,12 @@ export default function VendorSourcingDashboard({
                         <div
                           className="cell-compact-text font-medium"
                           style={{ fontSize: 12 }}
-                          title={r.rfqReceivedDate ? new Date(r.rfqReceivedDate).toLocaleString() : 'Persisted Received Date'}
+                          title={r.rfqReceivedDate ? new Date(r.rfqReceivedDate).toLocaleString() : UI_STRINGS.common.persistedReceivedDate}
                         >
                           <Calendar size={12} className="inline mr-1 text-slate-400" />
                           <span>
                             {r.rfqReceivedDate
-                              ? new Date(r.rfqReceivedDate).toLocaleDateString('en-IN', {
+                              ? new Date(r.rfqReceivedDate).toLocaleDateString(I18N_CONFIG.defaultLocale, {
                                   day: '2-digit',
                                   month: 'short',
                                   year: 'numeric',
@@ -400,7 +385,7 @@ export default function VendorSourcingDashboard({
                                   minute: '2-digit',
                                   hour12: false,
                                 })
-                              : '—'}
+                              : UI_STRINGS.common.copy4s9bsz}
                           </span>
                         </div>
                       </td>
@@ -436,10 +421,9 @@ export default function VendorSourcingDashboard({
                         <div
                           className="cell-compact-text text-muted"
                           style={{ fontSize: 11, marginTop: 2 }}
-                          title={`${r.category} (${r.itemCount} BOQ lines)`}
+                          title={interpolateUiString(UI_STRINGS.componentsVendorSourcingDashboard.categoryItemCountBOQLines, { "category": r.category, "itemCount": r.itemCount })}
                         >
-                          {r.category} • {r.itemCount} lines
-                        </div>
+                          {r.category}{UI_STRINGS.common.copyko5tj9}{r.itemCount}{UI_STRINGS.common.lines2}</div>
                       </td>
 
                       {/* 4. Buyer / Client */}
@@ -459,17 +443,17 @@ export default function VendorSourcingDashboard({
                         <div
                           className="cell-compact-text font-medium"
                           style={{ fontSize: 12, color: isOverdue ? '#b91c1c' : '#334155' }}
-                          title={r.submissionDeadline ? new Date(r.submissionDeadline).toLocaleString() : 'No deadline'}
+                          title={r.submissionDeadline ? new Date(r.submissionDeadline).toLocaleString() : UI_STRINGS.componentsVendorSourcingDashboard.noDeadline}
                         >
                           <Clock size={12} className={`inline mr-1 ${isOverdue ? 'text-red-500' : 'text-amber-500'}`} />
                           <span>
                             {r.submissionDeadline
-                              ? new Date(r.submissionDeadline).toLocaleDateString('en-IN', {
+                              ? new Date(r.submissionDeadline).toLocaleDateString(I18N_CONFIG.defaultLocale, {
                                   day: '2-digit',
                                   month: 'short',
                                   year: 'numeric',
                                 })
-                              : '—'}
+                              : UI_STRINGS.common.copy4s9bsz}
                           </span>
                         </div>
                       </td>
@@ -481,22 +465,20 @@ export default function VendorSourcingDashboard({
                             <div
                               className="cell-compact-text font-mono font-bold"
                               style={{ color: '#059669', fontSize: 13, textAlign: 'right' }}
-                              title={`₹${r.permittedCommercial.latestQuoteTotal.toLocaleString('en-IN')}`}
-                            >
-                              ₹{r.permittedCommercial.latestQuoteTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                              title={interpolateUiString(UI_STRINGS.common.toLocaleString2, { "toLocaleString": r.permittedCommercial.latestQuoteTotal.toLocaleString(I18N_CONFIG.defaultLocale) })}
+                            >{UI_STRINGS.common.copy1g8b5tg}{r.permittedCommercial.latestQuoteTotal.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}
                             </div>
                             {r.permittedCommercial.counterOfferAmount && (
                               <div
                                 className="cell-compact-text"
                                 style={{ fontSize: 10, color: '#2563eb', textAlign: 'right' }}
-                                title={`Counter-offer: ₹${r.permittedCommercial.counterOfferAmount.toLocaleString('en-IN')}`}
-                              >
-                                Counter: ₹{r.permittedCommercial.counterOfferAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                                title={interpolateUiString(UI_STRINGS.componentsVendorSourcingDashboard.counterOfferToLocaleString, { "toLocaleString": r.permittedCommercial.counterOfferAmount.toLocaleString(I18N_CONFIG.defaultLocale) })}
+                              >{UI_STRINGS.componentsVendorSourcingDashboard.counter}{r.permittedCommercial.counterOfferAmount.toLocaleString(I18N_CONFIG.defaultLocale, { maximumFractionDigits: 0 })}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <span className="badge badge-warning" style={{ fontSize: 11 }}>Pending Quote</span>
+                          <span className="badge badge-warning" style={{ fontSize: 11 }}>{UI_STRINGS.common.pendingQuote}</span>
                         )}
                       </td>
 
@@ -517,7 +499,7 @@ export default function VendorSourcingDashboard({
                               : {}),
                           }}
                         >
-                          {r.quotationStatus === 'AWAITING_REVISED_QUOTE' ? 'Awaiting Revised Quote' : r.quotationStatus}
+                          {r.quotationStatus === 'AWAITING_REVISED_QUOTE' ? UI_STRINGS.componentsVendorSourcingDashboard.awaitingRevisedQuote : r.quotationStatus}
                         </span>
                       </td>
 
@@ -537,7 +519,7 @@ export default function VendorSourcingDashboard({
                           style={{ fontSize: 12 }}
                           title={r.lastActivityDate ? new Date(r.lastActivityDate).toLocaleString() : ''}
                         >
-                          {new Date(r.lastActivityDate).toLocaleDateString('en-IN', {
+                          {new Date(r.lastActivityDate).toLocaleDateString(I18N_CONFIG.defaultLocale, {
                             day: '2-digit',
                             month: 'short',
                             year: 'numeric',
@@ -579,10 +561,9 @@ export default function VendorSourcingDashboard({
                             href={`/vendor-portal/rfqs/${r.id}`}
                             className="btn btn-secondary btn-sm"
                             style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
-                            title="View Full RFQ Workspace"
+                            title={UI_STRINGS.componentsVendorSourcingDashboard.viewFullRFQWorkspace}
                           >
-                            <Eye size={12} style={{ marginRight: 3 }} /> View
-                          </Link>
+                            <Eye size={12} style={{ marginRight: 3 }} />{UI_STRINGS.componentsVendorSourcingDashboard.view}</Link>
 
                           {/* Open Negotiation */}
                           <button
@@ -590,10 +571,9 @@ export default function VendorSourcingDashboard({
                             onClick={() => setActiveNegotiatingRfq(r)}
                             className="btn btn-primary btn-sm"
                             style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
-                            title="Open Commercial Negotiation Workspace"
+                            title={UI_STRINGS.common.openCommercialNegotiationWorkspace}
                           >
-                            <TrendingDown size={12} style={{ marginRight: 3 }} /> Negotiate
-                          </button>
+                            <TrendingDown size={12} style={{ marginRight: 3 }} />{UI_STRINGS.componentsVendorSourcingDashboard.negotiate}</button>
 
                           {/* Chat / Clarify */}
                           <button
@@ -604,10 +584,9 @@ export default function VendorSourcingDashboard({
                             }}
                             className="btn btn-secondary btn-sm"
                             style={{ fontSize: 11, padding: '4px 8px', position: 'relative', whiteSpace: 'nowrap' }}
-                            title="Open RFQ Clarification Queries"
+                            title={UI_STRINGS.componentsVendorSourcingDashboard.openRFQClarificationQueries}
                           >
-                            <MessageSquare size={12} style={{ marginRight: 3 }} /> Clarify
-                            {r.unreadMessagesCount > 0 && (
+                            <MessageSquare size={12} style={{ marginRight: 3 }} />{UI_STRINGS.componentsVendorSourcingDashboard.clarify}{r.unreadMessagesCount > 0 && (
                               <span
                                 style={{
                                   position: 'absolute',
@@ -636,10 +615,9 @@ export default function VendorSourcingDashboard({
                               }}
                               className="btn btn-secondary btn-sm"
                               style={{ fontSize: 11, padding: '4px 8px', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', whiteSpace: 'nowrap' }}
-                              title="View Buyer Decision Details"
+                              title={UI_STRINGS.componentsVendorSourcingDashboard.viewBuyerDecisionDetails}
                             >
-                              <FileCheck2 size={12} style={{ marginRight: 3 }} /> Decision
-                            </button>
+                              <FileCheck2 size={12} style={{ marginRight: 3 }} />{UI_STRINGS.componentsVendorSourcingDashboard.decision}</button>
                           )}
 
                           {/* Accept PPO */}
@@ -649,10 +627,9 @@ export default function VendorSourcingDashboard({
                               onClick={() => openAcceptPpoModal(r.latestPpo)}
                               className="btn btn-sm"
                               style={{ fontSize: 11, padding: '4px 8px', background: '#059669', color: '#ffffff', fontWeight: 600, whiteSpace: 'nowrap' }}
-                              title="Review and Accept Purchase Order"
+                              title={UI_STRINGS.componentsVendorSourcingDashboard.reviewAndAcceptPurchaseOrder}
                             >
-                              <CheckCircle2 size={12} style={{ marginRight: 3 }} /> Accept PPO
-                            </button>
+                              <CheckCircle2 size={12} style={{ marginRight: 3 }} />{UI_STRINGS.componentsVendorSourcingDashboard.acceptPPO}</button>
                           )}
                         </div>
                       </td>
@@ -670,26 +647,19 @@ export default function VendorSourcingDashboard({
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <PackageCheck className="w-5 h-5 text-emerald-600" />
-              PPOs & Purchase Orders Awaiting Acceptance
-            </h3>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '3px 0 0' }}>
-              Formal commercial purchase orders issued by buyer. Acceptance requires authorized vendor confirmation.
-            </p>
+              <PackageCheck className="w-5 h-5 text-emerald-600" />{UI_STRINGS.componentsVendorSourcingDashboard.pPOsPurchaseOrdersAwaitingAcceptance}</h3>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '3px 0 0' }}>{UI_STRINGS.componentsVendorSourcingDashboard.formalCommercialPurchaseOrdersIssuedByBuyerAcceptanceRequiresAuthorizedVendorConfirmation}</p>
           </div>
           <span className="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded font-semibold border border-emerald-200">
-            {ppos.length} Issued Orders
-          </span>
+            {ppos.length}{UI_STRINGS.componentsVendorSourcingDashboard.issuedOrders}</span>
         </div>
 
         <div style={{ padding: 20 }}>
           {ppos.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 20px', color: '#94a3b8' }}>
               <PackageCheck className="w-12 h-12 mx-auto mb-2 opacity-40 text-slate-400" />
-              <div style={{ fontWeight: 600, fontSize: 14, color: '#475569' }}>No Purchase Orders Issued Yet</div>
-              <p style={{ fontSize: 12, maxWidth: 440, margin: '4px auto 0' }}>
-                Once the buyer finalizes commercial awards and issues a formal PPO contract, it will appear here for vendor acceptance.
-              </p>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#475569' }}>{UI_STRINGS.componentsVendorSourcingDashboard.noPurchaseOrdersIssuedYet}</div>
+              <p style={{ fontSize: 12, maxWidth: 440, margin: '4px auto 0' }}>{UI_STRINGS.componentsVendorSourcingDashboard.onceTheBuyerFinalizesCommercialAwardsAndIssuesAFormalPPOContractItWillAppearHereForVendorAcceptance}</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -719,45 +689,42 @@ export default function VendorSourcingDashboard({
                             }`}
                           >
                             {isAccepted
-                              ? 'PPO Accepted — Order Execution'
+                              ? UI_STRINGS.componentsVendorSourcingDashboard.pPOAcceptedOrderExecution
                               : isIssueRaised
-                              ? 'Issue Raised — Held for Buyer Resolution'
-                              : 'PPO Pending Vendor Acceptance'}
+                              ? UI_STRINGS.componentsVendorSourcingDashboard.issueRaisedHeldForBuyerResolution
+                              : UI_STRINGS.componentsVendorSourcingDashboard.pPOPendingVendorAcceptance}
                           </span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>
-                          Project: <strong>{ppo.project?.name || 'Project'}</strong> | RFQ Link:{' '}
-                          <span className="font-mono text-blue-600">{ppo.rfq?.rfqNumber || 'Direct Order'}</span>
+                        <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>{UI_STRINGS.common.project2}<strong>{ppo.project?.name || UI_STRINGS.common.project}</strong>{UI_STRINGS.componentsVendorSourcingDashboard.rFQLink}{' '}
+                          <span className="font-mono text-blue-600">{ppo.rfq?.rfqNumber || UI_STRINGS.componentsVendorSourcingDashboard.directOrder}</span>
                         </div>
                       </div>
 
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>Total Order Value:</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', fontFamily: 'monospace' }}>
-                          ₹ {ppo.totalValue?.toLocaleString()} ({ppo.currency || 'INR'})
-                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.totalOrderValue2}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', fontFamily: 'monospace' }}>{UI_STRINGS.common.copy1g8b5tg}{ppo.totalValue?.toLocaleString()}{UI_STRINGS.common.copy1b3t0c5}{ppo.currency || UI_STRINGS.common.iNR}{UI_STRINGS.common.copyc7zu6c}</div>
                       </div>
                     </div>
 
                     {/* Metadata columns */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, margin: '14px 0', fontSize: 12 }}>
                       <div>
-                        <span style={{ color: '#64748b', fontSize: 11 }}>PPO Issue Date:</span>
+                        <span style={{ color: '#64748b', fontSize: 11 }}>{UI_STRINGS.componentsVendorSourcingDashboard.pPOIssueDate}</span>
                         <div style={{ fontWeight: 600 }}>
                           {ppo.issuedAt ? new Date(ppo.issuedAt).toLocaleDateString() : new Date(ppo.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b', fontSize: 11 }}>Delivery Schedule:</span>
-                        <div style={{ fontWeight: 600 }}>{ppo.deliveryTerms || 'Within 30 calendar days'}</div>
+                        <span style={{ color: '#64748b', fontSize: 11 }}>{UI_STRINGS.componentsVendorSourcingDashboard.deliverySchedule}</span>
+                        <div style={{ fontWeight: 600 }}>{ppo.deliveryTerms || UI_STRINGS.componentsVendorSourcingDashboard.within30CalendarDays}</div>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b', fontSize: 11 }}>Delivery Location:</span>
-                        <div style={{ fontWeight: 600 }}>{ppo.project?.location || 'Designated project site'}</div>
+                        <span style={{ color: '#64748b', fontSize: 11 }}>{UI_STRINGS.componentsVendorSourcingDashboard.deliveryLocation}</span>
+                        <div style={{ fontWeight: 600 }}>{ppo.project?.location || UI_STRINGS.componentsVendorSourcingDashboard.designatedProjectSite}</div>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b', fontSize: 11 }}>Payment & Tax Terms:</span>
-                        <div style={{ fontWeight: 600 }}>{ppo.paymentTerms || 'Net 30 days'} ({ppo.taxDetails || 'GST 18%'})</div>
+                        <span style={{ color: '#64748b', fontSize: 11 }}>{UI_STRINGS.componentsVendorSourcingDashboard.paymentTaxTerms}</span>
+                        <div style={{ fontWeight: 600 }}>{ppo.paymentTerms || UI_STRINGS.componentsVendorSourcingDashboard.net30Days}{UI_STRINGS.common.copy1b3t0c5}{ppo.taxDetails || UI_STRINGS.componentsVendorSourcingDashboard.gST18}{UI_STRINGS.common.copyc7zu6c}</div>
                       </div>
                     </div>
 
@@ -765,10 +732,8 @@ export default function VendorSourcingDashboard({
                     {isAccepted && (
                       <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#065f46', fontWeight: 700 }}>
-                          <CheckCircle2 size={16} /> Accepted by Vendor Signatory: {ppo.vendorAcceptedBy} (v{ppo.vendorAcceptedVersion || 1})
-                        </div>
-                        <div style={{ color: '#047857', fontSize: 11, marginTop: 2 }}>
-                          Timestamp: {ppo.vendorAcceptedAt ? new Date(ppo.vendorAcceptedAt).toLocaleString() : 'Recorded'}
+                          <CheckCircle2 size={16} />{UI_STRINGS.componentsVendorSourcingDashboard.acceptedByVendorSignatory}{ppo.vendorAcceptedBy}{UI_STRINGS.componentsVendorSourcingDashboard.v}{ppo.vendorAcceptedVersion || 1}{UI_STRINGS.common.copyc7zu6c}</div>
+                        <div style={{ color: '#047857', fontSize: 11, marginTop: 2 }}>{UI_STRINGS.componentsVendorSourcingDashboard.timestamp}{ppo.vendorAcceptedAt ? new Date(ppo.vendorAcceptedAt).toLocaleString() : UI_STRINGS.common.recorded}
                         </div>
                       </div>
                     )}
@@ -776,33 +741,26 @@ export default function VendorSourcingDashboard({
                     {isIssueRaised && (
                       <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9f1239', fontWeight: 700 }}>
-                          <AlertTriangle size={16} /> Vendor Clarification / Issue Reported:
-                        </div>
-                        <div style={{ color: '#be123c', fontSize: 12, marginTop: 2 }}>
-                          "{ppo.vendorIssueRemarks}"
-                        </div>
-                        <div style={{ color: '#9f1239', fontSize: 10, marginTop: 2 }}>
-                          Logged at: {ppo.vendorIssueRaisedAt ? new Date(ppo.vendorIssueRaisedAt).toLocaleString() : 'Recorded'} — PPO acceptance held.
-                        </div>
+                          <AlertTriangle size={16} />{UI_STRINGS.componentsVendorSourcingDashboard.vendorClarificationIssueReported}</div>
+                        <div style={{ color: '#be123c', fontSize: 12, marginTop: 2 }}>{UI_STRINGS.common.copyau1tph}{ppo.vendorIssueRemarks}{UI_STRINGS.common.copyau1tph}</div>
+                        <div style={{ color: '#9f1239', fontSize: 10, marginTop: 2 }}>{UI_STRINGS.componentsVendorSourcingDashboard.loggedAt}{ppo.vendorIssueRaisedAt ? new Date(ppo.vendorIssueRaisedAt).toLocaleString() : UI_STRINGS.common.recorded}{UI_STRINGS.componentsVendorSourcingDashboard.pPOAcceptanceHeld}</div>
                       </div>
                     )}
 
                     {/* Order Lines preview */}
                     {ppo.lines && ppo.lines.length > 0 && (
                       <div style={{ marginTop: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>
-                          Contracted Scope & Agreed Rates ({ppo.lines.length} Line Items)
-                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorSourcingDashboard.contractedScopeAgreedRates}{ppo.lines.length}{UI_STRINGS.componentsVendorSourcingDashboard.lineItems}</div>
                         <div className="table-wrapper" style={{ maxHeight: 180, overflowY: 'auto' }}>
                           <table className="table enterprise-table" style={{ fontSize: 11 }}>
                             <thead>
                               <tr>
-                                <th>S.No.</th>
-                                <th>Item Description</th>
-                                <th>UOM</th>
-                                <th style={{ textAlign: 'right' }}>Quantity</th>
-                                <th style={{ textAlign: 'right' }}>Agreed Unit Rate</th>
-                                <th style={{ textAlign: 'right' }}>Line Total</th>
+                                <th>{UI_STRINGS.common.sNo2}</th>
+                                <th>{UI_STRINGS.common.itemDescription}</th>
+                                <th>{UI_STRINGS.common.uOM}</th>
+                                <th style={{ textAlign: 'right' }}>{UI_STRINGS.common.quantity}</th>
+                                <th style={{ textAlign: 'right' }}>{UI_STRINGS.componentsVendorSourcingDashboard.agreedUnitRate}</th>
+                                <th style={{ textAlign: 'right' }}>{UI_STRINGS.componentsVendorSourcingDashboard.lineTotal}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -817,9 +775,8 @@ export default function VendorSourcingDashboard({
                                   </td>
                                   <td>{pl.uom}</td>
                                   <td style={{ textAlign: 'right', fontWeight: 600 }}>{pl.orderedQuantity}</td>
-                                  <td style={{ textAlign: 'right' }}>₹ {pl.orderedUnitRate?.toLocaleString()}</td>
-                                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                                    ₹ {pl.totalOrderValue?.toLocaleString()}
+                                  <td style={{ textAlign: 'right' }}>{UI_STRINGS.common.copytfdhmk}{pl.orderedUnitRate?.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>{UI_STRINGS.common.copy1g8b5tg}{pl.totalOrderValue?.toLocaleString()}
                                   </td>
                                 </tr>
                               ))}
@@ -838,16 +795,14 @@ export default function VendorSourcingDashboard({
                           className="btn btn-secondary btn-sm"
                           style={{ fontSize: 12, color: '#b91c1c' }}
                         >
-                          <HelpCircle size={14} style={{ marginRight: 4 }} /> Request Clarification / Raise Issue
-                        </button>
+                          <HelpCircle size={14} style={{ marginRight: 4 }} />{UI_STRINGS.componentsVendorSourcingDashboard.requestClarificationRaiseIssue}</button>
                         <button
                           type="button"
                           onClick={() => openAcceptPpoModal(ppo)}
                           className="btn btn-primary btn-sm"
                           style={{ fontSize: 12, background: '#059669', borderColor: '#059669' }}
                         >
-                          <CheckCircle2 size={14} style={{ marginRight: 4 }} /> Accept PPO & Confirm Order
-                        </button>
+                          <CheckCircle2 size={14} style={{ marginRight: 4 }} />{UI_STRINGS.componentsVendorSourcingDashboard.acceptPPOConfirmOrder}</button>
                       </div>
                     )}
                   </div>
@@ -862,19 +817,14 @@ export default function VendorSourcingDashboard({
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Vendor Rate Card Register
-            </h3>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '3px 0 0' }}>
-              Master pricing agreements with pre-negotiated ceiling rates and validity schedules
-            </p>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.componentsVendorSourcingDashboard.vendorRateCardRegister}</h3>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '3px 0 0' }}>{UI_STRINGS.componentsVendorSourcingDashboard.masterPricingAgreementsWithPreNegotiatedCeilingRatesAndValiditySchedules}</p>
           </div>
           <Link
             href="/vendor-portal/rate-cards"
             className="btn btn-secondary btn-sm"
             style={{ fontSize: 11 }}
-          >
-            View Master Register <ExternalLink size={12} style={{ marginLeft: 4 }} />
+          >{UI_STRINGS.componentsVendorSourcingDashboard.viewMasterRegister}<ExternalLink size={12} style={{ marginLeft: 4 }} />
           </Link>
         </div>
 
@@ -882,36 +832,33 @@ export default function VendorSourcingDashboard({
           <table className="table enterprise-table" style={{ fontSize: 12 }}>
             <thead>
               <tr>
-                <th>Rate Card Ref</th>
-                <th>Title & Scope</th>
-                <th>Category</th>
-                <th>Valid From</th>
-                <th>Valid To</th>
-                <th>Items</th>
-                <th>Status</th>
+                <th>{UI_STRINGS.common.rateCardRef}</th>
+                <th>{UI_STRINGS.componentsVendorSourcingDashboard.titleScope}</th>
+                <th>{UI_STRINGS.common.category2}</th>
+                <th>{UI_STRINGS.common.validFrom}</th>
+                <th>{UI_STRINGS.common.validTo}</th>
+                <th>{UI_STRINGS.common.items4}</th>
+                <th>{UI_STRINGS.common.status}</th>
               </tr>
             </thead>
             <tbody>
               {rateCards.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#94a3b8' }}>
-                    No Rate Cards registered for this vendor.
-                  </td>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#94a3b8' }}>{UI_STRINGS.componentsVendorSourcingDashboard.noRateCardsRegisteredForThisVendor}</td>
                 </tr>
               ) : (
                 rateCards.map((rc: any) => (
                   <tr key={rc.id}>
                     <td className="font-mono font-bold text-primary">
-                      {rc.rateCardNumber} (v{rc.version})
-                    </td>
+                      {rc.rateCardNumber}{UI_STRINGS.componentsVendorSourcingDashboard.v}{rc.version}{UI_STRINGS.common.copyc7zu6c}</td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{rc.title}</div>
-                      <div style={{ fontSize: 11, color: '#64748b' }}>{rc.scope || 'Standard Scope'}</div>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>{rc.scope || UI_STRINGS.common.standardScope}</div>
                     </td>
                     <td><span className="badge badge-draft">{rc.category}</span></td>
                     <td>{new Date(rc.validFrom).toLocaleDateString()}</td>
                     <td>{new Date(rc.validTo).toLocaleDateString()}</td>
-                    <td style={{ fontWeight: 600 }}>{rc.items?.length || 0} items</td>
+                    <td style={{ fontWeight: 600 }}>{rc.items?.length || 0}{UI_STRINGS.common.items3}</td>
                     <td><span className="badge badge-approved">{rc.status}</span></td>
                   </tr>
                 ))
@@ -927,14 +874,11 @@ export default function VendorSourcingDashboard({
           <div className="modal" style={{ maxWidth: 620, width: '90%' }}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">Accept Purchase Order (PPO)</h3>
-                <p className="modal-subtitle">
-                  Order Ref: {selectedPpo.ppoNumber} | Value: ₹ {selectedPpo.totalValue?.toLocaleString()}
+                <h3 className="modal-title">{UI_STRINGS.componentsVendorSourcingDashboard.acceptPurchaseOrderPPO}</h3>
+                <p className="modal-subtitle">{UI_STRINGS.componentsVendorSourcingDashboard.orderRef}{selectedPpo.ppoNumber}{UI_STRINGS.componentsVendorSourcingDashboard.value}{selectedPpo.totalValue?.toLocaleString()}
                 </p>
               </div>
-              <button type="button" onClick={() => setShowAcceptPpoModal(false)} className="modal-close">
-                ×
-              </button>
+              <button type="button" onClick={() => setShowAcceptPpoModal(false)} className="modal-close">{UI_STRINGS.common.copymriixi}</button>
             </div>
 
             <form onSubmit={handleAcceptPpo}>
@@ -946,15 +890,15 @@ export default function VendorSourcingDashboard({
                 )}
 
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 12 }}>
-                  <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Order Acceptance Details:</div>
-                  <div>Buyer / Client: <strong>{selectedPpo.project?.name || 'Client Project'}</strong></div>
-                  <div>Delivery Terms: <strong>{selectedPpo.deliveryTerms || 'Site delivery'}</strong></div>
-                  <div>Payment Terms: <strong>{selectedPpo.paymentTerms || '30 days net'}</strong></div>
-                  <div>Agreed Total: <strong className="text-emerald-700 font-mono">₹ {selectedPpo.totalValue?.toLocaleString()}</strong></div>
+                  <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{UI_STRINGS.componentsVendorSourcingDashboard.orderAcceptanceDetails}</div>
+                  <div>{UI_STRINGS.componentsVendorSourcingDashboard.buyerClient}<strong>{selectedPpo.project?.name || UI_STRINGS.componentsVendorSourcingDashboard.clientProject}</strong></div>
+                  <div>{UI_STRINGS.componentsVendorSourcingDashboard.deliveryTerms}<strong>{selectedPpo.deliveryTerms || UI_STRINGS.componentsVendorSourcingDashboard.siteDelivery}</strong></div>
+                  <div>{UI_STRINGS.componentsVendorSourcingDashboard.paymentTerms}<strong>{selectedPpo.paymentTerms || UI_STRINGS.componentsVendorSourcingDashboard.copytyq0ce}</strong></div>
+                  <div>{UI_STRINGS.componentsVendorSourcingDashboard.agreedTotal}<strong className="text-emerald-700 font-mono">{UI_STRINGS.common.copytfdhmk}{selectedPpo.totalValue?.toLocaleString()}</strong></div>
                 </div>
 
                 <div className="form-group mb-3">
-                  <label className="form-label" style={{ fontSize: 12 }}>Authorized Signatory Name:</label>
+                  <label className="form-label" style={{ fontSize: 12 }}>{UI_STRINGS.componentsVendorSourcingDashboard.authorizedSignatoryName}</label>
                   <input
                     type="text"
                     required
@@ -966,12 +910,12 @@ export default function VendorSourcingDashboard({
                 </div>
 
                 <div className="form-group mb-4">
-                  <label className="form-label" style={{ fontSize: 12 }}>Acceptance Comments / Acknowledgement (Optional):</label>
+                  <label className="form-label" style={{ fontSize: 12 }}>{UI_STRINGS.componentsVendorSourcingDashboard.acceptanceCommentsAcknowledgementOptional}</label>
                   <textarea
                     rows={2}
                     value={acceptRemarks}
                     onChange={(e) => setAcceptRemarks(e.target.value)}
-                    placeholder="e.g. Order acknowledged; production scheduled as per timeline."
+                    placeholder={UI_STRINGS.componentsVendorSourcingDashboard.eGOrderAcknowledgedProductionScheduledAsPerTimeline}
                     className="form-control"
                     style={{ fontSize: 12 }}
                   />
@@ -986,24 +930,20 @@ export default function VendorSourcingDashboard({
                       checked={confirmAccept}
                       onChange={(e) => setConfirmAccept(e.target.checked)}
                     />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#065f46' }}>
-                      I formally confirm acceptance of this Purchase Order and agree to execute works as per contracted rates & terms.
-                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#065f46' }}>{UI_STRINGS.componentsVendorSourcingDashboard.iFormallyConfirmAcceptanceOfThisPurchaseOrderAndAgreeToExecuteWorksAsPerContractedRatesTerms}</span>
                   </label>
                 </div>
               </div>
 
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowAcceptPpoModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
+                <button type="button" onClick={() => setShowAcceptPpoModal(false)} className="btn btn-secondary">{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   disabled={submittingAcceptPpo || !confirmAccept}
                   className="btn btn-primary"
                   style={{ background: '#059669', borderColor: '#059669' }}
                 >
-                  {submittingAcceptPpo ? 'Confirming Acceptance...' : 'Formally Accept PPO'}
+                  {submittingAcceptPpo ? UI_STRINGS.componentsVendorSourcingDashboard.confirmingAcceptance : UI_STRINGS.componentsVendorSourcingDashboard.formallyAcceptPPO}
                 </button>
               </div>
             </form>
@@ -1017,32 +957,25 @@ export default function VendorSourcingDashboard({
           <div className="modal" style={{ maxWidth: 560, width: '90%' }}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">Report Clarification / Issue on PPO</h3>
-                <p className="modal-subtitle">
-                  Order Ref: {selectedPpo.ppoNumber} | Value: ₹ {selectedPpo.totalValue?.toLocaleString()}
+                <h3 className="modal-title">{UI_STRINGS.componentsVendorSourcingDashboard.reportClarificationIssueOnPPO}</h3>
+                <p className="modal-subtitle">{UI_STRINGS.componentsVendorSourcingDashboard.orderRef}{selectedPpo.ppoNumber}{UI_STRINGS.componentsVendorSourcingDashboard.value}{selectedPpo.totalValue?.toLocaleString()}
                 </p>
               </div>
-              <button type="button" onClick={() => setShowIssueModal(false)} className="modal-close">
-                ×
-              </button>
+              <button type="button" onClick={() => setShowIssueModal(false)} className="modal-close">{UI_STRINGS.common.copymriixi}</button>
             </div>
 
             <form onSubmit={handleRaiseIssue}>
               <div className="modal-body">
-                <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, color: '#9f1239' }}>
-                  Raising an issue holds acceptance without accepting the order. The procurement team will be notified to review and rectify commercial terms.
-                </div>
+                <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, color: '#9f1239' }}>{UI_STRINGS.componentsVendorSourcingDashboard.raisingAnIssueHoldsAcceptanceWithoutAcceptingTheOrderTheProcurementTeamWillBeNotifiedToReviewAndRectifyCommercialTerms}</div>
 
                 <div className="form-group mb-3">
-                  <label className="form-label" style={{ fontSize: 12 }}>
-                    Reason for Issue / Clarification Required <span className="text-red-500">*</span>:
-                  </label>
+                  <label className="form-label" style={{ fontSize: 12 }}>{UI_STRINGS.componentsVendorSourcingDashboard.reasonForIssueClarificationRequired}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>{UI_STRINGS.common.copyhhsact}</label>
                   <textarea
                     rows={4}
                     required
                     value={issueRemarks}
                     onChange={(e) => setIssueRemarks(e.target.value)}
-                    placeholder="Specify the discrepancy (e.g. Rate variance vs agreed final round, delivery date infeasibility, scope discrepancy)..."
+                    placeholder={UI_STRINGS.componentsVendorSourcingDashboard.specifyTheDiscrepancyEGRateVarianceVsAgreedFinalRoundDeliveryDateInfeasibilityScopeDiscrepancy}
                     className="form-control"
                     style={{ fontSize: 12 }}
                   />
@@ -1050,15 +983,13 @@ export default function VendorSourcingDashboard({
               </div>
 
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowIssueModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
+                <button type="button" onClick={() => setShowIssueModal(false)} className="btn btn-secondary">{UI_STRINGS.common.cancel}</button>
                 <button
                   type="submit"
                   disabled={submittingIssue || !issueRemarks.trim()}
                   className="btn btn-danger"
                 >
-                  {submittingIssue ? 'Submitting Issue...' : 'Submit Issue to Buyer'}
+                  {submittingIssue ? UI_STRINGS.componentsVendorSourcingDashboard.submittingIssue : UI_STRINGS.common.submitIssueToBuyer}
                 </button>
               </div>
             </form>
@@ -1072,54 +1003,48 @@ export default function VendorSourcingDashboard({
           <div className="modal" style={{ maxWidth: 520, width: '90%' }}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">Buyer Decision Record</h3>
-                <p className="modal-subtitle">RFQ: {decisionRfq.rfqNumber}</p>
+                <h3 className="modal-title">{UI_STRINGS.componentsVendorSourcingDashboard.buyerDecisionRecord}</h3>
+                <p className="modal-subtitle">{UI_STRINGS.componentsVendorSourcingDashboard.rFQ}{decisionRfq.rfqNumber}</p>
               </div>
-              <button type="button" onClick={() => setShowDecisionModal(false)} className="modal-close">
-                ×
-              </button>
+              <button type="button" onClick={() => setShowDecisionModal(false)} className="modal-close">{UI_STRINGS.common.copymriixi}</button>
             </div>
 
             <div className="modal-body" style={{ fontSize: 13 }}>
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
                 <div style={{ marginBottom: 12 }}>
-                  <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Formal Decision:</span>
+                  <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorSourcingDashboard.formalDecision}</span>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
                     {decisionRfq.buyerDecisionStatus}
                   </div>
                 </div>
 
                 <div style={{ marginBottom: 12 }}>
-                  <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Decision Date:</span>
+                  <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorSourcingDashboard.decisionDate}</span>
                   <div style={{ fontWeight: 600, marginTop: 2 }}>
                     {decisionRfq.latestRound?.buyerDecisionDate
                       ? new Date(decisionRfq.latestRound.buyerDecisionDate).toLocaleString()
-                      : 'Recorded'}
+                      : UI_STRINGS.common.recorded}
                   </div>
                 </div>
 
                 {decisionRfq.latestRound?.buyerDecisionRemarks && (
                   <div style={{ marginBottom: 12 }}>
-                    <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Buyer Remarks:</span>
-                    <div style={{ fontStyle: 'italic', marginTop: 2, color: '#334155' }}>
-                      "{decisionRfq.latestRound.buyerDecisionRemarks}"
-                    </div>
+                    <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.common.buyerRemarks}</span>
+                    <div style={{ fontStyle: 'italic', marginTop: 2, color: '#334155' }}>{UI_STRINGS.common.copyau1tph}{decisionRfq.latestRound.buyerDecisionRemarks}{UI_STRINGS.common.copyau1tph}</div>
                   </div>
                 )}
 
                 <div>
-                  <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>Next Responsible Party:</span>
+                  <span style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase' }}>{UI_STRINGS.componentsVendorSourcingDashboard.nextResponsibleParty}</span>
                   <div style={{ fontWeight: 600, color: '#2563eb', marginTop: 2 }}>
-                    {decisionRfq.nextResponsibleParty} — {decisionRfq.nextAction}
+                    {decisionRfq.nextResponsibleParty}{UI_STRINGS.common.copyq9aflv}{decisionRfq.nextAction}
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="modal-footer">
-              <button type="button" onClick={() => setShowDecisionModal(false)} className="btn btn-primary">
-                Close
-              </button>
+              <button type="button" onClick={() => setShowDecisionModal(false)} className="btn btn-primary">{UI_STRINGS.common.close}</button>
             </div>
           </div>
         </div>

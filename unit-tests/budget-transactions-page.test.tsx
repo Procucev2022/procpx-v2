@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BudgetTransactionsPage from '../src/app/(app)/budget/transactions/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('next/link', () => {
   const React = require('react');
@@ -85,11 +89,11 @@ describe('budget transaction ledger page', () => {
     render(<BudgetTransactionsPage />);
     expect(await screen.findByText('TX-100')).toBeInTheDocument();
     expect(screen.getByText('Line 4')).toBeInTheDocument();
-    expect(screen.getByText(/Approver: Asha/)).toBeInTheDocument();
-    expect(screen.getByText(/Awaiting Project Approver/)).toBeInTheDocument();
-    expect(screen.getByText(/Awaiting Finance Approver/)).toBeInTheDocument();
+    expect(document.body).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.approver));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementPposPage.awaitingProjectApprover))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppFinanceBudgetApprovalsPage.awaitingFinance))).toBeInTheDocument();
     expect(screen.getByText(/Missing approval/)).toBeInTheDocument();
-    expect(screen.getAllByText('System').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.system)).length).toBeGreaterThan(0);
 
     const selects = screen.getAllByRole('combobox');
     fireEvent.change(selects[1], { target: { value: 'cc-2' } });
@@ -116,52 +120,52 @@ describe('budget transaction ledger page', () => {
     }
     fireEvent.change(selects[4], { target: { value: '' } });
 
-    const search = screen.getByPlaceholderText('Search Tx ID, BOQ Number, description...');
+    const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.searchTxIDBOQNumberDescription));
     for (const [term, code] of [['TX-100', 'TX-100'], ['BOQ-3', 'TX-300'], ['foundation', 'TX-200'], ['screen-ref', 'TX-400'], ['Mechanical', 'TX-300'], ['Groundworks', 'TX-200']]) {
       fireEvent.change(search, { target: { value: term } });
       expect(screen.getByText(code)).toBeInTheDocument();
     }
     fireEvent.change(search, { target: { value: 'not found' } });
-    expect(screen.getByText('No Transactions Found')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
 
     fireEvent.change(selects[0], { target: { value: 'project-1' } });
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=project-1'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=project-1'));
   });
 
   it('validates, reports failures, cancels, and successfully reverses an approved transaction', async () => {
     render(<BudgetTransactionsPage />);
     await screen.findByText('TX-100');
-    fireEvent.click(within(screen.getByRole('row', { name: /TX-100/ })).getByRole('button', { name: 'Reverse' }));
-    expect(screen.getByText('Reverse Budget Transaction')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm Reversal' })).toBeDisabled();
-    fireEvent.submit(screen.getByRole('button', { name: 'Confirm Reversal' }).closest('form')!);
-    expect(screen.getByText('Reverse Budget Transaction')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('row', { name: /TX-100/ })).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reverse) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.reverseBudgetTransaction))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.confirmReversal) })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.confirmReversal) }).closest('form')!);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.reverseBudgetTransaction))).toBeInTheDocument();
 
-    const reason = screen.getByPlaceholderText('e.g., BOQ revision scope correction, de-scoped item...');
+    const reason = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.eGBOQRevisionScopeCorrectionDeScopedItem));
     fireEvent.change(reason, { target: { value: '  ' } });
-    expect(screen.getByRole('button', { name: 'Confirm Reversal' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.confirmReversal) })).toBeDisabled();
     fireEvent.change(reason, { target: { value: '  Corrected BOQ  ' } });
     reverseResponse = { body: { error: 'Reversal permission denied' }, ok: false };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Reversal' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.confirmReversal) }));
     expect(await screen.findByText('Reversal permission denied')).toBeInTheDocument();
     expect(JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'POST')![1].body)).toEqual({
       transactionId: 'tx-1', reversalReason: 'Corrected BOQ',
     });
 
     reverseResponse = { body: {}, ok: true };
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Reversal' }));
-    expect(await screen.findByText('Transaction TX-100 reversed successfully!')).toBeInTheDocument();
-    expect(screen.queryByText('Reverse Budget Transaction')).not.toBeInTheDocument();
-    const successBanner = screen.getByText('Transaction TX-100 reversed successfully!').parentElement?.parentElement as HTMLElement;
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.confirmReversal) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.transactionTransactionCodeReversedSuccessfully))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.reverseBudgetTransaction))).not.toBeInTheDocument();
+    const successBanner = screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.transactionTransactionCodeReversedSuccessfully)).parentElement?.parentElement as HTMLElement;
     fireEvent.click(within(successBanner).getByRole('button'));
-    expect(screen.queryByText('Transaction TX-100 reversed successfully!')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.transactionTransactionCodeReversedSuccessfully))).not.toBeInTheDocument();
 
-    fireEvent.click(within(screen.getByRole('row', { name: /TX-100/ })).getByRole('button', { name: 'Reverse' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Reverse Budget Transaction')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('row', { name: /TX-100/ })).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reverse) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.reverseBudgetTransaction))).not.toBeInTheDocument();
   });
 
   it('shows empty results when project and budget requests fail or return no transactions', async () => {
@@ -172,7 +176,7 @@ describe('budget transaction ledger page', () => {
         : Promise.resolve(response({})));
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     render(<BudgetTransactionsPage />);
-    expect(await screen.findByText('No Transactions Found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });
@@ -182,7 +186,7 @@ describe('budget transaction ledger page', () => {
       ? Promise.resolve(response(projects))
       : Promise.resolve(response({})));
     render(<BudgetTransactionsPage />);
-    expect(await screen.findByText('No Transactions Found')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound))).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /NP-01/ })).toBeInTheDocument();
   });
 });

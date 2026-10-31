@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx';
 import { POST } from '../src/app/api/boq/standard/upload-validate/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { uomMaster: { findMany: jest.fn() } } }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -63,7 +65,7 @@ describe('standard BOQ upload validation API', () => {
     await expect(POST(request())).resolves.toBe(denied);
     await expect(POST(request())).resolves.toEqual({
       ok: false,
-      error: 'Please select or upload a completed Standard BOQ Excel file.',
+      error: UI_STRINGS.appApiBoqStandardUploadValidateRoute.pleaseSelectOrUploadACompletedStandardBOQExcelFile,
       status: 400,
     });
     expect(auth).toHaveBeenCalledWith('BOQ_EDIT');
@@ -94,17 +96,17 @@ describe('standard BOQ upload validation API', () => {
     const noSheet = { SheetNames: ['Inventory'], Sheets: {} };
     jest.spyOn(XLSX, 'read').mockReturnValueOnce(noSheet as any);
     await expect(POST(request({ file: { name: 'empty.xlsx', size: 0, arrayBuffer: async () => new ArrayBuffer(0) } }))).resolves.toEqual({
-      ok: false, error: 'Invalid spreadsheet: Could not find data sheet in workbook.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqStandardUploadValidateRoute.invalidSpreadsheetCouldNotFindDataSheetInWorkbook, status: 400,
     });
 
     jest.spyOn(XLSX.utils, 'sheet_to_json').mockReturnValueOnce([] as any);
     await expect(POST(sheetRequest())).resolves.toEqual({
-      ok: false, error: 'The uploaded file does not contain any data rows.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqStandardUploadValidateRoute.theUploadedFileDoesNotContainAnyDataRows, status: 400,
     });
     jest.restoreAllMocks();
 
     await expect(POST(sheetRequest('BOQ', [['Description', 'Quantity'], ['', '  ']]))).resolves.toEqual({
-      ok: false, error: 'No data rows found below headers in the spreadsheet.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqStandardUploadValidateRoute.noDataRowsFoundBelowHeadersInTheSpreadsheet, status: 400,
     });
     expect(findUoms).not.toHaveBeenCalled();
   });
@@ -137,8 +139,8 @@ describe('standard BOQ upload validation API', () => {
       metadata: { sector: 'INDUSTRIAL', projectType: 'Warehouse', templateVersion: 'v3', projectId: 'project-row', costCentreId: 'cc-row' },
     });
     expect(result.data.issues.map((issue: any) => issue.issue)).toEqual(expect.arrayContaining([
-      'Duplicate Item Code "IT-1"', 'Quantity must be greater than zero.', 'UOM missing; defaulted to NOS',
-      'Quantity required', 'Quantity "several" must be numeric.', 'Quantity cannot be negative.',
+      'Duplicate Item Code "IT-1"', UI_STRINGS.common.quantityMustBeGreaterThanZero, 'UOM missing; defaulted to NOS',
+      UI_STRINGS.appAppBoqStudioPage.quantityRequired, 'Quantity "several" must be numeric.', UI_STRINGS.common.quantityCannotBeNegative,
       'Non-standard UOM "CARTON"', 'Quantity "oops" must be numeric.',
     ]));
     expect(result.data.issues).toEqual(expect.arrayContaining([

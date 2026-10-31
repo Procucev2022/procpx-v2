@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { isUserAuthorizedForProject } from '@/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -125,7 +128,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching PPO vendor ratings:', error);
-    return apiError(error.message || 'Failed to fetch PPO ratings', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpoRatings }), 500);
   }
 }
 
@@ -137,7 +140,7 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role === 'PROCUREMENT_USER') {
-    return apiError('Forbidden: Procurement users have read-only access to vendor ratings.', 403);
+    return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.forbiddenProcurementUsersHaveReadOnlyAccessToVendorRatings, 403);
   }
 
   const { id } = await params;
@@ -154,7 +157,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError('Vendor not found or access denied.', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
     }
 
     const body = await req.json();
@@ -178,7 +181,7 @@ export async function POST(
     } = body;
 
     if (!ppoId) {
-      return apiError('PPO ID is required to record performance evaluation.', 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOIDIsRequiredToRecordPerformanceEvaluation, 400);
     }
 
     const ppo = await prisma.ppo.findFirst({
@@ -194,18 +197,18 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError('PPO not found or does not belong to this vendor.', 404);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPONotFoundOrDoesNotBelongToThisVendor, 404);
     }
 
     // Business Rule: PPO must be eligible (not DRAFT or CANCELLED)
     if (ppo.status === 'DRAFT' || ppo.status === 'CANCELLED') {
-      return apiError(`PPO ${ppo.ppoNumber} is in ${ppo.status} status and is not eligible for performance evaluation.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberIsInStatusStatusAndIsNotEligibleForPerformanceEvaluation, { "ppoNumber": ppo.ppoNumber, "status": ppo.status }), 400);
     }
 
     // Security Rule: Project scope authorization check
     const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, ppo.projectId);
     if (!isAuthorized) {
-      return apiError('Access denied: You are not authorised to evaluate PPOs for this project.', 403);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.accessDeniedYouAreNotAuthorisedToEvaluatePPOsForThisProject, 403);
     }
 
     // Check for existing rating for this PPO & enforce immutability
@@ -215,10 +218,10 @@ export async function POST(
 
     if (existingRating) {
       if (existingRating.status === 'APPROVED' || existingRating.status === 'REJECTED') {
-        return apiError(`PPO ${ppo.ppoNumber} assessment is in ${existingRating.status} status and is locked against modifications.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsInStatusStatusAndIsLockedAgainstModifications, { "ppoNumber": ppo.ppoNumber, "status": existingRating.status }), 400);
       }
       if (existingRating.status === 'SUBMITTED') {
-        return apiError(`PPO ${ppo.ppoNumber} assessment is currently submitted and under Project Approver review. It cannot be modified until reviewed or returned.`, 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsCurrentlySubmittedAndUnderProjectApproverReviewItCannotBeModifiedUntilReviewedOrReturned, { "ppoNumber": ppo.ppoNumber }), 400);
       }
     }
 
@@ -240,7 +243,7 @@ export async function POST(
 
     if (!isDraft) {
       if (!overallImprovement && !comments && !qualityComments) {
-        return apiError('Please provide feedback or areas for improvement before submitting for Project Approval.', 400);
+        return apiError(UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, 400);
       }
     }
 
@@ -368,8 +371,8 @@ export async function POST(
         data: {
           tenantId: ctx.tenantId,
           targetRole: 'PROJECT_APPROVER',
-          title: `Vendor Performance Review Submitted: ${ppo.ppoNumber}`,
-          message: `${ctx.userName || 'Project User'} submitted a ${overallScore}/5.0 performance rating for vendor "${vendor.name}" on PPO ${ppo.ppoNumber}.`,
+          title: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.vendorPerformanceReviewSubmittedPpoNumber, { "ppoNumber": ppo.ppoNumber }),
+          message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.value1SubmittedAOverallScore50PerformanceRatingForVendorNameOnPPOPpoNumber, { "value1": ctx.userName || UI_STRINGS.common.projectUser, "overallScore": overallScore, "name": vendor.name, "ppoNumber": ppo.ppoNumber }),
           type: 'ACTION_REQUIRED',
           entityType: 'PPO',
           entityId: ppo.id,
@@ -387,6 +390,6 @@ export async function POST(
     }, 201);
   } catch (error: any) {
     console.error('Error submitting PPO vendor rating:', error);
-    return apiError(error.message || 'Failed to submit PPO rating', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitPpoRating }), 500);
   }
 }

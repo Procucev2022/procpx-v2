@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { GET } from '../src/app/api/procurement/rate-cards/match/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -61,9 +63,9 @@ describe('rate card match API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(GET(request())).resolves.toBe(denied);
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'Either prId or rfqId is required to match rate cards', status: 400 });
-    await expect(GET(request('?prId=pr-missing'))).resolves.toEqual({ ok: false, error: 'Procurement Request not found', status: 404 });
-    await expect(GET(request('?rfqId=rfq-missing'))).resolves.toEqual({ ok: false, error: 'RFQ not found', status: 404 });
+    await expect(GET(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsMatchRoute.eitherPrIdOrRfqIdIsRequiredToMatchRateCards, status: 400 });
+    await expect(GET(request('?prId=pr-missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsMatchRoute.procurementRequestNotFound, status: 404 });
+    await expect(GET(request('?rfqId=rfq-missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFound, status: 404 });
   });
 
   it('returns an empty match result without querying rate cards when the PR has no lines', async () => {
@@ -72,7 +74,7 @@ describe('rate card match API', () => {
     });
     await expect(GET(request('?prId=pr-1'))).resolves.toEqual({ ok: true, status: 200, data: {
       reference: { type: 'PR', id: 'pr-1', number: 'PR-001', title: 'Empty PR', status: 'PR_DRAFT', project: null, costCentre: null },
-      matchedRateCards: [], lines: [], message: 'No line items available to match against rate cards.',
+      matchedRateCards: [], lines: [], message: UI_STRINGS.appApiProcurementRateCardsMatchRoute.noLineItemsAvailableToMatchAgainstRateCards,
     } });
     expect(db.vendorRateCard.findMany).not.toHaveBeenCalled();
   });

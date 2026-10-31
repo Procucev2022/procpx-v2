@@ -5,6 +5,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { hasPermission } from '../src/lib/permissions';
 import { createAuditLog } from '../src/lib/audit';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -79,27 +81,27 @@ describe('negotiation offer submission API', () => {
 
     auth.mockResolvedValueOnce({ ...vendorContext });
     permission.mockReturnValueOnce(false);
-    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient vendor negotiation permissions', status: 403 });
+    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenInsufficientVendorNegotiationPermissions, status: 403 });
     auth.mockResolvedValueOnce(buyerContext);
     permission.mockReturnValueOnce(false);
-    await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1' }))).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
+    await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
 
     auth.mockResolvedValueOnce({ ...vendorContext, vendorId: undefined });
-    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'Forbidden: vendor record not associated with this user account', status: 403 });
+    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, status: 403 });
     auth.mockResolvedValueOnce(vendorContext);
-    await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-2' }))).resolves.toEqual({ ok: false, error: 'Forbidden: you can only submit offers for your own vendor account', status: 403 });
-    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'RFQ ID and Vendor ID are required', status: 400 });
+    await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-2' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenYouCanOnlySubmitOffersForYourOwnVendorAccount, status: 403 });
+    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQIDAndVendorIDAreRequired, status: 400 });
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ rfqId: 'missing', vendorId: 'vendor-1' }))).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(POST(request({ rfqId: 'missing', vendorId: 'vendor-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'DRAFT' }));
     await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1' }))).resolves.toMatchObject({ ok: false, error: expect.stringContaining('does not permit'), status: 400 });
     db.vendor.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1' }))).resolves.toEqual({ ok: false, error: 'Vendor not found', status: 404 });
+    await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFound, status: 404 });
 
     auth.mockResolvedValueOnce(vendorContext);
     db.rfqVendor.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: 'Forbidden: vendor is not invited to this RFQ', status: 403 });
+    await expect(POST(request({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, status: 403 });
   });
 
   it('sends a buyer counteroffer, creates a negotiation, and updates RFQ messaging and notifications', async () => {
@@ -107,16 +109,16 @@ describe('negotiation offer submission API', () => {
     db.negotiation.create.mockResolvedValueOnce(negotiation({ rounds: [] }));
     const result = await POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1', counterOfferAmount: '800', notes: 'Reduce price', deadline: '2026-12-01' }));
     expect(result).toMatchObject({ ok: true, status: 201, data: { round: { id: 'round-new' }, message: expect.stringContaining('800') } });
-    expect(db.negotiation.create).toHaveBeenCalledWith({ data: { tenantId: 'tenant-1', rfqId: 'rfq-1', currentRound: 1, status: 'ACTIVE' }, include: { rounds: { orderBy: { roundNumber: 'desc' } } } });
+    expect(db.negotiation.create).toHaveBeenCalledWith({ data: { tenantId: 'tenant-1', rfqId: 'rfq-1', currentRound: 1, status: UI_STRINGS.common.aCTIVE }, include: { rounds: { orderBy: { roundNumber: 'desc' } } } });
     expect(db.negotiationRound.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       vendorId: 'vendor-1', roundNumber: 1, deadline: new Date('2026-12-01'), previousQuoteAmount: 1000,
       counterOfferAmount: 800, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', notes: 'Reduce price',
-      isFinalOffer: false, buyerDecision: null, nextResponsibleParty: 'VENDOR', submittedByVendor: null,
+      isFinalOffer: false, buyerDecision: null, nextResponsibleParty: UI_STRINGS.common.vENDOR, submittedByVendor: null,
     }), include: { vendor: true } });
     expect(db.negotiation.update).toHaveBeenCalledWith({ where: { id: 'neg-1' }, data: { currentRound: 1, bestQuoteAmount: 800 } });
     expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'NEGOTIATION' } });
     expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      senderName: 'Buyer', senderRole: 'CATEGORY_MANAGER', isVendorSent: false, message: expect.stringContaining('Buyer submitted counteroffer'),
+      senderName: UI_STRINGS.appLoginPageConstants.buyer, senderRole: 'CATEGORY_MANAGER', isVendorSent: false, message: expect.stringContaining('Buyer submitted counteroffer'),
     }) });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'BUYER_COUNTEROFFER_SUBMITTED', newValue: expect.objectContaining({ counterOfferAmount: 800 }) }));
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'COUNTER_OFFER_SENT', details: expect.objectContaining({ vendorName: 'Acme', amount: 800, roundNumber: 1 }) }));
@@ -127,7 +129,7 @@ describe('negotiation offer submission API', () => {
       vendorId: 'vendor-1', counterOfferAmount: 700 + i, revisedQuoteAmount: null, nextResponsibleParty: 'VENDOR', roundNumber: i + 1,
     })) }));
     await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1', counterOfferAmount: 500 }))).resolves.toEqual({
-      ok: false, error: 'Maximum limit of 20 buyer counteroffers reached for this vendor.', status: 400,
+      ok: false, error: UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.maximumLimitOf20BuyerCounteroffersReachedForThisVendor, status: 400,
     });
 
     db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: [{
@@ -135,7 +137,7 @@ describe('negotiation offer submission API', () => {
       createdAt: new Date(), roundNumber: 1,
     }] }));
     await expect(POST(request({ rfqId: 'rfq-1', vendorId: 'vendor-1', counterOfferAmount: 500 }))).resolves.toEqual({
-      ok: true, data: { round: expect.objectContaining({ id: 'round-recent' }), message: 'Offer already recorded' }, status: 200,
+      ok: true, data: { round: expect.objectContaining({ id: 'round-recent' }), message: UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.offerAlreadyRecorded }, status: 200,
     });
     expect(db.negotiationRound.create).not.toHaveBeenCalled();
   });
@@ -155,7 +157,7 @@ describe('negotiation offer submission API', () => {
     }), include: { vendor: true } });
     expect(db.negotiation.update).toHaveBeenCalledWith({ where: { id: 'neg-1' }, data: { currentRound: 1, bestQuoteAmount: 0 } });
     expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      senderName: 'Category Manager', message: expect.stringContaining('. '),
+      senderName: UI_STRINGS.common.categoryManager, message: expect.stringContaining(UI_STRINGS.appAppProcurementVendorsIdPage.copy15km32b),
     }) });
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ details: expect.objectContaining({ amount: undefined }) }));
   });
@@ -258,14 +260,14 @@ describe('negotiation offer submission API', () => {
       { rfqLineId: 'line-2', quantity: 3, counterRate: null, revisedRate: 30, lineTotal: 90 },
     ]);
     expect(db.quote.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      quoteNumber: 'QT-RFQ-001-02', quoteVersion: 2, totalQuoteAmount: 700, status: 'SUBMITTED',
+      quoteNumber: 'QT-RFQ-001-02', quoteVersion: 2, totalQuoteAmount: 700, status: UI_STRINGS.common.sUBMITTED,
       submittedBy: 'Authorized Signatory', lines: { create: [
         expect.objectContaining({ rfqLineId: 'line-1', unitRate: 50, lineTotal: 100, remarks: null }),
         expect.objectContaining({ rfqLineId: 'line-2', unitRate: 30, lineTotal: 90, remarks: 'Panel' }),
       ] },
     }) });
     expect(db.rfq.update).not.toHaveBeenCalled();
-    expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderName: 'Authorized Signatory', senderRole: 'VENDOR', isVendorSent: true }) });
+    expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ senderName: 'Authorized Signatory', senderRole: UI_STRINGS.common.vENDOR, isVendorSent: true }) });
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED', details: expect.objectContaining({ isFinalOffer: true, amount: 700, roundNumber: 2 }) }));
   });
 
@@ -284,7 +286,7 @@ describe('negotiation offer submission API', () => {
     auth.mockResolvedValueOnce(vendorContext);
     db.quote.findMany.mockResolvedValueOnce([{ quoteVersion: 20 }]);
     await expect(POST(request({ rfqId: 'rfq-1', revisedQuoteAmount: 850 }))).resolves.toEqual({
-      ok: false, error: 'Maximum limit of 20 quote versions reached per vendor for this RFQ.', status: 400,
+      ok: false, error: UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, status: 400,
     });
   });
 

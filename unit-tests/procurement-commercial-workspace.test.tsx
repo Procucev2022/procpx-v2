@@ -1,4 +1,8 @@
 /** @jest-environment jsdom */
+
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+
+import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ProcurementCommercialWorkspace from '../src/components/ProcurementCommercialWorkspace';
@@ -107,29 +111,29 @@ describe('ProcurementCommercialWorkspace', () => {
   it('renders quote comparison statuses, rankings, commercial terms, and opens each negotiation history state', () => {
     renderWorkspace();
 
-    expect(screen.getByText('Complete Quote')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.completeQuote, '', true))).toBeInTheDocument();
     expect(screen.getByText('Partial Quote (1/2 items)')).toBeInTheDocument();
-    expect(screen.getByText('No Quote')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.noQuote, '', true))).toBeInTheDocument();
     expect(screen.getAllByText('Alpha Materials').length).toBeGreaterThan(0);
     expect(screen.getByText('Net 45')).toBeInTheDocument();
     expect(screen.getByText('Deliver within 20 days')).toBeInTheDocument();
-    expect(screen.getByText('30 Days')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copy1xeupjt))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle('View sequential negotiation audit history for this supplier'));
-    expect(screen.getByText('Negotiation History & Audit Trail')).toBeInTheDocument();
-    expect(screen.getByText('SUPERSEDED')).toBeInTheDocument();
-    expect(screen.getByText('REVISED')).toBeInTheDocument();
-    expect(screen.getByText('Awaiting Response')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    fireEvent.click(screen.getByTitle('View sequential negotiation audit history for this supplier'));
-    const historyHeader = screen.getByText('Negotiation History & Audit Trail').parentElement!.parentElement!;
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.negotiationHistoryAuditTrail))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sUPERSEDED))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.rEVISED))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.awaitingResponse))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    const historyHeader = screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.negotiationHistoryAuditTrail)).parentElement!.parentElement!;
     fireEvent.click(historyHeader.querySelector('button')!);
-    expect(screen.queryByText('Negotiation History & Audit Trail')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.negotiationHistoryAuditTrail))).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Commercial Terms & Vendor Conditions'));
-    expect(screen.getByRole('button', { name: /Expand Terms/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.commercialTermsVendorConditions)));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.expandTerms, "", false) })).toBeInTheDocument();
     expect(screen.queryByText('Net 45')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Expand Terms/ }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.expandTerms, "", false) }));
     expect(screen.getByText('Net 45')).toBeInTheDocument();
   });
 
@@ -157,10 +161,10 @@ describe('ProcurementCommercialWorkspace', () => {
     renderWorkspace({ rfq, comparison });
     expect(screen.getAllByText('#2')).toHaveLength(2);
     expect(screen.getByText(/▲ 330%/)).toBeInTheDocument();
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
     fireEvent.change(screen.getAllByRole('spinbutton').at(-1)!, { target: { value: '120' } });
-    const savingsRow = screen.getByText('Savings vs AI Benchmark').closest('tr');
-    expect(savingsRow).toHaveTextContent('-₹');
+    const savingsRow = screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.savingsVsAIBenchmark)).closest('tr');
+    expect(savingsRow).toHaveTextContent(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.copy134eyoj));
   });
 
   it('edits and saves line counteroffers, opens item details, and handles confirmed reset', () => {
@@ -169,12 +173,12 @@ describe('ProcurementCommercialWorkspace', () => {
     const lineRateInputs = screen.getAllByRole('spinbutton');
     fireEvent.change(lineRateInputs[0], { target: { value: '75' } });
     expect(screen.getByText(/1 line modified/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     expect(localStorage.getItem('procpx_cm_counteroffer_draft_rfq-1')).toContain('"line-1":75');
-    expect(screen.getByText(/Draft saved at/)).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.draftSavedAt, "", false))).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
-    expect(screen.getByText('Section 1 — Item Details')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.section1ItemDetails))).toBeInTheDocument();
     expect(screen.getAllByText('Supply cement to the north site').length).toBeGreaterThan(0);
     expect(screen.getAllByText('53 grade cement').length).toBeGreaterThan(0);
     expect(screen.getByText('Materials')).toBeInTheDocument();
@@ -182,62 +186,62 @@ describe('ProcurementCommercialWorkspace', () => {
     const targetRate = screen.getAllByRole('spinbutton').at(-1)!;
     fireEvent.change(targetRate, { target: { value: '80.25' } });
     fireEvent.keyDown(targetRate, { key: 'Enter', code: 'Enter', charCode: 13 });
-    expect(screen.getByText(/Buyer offer rate applied to this item/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
+    expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.buyerOfferRateAppliedToThisItem);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
     const drawerBackdrop = Array.from(container.querySelectorAll('div')).find((element) =>
       element.className.includes('backdrop-blur-2xs')
     );
     fireEvent.click(drawerBackdrop!);
-    expect(screen.queryByText(/Section 1 â€” Item Details/)).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.section1ItemDetails, "", false))).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
-    expect(screen.getByText('Reset Counteroffer Rates?')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByText('Reset Counteroffer Rates?')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.resetCounterofferRates))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.resetCounterofferRates))).not.toBeInTheDocument();
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(80.25);
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.confirmReset) }));
     expect(localStorage.getItem('procpx_cm_counteroffer_draft_rfq-1')).toBeNull();
-    expect(screen.queryByText('Reset Counteroffer Rates?')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.resetCounterofferRates))).not.toBeInTheDocument();
   });
 
   it('supports select all, batch discounts, the detail drawer, and draft input validation', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: '-5%' }));
-    fireEvent.click(screen.getByTitle('Select all lines'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copypr3sba) }));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.selectAllLines)));
     expect(screen.getByText('2 of 2 lines selected')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '-5%' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copypr3sba) }));
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(86);
-    fireEvent.click(screen.getByTitle('Select all lines'));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.selectAllLines)));
     expect(screen.queryByText('2 of 2 lines selected')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
-    const drawer = screen.getByText('Section 4 — Cost Analysis').closest('div.fixed');
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
+    const drawer = screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.section4CostAnalysis)).closest('div.fixed');
     expect(drawer).toBeTruthy();
     const rate = screen.getAllByRole('spinbutton').at(-1)!;
     fireEvent.change(rate, { target: { value: '-1' } });
-    expect(screen.getByRole('button', { name: 'Apply Offer to Item' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.applyOfferToItem) })).toBeDisabled();
     fireEvent.change(rate, { target: { value: '0' } });
-    expect(screen.getByRole('button', { name: 'Save to Draft' })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Save to Draft' }));
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.saveToDraft) })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.saveToDraft) }));
     expect(screen.getByText(/Draft rate saved for this item/)).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Close drawer'));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.closeDrawer)));
   });
 
   it('reports storage failures when saving a draft rate from the detail drawer', () => {
     renderWorkspace();
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
     const rate = screen.getAllByRole('spinbutton').at(-1)!;
     fireEvent.change(rate, { target: { value: '82' } });
     const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
       throw new Error('storage unavailable');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save to Draft' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.saveToDraft) }));
 
-    expect(mockToast.error).toHaveBeenCalledWith('Failed to save draft rate. Please retry.');
+    expect(mockToast.error).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToSaveDraftRatePleaseRetry);
     setItem.mockRestore();
   });
 
@@ -246,9 +250,9 @@ describe('ProcurementCommercialWorkspace', () => {
     comparison.lines[0].vendorQuotes.v1.amount = 0;
     renderWorkspace({ comparison });
 
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
 
-    expect(screen.getByText('Line Amount')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.lineAmount, '', true))).toBeInTheDocument();
     expect(screen.getAllByText(/180/).length).toBeGreaterThan(0);
   });
 
@@ -259,23 +263,23 @@ describe('ProcurementCommercialWorkspace', () => {
 
     fireEvent.click(lineCheckboxes[0]);
     expect(screen.getByText('1 of 2 lines selected')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '-3%' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copyomz2jg) }));
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(87);
 
     fireEvent.click(lineCheckboxes[1]);
     expect(screen.getByText('2 of 2 lines selected')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '-10%' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copyxbwjl8) }));
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(81);
     expect(screen.getAllByRole('spinbutton')[1]).toHaveValue(108);
 
     fireEvent.click(lineCheckboxes[0]);
     fireEvent.click(lineCheckboxes[1]);
-    expect(screen.queryByText(/lines selected/)).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.linesSelected, "", false))).not.toBeInTheDocument();
   });
 
   it('supports vendor selection toggles and closes the offer menu after an outside click', () => {
     const { container } = renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
 
     const menu = container.querySelector('#send-offer-dropdown-menu') as HTMLElement;
     const checkboxes = within(menu).getAllByRole('checkbox') as HTMLInputElement[];
@@ -311,22 +315,33 @@ describe('ProcurementCommercialWorkspace', () => {
     };
     const { container } = renderWorkspace({ rfq: sparseRfq, comparison: null });
 
-    expect(screen.getAllByText('Vendor').length).toBeGreaterThan(0);
-    expect(screen.getByText('30 days net from certified progressive invoice')).toBeInTheDocument();
-    expect(screen.getByText('Site delivery & completion within 45 days from work order issuance')).toBeInTheDocument();
-    expect(screen.getAllByText('60 Days')).toHaveLength(2);
-    fireEvent.click(screen.getByTitle('Click to view details'));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.vendor)).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copydnd1iv))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.siteDeliveryCompletionWithin45DaysFromWorkOrderIssuance))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copy1vaqoda))).toHaveLength(2);
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails)));
     expect(screen.getAllByText('No BOQ description').length).toBeGreaterThan(0);
-    expect(screen.getByText(/AI Baseline:/).closest('span')).toHaveTextContent('0 / Unit');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.aIBaseline, "", false)).closest('span')).toHaveTextContent('0 / Unit');
 
     fireEvent.click(container.querySelector('tbody input[type="checkbox"]')!);
-    fireEvent.click(screen.getByRole('button', { name: '-5%' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.copypr3sba) }));
     expect(screen.getByText('1 of 1 lines selected')).toBeInTheDocument();
 
     const drawerBackdrop = Array.from(container.querySelectorAll('div')).find((element) =>
       element.className.includes('backdrop-blur-2xs')
     );
     fireEvent.click(drawerBackdrop!);
+  });
+
+  it('preserves a zero benchmark when both RFQ and comparison totals are zero', () => {
+    const rfq = baseRfq();
+    rfq.estimatedBenchmarkValue = 0;
+    const comparison = baseComparison();
+    comparison.summary.totalBenchmark = 0;
+
+    const { container } = renderWorkspace({ rfq, comparison });
+
+    expect(container.firstElementChild).toHaveClass('w-full', 'flex', 'flex-col');
   });
 
   it('tolerates missing RFQ collections and updates the default vendor after comparison data arrives', async () => {
@@ -337,11 +352,11 @@ describe('ProcurementCommercialWorkspace', () => {
       negotiations: [{}], boqRevision: undefined,
     };
     const { props, rerender } = renderWorkspace({ rfq: sparseRfq as any, comparison: null });
-    expect(screen.getByText('Vendor Comparison — Total Quote Amount')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.vendorComparisonTotalQuoteAmount))).toBeInTheDocument();
 
     rerender(<ProcurementCommercialWorkspace {...props} comparison={{ vendors: [{ vendorId: 'v-empty' }], lines: [] }} />);
-    expect(screen.getAllByText('Vendor').length).toBeGreaterThan(0);
-    await waitFor(() => expect(screen.getByText('Vendor Comparison — Total Quote Amount')).toBeInTheDocument());
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.vendor)).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.vendorComparisonTotalQuoteAmount))).toBeInTheDocument());
   });
 
   it('uses comparison metadata when an RFQ line has only a partial BOQ link', () => {
@@ -363,7 +378,7 @@ describe('ProcurementCommercialWorkspace', () => {
       }],
     };
     renderWorkspace({ rfq, comparison });
-    fireEvent.click(screen.getByTitle('Click to view details'));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails)));
 
     expect(screen.getByText('Comparison full scope')).toBeInTheDocument();
     expect(screen.getByText('Comparison specification')).toBeInTheDocument();
@@ -394,10 +409,10 @@ describe('ProcurementCommercialWorkspace', () => {
     const updatedRfq = { ...props.rfq, negotiations: [{ rounds: ineligibleRounds }] };
     rerender(<ProcurementCommercialWorkspace {...props} rfq={updatedRfq} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
     expect(screen.getByText('Select All Vendors (0)')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
-    expect(mockToast.error).toHaveBeenCalledWith('Selected vendors are not eligible to receive counteroffers.');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
+    expect(mockToast.error).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.selectedVendorsAreNotEligibleToReceiveCounteroffers);
   });
 
   it('dispatches offers and reports per-vendor success and failure results', async () => {
@@ -413,22 +428,22 @@ describe('ProcurementCommercialWorkspace', () => {
       }),
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
     expect(screen.getByText('Select All Vendors (2)')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
     const request = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(request).toMatchObject({ rfqId: 'rfq-1', vendorIds: ['v1', 'v2'], nextResponsibleParty: 'VENDOR' });
     expect(JSON.parse(request.lineItemsJson)).toHaveLength(2);
-    expect(await screen.findByText('Dispatch Breakdown')).toBeInTheDocument();
-    expect(screen.getByText('Offer dispatch completed: 1 succeeded, 1 failed.')).toBeInTheDocument();
-    expect(screen.getByText('Vendor no longer eligible')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.dispatchBreakdown))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.offerDispatchCompletedDispatchedCountSucceededValue2, {"dispatchedCount":"1","value2":", 1 failed"})))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthEligible, {"length":"Vendor no longer"})))).toBeInTheDocument();
     expect(props.onNegotiationSubmitted).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Dismiss' })[0]);
-    expect(screen.queryByText('Offer dispatch completed: 1 succeeded, 1 failed.')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(screen.queryByText('Dispatch Breakdown')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.dismiss) })[0]);
+    expect(screen.queryByText(uiStringPattern(interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.offerDispatchCompletedDispatchedCountSucceededValue2, {"dispatchedCount":"1","value2":", 1 failed"})))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.dismiss) }));
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.dispatchBreakdown))).not.toBeInTheDocument();
   });
 
   it('handles partial-success API responses and dispatch failure details without a callback', async () => {
@@ -441,13 +456,13 @@ describe('ProcurementCommercialWorkspace', () => {
         results: [],
       }),
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
-    expect(await screen.findByText('Offer dispatch completed: 1 succeeded.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.offerDispatchCompletedDispatchedCountSucceededValue2, {"dispatchedCount":"1","value2":""})))).toBeInTheDocument();
     expect(mockToast.success).toHaveBeenCalledWith(
-      'Buyer offer dispatched to 1 vendor.',
+      UI_STRINGS.common.userMessages.buyerOfferDispatchedToOneVendor,
       'RFQ-2026-001',
-      'Awaiting Vendor Revised Offer'
+      UI_STRINGS.common.userMessages.awaitingVendorRevisedOffer
     );
 
     partialSuccess.unmount();
@@ -460,22 +475,22 @@ describe('ProcurementCommercialWorkspace', () => {
         failed: [{ vendorName: 'Alpha Materials', reason: 'Vendor response window closed' }],
       }),
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
-    expect(await screen.findByText('Offer dispatch failed: Vendor response window closed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.componentsProcurementCommercialWorkspace.offerDispatchFailedValue1, {"value1":"Vendor response window closed"})))).toBeInTheDocument();
   });
 
   it('validates entered rates and reports rejected dispatch requests without losing entered rates', async () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
     fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '-2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
-    expect(mockToast.error).toHaveBeenCalledWith('Invalid counteroffer rate entered. Rates must be positive numbers.');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
+    expect(mockToast.error).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.invalidCounterofferRateEnteredRatesMustBePositiveNumbers);
 
     fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '80' } });
     (global.fetch as jest.Mock).mockRejectedValue(new Error('Service unavailable'));
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
     expect(await screen.findByText('Service unavailable')).toBeInTheDocument();
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(80);
     expect(mockToast.error).toHaveBeenCalledWith('Service unavailable');
@@ -490,8 +505,8 @@ describe('ProcurementCommercialWorkspace', () => {
     }));
     const view = renderWorkspace({ rfq, isDemoMode: true, onNegotiationSubmitted });
     expect(screen.getByText('Draft saved at 10:15')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer to Vendors' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send Offer' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOfferToVendors) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sendOffer, '', true) }));
     await act(async () => { jest.advanceTimersByTime(600); });
     await waitFor(() => expect(onNegotiationSubmitted).toHaveBeenCalledTimes(1));
     expect(screen.getByText(/Buyer offer dispatched successfully to/)).toBeInTheDocument();
@@ -500,7 +515,7 @@ describe('ProcurementCommercialWorkspace', () => {
 
     localStorage.setItem('procpx_cm_counteroffer_draft_rfq-1', '{bad json');
     renderWorkspace();
-    expect(screen.queryByText(/Draft saved at/)).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.draftSavedAt, "", false))).not.toBeInTheDocument();
   });
 
   it('reports draft storage failures and opens history for a vendor without negotiation rounds', () => {
@@ -508,17 +523,17 @@ describe('ProcurementCommercialWorkspace', () => {
     rfq.negotiations = [];
     const { container } = renderWorkspace({ rfq });
     const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage full'); });
-    fireEvent.click(screen.getByRole('button', { name: 'Save as Draft' }));
-    expect(mockToast.error).toHaveBeenCalledWith('Failed to save draft rates.');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
+    expect(mockToast.error).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToSaveDraftRates);
 
-    fireEvent.click(screen.getAllByTitle('Click to view details')[0]);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[0]);
     const detailRate = screen.getAllByRole('spinbutton').at(-1)!;
     fireEvent.change(detailRate, { target: { value: '95' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Offer to Item' }));
-    expect(mockToast.error).toHaveBeenCalledWith('Failed to save draft rate. Please retry.');
-    fireEvent.click(screen.getByRole('button', { name: 'Save to Draft' }));
-    expect(mockToast.error).toHaveBeenCalledWith('Failed to save draft rate. Please retry.');
-    fireEvent.click(screen.getByTitle('Close drawer'));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.applyOfferToItem) }));
+    expect(mockToast.error).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToSaveDraftRatePleaseRetry);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.saveToDraft) }));
+    expect(mockToast.error).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToSaveDraftRatePleaseRetry);
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.closeDrawer)));
     setItem.mockRestore();
 
     const vendorNames = screen.getAllByText('No Quote Co');

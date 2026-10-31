@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
   const ctx = await requireAuth('BOQ_REVISION_CREATE');
@@ -15,9 +18,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     where: { id: revisionId, tenantId: ctx.tenantId },
     include: { lines: { where: { isDeleted: false } } },
   });
-  if (!sourceRevision) return apiError('Revision not found', 404);
+  if (!sourceRevision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
   if (sourceRevision.status !== 'APPROVED') {
-    return apiError('New revisions can only be created from an approved revision.');
+    return apiError(UI_STRINGS.appApiBoqRevisionIdNewRevisionRoute.newRevisionsCanOnlyBeCreatedFromAnApprovedRevision);
   }
 
   // Create new sequential revision with atomic concurrency handling
@@ -72,7 +75,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     entityType: 'BOQ_REVISION',
     entityId: newRevision.id,
     action: 'CREATE',
-    description: `New BOQ Revision ${newRevCode} created from approved ${sourceRevision.revisionCode}`,
+    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdNewRevisionRoute.newBOQRevisionNewRevCodeCreatedFromApprovedRevisionCode, { "newRevCode": newRevCode, "revisionCode": sourceRevision.revisionCode }),
     newValue: { revisionCode: newRevCode, sourceRevision: sourceRevision.revisionCode, lines: sourceRevision.lines.length },
   });
 

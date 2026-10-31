@@ -1,5 +1,6 @@
 'use client';
 // src/app/(app)/budget/page.tsx - Enterprise Project Budget Workspace
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -27,6 +28,9 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 function ProjectBudgetContent() {
   const toast = useToast();
@@ -115,10 +119,10 @@ function ProjectBudgetContent() {
           setSelectedCostCentreId('');
         }
       } else {
-        setErrorMessage('Failed to load project budget data.');
+        setErrorMessage(UI_STRINGS.appAppBudgetPage.failedToLoadProjectBudgetData);
       }
     } catch (e: any) {
-      setErrorMessage(e.message || 'Error loading budget data.');
+      setErrorMessage(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.errorLoadingBudgetData }));
     } finally {
       setLoading(false);
     }
@@ -176,10 +180,10 @@ function ProjectBudgetContent() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Approval failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.approvalFailed }));
       }
-      toast.success('Budget approved successfully.', currentProject?.name, 'Approved');
-      setStatusMessage('Budget approved successfully.');
+      toast.success(UI_STRINGS.common.budgetApprovedSuccessfully, currentProject?.name, UI_STRINGS.common.approved);
+      setStatusMessage(UI_STRINGS.common.budgetApprovedSuccessfully);
       loadBudgetData(selectedProjectId);
     } catch (err: any) {
       setErrorMessage(err.message);
@@ -208,12 +212,12 @@ function ProjectBudgetContent() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Rejection failed');
+        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.rejectionFailed }));
       }
       setRejectModalOpen(false);
       setSelectedRejectContrib(null);
       setRejectReason('');
-      setStatusMessage('Budget contribution rejected with audit notes.');
+      setStatusMessage(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes);
       loadBudgetData(selectedProjectId);
     } catch (err: any) {
       setErrorMessage(err.message);
@@ -223,7 +227,7 @@ function ProjectBudgetContent() {
   };
 
   const formatCurrency = (val: number) => {
-    return `₹ ${Math.round(val || 0).toLocaleString('en-IN')}`;
+    return `₹ ${Math.round(val || 0).toLocaleString(I18N_CONFIG.defaultLocale)}`;
   };
 
   const formatStatusText = (status: string) => {
@@ -272,8 +276,8 @@ function ProjectBudgetContent() {
     <div className="page-container" style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
       {/* 1. PROJECT BUDGET HEADER */}
       <PageHeader
-        title="Project Budget Workspace"
-        subtitle="Integrated enterprise budget control, cost centre allocation, ₹/Sqft metrics, and downstream procurement governance"
+        title={UI_STRINGS.appAppBudgetPage.projectBudgetWorkspace}
+        subtitle={UI_STRINGS.appAppBudgetPage.integratedEnterpriseBudgetControlCostCentreAllocationSqftMetricsAndDownstreamProcurementGovernance}
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -281,27 +285,21 @@ function ProjectBudgetContent() {
               onClick={() => loadBudgetData(selectedProjectId)}
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              title="Refresh Budget"
+              title={UI_STRINGS.appAppBudgetPage.refreshBudget}
             >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
             <Link
               href="/budget/transactions"
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <History size={14} />
-              Ledger
-            </Link>
+              <History size={14} />{UI_STRINGS.common.ledger}</Link>
             <Link
               href="/budget/vs-actual"
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <Scale size={14} />
-              Budget vs Actual
-            </Link>
+              <Scale size={14} />{UI_STRINGS.common.budgetVsActual}</Link>
           </div>
         }
       />
@@ -309,9 +307,7 @@ function ProjectBudgetContent() {
       {/* Global Selectors */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 flex gap-4 items-center flex-wrap">
         <div style={{ flex: 1, minWidth: 240 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
-            Project
-          </label>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>{UI_STRINGS.common.project}</label>
           <select
             className="form-control"
             value={selectedProjectId}
@@ -320,16 +316,14 @@ function ProjectBudgetContent() {
           >
             {projects.map(p => (
               <option key={p.id} value={p.id}>
-                {p.projectCode} — {p.name}
+                {p.projectCode}{UI_STRINGS.common.copyq9aflv}{p.name}
               </option>
             ))}
           </select>
         </div>
 
         <div style={{ flex: 1, minWidth: 260 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
-            Cost Centre
-          </label>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>{UI_STRINGS.common.costCentre2}</label>
           <select
             className="form-control"
             value={selectedCostCentreId}
@@ -338,11 +332,11 @@ function ProjectBudgetContent() {
             style={{ height: 40, width: '100%', fontSize: 13, fontWeight: 600 }}
           >
             {costCentres.length === 0 ? (
-              <option value="">No Cost Centres</option>
+              <option value="">{UI_STRINGS.appAppBudgetPage.noCostCentres}</option>
             ) : (
               costCentres.map(cc => (
                 <option key={cc.id} value={cc.id}>
-                  {cc.code} — {cc.name}
+                  {cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}
                 </option>
               ))
             )}
@@ -351,8 +345,7 @@ function ProjectBudgetContent() {
 
         {selectedCC && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto', paddingTop: 18 }}>
-            <span className="text-xs text-slate-500 font-medium">
-              Area: <strong className="text-slate-900">{ccArea > 0 ? `${ccArea.toLocaleString('en-IN')} Sqft` : 'Not specified'}</strong>
+            <span className="text-xs text-slate-500 font-medium">{UI_STRINGS.appAppBudgetPage.area}<strong className="text-slate-900">{ccArea > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleStringSqft, { "toLocaleString": ccArea.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.notSpecified}</strong>
             </span>
             <StatusBadge status={ccStatus} />
           </div>
@@ -366,9 +359,7 @@ function ProjectBudgetContent() {
             <CheckCircle2 size={16} />
             <span>{statusMessage}</span>
           </div>
-          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>
-            ✕
-          </button>
+          <button type="button" onClick={() => setStatusMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -378,9 +369,7 @@ function ProjectBudgetContent() {
             <AlertCircle size={16} />
             <span>{errorMessage}</span>
           </div>
-          <button type="button" onClick={() => setErrorMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c' }}>
-            ✕
-          </button>
+          <button type="button" onClick={() => setErrorMessage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c' }}>{UI_STRINGS.common.copy4i33ao}</button>
         </div>
       )}
 
@@ -388,30 +377,30 @@ function ProjectBudgetContent() {
       <div className="mb-6">
         <SummaryCardGrid columns={4}>
           <SummaryCard
-            label="Total Budget Allocation"
+            label={UI_STRINGS.appAppBudgetPage.totalBudgetAllocation}
             value={formatCurrency(ccTotalBudget)}
-            secondary={`Approved: ${formatCurrency(ccApprovedBudget)} • Pending: ${formatCurrency(ccPendingBudget)}`}
+            secondary={interpolateUiString(UI_STRINGS.appAppBudgetPage.approvedValue1PendingValue2, { "value1": formatCurrency(ccApprovedBudget), "value2": formatCurrency(ccPendingBudget) })}
             icon={<Landmark size={16} />}
             accent="default"
           />
           <SummaryCard
-            label="Actual Spend"
+            label={UI_STRINGS.appAppBudgetPage.actualSpend}
             value={formatCurrency(ccActual)}
-            secondary={`Utilisation: ${ccTotalBudget > 0 ? ((ccActual / ccTotalBudget) * 100).toFixed(1) : 0}%`}
+            secondary={interpolateUiString(UI_STRINGS.appAppBudgetPage.utilisationValue1, { "value1": ccTotalBudget > 0 ? ((ccActual / ccTotalBudget) * 100).toFixed(1) : 0 })}
             icon={<TrendingDown size={16} />}
             accent="neutral"
           />
           <SummaryCard
-            label="Available Balance"
+            label={UI_STRINGS.appAppBudgetPage.availableBalance}
             value={formatCurrency(ccBalance)}
-            secondary="Uncommitted allocation"
+            secondary={UI_STRINGS.appAppBudgetPage.uncommittedAllocation}
             icon={<CheckCircle2 size={16} />}
             accent="emerald"
           />
           <SummaryCard
-            label="Cost Per Sqft"
-            value={ccArea > 0 ? `₹ ${budgetPerSqFt?.toLocaleString('en-IN')}` : '—'}
-            secondary={ccArea > 0 ? `Actual: ₹ ${actualPerSqFt || 0} / Sqft` : 'Area not configured'}
+            label={UI_STRINGS.appAppBudgetPage.costPerSqft}
+            value={ccArea > 0 ? `₹ ${budgetPerSqFt?.toLocaleString(I18N_CONFIG.defaultLocale)}` : '—'}
+            secondary={ccArea > 0 ? interpolateUiString(UI_STRINGS.appAppBudgetPage.actualValue1Sqft, { "value1": actualPerSqFt || 0 }) : UI_STRINGS.appAppBudgetPage.areaNotConfigured}
             icon={<Scale size={16} />}
             accent="blue"
           />
@@ -426,11 +415,9 @@ function ProjectBudgetContent() {
               <Clock size={18} color="#b45309" />
               <div>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
-                  {pendingContributions.length} Budget Contribution{pendingContributions.length > 1 ? 's' : ''} Under Approval for {selectedCC?.name}
+                  {pendingContributions.length}{UI_STRINGS.appAppBudgetPage.budgetContribution}{pendingContributions.length > 1 ? UI_STRINGS.common.s : ''}{UI_STRINGS.appAppBudgetPage.underApprovalFor}{selectedCC?.name}
                 </span>
-                <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
-                  Originated from commercial BOQ allocation. Requires Project Approver review and sign-off.
-                </div>
+                <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>{UI_STRINGS.appAppBudgetPage.originatedFromCommercialBOQAllocationRequiresProjectApproverReviewAndSignOff}</div>
               </div>
             </div>
 
@@ -447,8 +434,7 @@ function ProjectBudgetContent() {
                         className="btn btn-primary btn-sm"
                         style={{ height: 32, fontSize: 12, padding: '0 12px', background: '#047857', borderColor: '#047857' }}
                       >
-                        <Check size={14} /> Approve Budget (₹ {contrib.totalEstimatedValue ? contrib.totalEstimatedValue.toLocaleString('en-IN') : '0'})
-                      </button>
+                        <Check size={14} />{UI_STRINGS.appAppBudgetPage.approveBudget}{contrib.totalEstimatedValue ? contrib.totalEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.appAppBudgetPage.copyepw9f3}{UI_STRINGS.common.copyc7zu6c}</button>
                       <button
                         type="button"
                         disabled={approving}
@@ -456,8 +442,7 @@ function ProjectBudgetContent() {
                         className="btn btn-outline btn-sm"
                         style={{ height: 32, fontSize: 12, padding: '0 10px', color: '#b91c1c' }}
                       >
-                        <X size={14} /> Reject
-                      </button>
+                        <X size={14} />{UI_STRINGS.common.reject}</button>
                     </div>
                   );
                 })}
@@ -471,29 +456,24 @@ function ProjectBudgetContent() {
       <div className="card" style={{ background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24 }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
           <div>
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              CATEGORY-WISE BUDGET
-            </h2>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>
-              Calculated from commercial BOQ allocations and verified cost transactions for {selectedCC?.code || 'this Cost Centre'}.
-            </p>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{UI_STRINGS.appAppBudgetPage.cATEGORYWISEBUDGET}</h2>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppBudgetPage.calculatedFromCommercialBOQAllocationsAndVerifiedCostTransactionsFor}{selectedCC?.code || UI_STRINGS.appAppBudgetPage.thisCostCentre}{UI_STRINGS.common.copyby08hd}</p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
-            {categories.length} Commercial Categories
-          </span>
+            {categories.length}{UI_STRINGS.appAppBudgetPage.commercialCategories}</span>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
           <table className="table" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#475569', height: 42 }}>
-                <th style={{ padding: '0 16px', fontWeight: 700 }}>Category</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>Approved Budget</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>Pending Approval</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>₹ / Sqft</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>Actual</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>Balance</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'center' }}>Approval Status</th>
+                <th style={{ padding: '0 16px', fontWeight: 700 }}>{UI_STRINGS.common.category2}</th>
+                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.approvedBudget}</th>
+                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.pendingApproval}</th>
+                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.sqft}</th>
+                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.actual}</th>
+                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.appAppBudgetPage.balance}</th>
+                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'center' }}>{UI_STRINGS.common.approvalStatus}</th>
               </tr>
             </thead>
             <tbody>
@@ -501,26 +481,21 @@ function ProjectBudgetContent() {
                 <tr>
                   <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                      <RefreshCw size={16} className="animate-spin" />
-                      Loading category budget metrics...
-                    </div>
+                      <RefreshCw size={16} className="animate-spin" />{UI_STRINGS.appAppBudgetPage.loadingCategoryBudgetMetrics}</div>
                   </td>
                 </tr>
               ) : categories.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
                     <FileSpreadsheet size={36} color="#cbd5e1" style={{ margin: '0 auto 10px auto' }} />
-                    <div style={{ fontWeight: 600, color: '#334155', fontSize: 14 }}>No Category Budget Allocated</div>
-                    <p style={{ color: '#64748b', fontSize: 12, margin: '4px 0 16px 0' }}>
-                      Add a completed BOQ with AI Cost to allocate commercial budget to {selectedCC?.name || 'this Cost Centre'}.
-                    </p>
+                    <div style={{ fontWeight: 600, color: '#334155', fontSize: 14 }}>{UI_STRINGS.appAppBudgetPage.noCategoryBudgetAllocated}</div>
+                    <p style={{ color: '#64748b', fontSize: 12, margin: '4px 0 16px 0' }}>{UI_STRINGS.appAppBudgetPage.addACompletedBOQWithAICostToAllocateCommercialBudgetTo}{selectedCC?.name || UI_STRINGS.appAppBudgetPage.thisCostCentre}{UI_STRINGS.common.copyby08hd}</p>
                     <Link
                       href={`/boq/studio?projectId=${selectedProjectId}&costCentreId=${selectedCostCentreId}`}
                       className="btn btn-primary btn-sm"
                       style={{ fontSize: 12, padding: '0 14px' }}
                     >
-                      <Sparkles size={14} /> Open BOQ Studio
-                    </Link>
+                      <Sparkles size={14} />{UI_STRINGS.common.openBOQStudio}</Link>
                   </td>
                 </tr>
               ) : (
@@ -535,10 +510,10 @@ function ProjectBudgetContent() {
                         {formatCurrency(cat.approvedBudget)}
                       </td>
                       <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: cat.pendingBudget > 0 ? '#b45309' : '#94a3b8' }}>
-                        {cat.pendingBudget > 0 ? formatCurrency(cat.pendingBudget) : '—'}
+                        {cat.pendingBudget > 0 ? formatCurrency(cat.pendingBudget) : UI_STRINGS.common.copy4s9bsz}
                       </td>
                       <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: '#1e40af' }}>
-                        {cat.ratePerSqFt !== null ? `₹ ${cat.ratePerSqFt.toLocaleString('en-IN')}` : (ccArea > 0 ? '₹ 0' : '—')}
+                        {cat.ratePerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": cat.ratePerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (ccArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
                       </td>
                       <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: cat.actual > 0 ? '#0f172a' : '#94a3b8' }}>
                         {formatCurrency(cat.actual)}
@@ -577,22 +552,16 @@ function ProjectBudgetContent() {
       {rejectModalOpen && selectedRejectContrib && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 480, padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 10px 0', color: '#b91c1c' }}>
-              Reject Budget Contribution
-            </h3>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
-              Mandatory Project Approver requirement: Please provide the reason for rejecting this budget contribution.
-            </p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 10px 0', color: '#b91c1c' }}>{UI_STRINGS.common.rejectBudgetContribution}</h3>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>{UI_STRINGS.appAppBudgetPage.mandatoryProjectApproverRequirementPleaseProvideTheReasonForRejectingThisBudgetContribution}</p>
 
             <form onSubmit={handleConfirmReject}>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                  Mandatory Rejection Reason *
-                </label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.appAppBudgetPage.mandatoryRejectionReason}</label>
                 <textarea
                   className="input-field"
                   rows={3}
-                  placeholder="Specify reason for budget rejection..."
+                  placeholder={UI_STRINGS.appAppBudgetPage.specifyReasonForBudgetRejection}
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1' }}
@@ -601,11 +570,9 @@ function ProjectBudgetContent() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" className="btn btn-outline" onClick={() => setRejectModalOpen(false)} disabled={approving}>
-                  Cancel
-                </button>
+                <button type="button" className="btn btn-outline" onClick={() => setRejectModalOpen(false)} disabled={approving}>{UI_STRINGS.common.cancel}</button>
                 <button type="submit" className="btn btn-outline" style={{ background: '#b91c1c', color: '#ffffff', borderColor: '#b91c1c' }} disabled={approving || !rejectReason.trim()}>
-                  {approving ? 'Rejecting...' : 'Confirm Rejection'}
+                  {approving ? UI_STRINGS.common.rejecting : UI_STRINGS.common.confirmRejection}
                 </button>
               </div>
             </form>
@@ -618,7 +585,7 @@ function ProjectBudgetContent() {
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#475569' }}>
             <Layers size={16} color="#64748b" />
-            <span>Switch Cost Centre in this Project:</span>
+            <span>{UI_STRINGS.appAppBudgetPage.switchCostCentreInThisProject}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {costCentres.map(cc => (
@@ -637,7 +604,7 @@ function ProjectBudgetContent() {
                   color: cc.id === selectedCostCentreId ? '#1e40af' : '#475569',
                 }}
               >
-                {cc.code} — {cc.name}
+                {cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}
               </button>
             ))}
           </div>
@@ -649,7 +616,7 @@ function ProjectBudgetContent() {
 
 export default function ProjectBudgetPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>Loading Project Budget...</div>}>
+    <Suspense fallback={<div style={{ padding: '48px 32px', textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.common.loadingProjectBudget}</div>}>
       <ProjectBudgetContent />
     </Suspense>
   );

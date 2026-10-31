@@ -3,6 +3,8 @@ import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 export async function GET(req: NextRequest) {
   // Support testing header fallback
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   const session = await auth();
   if (!session?.user) {
-    return apiError('Unauthorized', 401);
+    return apiError(UI_STRINGS.appApiAuthMeRoute.unauthorized, 401);
   }
 
   return apiSuccess({

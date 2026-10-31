@@ -3,6 +3,8 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { POST as createCostCentre, GET as listCostCentres } from '../src/app/api/cost-centres/route';
 import { GET as listApprovedBoqs } from '../src/app/api/procurement/approved-boqs/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -75,11 +77,11 @@ describe('cost centre and approved BOQ APIs', () => {
     isContext.mockReturnValueOnce(false);
     await expect(createCostCentre(request('http://localhost/api/cost-centres', {}))).resolves.toBe(denied);
     await expect(createCostCentre(request('http://localhost/api/cost-centres', { projectId: '', code: 'CC', name: 'Office' }))).resolves.toEqual({
-      ok: false, error: 'Project ID, Cost Centre Code, and Name are mandatory.', status: 400,
+      ok: false, error: UI_STRINGS.appApiCostCentresRoute.projectIDCostCentreCodeAndNameAreMandatory, status: 400,
     });
     db.project.findFirst.mockResolvedValueOnce(null);
     await expect(createCostCentre(request('http://localhost/api/cost-centres', { projectId: 'missing', code: 'CC', name: 'Office' }))).resolves.toEqual({
-      ok: false, error: 'Project not found or inaccessible.', status: 404,
+      ok: false, error: UI_STRINGS.appApiCostCentresRoute.projectNotFoundOrInaccessible, status: 404,
     });
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.costCentre.findUnique.mockResolvedValueOnce({ id: 'duplicate' });
@@ -95,7 +97,7 @@ describe('cost centre and approved BOQ APIs', () => {
       projectId: 'project-1', code: ' CC-2 ', name: ' East Wing ', description: ' Office ', areaSqFt: '125.5', location: ' Pune ', floorZone: ' L2 ',
     }))).resolves.toEqual({ ok: true, data: created, status: 201 });
     expect(db.costCentre.create).toHaveBeenCalledWith({ data: {
-      tenantId: 'tenant-1', projectId: 'project-1', code: 'CC-2', name: 'East Wing', description: 'Office', areaSqFt: 125.5,
+      tenantId: 'tenant-1', projectId: 'project-1', code: 'CC-2', name: 'East Wing', description: UI_STRINGS.appAppBoqStudioPage.office, areaSqFt: 125.5,
       location: 'Pune', floorZone: 'L2', createdBy: 'user-1',
     } });
     expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'COST_CENTRE_CREATED', entityId: 'cc-2' }) });
@@ -161,7 +163,7 @@ describe('cost centre and approved BOQ APIs', () => {
     expect(db.boqRevision.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', AND: [
         { OR: [
-          { status: 'APPROVED' }, { prStatus: 'PR_RELEASED_TO_PROCUREMENT' }, { prStatus: 'PR_APPROVED' },
+          { status: UI_STRINGS.common.aPPROVED }, { prStatus: 'PR_RELEASED_TO_PROCUREMENT' }, { prStatus: 'PR_APPROVED' },
           { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
         ] },
         { boq: { projectId: 'project-1' } },

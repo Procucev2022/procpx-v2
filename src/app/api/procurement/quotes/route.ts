@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('QUOTE_VIEW');
@@ -46,7 +49,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ quotes, total: quotes.length });
   } catch (error: any) {
     console.error('Error fetching quotes:', error);
-    return apiError(error.message || 'Failed to fetch quotes', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchQuotes }), 500);
   }
 }
 
@@ -68,15 +71,15 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId || !vendorId || !lines.length) {
-      return apiError('RFQ ID, Vendor ID, and line pricing are required', 400);
+      return apiError(UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, 400);
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId) {
-        return apiError('Forbidden: vendor record not associated with this user account', 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403);
       }
       if (vendorId !== ctx.vendorId) {
-        return apiError('Forbidden: you can only submit quotes for your own vendor account', 403);
+        return apiError(UI_STRINGS.appApiProcurementQuotesRoute.forbiddenYouCanOnlySubmitQuotesForYourOwnVendorAccount, 403);
       }
     }
 
@@ -87,7 +90,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError('RFQ not found or access denied', 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
     if (ctx.role === 'VENDOR') {
@@ -95,12 +98,12 @@ export async function POST(req: NextRequest) {
         where: { rfqId, vendorId: ctx.vendorId!, tenantId: ctx.tenantId },
       });
       if (!isInvited) {
-        return apiError('Forbidden: vendor is not invited to this RFQ', 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403);
       }
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(`RFQ status (${rfq.status}) does not permit vendor quotation submissions`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400);
     }
 
     // 2. Verify vendor exists
@@ -109,7 +112,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError('Vendor not found or access denied', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
     }
 
     // 3. Check existing quotes for this RFQ & Vendor to increment version
@@ -225,7 +228,7 @@ export async function POST(req: NextRequest) {
       entityType: 'QUOTE',
       entityId: quote.id,
       action: auditAction,
-      description: `Quote ${quoteNumber} v${nextVersion} submitted by ${vendor.name} for RFQ ${rfq.rfqNumber}: ₹ ${grandTotalQuoteAmount.toLocaleString()}`,
+      description: interpolateUiString(UI_STRINGS.appApiProcurementQuotesRoute.quoteQuoteNumberVNextVersionSubmittedByNameForRFQRfqNumberToLocaleString, { "quoteNumber": quoteNumber, "nextVersion": nextVersion, "name": vendor.name, "rfqNumber": rfq.rfqNumber, "toLocaleString": grandTotalQuoteAmount.toLocaleString() }),
       newValue: {
         quoteNumber,
         version: nextVersion,
@@ -247,9 +250,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return apiSuccess({ quote, message: `Quote v${nextVersion} submitted successfully` }, 201);
+    return apiSuccess({ quote, message: interpolateUiString(UI_STRINGS.appApiProcurementQuotesRoute.quoteVNextVersionSubmittedSuccessfully, { "nextVersion": nextVersion }) }, 201);
   } catch (error: any) {
     console.error('Error submitting quote:', error);
-    return apiError(error.message || 'Failed to submit quote', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuote }), 500);
   }
 }

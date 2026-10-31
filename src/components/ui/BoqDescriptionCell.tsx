@@ -5,19 +5,22 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Copy, Check, Info } from 'lucide-react';
 import type { BoqDescriptionCellProps } from "@app-types/components/ui/BoqDescriptionCell.types";
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 export type { BoqDescriptionCellProps };
 
 
 export default function BoqDescriptionCell({
   text,
-  title = 'BOQ Description',
+  title = UI_STRINGS.componentsUiBoqDescriptionCell.defaultTitle,
   contextLabel,
   itemCode,
   itemDescription,
   lineNumber,
   maxWidth = 220,
   clampLines = 2,
-  emptyPlaceholder = '—',
+  emptyPlaceholder = UI_STRINGS.common.copy4s9bsz,
   className = '',
   showIcon = false,
 }: BoqDescriptionCellProps) {
@@ -147,7 +150,7 @@ export default function BoqDescriptionCell({
         onBlur={handleMouseLeave}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
-        aria-label={`${title}: ${cleanText.slice(0, 60)}...`}
+        aria-label={interpolateUiString(UI_STRINGS.componentsUiBoqDescriptionCell.titleSlice, { "title": title, "slice": cleanText.slice(0, 60) })}
         className={`group inline-flex items-start gap-1 cursor-pointer rounded px-1 py-0.5 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 hover:bg-blue-50/50 ${className}`}
         style={{
           maxWidth: maxWidthStyle,
@@ -208,9 +211,7 @@ export default function BoqDescriptionCell({
                     </span>
                   )}
                   {lineNumber && (
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      (Line #{lineNumber})
-                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">{UI_STRINGS.componentsUiBoqDescriptionCell.line}{lineNumber}{UI_STRINGS.common.copyc7zu6c}</span>
                   )}
                   {itemCode && (
                     <span className="text-[10px] font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate">
@@ -223,17 +224,17 @@ export default function BoqDescriptionCell({
                   type="button"
                   onClick={handleCopy}
                   className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-700 bg-slate-50 hover:bg-blue-50 px-2 py-0.5 rounded border border-slate-200 transition-colors shrink-0"
-                  title={`Copy full ${title.toLowerCase()} to clipboard`}
+                  title={interpolateUiString(UI_STRINGS.componentsUiBoqDescriptionCell.copyFullToLowerCaseToClipboard, { "toLowerCase": title.toLowerCase() })}
                 >
                   {copied ? (
                     <>
                       <Check size={12} className="text-emerald-600" />
-                      <span className="text-emerald-700 font-semibold">Copied</span>
+                      <span className="text-emerald-700 font-semibold">{UI_STRINGS.common.copied}</span>
                     </>
                   ) : (
                     <>
                       <Copy size={12} className="text-slate-400" />
-                      <span>Copy</span>
+                      <span>{UI_STRINGS.common.copy}</span>
                     </>
                   )}
                 </button>
@@ -242,7 +243,7 @@ export default function BoqDescriptionCell({
               {/* Context: Item Description if available */}
               {itemDescription && (
                 <div className="text-[11px] text-slate-500 mb-2 truncate" title={itemDescription}>
-                  <span className="font-medium text-slate-600">Item:</span> {itemDescription}
+                  <span className="font-medium text-slate-600">{UI_STRINGS.componentsUiBoqDescriptionCell.item}</span> {itemDescription}
                 </div>
               )}
 
@@ -250,7 +251,7 @@ export default function BoqDescriptionCell({
               <div
                 tabIndex={0}
                 role="region"
-                aria-label={`Full ${title}`}
+                aria-label={interpolateUiString(UI_STRINGS.componentsUiBoqDescriptionCell.fullTitle, { "title": title })}
                 className="text-[12px] leading-relaxed text-slate-800 whitespace-pre-wrap break-words max-h-60 overflow-y-auto pr-1 select-text font-normal border-l-2 border-blue-400 pl-2.5 my-1"
               >
                 {cleanText}
@@ -259,9 +260,8 @@ export default function BoqDescriptionCell({
               {/* Tooltip Footer */}
               <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 select-none">
                 <span className="flex items-center gap-1">
-                  <Info size={11} className="text-slate-400" /> Complete untruncated record
-                </span>
-                <span className="font-mono">{cleanText.length} characters</span>
+                  <Info size={11} className="text-slate-400" />{UI_STRINGS.componentsUiBoqDescriptionCell.completeUntruncatedRecord}</span>
+                <span className="font-mono">{cleanText.length}{UI_STRINGS.common.characters}</span>
               </div>
             </div>
           </div>,

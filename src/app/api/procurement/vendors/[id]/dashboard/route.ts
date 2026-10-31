@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { hasPermission } from '@/lib/permissions';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(
   req: NextRequest,
@@ -17,11 +20,11 @@ export async function GET(
   // Authorization & strict cross-vendor isolation
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId || ctx.vendorId !== vendorId) {
-      return apiError('Forbidden: you can only access your own vendor dashboard', 403);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdDashboardRoute.forbiddenYouCanOnlyAccessYourOwnVendorDashboard, 403);
     }
   } else {
     if (!hasPermission(ctx.role, 'VENDOR_VIEW')) {
-      return apiError('Forbidden: insufficient permissions', 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
   }
 
@@ -31,7 +34,7 @@ export async function GET(
     });
 
     if (!vendor) {
-      return apiError('Vendor not found or access denied', 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
     }
 
     // 1. Fetch all RFQs where vendor is invited
@@ -367,6 +370,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching vendor dashboard data:', error);
-    return apiError(error.message || 'Failed to fetch vendor dashboard data', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }), 500);
   }
 }

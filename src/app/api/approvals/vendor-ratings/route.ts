@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { isUserAuthorizedForProject, getUserAuthorizedProjectIds } from '@/lib/project-auth';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('VENDOR_RATE_PPO_APPROVE');
@@ -132,7 +135,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching vendor ratings approval queue:', error);
-    return apiError(error.message || 'Failed to fetch approvals queue', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovalsQueue }), 500);
   }
 }
 
@@ -145,11 +148,11 @@ export async function POST(req: NextRequest) {
     const { ratingId, action, approverComments = '' } = body;
 
     if (!ratingId) {
-      return apiError('Rating ID is required.', 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingIDIsRequired, 400);
     }
 
     if (!['ACCEPT', 'RETURN', 'REJECT'].includes(action)) {
-      return apiError('Invalid decision action. Must be ACCEPT, RETURN, or REJECT.', 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.invalidDecisionActionMustBeACCEPTRETURNOrREJECT, 400);
     }
 
     const rating = await prisma.ppoVendorRating.findFirst({
@@ -164,23 +167,23 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rating) {
-      return apiError('Rating record not found or access denied.', 404);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingRecordNotFoundOrAccessDenied, 404);
     }
 
     // Security Rule: Validate approver project scope
     const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, rating.projectId || rating.ppo?.projectId);
     if (!isAuthorized) {
-      return apiError('Access denied: You are not authorised to review assessments for this project.', 403);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.accessDeniedYouAreNotAuthorisedToReviewAssessmentsForThisProject, 403);
     }
 
     // Business Rule: Only SUBMITTED ratings can be reviewed/decided
     if (rating.status !== 'SUBMITTED') {
-      return apiError(`Cannot record decision on assessment in ${rating.status} status. Only submitted assessments can be reviewed.`, 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.cannotRecordDecisionOnAssessmentInStatusStatusOnlySubmittedAssessmentsCanBeReviewed, { "status": rating.status }), 400);
     }
 
     // Require approver comments for Return or Reject per Requirement 2
     if ((action === 'RETURN' || action === 'REJECT') && !approverComments?.trim()) {
-      return apiError('Approver review comments are mandatory when rejecting or returning an assessment for correction.', 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.approverReviewCommentsAreMandatoryWhenRejectingOrReturningAnAssessmentForCorrection, 400);
     }
 
     let existingCriteria: any = {};
@@ -294,7 +297,7 @@ export async function POST(req: NextRequest) {
       entityType: 'VENDOR',
       entityId: rating.vendorId,
       action: auditAction,
-      description: `PPO ${rating.ppo.ppoNumber} performance rating (${rating.overallScore}/5.0) decision recorded: ${newStatus} by ${approverName}. Comments: ${approverComments.trim() || 'None'}`,
+      description: interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.pPOPpoNumberPerformanceRatingOverallScore50DecisionRecordedNewStatusByApproverNameCommentsValue5, { "ppoNumber": rating.ppo.ppoNumber, "overallScore": rating.overallScore, "newStatus": newStatus, "approverName": approverName, "value5": approverComments.trim() || UI_STRINGS.common.none }),
       newValue: {
         ppoNumber: rating.ppo.ppoNumber,
         action,
@@ -331,6 +334,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error recording approver decision:', error);
-    return apiError(error.message || 'Failed to record approver decision', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordApproverDecision }), 500);
   }
 }

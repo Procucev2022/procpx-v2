@@ -12,6 +12,9 @@ node_modules/
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/blob-report/
 
 # local structured logs, snapshots, and screenshots
 /logs
@@ -20,6 +23,11 @@ node_modules/
 .next/
 /out/
 
+# generated application builds
+/dist/
+/.output/
+/.turbo/
+
 # production
 /build
 
@@ -27,6 +35,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.pem
+*.key
 
 # debug
 npm-debug.log*
@@ -37,6 +46,27 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+
+# Cloudflare local state and secrets
+/.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# local databases and SQLite sidecars (D1 schema and SQL migrations stay tracked)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite3-journal
+
+# local caches and scratch output
+/.cache/
+/.npm/
+/tmp/
+/temp/
+/.tmp-*
 
 # vercel
 .vercel

@@ -4,6 +4,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { hasPermission } from '../src/lib/permissions';
 import { createAuditLog } from '../src/lib/audit';
 import { GET as getRfq, PUT as updateRfq } from '../src/app/api/procurement/rfqs/[id]/route';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -46,15 +48,15 @@ describe('RFQ detail read permissions', () => {
     isContext.mockReturnValueOnce(false);
     await expect(getRfq(getRequest(), params)).resolves.toBe(denied);
     permission.mockReturnValueOnce(false);
-    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: 'Forbidden: insufficient permissions', status: 403 });
+    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: null });
-    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: 'Forbidden: unmapped vendor account', status: 403 });
+    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenUnmappedVendorAccount, status: 403 });
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: 'vendor-1' });
     db.rfqVendor.findFirst.mockResolvedValueOnce(null);
-    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: 'Forbidden: you are not invited to this RFQ', status: 403 });
+    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, status: 403 });
     db.rfqVendor.findFirst.mockResolvedValueOnce({ id: 'invite-1' });
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
   });
 
   it('returns vendor-filtered RFQ details with auction and award data hidden', async () => {
@@ -108,7 +110,7 @@ describe('RFQ status and edit transitions', () => {
     await expect(updateRfq(putRequest({ title: 'Edit' }), params)).resolves.toBe(denied);
     expect(auth).toHaveBeenCalledWith('RFQ_EDIT');
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(updateRfq(putRequest({ status: 'UNDER_REVIEW' }), params)).resolves.toEqual({ ok: false, error: 'RFQ not found or access denied', status: 404 });
+    await expect(updateRfq(putRequest({ status: 'UNDER_REVIEW' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
   });
 
   it('releases drafts, updates invitations, and applies draft fields with audit history', async () => {
@@ -120,7 +122,7 @@ describe('RFQ status and edit transitions', () => {
       action: 'RELEASE', title: 'Lighting', scopeOfWork: 'Install lights', submissionDeadline: '2026-11-30T00:00:00.000Z',
       clarificationDeadline: '2026-11-01T00:00:00.000Z', deliveryRequirement: '30 days', paymentTerms: 'Net 30', taxTerms: 'GST',
     }), params)).resolves.toEqual({ ok: true, data: { rfq: updated, message: 'RFQ RFQ-1 released to 2 vendors' }, status: 200 });
-    expect(db.rfqVendor.updateMany).toHaveBeenCalledWith({ where: { rfqId: 'rfq-1' }, data: { invitationStatus: 'INVITED' } });
+    expect(db.rfqVendor.updateMany).toHaveBeenCalledWith({ where: { rfqId: 'rfq-1' }, data: { invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED } });
     expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: expect.objectContaining({
       status: 'RELEASED', title: 'Lighting', scopeOfWork: 'Install lights', submissionDeadline: new Date('2026-11-30T00:00:00.000Z'),
       clarificationDeadline: new Date('2026-11-01T00:00:00.000Z'), deliveryRequirement: '30 days', paymentTerms: 'Net 30', taxTerms: 'GST', releasedAt: expect.any(Date),
@@ -132,7 +134,7 @@ describe('RFQ status and edit transitions', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'ISSUED', rfqNumber: 'RFQ-1', invitedVendors: [] });
     await expect(updateRfq(putRequest({ action: 'RELEASE' }), params)).resolves.toEqual({ ok: false, error: 'Cannot release RFQ in status ISSUED', status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'RELEASED', rfqNumber: 'RFQ-1', invitedVendors: [] });
-    await expect(updateRfq(putRequest({ action: 'CANCEL' }), params)).resolves.toEqual({ ok: false, error: 'Cancellation reason is required', status: 400 });
+    await expect(updateRfq(putRequest({ action: 'CANCEL' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, status: 400 });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1', status: 'RELEASED', invitedVendors: [] });
     db.rfq.update.mockResolvedValueOnce({ id: 'rfq-1', status: 'CANCELLED' });
     await expect(updateRfq(putRequest({ action: 'CANCEL', reason: 'Project paused', title: 'Ignored after release' }), params)).resolves.toMatchObject({ ok: true, data: { rfq: { status: 'CANCELLED' }, message: 'RFQ RFQ-1 cancelled. Reason: Project paused' } });
@@ -144,7 +146,7 @@ describe('RFQ status and edit transitions', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1', status: 'UNDER_REVIEW', invitedVendors: [] });
     db.rfq.update.mockResolvedValueOnce({ id: 'rfq-1', status: 'UNDER_REVIEW' });
     await updateRfq(putRequest({ status: 'UNDER_REVIEW', title: 'Updated', submissionDeadline: '2026-12-01T00:00:00.000Z', scopeOfWork: '' }), params);
-    expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'UNDER_REVIEW', title: 'Updated', submissionDeadline: new Date('2026-12-01T00:00:00.000Z') } });
+    expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'UNDER_REVIEW', title: UI_STRINGS.appAppProjectsPage.updated, submissionDeadline: new Date('2026-12-01T00:00:00.000Z') } });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'APPROVED', invitedVendors: [] });
     db.rfq.update.mockResolvedValueOnce({ id: 'rfq-1', status: 'APPROVED' });
     await updateRfq(putRequest({ title: 'Must not overwrite' }), params);

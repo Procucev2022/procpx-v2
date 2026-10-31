@@ -2,6 +2,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_APPROVE');
@@ -14,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { reason } = body;
 
     if (!reason || !reason.trim()) {
-      return apiError('Mandatory rejection reason must be provided.', 400);
+      return apiError(UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, 400);
     }
 
     const pr = await prisma.procurementRequest.findFirst({
@@ -22,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { costCentre: true },
     });
 
-    if (!pr) return apiError('Procurement Request not found.', 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
 
     const updated = await prisma.procurementRequest.update({
       where: { id },
@@ -56,12 +59,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         entityType: 'PR',
         entityId: pr.id,
         action: 'PR_REJECTED',
-        description: `Procurement Request ${pr.prNumber} REJECTED by Project Approver. Reason: ${reason.trim()}`,
+        description: interpolateUiString(UI_STRINGS.appApiPrIdRejectRoute.procurementRequestPrNumberREJECTEDByProjectApproverReasonTrim, { "prNumber": pr.prNumber, "trim": reason.trim() }),
       },
     });
 
     return apiSuccess({ pr: updated, status: 'PR_REJECTED' });
   } catch (err: any) {
-    return apiError(err.message || 'PR rejection failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prRejectionFailed }), 500);
   }
 }

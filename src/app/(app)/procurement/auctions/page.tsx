@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/procurement/auctions/page.tsx
 // Complete Enterprise Auction Workspace: Dashboard, KPIs, Register, and Step-Based Guided Creation
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -36,10 +37,13 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export default function AuctionsHubPage() {
   return (
-    <Suspense fallback={<div className="container" style={{ padding: 32 }}>Loading Auction Workspace...</div>}>
+    <Suspense fallback={<div className="container" style={{ padding: 32 }}>{UI_STRINGS.appAppProcurementAuctionsPage.loadingAuctionWorkspace}</div>}>
       <AuctionsContent />
     </Suspense>
   );
@@ -215,7 +219,7 @@ function AuctionsContent() {
       }
     } catch (err) {
       console.error(err);
-      toast.error({ title: 'Error', message: 'Failed to load auction events' });
+      toast.error({ title: UI_STRINGS.common.error, message: UI_STRINGS.appAppProcurementAuctionsPage.failedToLoadAuctionEvents });
     } finally {
       setLoading(false);
     }
@@ -276,24 +280,24 @@ function AuctionsContent() {
   // Handle Save / Schedule Auction
   const handleSaveAuction = async (isDraft: boolean) => {
     if (!selectedRfqId) {
-      toast.error({ title: 'Validation', message: 'Please select an RFQ package.' });
+      toast.error({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppProcurementAuctionsPage.pleaseSelectAnRFQPackage });
       setWizardStep(1);
       return;
     }
     if (!auctionName.trim()) {
-      toast.error({ title: 'Validation', message: 'Please enter an Auction Name.' });
+      toast.error({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppProcurementAuctionsPage.pleaseEnterAnAuctionName });
       setWizardStep(1);
       return;
     }
     if (!isDraft && invitedVendorIds.length === 0) {
-      toast.error({ title: 'Validation', message: 'Please invite at least one vendor.' });
+      toast.error({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppProcurementAuctionsPage.pleaseInviteAtLeastOneVendor });
       setWizardStep(4);
       return;
     }
     if (!isDraft && nonInvitedQuotedVendors.length > 0 && !nonInvitedJustification.trim()) {
       toast.error({
-        title: 'Mandatory Policy Requirement',
-        message: 'Please provide justification comments for excluding quoted vendors.',
+        title: UI_STRINGS.appAppProcurementAuctionsPage.mandatoryPolicyRequirement,
+        message: UI_STRINGS.appAppProcurementAuctionsPage.pleaseProvideJustificationCommentsForExcludingQuotedVendors,
       });
       setWizardStep(4);
       return;
@@ -304,7 +308,7 @@ function AuctionsContent() {
     const endIso = endDate && endTime ? new Date(`${endDate}T${endTime}:00+05:30`).toISOString() : new Date(Date.now() + 2 * 3600000).toISOString();
 
     if (!isDraft && new Date(endIso) <= new Date(startIso)) {
-      toast.error({ title: 'Invalid Schedule', message: 'Auction End Time must be later than Start Time.' });
+      toast.error({ title: UI_STRINGS.appAppProcurementAuctionsPage.invalidSchedule, message: UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime });
       setWizardStep(2);
       return;
     }
@@ -348,18 +352,18 @@ function AuctionsContent() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save auction');
+      if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSaveAuction }));
 
       toast.success({
-        title: isDraft ? 'Draft Saved' : 'Auction Scheduled',
-        message: data.message || `Auction ${data.auction?.auctionNumber} saved successfully.`,
+        title: isDraft ? UI_STRINGS.common.userMessages.draftSaved : UI_STRINGS.common.userMessages.auctionScheduled,
+        message: interpolateUiString(UI_STRINGS.common.value1, { "value1": data.message || interpolateUiString(UI_STRINGS.common.userMessages.auctionSavedSuccessfully, { "auctionNumber": data.auction?.auctionNumber }) }),
       });
 
       setShowCreateWizard(false);
       resetWizard();
       fetchAuctions();
     } catch (err: any) {
-      toast.error({ title: 'Auction Creation Failed', message: err.message });
+      toast.error({ title: UI_STRINGS.appAppProcurementAuctionsPage.auctionCreationFailed, message: err.message });
     } finally {
       setSubmitting(false);
     }
@@ -394,7 +398,7 @@ function AuctionsContent() {
     if (!dateStr) return '—';
     try {
       const d = new Date(dateStr);
-      return d.toLocaleString('en-IN', {
+      return d.toLocaleString(I18N_CONFIG.defaultLocale, {
         timeZone: 'Asia/Kolkata',
         day: '2-digit',
         month: 'short',
@@ -412,11 +416,11 @@ function AuctionsContent() {
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
       {/* Page Header */}
       <PageHeader
-        title="B2B E-Auction Management Workspace"
-        subtitle="Configure, schedule, monitor live bidding, and govern Reverse Auctions, Forward Auctions, and Sealed Bids in India Standard Time (IST)"
+        title={UI_STRINGS.appAppProcurementAuctionsPage.b2BEAuctionManagementWorkspace}
+        subtitle={UI_STRINGS.appAppProcurementAuctionsPage.configureScheduleMonitorLiveBiddingAndGovernReverseAuctionsForwardAuctionsAndSealedBidsInIndiaStandardTimeIST}
         breadcrumbs={[
-          { label: 'Procurement', href: '/procurement/rfqs' },
-          { label: 'Auctions Workspace' },
+          { label: UI_STRINGS.common.procurement, href: '/procurement/rfqs' },
+          { label: UI_STRINGS.appAppProcurementAuctionsPage.auctionsWorkspace },
         ]}
         actions={
           <div style={{ display: 'flex', gap: 10 }}>
@@ -426,8 +430,7 @@ function AuctionsContent() {
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
-            </button>
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh}</button>
             {canManage && (
               <button
                 type="button"
@@ -438,8 +441,7 @@ function AuctionsContent() {
                 className="btn btn-primary btn-sm"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                <Plus size={14} /> Create E-Auction
-              </button>
+                <Plus size={14} />{UI_STRINGS.appAppProcurementAuctionsPage.createEAuction}</button>
             )}
           </div>
         }
@@ -463,8 +465,7 @@ function AuctionsContent() {
         >
           <Shield size={18} color="#d97706" />
           <div>
-            <strong>Observer Access ({userRole})</strong>: You are viewing the Auctions Workspace in read-only mode. Event configuration, scheduling, and live buyer controls are restricted to procurement officers.
-          </div>
+            <strong>{UI_STRINGS.appAppProcurementAuctionsPage.observerAccess}{userRole}{UI_STRINGS.common.copyc7zu6c}</strong>{UI_STRINGS.appAppProcurementAuctionsPage.youAreViewingTheAuctionsWorkspaceInReadOnlyModeEventConfigurationSchedulingAndLiveBuyerControlsAreRestrictedToProcurementOfficers}</div>
         </div>
       )}
 
@@ -472,44 +473,44 @@ function AuctionsContent() {
       <div className="mb-6">
         <SummaryCardGrid columns={6}>
           <SummaryCard
-            label="Total Auctions"
+            label={UI_STRINGS.appAppProcurementAuctionsPage.totalAuctions}
             value={kpis.total}
-            secondary="All tenant auctions"
+            secondary={UI_STRINGS.appAppProcurementAuctionsPage.allTenantAuctions}
             icon={<Gavel size={16} />}
             accent="default"
           />
           <SummaryCard
-            label="Live Auctions"
+            label={UI_STRINGS.appAppProcurementAuctionsPage.liveAuctions}
             value={kpis.live}
-            secondary="Accepting real-time bids"
+            secondary={UI_STRINGS.appAppProcurementAuctionsPage.acceptingRealTimeBids}
             icon={<Clock size={16} />}
             accent="amber"
           />
           <SummaryCard
-            label="Upcoming"
+            label={UI_STRINGS.appAppProcurementAuctionsPage.upcoming}
             value={kpis.upcoming}
-            secondary="Scheduled events"
+            secondary={UI_STRINGS.appAppProcurementAuctionsPage.scheduledEvents}
             icon={<Calendar size={16} />}
             accent="blue"
           />
           <SummaryCard
-            label="Drafts"
+            label={UI_STRINGS.common.drafts}
             value={kpis.draft}
-            secondary="Configurations in progress"
+            secondary={UI_STRINGS.appAppProcurementAuctionsPage.configurationsInProgress}
             icon={<FileText size={16} />}
             accent="default"
           />
           <SummaryCard
-            label="Completed"
+            label={UI_STRINGS.common.completed}
             value={kpis.completed}
-            secondary="Concluded & awarded"
+            secondary={UI_STRINGS.appAppProcurementAuctionsPage.concludedAwarded}
             icon={<CheckCircle2 size={16} />}
             accent="emerald"
           />
           <SummaryCard
-            label="Pending Actions"
+            label={UI_STRINGS.appAppProcurementAuctionsPage.pendingActions}
             value={kpis.pending}
-            secondary="Drafts & awards pending"
+            secondary={UI_STRINGS.appAppProcurementAuctionsPage.draftsAwardsPending}
             icon={<AlertCircle size={16} />}
             accent="rose"
           />
@@ -521,12 +522,12 @@ function AuctionsContent() {
         {/* Tab Navigation */}
         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', padding: '0 16px' }}>
           {[
-            { id: 'ALL', label: 'All Auctions', count: kpis.total },
-            { id: 'LIVE', label: 'Live Bidding', count: kpis.live, pulse: kpis.live > 0 },
-            { id: 'UPCOMING', label: 'Upcoming', count: kpis.upcoming },
-            { id: 'DRAFT', label: 'Drafts', count: kpis.draft },
-            { id: 'COMPLETED', label: 'Completed', count: kpis.completed },
-            { id: 'RESULTS', label: 'Results & History', count: kpis.completed },
+            { id: 'ALL', label: UI_STRINGS.appAppProcurementAuctionsPage.allAuctions, count: kpis.total },
+            { id: 'LIVE', label: UI_STRINGS.appAppProcurementAuctionsPage.liveBidding, count: kpis.live, pulse: kpis.live > 0 },
+            { id: 'UPCOMING', label: UI_STRINGS.appAppProcurementAuctionsPage.upcoming, count: kpis.upcoming },
+            { id: 'DRAFT', label: UI_STRINGS.common.drafts, count: kpis.draft },
+            { id: 'COMPLETED', label: UI_STRINGS.common.completed, count: kpis.completed },
+            { id: 'RESULTS', label: UI_STRINGS.appAppProcurementAuctionsPage.resultsHistory, count: kpis.completed },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -583,7 +584,7 @@ function AuctionsContent() {
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input
               type="text"
-              placeholder="Search by Auction #, Title, RFQ, PR..."
+              placeholder={UI_STRINGS.appAppProcurementAuctionsPage.searchByAuctionTitleRFQPR}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="form-control"
@@ -592,52 +593,48 @@ function AuctionsContent() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Category:</span>
+            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{UI_STRINGS.common.category3}</span>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="form-control"
               style={{ fontSize: 12, height: 36, width: 160 }}
             >
-              <option value="ALL">All Categories</option>
-              <option value="RFQ_TOTAL_WISE">RFQ Total Wise</option>
-              <option value="ITEM_WISE">Item Wise</option>
+              <option value="ALL">{UI_STRINGS.common.allCategories}</option>
+              <option value="RFQ_TOTAL_WISE">{UI_STRINGS.common.rFQTotalWise}</option>
+              <option value="ITEM_WISE">{UI_STRINGS.common.itemWise}</option>
             </select>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Type:</span>
+            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{UI_STRINGS.appAppProcurementAuctionsPage.type}</span>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="form-control"
               style={{ fontSize: 12, height: 36, width: 170 }}
             >
-              <option value="ALL">All Auction Types</option>
-              <option value="REVERSE_AUCTION">Reverse Auction</option>
-              <option value="FORWARD_AUCTION">Forward Auction</option>
-              <option value="SEALED_BID">Sealed Bid</option>
+              <option value="ALL">{UI_STRINGS.appAppProcurementAuctionsPage.allAuctionTypes}</option>
+              <option value="REVERSE_AUCTION">{UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction}</option>
+              <option value="FORWARD_AUCTION">{UI_STRINGS.appAppProcurementAuctionsPage.forwardAuction}</option>
+              <option value="SEALED_BID">{UI_STRINGS.common.sealedBid}</option>
             </select>
           </div>
 
-          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#64748b' }}>
-            Showing <strong>{filteredAuctions.length}</strong> events
-          </div>
+          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#64748b' }}>{UI_STRINGS.common.showing}<strong>{filteredAuctions.length}</strong>{UI_STRINGS.appAppProcurementAuctionsPage.events}</div>
         </div>
 
         {/* Auction Table */}
         {loading ? (
           <div style={{ padding: 60, textAlign: 'center', color: '#64748b' }}>
-            <div className="spinner" style={{ margin: '0 auto 12px' }} />
-            Synchronising auction data with server...
-          </div>
+            <div className="spinner" style={{ margin: '0 auto 12px' }} />{UI_STRINGS.appAppProcurementAuctionsPage.synchronisingAuctionDataWithServer}</div>
         ) : filteredAuctions.length === 0 ? (
           <div style={{ padding: 48 }}>
             <EmptyState
               icon={<Gavel size={40} strokeWidth={1.5} color="#94a3b8" />}
-              title="No Auctions Matching Filters"
-              description="Schedule a new Reverse Auction, Forward Auction, or Sealed Bid from any active RFQ package."
-              actionText={canManage ? 'Create New E-Auction' : undefined}
+              title={UI_STRINGS.appAppProcurementAuctionsPage.noAuctionsMatchingFilters}
+              description={UI_STRINGS.appAppProcurementAuctionsPage.scheduleANewReverseAuctionForwardAuctionOrSealedBidFromAnyActiveRFQPackage}
+              actionText={canManage ? UI_STRINGS.appAppProcurementAuctionsPage.createNewEAuction : undefined}
               onAction={canManage ? () => setShowCreateWizard(true) : undefined}
             />
           </div>
@@ -646,17 +643,17 @@ function AuctionsContent() {
             <table className="data-table enterprise-table" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
-                  <th style={{ width: 140, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>Auction ID</th>
-                  <th style={{ minWidth: 200, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>Auction Name</th>
-                  <th style={{ width: 150, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>PR / BOQ Ref</th>
-                  <th style={{ width: 130, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>RFQ Ref</th>
-                  <th style={{ width: 130, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>Auction Type</th>
-                  <th style={{ width: 130, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>Category</th>
-                  <th style={{ width: 170, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>Start Time (IST)</th>
-                  <th style={{ width: 170, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>End Time (IST)</th>
-                  <th style={{ width: 110, padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>Vendors</th>
-                  <th style={{ width: 120, padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>Status</th>
-                  <th style={{ width: 140, padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>Actions</th>
+                  <th style={{ width: 140, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.auctionID}</th>
+                  <th style={{ minWidth: 200, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionName}</th>
+                  <th style={{ width: 150, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.pRBOQRef}</th>
+                  <th style={{ width: 130, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.rFQRef}</th>
+                  <th style={{ width: 130, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.auctionType}</th>
+                  <th style={{ width: 130, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.category2}</th>
+                  <th style={{ width: 170, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.startTimeIST}</th>
+                  <th style={{ width: 170, padding: '12px 14px', textAlign: 'left', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.endTimeIST}</th>
+                  <th style={{ width: 110, padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.vendors}</th>
+                  <th style={{ width: 120, padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ width: 140, padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -676,17 +673,15 @@ function AuctionsContent() {
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{auc.title}</div>
                         {auc.currentLeadingBid ? (
-                          <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 2 }}>
-                            Leading: {auc.currency} {Number(auc.currentLeadingBid).toLocaleString('en-IN')}
+                          <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, marginTop: 2 }}>{UI_STRINGS.appAppProcurementAuctionsPage.leading}{auc.currency} {Number(auc.currentLeadingBid).toLocaleString(I18N_CONFIG.defaultLocale)}
                           </div>
                         ) : (
-                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                            Ceiling: {auc.currency} {Number(auc.startingPrice || 0).toLocaleString('en-IN')}
+                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{UI_STRINGS.appAppProcurementAuctionsPage.ceiling}{auc.currency} {Number(auc.startingPrice || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
                           </div>
                         )}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 12 }}>
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{auc.prNumber || '—'}</div>
+                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{auc.prNumber || UI_STRINGS.common.copy4s9bsz}</div>
                         <div style={{ fontSize: 11, color: '#64748b' }}>{auc.boqNumber || auc.costCentre || ''}</div>
                       </td>
                       <td style={{ padding: '12px 14px' }}>
@@ -706,14 +701,14 @@ function AuctionsContent() {
                           style={{ fontSize: 11 }}
                         >
                           {auc.auctionType === 'REVERSE_AUCTION'
-                            ? 'Reverse'
+                            ? UI_STRINGS.common.reverse
                             : auc.auctionType === 'FORWARD_AUCTION'
-                            ? 'Forward'
-                            : 'Sealed Bid'}
+                            ? UI_STRINGS.common.forward
+                            : UI_STRINGS.common.sealedBid}
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 12 }}>
-                        {auc.auctionCategory === 'ITEM_WISE' ? 'Item Wise' : 'RFQ Total Wise'}
+                        {auc.auctionCategory === 'ITEM_WISE' ? UI_STRINGS.common.itemWise : UI_STRINGS.common.rFQTotalWise}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 12, color: '#334155' }}>
                         {formatIST(auc.startTime)}
@@ -721,14 +716,11 @@ function AuctionsContent() {
                       <td style={{ padding: '12px 14px', fontSize: 12, color: '#334155' }}>
                         {formatIST(auc.scheduledEndTime || auc.endTime)}
                         {auc.extensionCount > 0 && (
-                          <span style={{ display: 'block', fontSize: 10, color: '#d97706', fontWeight: 600 }}>
-                            Extended ({auc.extensionCount}x)
-                          </span>
+                          <span style={{ display: 'block', fontSize: 10, color: '#d97706', fontWeight: 600 }}>{UI_STRINGS.appAppProcurementAuctionsPage.extended}{auc.extensionCount}{UI_STRINGS.appAppProcurementAuctionsPage.x}</span>
                         )}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'center', fontSize: 12 }}>
-                        <span style={{ fontWeight: 600, color: '#0f172a' }}>{auc.invitedVendorsCount}</span> invited
-                      </td>
+                        <span style={{ fontWeight: 600, color: '#0f172a' }}>{auc.invitedVendorsCount}</span>{UI_STRINGS.appAppProcurementAuctionsPage.invited}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                         <StatusBadge status={auc.status} />
                       </td>
@@ -746,12 +738,11 @@ function AuctionsContent() {
                         >
                           {isLive ? (
                             <>
-                              <Clock size={12} className="animate-pulse" /> Monitor Live
-                            </>
+                              <Clock size={12} className="animate-pulse" />{UI_STRINGS.appAppProcurementAuctionsPage.monitorLive}</>
                           ) : auc.status === 'DRAFT' ? (
-                            'Edit Draft'
+                            UI_STRINGS.appAppProcurementAuctionsPage.editDraft
                           ) : (
-                            'View Details'
+                            UI_STRINGS.common.viewDetails
                           )}
                         </Link>
                       </td>
@@ -805,20 +796,15 @@ function AuctionsContent() {
             >
               <div>
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Gavel size={20} color="#0284c7" /> Configure & Schedule E-Auction Event
-                </h3>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
-                  Step {wizardStep} of 6 — Fully aligned with ProCapex mandatory procurement auction rules
-                </p>
+                  <Gavel size={20} color="#0284c7" />{UI_STRINGS.appAppProcurementAuctionsPage.configureScheduleEAuctionEvent}</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>{interpolateUiString(UI_STRINGS.appAppProcurementAuctionsPage.wizardProgress, { wizardStep })}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCreateWizard(false)}
                 className="btn btn-secondary btn-sm"
                 style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer' }}
-              >
-                ✕
-              </button>
+              >{UI_STRINGS.common.copy4i33ao}</button>
             </div>
 
             {/* Step Progress Indicator */}
@@ -831,12 +817,12 @@ function AuctionsContent() {
               }}
             >
               {[
-                { step: 1, label: '1. Auction Details' },
-                { step: 2, label: '2. Scheduling & IST' },
-                { step: 3, label: '3. Rules & Options' },
-                { step: 4, label: '4. Vendor Selection' },
-                { step: 5, label: '5. Items & Pricing' },
-                { step: 6, label: '6. Review & Schedule' },
+                { step: 1, label: UI_STRINGS.appAppProcurementAuctionsPage.copy3l8vx1 },
+                { step: 2, label: UI_STRINGS.appAppProcurementAuctionsPage.copy11qgvuv },
+                { step: 3, label: UI_STRINGS.appAppProcurementAuctionsPage.copy13vrfjn },
+                { step: 4, label: UI_STRINGS.appAppProcurementAuctionsPage.copy1rl9kx },
+                { step: 5, label: UI_STRINGS.appAppProcurementAuctionsPage.copy1yuec8e },
+                { step: 6, label: UI_STRINGS.appAppProcurementAuctionsPage.copyt8xw82 },
               ].map((s) => (
                 <button
                   key={s.step}
@@ -856,7 +842,7 @@ function AuctionsContent() {
                     textAlign: 'center',
                   }}
                 >
-                  {wizardStep > s.step ? `✓ ${s.label.split('. ')[1]}` : s.label}
+                  {wizardStep > s.step ? interpolateUiString(UI_STRINGS.appAppProcurementAuctionsPage.value1, { "value1": s.label.split('. ')[1] }) : s.label}
                 </button>
               ))}
             </div>
@@ -868,8 +854,7 @@ function AuctionsContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                        Select Sourcing RFQ Package <span style={{ color: '#ef4444' }}>*</span>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementAuctionsPage.selectSourcingRFQPackage}<span style={{ color: '#ef4444' }}>{UI_STRINGS.common.copyd1yn99}</span>
                       </label>
                       <select
                         value={selectedRfqId}
@@ -877,29 +862,26 @@ function AuctionsContent() {
                         className="form-control"
                         style={{ height: 38, fontSize: 13 }}
                       >
-                        <option value="">-- Choose Approved RFQ --</option>
+                        <option value="">{UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ}</option>
                         {rfqOptions.map((rfq) => (
                           <option key={rfq.id} value={rfq.id}>
-                            {rfq.rfqNumber} — {rfq.title} ({rfq.quotedVendors?.length || 0} quoted vendors)
-                          </option>
+                            {rfq.rfqNumber}{UI_STRINGS.common.copyq9aflv}{rfq.title}{UI_STRINGS.common.copy1b3t0c5}{rfq.quotedVendors?.length || 0}{UI_STRINGS.appAppProcurementAuctionsPage.quotedVendors}</option>
                         ))}
                       </select>
                       {currentRfq && (
-                        <div style={{ marginTop: 6, fontSize: 12, color: '#64748b' }}>
-                          Linked PR: <strong>{currentRfq.prNumber || '—'}</strong> | BOQ: <strong>{currentRfq.boqNumber || '—'}</strong>
+                        <div style={{ marginTop: 6, fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.linkedPR}<strong>{currentRfq.prNumber || UI_STRINGS.common.copy4s9bsz}</strong>{UI_STRINGS.appAppProcurementAuctionsPage.bOQ}<strong>{currentRfq.boqNumber || UI_STRINGS.common.copy4s9bsz}</strong>
                         </div>
                       )}
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                        Auction Event Name <span style={{ color: '#ef4444' }}>*</span>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionEventName}<span style={{ color: '#ef4444' }}>{UI_STRINGS.common.copyd1yn99}</span>
                       </label>
                       <input
                         type="text"
                         value={auctionName}
                         onChange={(e) => setAuctionName(e.target.value)}
-                        placeholder="e.g. Reverse Auction — Electrical Substation Equipment"
+                        placeholder={UI_STRINGS.appAppProcurementAuctionsPage.eGReverseAuctionElectricalSubstationEquipment}
                         className="form-control"
                         style={{ height: 38, fontSize: 13 }}
                       />
@@ -908,8 +890,7 @@ function AuctionsContent() {
 
                   {/* Auction Category: RFQ Total Wise vs Item Wise */}
                   <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>
-                      Auction Category <span style={{ color: '#ef4444' }}>*</span>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionCategory}<span style={{ color: '#ef4444' }}>{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                       <div
@@ -922,10 +903,8 @@ function AuctionsContent() {
                           cursor: 'pointer',
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>RFQ Total Wise</div>
-                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                          Bidders submit decrements on the combined overall package amount.
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{UI_STRINGS.common.rFQTotalWise}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.biddersSubmitDecrementsOnTheCombinedOverallPackageAmount}</div>
                       </div>
 
                       <div
@@ -938,18 +917,15 @@ function AuctionsContent() {
                           cursor: 'pointer',
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Item Wise</div>
-                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                          Bidders compete on individual line items independently.
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{UI_STRINGS.common.itemWise}</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.biddersCompeteOnIndividualLineItemsIndependently}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Auction Type: Reverse, Forward, Sealed Bid */}
                   <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>
-                      Auction Type <span style={{ color: '#ef4444' }}>*</span>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>{UI_STRINGS.common.auctionType}<span style={{ color: '#ef4444' }}>{UI_STRINGS.common.copyd1yn99}</span>
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
                       <div
@@ -962,10 +938,8 @@ function AuctionsContent() {
                           cursor: 'pointer',
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Reverse Auction</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                          Eligible vendors submit successively lower prices to compete for L1.
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.eligibleVendorsSubmitSuccessivelyLowerPricesToCompeteForL1}</div>
                       </div>
 
                       <div
@@ -978,10 +952,8 @@ function AuctionsContent() {
                           cursor: 'pointer',
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Forward Auction</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                          Participants submit higher prices (asset disposals / scrap sale).
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.forwardAuction}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.participantsSubmitHigherPricesAssetDisposalsScrapSale}</div>
                       </div>
 
                       <div
@@ -994,10 +966,8 @@ function AuctionsContent() {
                           cursor: 'pointer',
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Sealed Bid</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                          Strictly 1 confidential bid per participant. Revealed only after closure.
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.common.sealedBid}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.strictly1ConfidentialBidPerParticipantRevealedOnlyAfterClosure}</div>
                       </div>
                     </div>
                   </div>
@@ -1005,25 +975,21 @@ function AuctionsContent() {
                   {/* Currency, Refresh Interval & Scrolling Text */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                        Auction Currency
-                      </label>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionCurrency}</label>
                       <select
                         value={currency}
                         onChange={(e) => setCurrency(e.target.value)}
                         className="form-control"
                         style={{ height: 38, fontSize: 13 }}
                       >
-                        <option value="INR">INR (₹) — Indian Rupee</option>
-                        <option value="USD">USD ($) — US Dollar</option>
-                        <option value="EUR">EUR (€) — Euro</option>
+                        <option value="INR">{UI_STRINGS.appAppProcurementAuctionsPage.iNRIndianRupee}</option>
+                        <option value="USD">{UI_STRINGS.appAppProcurementAuctionsPage.uSDUSDollar}</option>
+                        <option value="EUR">{UI_STRINGS.appAppProcurementAuctionsPage.eUREuro}</option>
                       </select>
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                        Automatic Page Refresh Interval (Seconds)
-                      </label>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementAuctionsPage.automaticPageRefreshIntervalSeconds}</label>
                       <input
                         type="number"
                         min={5}
@@ -1033,19 +999,17 @@ function AuctionsContent() {
                         className="form-control"
                         style={{ height: 38, fontSize: 13 }}
                       />
-                      <span style={{ fontSize: 11, color: '#64748b' }}>Default 15 seconds. Prevents input disruption.</span>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.default15SecondsPreventsInputDisruption}</span>
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                      Scrolling Announcement Banner (Visible to all participants)
-                    </label>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementAuctionsPage.scrollingAnnouncementBannerVisibleToAllParticipants}</label>
                     <input
                       type="text"
                       value={scrollingText}
                       onChange={(e) => setScrollingText(e.target.value)}
-                      placeholder="e.g. Critical: Please note that taxes are excluded from unit rates."
+                      placeholder={UI_STRINGS.appAppProcurementAuctionsPage.eGCriticalPleaseNoteThatTaxesAreExcludedFromUnitRates}
                       className="form-control"
                       style={{ height: 38, fontSize: 13 }}
                     />
@@ -1069,23 +1033,17 @@ function AuctionsContent() {
                   >
                     <Clock size={24} color="#0284c7" />
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0369a1' }}>
-                        Time Zone Authority: India Standard Time (IST, UTC+05:30)
-                      </div>
-                      <div style={{ fontSize: 12, color: '#0284c7', marginTop: 2 }}>
-                        All countdown timers, auction opening, closing, and automatic extensions will be governed strictly by server-authoritative IST.
-                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0369a1' }}>{UI_STRINGS.appAppProcurementAuctionsPage.timeZoneAuthorityIndiaStandardTimeISTUTC0530}</div>
+                      <div style={{ fontSize: 12, color: '#0284c7', marginTop: 2 }}>{UI_STRINGS.appAppProcurementAuctionsPage.allCountdownTimersAuctionOpeningClosingAndAutomaticExtensionsWillBeGovernedStrictlyByServerAuthoritativeIST}</div>
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                     <div style={{ padding: 18, border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                      <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                        Auction Start Time (IST)
-                      </h4>
+                      <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionStartTimeIST}</h4>
                       <div style={{ display: 'flex', gap: 10 }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Date</label>
+                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>{UI_STRINGS.common.date}</label>
                           <input
                             type="date"
                             value={startDate}
@@ -1095,7 +1053,7 @@ function AuctionsContent() {
                           />
                         </div>
                         <div style={{ width: 120 }}>
-                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Time</label>
+                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>{UI_STRINGS.common.time}</label>
                           <input
                             type="time"
                             value={startTime}
@@ -1108,12 +1066,10 @@ function AuctionsContent() {
                     </div>
 
                     <div style={{ padding: 18, border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                      <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                        Auction End Time (IST)
-                      </h4>
+                      <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionEndTimeIST}</h4>
                       <div style={{ display: 'flex', gap: 10 }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Date</label>
+                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>{UI_STRINGS.common.date}</label>
                           <input
                             type="date"
                             value={endDate}
@@ -1123,7 +1079,7 @@ function AuctionsContent() {
                           />
                         </div>
                         <div style={{ width: 120 }}>
-                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>Time</label>
+                          <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>{UI_STRINGS.common.time}</label>
                           <input
                             type="time"
                             value={endTime}
@@ -1138,14 +1094,12 @@ function AuctionsContent() {
 
                   {/* Quick Duration Buttons */}
                   <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>
-                      Quick Schedule Presets:
-                    </label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>{UI_STRINGS.appAppProcurementAuctionsPage.quickSchedulePresets}</label>
                     <div style={{ display: 'flex', gap: 10 }}>
                       {[
-                        { label: 'Next 1 Hour', dur: 1 },
-                        { label: 'Next 2 Hours', dur: 2 },
-                        { label: 'Tomorrow 10:00 AM – 12:00 PM', tomorrow: true },
+                        { label: UI_STRINGS.appAppProcurementAuctionsPage.next1Hour, dur: 1 },
+                        { label: UI_STRINGS.appAppProcurementAuctionsPage.next2Hours, dur: 2 },
+                        { label: UI_STRINGS.appAppProcurementAuctionsPage.tomorrow1000AM1200PM, tomorrow: true },
                       ].map((preset, idx) => (
                         <button
                           key={idx}
@@ -1186,10 +1140,8 @@ function AuctionsContent() {
                   {/* Quantity Type */}
                   <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Auction Quantity Basis</div>
-                      <div style={{ fontSize: 12, color: '#64748b' }}>
-                        Full = complete RFQ BOQ quantity. Single = unit-rate basis competition.
-                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionQuantityBasis}</div>
+                      <div style={{ fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.fullCompleteRFQBOQQuantitySingleUnitRateBasisCompetition}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 12 }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
@@ -1198,18 +1150,14 @@ function AuctionsContent() {
                           name="quantityType"
                           checked={quantityType === 'FULL'}
                           onChange={() => setQuantityType('FULL')}
-                        />
-                        Full Quantity
-                      </label>
+                        />{UI_STRINGS.appAppProcurementAuctionsPage.fullQuantity}</label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                         <input
                           type="radio"
                           name="quantityType"
                           checked={quantityType === 'SINGLE'}
                           onChange={() => setQuantityType('SINGLE')}
-                        />
-                        Single Unit Rate
-                      </label>
+                        />{UI_STRINGS.appAppProcurementAuctionsPage.singleUnitRate}</label>
                     </div>
                   </div>
 
@@ -1217,10 +1165,8 @@ function AuctionsContent() {
                   <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Auction Start Price</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>
-                          If enabled, bidders cannot exceed this ceiling (Reverse) or floor (Forward).
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionStartPrice}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.ifEnabledBiddersCannotExceedThisCeilingReverseOrFloorForward}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 12 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
@@ -1229,28 +1175,24 @@ function AuctionsContent() {
                             name="hasStartPrice"
                             checked={hasStartPrice}
                             onChange={() => setHasStartPrice(true)}
-                          />
-                          Yes
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.yes}</label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
                             type="radio"
                             name="hasStartPrice"
                             checked={!hasStartPrice}
                             onChange={() => setHasStartPrice(false)}
-                          />
-                          No
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.no}</label>
                       </div>
                     </div>
                     {hasStartPrice && auctionCategory === 'RFQ_TOTAL_WISE' && (
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Starting Price ({currency}):</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{UI_STRINGS.appAppProcurementAuctionsPage.startingPrice}{currency}{UI_STRINGS.appAppProcurementAuctionsPage.copy626bdm}</span>
                         <input
                           type="number"
                           value={startingPrice}
                           onChange={(e) => setStartingPrice(e.target.value ? Number(e.target.value) : '')}
-                          placeholder="e.g. 1500000"
+                          placeholder={UI_STRINGS.appAppProcurementAuctionsPage.eG1500000}
                           className="form-control"
                           style={{ width: 220, height: 36 }}
                         />
@@ -1261,15 +1203,15 @@ function AuctionsContent() {
                   {/* Display Leading Price */}
                   <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Display Leading Price to Participants</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.displayLeadingPriceToParticipants}</div>
                       <div style={{ fontSize: 12, color: '#64748b' }}>
                         {auctionType === 'SEALED_BID'
-                          ? 'Strictly disabled for Sealed Bid to enforce complete bid confidentiality.'
-                          : 'Show the lowest (Reverse) or highest (Forward) valid bid on vendor live screens.'}
+                          ? UI_STRINGS.appAppProcurementAuctionsPage.strictlyDisabledForSealedBidToEnforceCompleteBidConfidentiality
+                          : UI_STRINGS.appAppProcurementAuctionsPage.showTheLowestReverseOrHighestForwardValidBidOnVendorLiveScreens}
                       </div>
                     </div>
                     {auctionType === 'SEALED_BID' ? (
-                      <span className="badge badge-warning" style={{ fontSize: 11 }}>Confidential (Disabled)</span>
+                      <span className="badge badge-warning" style={{ fontSize: 11 }}>{UI_STRINGS.appAppProcurementAuctionsPage.confidentialDisabled}</span>
                     ) : (
                       <div style={{ display: 'flex', gap: 12 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
@@ -1278,18 +1220,14 @@ function AuctionsContent() {
                             name="hasLeadingPrice"
                             checked={hasLeadingPrice}
                             onChange={() => setHasLeadingPrice(true)}
-                          />
-                          Yes
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.yes}</label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
                             type="radio"
                             name="hasLeadingPrice"
                             checked={!hasLeadingPrice}
                             onChange={() => setHasLeadingPrice(false)}
-                          />
-                          No (Rank Only)
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.noRankOnly}</label>
                       </div>
                     )}
                   </div>
@@ -1298,10 +1236,8 @@ function AuctionsContent() {
                   <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Minimum Bid Reduction / Increment</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>
-                          Enforce minimum decrements (Reverse) or increments (Forward) between subsequent bids.
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.minimumBidReductionIncrement}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.enforceMinimumDecrementsReverseOrIncrementsForwardBetweenSubsequentBids}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 12 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
@@ -1310,28 +1246,24 @@ function AuctionsContent() {
                             name="hasMinBidReduction"
                             checked={hasMinBidReduction}
                             onChange={() => setHasMinBidReduction(true)}
-                          />
-                          Yes
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.yes}</label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
                             type="radio"
                             name="hasMinBidReduction"
                             checked={!hasMinBidReduction}
                             onChange={() => setHasMinBidReduction(false)}
-                          />
-                          No
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.no}</label>
                       </div>
                     </div>
                     {hasMinBidReduction && (
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Minimum Delta Amount ({currency}):</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{UI_STRINGS.appAppProcurementAuctionsPage.minimumDeltaAmount}{currency}{UI_STRINGS.appAppProcurementAuctionsPage.copy626bdm}</span>
                         <input
                           type="number"
                           value={minDecrement}
                           onChange={(e) => setMinDecrement(e.target.value ? Number(e.target.value) : '')}
-                          placeholder="e.g. 5000"
+                          placeholder={UI_STRINGS.appAppProcurementAuctionsPage.eG5000}
                           className="form-control"
                           style={{ width: 180, height: 36 }}
                         />
@@ -1343,10 +1275,8 @@ function AuctionsContent() {
                   <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>Automatic Rolling Extension</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>
-                          Extends end time automatically when a valid bid is logged in the final minutes.
-                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.automaticRollingExtension}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.extendsEndTimeAutomaticallyWhenAValidBidIsLoggedInTheFinalMinutes}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 12 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
@@ -1355,23 +1285,19 @@ function AuctionsContent() {
                             name="hasAutoExtension"
                             checked={hasAutoExtension}
                             onChange={() => setHasAutoExtension(true)}
-                          />
-                          Yes
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.yes}</label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
                             type="radio"
                             name="hasAutoExtension"
                             checked={!hasAutoExtension}
                             onChange={() => setHasAutoExtension(false)}
-                          />
-                          No
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.no}</label>
                       </div>
                     </div>
                     {hasAutoExtension && (
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Extension Duration (Minutes):</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>{UI_STRINGS.appAppProcurementAuctionsPage.extensionDurationMinutes}</span>
                         <input
                           type="number"
                           min={1}
@@ -1388,9 +1314,7 @@ function AuctionsContent() {
                   {/* Bid Limits & Project User Observer */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 4 }}>
-                        Limit Bids Per Participant
-                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.limitBidsPerParticipant}</div>
                       <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
@@ -1398,18 +1322,14 @@ function AuctionsContent() {
                             name="hasBidLimit"
                             checked={hasBidLimit}
                             onChange={() => setHasBidLimit(true)}
-                          />
-                          Yes
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.yes}</label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
                             type="radio"
                             name="hasBidLimit"
                             checked={!hasBidLimit}
                             onChange={() => setHasBidLimit(false)}
-                          />
-                          No
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.no}</label>
                       </div>
                       {hasBidLimit && (
                         <input
@@ -1425,9 +1345,7 @@ function AuctionsContent() {
                     </div>
 
                     <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 4 }}>
-                        Invite Project User (Observer)
-                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 4 }}>{UI_STRINGS.appAppProcurementAuctionsPage.inviteProjectUserObserver}</div>
                       <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
@@ -1435,18 +1353,14 @@ function AuctionsContent() {
                             name="inviteProjectUser"
                             checked={inviteProjectUser}
                             onChange={() => setInviteProjectUser(true)}
-                          />
-                          Yes
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.yes}</label>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                           <input
                             type="radio"
                             name="inviteProjectUser"
                             checked={!inviteProjectUser}
                             onChange={() => setInviteProjectUser(false)}
-                          />
-                          No
-                        </label>
+                          />{UI_STRINGS.appAppProcurementAuctionsPage.no}</label>
                       </div>
                       {inviteProjectUser && (
                         <select
@@ -1455,11 +1369,10 @@ function AuctionsContent() {
                           className="form-control"
                           style={{ height: 36, fontSize: 12 }}
                         >
-                          <option value="">-- Select Project Observer --</option>
+                          <option value="">{UI_STRINGS.appAppProcurementAuctionsPage.selectProjectObserver}</option>
                           {projectUsers.map((u) => (
                             <option key={u.id} value={u.id}>
-                              {u.name} ({u.role})
-                            </option>
+                              {u.name}{UI_STRINGS.common.copy1b3t0c5}{u.role}{UI_STRINGS.common.copyc7zu6c}</option>
                           ))}
                         </select>
                       )}
@@ -1473,12 +1386,8 @@ function AuctionsContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                        Invite Eligible Quoted Vendors
-                      </h4>
-                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
-                        Vendors who submitted quotes for this RFQ are displayed below.
-                      </p>
+                      <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.inviteEligibleQuotedVendors}</h4>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.vendorsWhoSubmittedQuotesForThisRFQAreDisplayedBelow}</p>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
@@ -1486,17 +1395,13 @@ function AuctionsContent() {
                         onClick={inviteAllVendors}
                         className="btn btn-secondary btn-sm"
                         style={{ fontSize: 12 }}
-                      >
-                        Invite All
-                      </button>
+                      >{UI_STRINGS.appAppProcurementAuctionsPage.inviteAll}</button>
                       <button
                         type="button"
                         onClick={removeAllVendors}
                         className="btn btn-secondary btn-sm"
                         style={{ fontSize: 12 }}
-                      >
-                        Clear Selection
-                      </button>
+                      >{UI_STRINGS.common.clearSelection}</button>
                     </div>
                   </div>
 
@@ -1504,14 +1409,10 @@ function AuctionsContent() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 1fr', gap: 14, alignItems: 'center' }}>
                     {/* Available Vendors */}
                     <div style={{ border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #cbd5e1', fontWeight: 700, fontSize: 12, color: '#1e293b' }}>
-                        Available Quoted Vendors ({availableVendors.length})
-                      </div>
+                      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #cbd5e1', fontWeight: 700, fontSize: 12, color: '#1e293b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.availableQuotedVendors}{availableVendors.length}{UI_STRINGS.common.copyc7zu6c}</div>
                       <div style={{ maxHeight: 260, overflowY: 'auto', padding: 8 }}>
                         {availableVendors.length === 0 ? (
-                          <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
-                            No quoted vendors for this RFQ
-                          </div>
+                          <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{UI_STRINGS.appAppProcurementAuctionsPage.noQuotedVendorsForThisRFQ}</div>
                         ) : (
                           availableVendors.map((v) => {
                             const isInvited = invitedVendorIds.includes(v.vendorId);
@@ -1535,11 +1436,11 @@ function AuctionsContent() {
                                 <div>
                                   <div style={{ fontWeight: 600, fontSize: 12, color: '#0f172a' }}>{v.name}</div>
                                   <div style={{ fontSize: 11, color: '#64748b' }}>
-                                    {v.code} | Quoted: ₹{v.quoteAmount ? v.quoteAmount.toLocaleString('en-IN') : '—'}
+                                    {v.code}{UI_STRINGS.appAppProcurementAuctionsPage.quoted}{v.quoteAmount ? v.quoteAmount.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.copy4s9bsz}
                                   </div>
                                 </div>
                                 <span style={{ fontSize: 11, fontWeight: 700, color: isInvited ? '#0284c7' : '#94a3b8' }}>
-                                  {isInvited ? '✓ Invited' : '+ Add'}
+                                  {isInvited ? UI_STRINGS.common.invited : UI_STRINGS.appAppProcurementAuctionsPage.add}
                                 </span>
                               </div>
                             );
@@ -1555,31 +1456,23 @@ function AuctionsContent() {
                         onClick={inviteAllVendors}
                         className="btn btn-secondary btn-sm"
                         style={{ padding: '6px 10px' }}
-                        title="Add All"
-                      >
-                        →
-                      </button>
+                        title={UI_STRINGS.appAppProcurementAuctionsPage.addAll}
+                      >{UI_STRINGS.common.copy15ynnjp}</button>
                       <button
                         type="button"
                         onClick={removeAllVendors}
                         className="btn btn-secondary btn-sm"
                         style={{ padding: '6px 10px' }}
-                        title="Remove All"
-                      >
-                        ←
-                      </button>
+                        title={UI_STRINGS.appAppProcurementAuctionsPage.removeAll}
+                      >{UI_STRINGS.appAppProcurementAuctionsPage.copy15eog5r}</button>
                     </div>
 
                     {/* Invited Vendors List */}
                     <div style={{ border: '1px solid #0284c7', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ padding: '10px 14px', background: '#f0f9ff', borderBottom: '1px solid #bae6fd', fontWeight: 700, fontSize: 12, color: '#0369a1' }}>
-                        Invited Auction Participants ({invitedVendorIds.length})
-                      </div>
+                      <div style={{ padding: '10px 14px', background: '#f0f9ff', borderBottom: '1px solid #bae6fd', fontWeight: 700, fontSize: 12, color: '#0369a1' }}>{UI_STRINGS.appAppProcurementAuctionsPage.invitedAuctionParticipants}{invitedVendorIds.length}{UI_STRINGS.common.copyc7zu6c}</div>
                       <div style={{ maxHeight: 260, overflowY: 'auto', padding: 8 }}>
                         {invitedVendorIds.length === 0 ? (
-                          <div style={{ padding: 20, textAlign: 'center', color: '#ef4444', fontSize: 12 }}>
-                            No vendors invited yet. Please select at least one vendor.
-                          </div>
+                          <div style={{ padding: 20, textAlign: 'center', color: '#ef4444', fontSize: 12 }}>{UI_STRINGS.appAppProcurementAuctionsPage.noVendorsInvitedYetPleaseSelectAtLeastOneVendor}</div>
                         ) : (
                           availableVendors
                             .filter((v) => invitedVendorIds.includes(v.vendorId))
@@ -1599,8 +1492,7 @@ function AuctionsContent() {
                               >
                                 <div>
                                   <div style={{ fontWeight: 600, fontSize: 12, color: '#0f172a' }}>{v.name}</div>
-                                  <div style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>
-                                    L-Benchmark: ₹{v.quoteAmount ? v.quoteAmount.toLocaleString('en-IN') : '—'}
+                                  <div style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>{UI_STRINGS.appAppProcurementAuctionsPage.lBenchmark}{v.quoteAmount ? v.quoteAmount.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.copy4s9bsz}
                                   </div>
                                 </div>
                                 <button
@@ -1608,9 +1500,7 @@ function AuctionsContent() {
                                   onClick={() => toggleVendorInvite(v.vendorId)}
                                   className="btn btn-secondary btn-sm"
                                   style={{ padding: '2px 8px', fontSize: 11, color: '#ef4444' }}
-                                >
-                                  Remove
-                                </button>
+                                >{UI_STRINGS.appAppProcurementAuctionsPage.remove}</button>
                               </div>
                             ))
                         )}
@@ -1630,18 +1520,15 @@ function AuctionsContent() {
                     >
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                         <AlertCircle size={18} color="#d97706" />
-                        <span style={{ fontWeight: 700, fontSize: 13, color: '#92400e' }}>
-                          Mandatory Compliance Justification for Non-Invited Vendors *
-                        </span>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: '#92400e' }}>{UI_STRINGS.appAppProcurementAuctionsPage.mandatoryComplianceJustificationForNonInvitedVendors}</span>
                       </div>
                       <p style={{ margin: '0 0 8px', fontSize: 12, color: '#78350f' }}>
-                        {nonInvitedQuotedVendors.length} vendor(s) who submitted quotations ({nonInvitedQuotedVendors.map((v) => v.name).join(', ')}) are excluded from this auction. In accordance with procurement governance policy, provide an explicit justification for the audit trail:
-                      </p>
+                        {nonInvitedQuotedVendors.length}{UI_STRINGS.appAppProcurementAuctionsPage.vendorSWhoSubmittedQuotations}{nonInvitedQuotedVendors.map((v) => v.name).join(', ')}{UI_STRINGS.appAppProcurementAuctionsPage.areExcludedFromThisAuctionInAccordanceWithProcurementGovernancePolicyProvideAnExplicitJustificationForTheAuditTrail}</p>
                       <textarea
                         rows={3}
                         value={nonInvitedJustification}
                         onChange={(e) => setNonInvitedJustification(e.target.value)}
-                        placeholder="State technical, commercial, or compliance rationale for excluding quoted vendors..."
+                        placeholder={UI_STRINGS.appAppProcurementAuctionsPage.stateTechnicalCommercialOrComplianceRationaleForExcludingQuotedVendors}
                         className="form-control"
                         style={{ fontSize: 12 }}
                       />
@@ -1655,13 +1542,11 @@ function AuctionsContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                        RFQ Scope Items ({auctionItems.length})
-                      </h4>
+                      <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.rFQScopeItems}{auctionItems.length}{UI_STRINGS.common.copyc7zu6c}</h4>
                       <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
                         {auctionCategory === 'ITEM_WISE'
-                          ? 'Item-Wise Auction: configure starting prices for each individual item line.'
-                          : 'RFQ Total-Wise Auction: items are bundled under the total starting ceiling price.'}
+                          ? UI_STRINGS.appAppProcurementAuctionsPage.itemWiseAuctionConfigureStartingPricesForEachIndividualItemLine
+                          : UI_STRINGS.appAppProcurementAuctionsPage.rFQTotalWiseAuctionItemsAreBundledUnderTheTotalStartingCeilingPrice}
                       </p>
                     </div>
                   </div>
@@ -1670,16 +1555,14 @@ function AuctionsContent() {
                     <table className="data-table" style={{ width: '100%', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
-                          <th style={{ width: 50, padding: 8 }}>S.No</th>
-                          <th style={{ width: 110, padding: 8 }}>Item Code</th>
-                          <th style={{ width: 140, padding: 8 }}>Category</th>
-                          <th style={{ minWidth: 200, padding: 8 }}>Description</th>
-                          <th style={{ width: 80, padding: 8 }}>UOM</th>
-                          <th style={{ width: 90, padding: 8, textAlign: 'right' }}>Qty</th>
+                          <th style={{ width: 50, padding: 8 }}>{UI_STRINGS.common.sNo}</th>
+                          <th style={{ width: 110, padding: 8 }}>{UI_STRINGS.common.itemCode}</th>
+                          <th style={{ width: 140, padding: 8 }}>{UI_STRINGS.common.category2}</th>
+                          <th style={{ minWidth: 200, padding: 8 }}>{UI_STRINGS.common.description}</th>
+                          <th style={{ width: 80, padding: 8 }}>{UI_STRINGS.common.uOM}</th>
+                          <th style={{ width: 90, padding: 8, textAlign: 'right' }}>{UI_STRINGS.common.qty}</th>
                           {hasStartPrice && (
-                            <th style={{ width: 150, padding: 8, textAlign: 'right' }}>
-                              Start Price ({currency})
-                            </th>
+                            <th style={{ width: 150, padding: 8, textAlign: 'right' }}>{UI_STRINGS.appAppProcurementAuctionsPage.startPrice}{currency}{UI_STRINGS.common.copyc7zu6c}</th>
                           )}
                         </tr>
                       </thead>
@@ -1708,7 +1591,7 @@ function AuctionsContent() {
                                       prev.map((it, i) => (i === idx ? { ...it, startPrice: val } : it))
                                     );
                                   }}
-                                  placeholder="0.00"
+                                  placeholder={UI_STRINGS.common.copywwhtor}
                                   className="form-control"
                                   style={{ height: 32, fontSize: 12, textAlign: 'right' }}
                                 />
@@ -1726,57 +1609,53 @@ function AuctionsContent() {
               {wizardStep === 6 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                   <div style={{ padding: 16, background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 }}>
-                    <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                      Executive Summary & Pre-Schedule Verification
-                    </h4>
+                    <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementAuctionsPage.executiveSummaryPreScheduleVerification}</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
                       <div>
-                        <span style={{ color: '#64748b' }}>Auction Event:</span> <strong>{auctionName}</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionEvent}</span> <strong>{auctionName}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>RFQ Package:</span> <strong>{currentRfq?.rfqNumber}</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.rFQPackage}</span> <strong>{currentRfq?.rfqNumber}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Category & Type:</span>{' '}
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.categoryType}</span>{' '}
                         <strong>
-                          {auctionCategory === 'ITEM_WISE' ? 'Item Wise' : 'RFQ Total Wise'} | {auctionType}
+                          {auctionCategory === 'ITEM_WISE' ? UI_STRINGS.common.itemWise : UI_STRINGS.common.rFQTotalWise}{UI_STRINGS.common.copy17xhom3}{auctionType}
                         </strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Currency:</span> <strong>{currency}</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.currency}</span> <strong>{currency}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Start Time (IST):</span>{' '}
-                        <strong>{startDate} {startTime} IST</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.startTimeIST2}</span>{' '}
+                        <strong>{startDate} {startTime}{UI_STRINGS.appAppProcurementAuctionsPage.iST}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>End Time (IST):</span>{' '}
-                        <strong>{endDate} {endTime} IST</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.endTimeIST2}</span>{' '}
+                        <strong>{endDate} {endTime}{UI_STRINGS.appAppProcurementAuctionsPage.iST}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Invited Vendors:</span>{' '}
-                        <strong>{invitedVendorIds.length} vendors</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.common.invitedVendors}</span>{' '}
+                        <strong>{invitedVendorIds.length}{UI_STRINGS.common.vendors}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Rolling Extension:</span>{' '}
-                        <strong>{hasAutoExtension ? `${autoExtensionMinutes} Minutes` : 'Disabled'}</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.rollingExtension}</span>{' '}
+                        <strong>{hasAutoExtension ? interpolateUiString(UI_STRINGS.appAppProcurementAuctionsPage.autoExtensionMinutesMinutes, { "autoExtensionMinutes": autoExtensionMinutes }) : UI_STRINGS.appAppProcurementAuctionsPage.disabled}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Start Ceiling Price:</span>{' '}
-                        <strong>{hasStartPrice && startingPrice ? `${currency} ${Number(startingPrice).toLocaleString('en-IN')}` : 'None'}</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.startCeilingPrice}</span>{' '}
+                        <strong>{hasStartPrice && startingPrice ? interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": currency, "toLocaleString": Number(startingPrice).toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.none}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#64748b' }}>Min Decrement Delta:</span>{' '}
-                        <strong>{hasMinBidReduction && minDecrement ? `${currency} ${Number(minDecrement).toLocaleString('en-IN')}` : 'Standard'}</strong>
+                        <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.minDecrementDelta}</span>{' '}
+                        <strong>{hasMinBidReduction && minDecrement ? interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": currency, "toLocaleString": Number(minDecrement).toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.standard}</strong>
                       </div>
                     </div>
                   </div>
 
                   {/* Terms & Conditions preview */}
                   <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>
-                      Auction Terms & Conditions (Mandatory Acknowledgement for Vendors)
-                    </label>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>{UI_STRINGS.appAppProcurementAuctionsPage.auctionTermsConditionsMandatoryAcknowledgementForVendors}</label>
                     <textarea
                       rows={4}
                       value={termsAndConditions}
@@ -1808,8 +1687,7 @@ function AuctionsContent() {
                     className="btn btn-secondary btn-sm"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
-                    <ArrowLeft size={14} /> Back
-                  </button>
+                    <ArrowLeft size={14} />{UI_STRINGS.appAppProcurementAuctionsPage.back}</button>
                 )}
               </div>
 
@@ -1818,17 +1696,13 @@ function AuctionsContent() {
                   type="button"
                   onClick={() => setShowCreateWizard(false)}
                   className="btn btn-secondary btn-sm"
-                >
-                  Cancel
-                </button>
+                >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="button"
                   disabled={submitting}
                   onClick={() => handleSaveAuction(true)}
                   className="btn btn-secondary btn-sm"
-                >
-                  Save as Draft
-                </button>
+                >{UI_STRINGS.common.saveAsDraft}</button>
 
                 {wizardStep < 6 ? (
                   <button
@@ -1836,8 +1710,7 @@ function AuctionsContent() {
                     onClick={() => setWizardStep((prev) => prev + 1)}
                     className="btn btn-primary btn-sm"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    Next Step <ArrowRight size={14} />
+                  >{UI_STRINGS.appAppProcurementAuctionsPage.nextStep}<ArrowRight size={14} />
                   </button>
                 ) : (
                   <button
@@ -1847,7 +1720,7 @@ function AuctionsContent() {
                     className="btn btn-primary btn-sm"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
-                    <Check size={14} /> {submitting ? 'Scheduling...' : 'Confirm & Schedule Auction'}
+                    <Check size={14} /> {submitting ? UI_STRINGS.appAppProcurementAuctionsPage.scheduling : UI_STRINGS.appAppProcurementAuctionsPage.confirmScheduleAuction}
                   </button>
                 )}
               </div>

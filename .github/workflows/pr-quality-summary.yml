@@ -70,6 +70,7 @@ jobs:
               install: 'Install',
               build: 'Build',
               unitTests: 'Unit tests and coverage',
+              performance: 'Client performance budgets',
               typecheck: 'Typecheck',
               lint: 'Lint',
             };

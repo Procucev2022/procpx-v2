@@ -1,7 +1,11 @@
 /** @jest-environment jsdom */
+import { uiStringPattern } from '@/lib/i18n';
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CreatePrPage from '../src/app/(app)/pr/new/page';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -68,10 +72,10 @@ describe('new procurement request page', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/cost-centres?projectId=project-1');
     expect(fetchMock).toHaveBeenCalledWith('/api/boq?projectId=project-1');
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Electrical & Civil Fitout Procurement'), { target: { value: '  New electrical package  ' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppPrNewPage.eGElectricalCivilFitoutProcurement)), { target: { value: '  New electrical package  ' } });
     fireEvent.change(document.querySelector('input[type="date"]')!, { target: { value: '2026-12-01' } });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Site Store - Unit 402'), { target: { value: '  Unit 402  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Procurement Request' }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppPrNewPage.eGSiteStoreUnit402)), { target: { value: '  Unit 402  ' } });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createProcurementRequest) }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/pr'));
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/pr');
@@ -94,23 +98,23 @@ describe('new procurement request page', () => {
     render(<CreatePrPage />);
     expect(await screen.findByRole('option', { name: /P-2/ })).toBeInTheDocument();
     expect(await screen.findByRole('option', { name: /ALT-2/ })).toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: /BOQ Baseline/ })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.bOQBaseline) })).toBeInTheDocument();
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'cc-2' } });
     fireEvent.change(screen.getAllByRole('combobox')[2], { target: { value: 'boq-2' } });
 
     configureFetch({ costCentreBody: [], boqBody: [] });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'project-3' } });
-    expect(await screen.findByText(/No BOQs found for this project/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create a BOQ in Studio' })).toHaveAttribute('href', '/boq/studio?projectId=project-3');
-    expect(screen.getByRole('button', { name: 'Create Procurement Request' })).toBeDisabled();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createABOQInStudio) })).toHaveAttribute('href', '/boq/studio?projectId=project-3');
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createProcurementRequest) })).toBeDisabled();
   });
 
   it('shows an error when the form is submitted without project or BOQ selections', async () => {
     configureFetch({ projectBody: { data: [] }, costCentreBody: [], boqBody: [] });
     render(<CreatePrPage />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Create Procurement Request' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createProcurementRequest) })).toBeDisabled());
     fireEvent.submit(document.querySelector('form')!);
-    expect(await screen.findByText('Please select a project and source BOQ.')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.pleaseSelectAProjectAndSourceBOQ))).toBeInTheDocument();
   });
 
   it('uses the package title fallback and shows API failures after re-enabling the form', async () => {
@@ -123,7 +127,7 @@ describe('new procurement request page', () => {
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '' } });
     fireEvent.submit(document.querySelector('form')!);
     expect(await screen.findByText('Unable to create request')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Create Procurement Request' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createProcurementRequest) })).toBeEnabled());
     const call = fetchMock.mock.calls.find(([url]) => url === '/api/pr');
     expect(JSON.parse(call?.[1].body)).toMatchObject({ title: 'Procurement Package PR', revisionId: null, costCentreId: null });
   });
@@ -154,7 +158,7 @@ describe('new procurement request page', () => {
     render(<CreatePrPage />);
     expect(await screen.findByRole('option', { name: /P-1/ })).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/boq?projectId=project-1'));
-    expect(await screen.findByText(/No BOQs found for this project/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject))).toBeInTheDocument();
   });
 
   it('covers empty payload fallbacks and generic create errors', async () => {
@@ -167,7 +171,7 @@ describe('new procurement request page', () => {
     configureFetch({ boqBody: false, postResponse: response({}, false) });
     render(<CreatePrPage />);
     expect(await screen.findByRole('option', { name: /P-1/ })).toBeInTheDocument();
-    expect(await screen.findByText(/No BOQs found for this project/)).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject))).toBeInTheDocument();
   });
 
   it('catches failures while loading cost centres and BOQs', async () => {
@@ -187,6 +191,6 @@ describe('new procurement request page', () => {
     render(<CreatePrPage />);
     expect(await screen.findByRole('option', { name: /BOQ-1/ })).toBeInTheDocument();
     fireEvent.submit(document.querySelector('form')!);
-    expect(await screen.findByText('Failed to create PR')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToCreatePr))).toBeInTheDocument();
   });
 });
