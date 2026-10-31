@@ -92,6 +92,8 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 | Uploads | `uploads/` folder | R2 bucket bound as `UPLOADS` |
 | Logs | `logs/` JSONL files | Workers Logs (console) |
 
+**Local dev against remote D1:** set `DATABASE_PROVIDER="d1"` in `.env` and run `npm run dev`. The app uses the `DB` database from `wrangler.jsonc` through your `npx wrangler login`, and no API token is needed. Set it back to `"sqlite"` to use `prisma/dev.db`.
+
 **Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), then run `npm run cf:migrate`.
 
 **Secrets** (once per environment):

@@ -1,0 +1,353 @@
+// scripts/e2e-d1-regression.ts
+// End-to-end regression of proCPX against the database the running app uses
+// (Cloudflare D1 when DATABASE_PROVIDER=d1). Drives the real HTTP API, then
+// verifies every write directly in D1 with `wrangler d1 execute`.
+//
+// Usage:  npx tsx scripts/e2e-d1-regression.ts [baseUrl]      (default http://localhost:3001)
+//
+// It only ADDS clearly-labelled records (title/name prefix "E2E-D1 <run id>");
+// it never deletes or edits baseline test data.
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+
+const BASE_URL = process.argv[2] || process.env.E2E_BASE_URL || 'http://localhost:3001';
+const RUN = `E2E-D1 ${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+const DEMO_PASSWORD = 'Demo@1234';
+const VENDOR_PASSWORD = 'welcome';
+
+// API responses are untyped JSON; the checks below read them defensively.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiJson = any;
+type Result = { area: string; check: string; ok: boolean; detail: string };
+const results: Result[] = [];
+const record = (area: string, check: string, ok: boolean, detail = '') => {
+  results.push({ area, check, ok, detail });
+  console.log(`${ok ? 'PASS' : 'FAIL'}  [${area}] ${check}${detail ? ` - ${detail}` : ''}`);
+};
+
+// ---------------------------------------------------------------- HTTP helpers
+class Session {
+  cookies = new Map<string, string>();
+  constructor(public label: string) {}
+  header() { return [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; '); }
+  absorb(res: Response) {
+    for (const line of res.headers.getSetCookie()) {
+      const [pair] = line.split(';');
+      const i = pair.indexOf('=');
+      this.cookies.set(pair.slice(0, i), pair.slice(i + 1));
+    }
+  }
+  async request(method: string, path: string, body?: unknown) {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      redirect: 'manual',
+      headers: { Cookie: this.header(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    this.absorb(res);
+    const text = await res.text();
+    let json: ApiJson = null;
+    try { json = JSON.parse(text); } catch { /* HTML page */ }
+    return { status: res.status, json, text };
+  }
+  get(path: string) { return this.request('GET', path); }
+  post(path: string, body: unknown = {}) { return this.request('POST', path, body); }
+  put(path: string, body: unknown = {}) { return this.request('PUT', path, body); }
+}
+
+async function login(email: string, password = DEMO_PASSWORD): Promise<Session> {
+  const s = new Session(email);
+  const csrf = await s.get('/api/auth/csrf');
+  const form = new URLSearchParams({ csrfToken: csrf.json.csrfToken, email, password, callbackUrl: `${BASE_URL}/dashboard` });
+  const res = await fetch(`${BASE_URL}/api/auth/callback/credentials`, {
+    method: 'POST', redirect: 'manual',
+    headers: { Cookie: s.header(), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form,
+  });
+  s.absorb(res);
+  const me = await s.get('/api/auth/session');
+  if (!me.json?.user?.email) throw new Error(`Login failed for ${email}`);
+  return s;
+}
+
+const data = (r: { json: ApiJson }) => r.json?.data ?? r.json;
+const errorOf = (r: { status: number; json: ApiJson; text: string }) =>
+  `HTTP ${r.status} ${r.json?.error || r.json?.message || r.text.slice(0, 160)}`;
+
+// ---------------------------------------------------------------- D1 helpers
+const WRANGLER = path.join(__dirname, '..', 'node_modules', 'wrangler', 'bin', 'wrangler.js');
+
+function d1<T = Record<string, unknown>>(sql: string): T[] {
+  // Run wrangler's JS entry with node directly: no shell, so SQL is passed verbatim.
+  const out = execFileSync(process.execPath, [WRANGLER, 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql.replace(/\s+/g, ' ')], {
+    encoding: 'utf8', env: { ...process.env, CI: '1' }, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024,
+  });
+  return JSON.parse(out)[0].results as T[];
+}
+const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+
+const BASELINE_SQL = `SELECT
+  (SELECT count(*) FROM tenants) tenants, (SELECT count(*) FROM users) users,
+  (SELECT count(*) FROM categories) categories, (SELECT count(*) FROM projects) projects,
+  (SELECT count(*) FROM cost_centres) costCentres, (SELECT count(*) FROM boqs) boqs,
+  (SELECT count(*) FROM boq_lines) boqLines, (SELECT count(*) FROM procurement_requests) prs,
+  (SELECT count(*) FROM pr_lines) prLines, (SELECT count(*) FROM vendors) vendors,
+  (SELECT count(*) FROM rfqs) rfqs, (SELECT count(*) FROM rfq_lines) rfqLines,
+  (SELECT count(*) FROM quotes) quotes, (SELECT count(*) FROM quote_lines) quoteLines,
+  (SELECT count(*) FROM negotiations) negotiations, (SELECT count(*) FROM award_recommendations) awards,
+  (SELECT count(*) FROM ppos) ppos, (SELECT count(*) FROM ppo_lines) ppoLines`;
+
+// ---------------------------------------------------------------- 1. role sweep
+const LIST_ENDPOINTS = [
+  '/api/auth/me', '/api/dashboard', '/api/notifications', '/api/projects', '/api/cost-centres', '/api/boq',
+  '/api/masters/categories', '/api/masters/uom', '/api/pr', '/api/approvals', '/api/budgets', '/api/audit',
+  '/api/actual-costs', '/api/financial/budget-vs-actual', '/api/admin/users', '/api/boq/standard-library',
+  '/api/procurement/approved-boqs', '/api/procurement/approved-prs', '/api/procurement/rfqs',
+  '/api/procurement/vendors', '/api/procurement/quotes', '/api/procurement/negotiations',
+  '/api/procurement/awards', '/api/procurement/ppos', '/api/procurement/rate-cards',
+  '/api/procurement/auctions', '/api/procurement/auctions/rfq-options', '/api/approvals/vendor-ratings',
+  '/api/vendor-portal/me', '/api/vendor-portal/rfqs', '/api/vendor-portal/ppos', '/api/vendor-portal/rate-cards',
+];
+const PAGES = ['/dashboard', '/projects', '/boq', '/pr', '/approvals/boq-pr', '/procurement/rfqs', '/masters/standard-boq'];
+const ROLES = [
+  'project.user@procucev-demo.local', 'project.approver@procucev-demo.local', 'procurement.user@procucev-demo.local',
+  'finance.user@procucev-demo.local', 'category.manager@procucev-demo.local', 'client.admin@procucev-demo.local',
+  'super.admin@procucev-demo.local', 'viewer@procucev-demo.local',
+];
+
+async function roleSweep() {
+  const sessions: Record<string, Session> = {};
+  for (const email of ROLES) {
+    try {
+      sessions[email] = await login(email);
+      record('auth', `login ${email}`, true);
+    } catch (e) {
+      record('auth', `login ${email}`, false, String(e));
+      continue;
+    }
+    const s = sessions[email];
+    const fivexx: string[] = [];
+    const counts = { ok: 0, denied: 0 };
+    for (const path of [...LIST_ENDPOINTS, ...PAGES]) {
+      const r = await s.get(path);
+      if (r.status >= 500) fivexx.push(`${path} ${errorOf(r)}`);
+      else if (r.status === 401 || r.status === 403) counts.denied++;
+      else counts.ok++;
+    }
+    record('role sweep', `${email}: ${LIST_ENDPOINTS.length + PAGES.length} endpoints/pages, no server errors`,
+      fivexx.length === 0, fivexx.length ? fivexx.join(' | ') : `${counts.ok} allowed, ${counts.denied} denied`);
+  }
+  return sessions;
+}
+
+// ---------------------------------------------------------------- 2. permissions & tenant isolation
+async function securityChecks(s: Record<string, Session>) {
+  const anon = new Session('anonymous');
+  for (const path of ['/api/projects', '/api/boq', '/api/procurement/rfqs']) {
+    const r = await anon.get(path);
+    record('security', `anonymous ${path} rejected`, r.status === 401 || r.status === 403, `HTTP ${r.status}`);
+  }
+  const viewer = s['viewer@procucev-demo.local'];
+  if (viewer) {
+    const r = await viewer.post('/api/projects', { name: `${RUN} viewer must not create` });
+    record('security', 'VIEWER cannot create a project', r.status === 403, `HTTP ${r.status}`);
+  }
+  const pu = s['project.user@procucev-demo.local'];
+  if (pu) {
+    const r = await pu.post('/api/procurement/rfqs', { title: `${RUN} forbidden` });
+    record('security', 'PROJECT_USER cannot create an RFQ', r.status === 403, `HTTP ${r.status}`);
+  }
+
+  // Tenant isolation: the hospitality tenant must not see retail records.
+  const retailProject = d1<{ id: string }>(`SELECT p.id FROM projects p JOIN tenants t ON t.id=p.tenantId WHERE t.slug='procucev-retail-demo' LIMIT 1`)[0];
+  const hosp = await login('hospitality.user@procucev-demo.local');
+  const list = await hosp.get('/api/projects');
+  const ids: string[] = (data(list) || []).map((p: { id: string }) => p.id);
+  record('security', 'tenant isolation: hospitality tenant does not list retail projects', !ids.includes(retailProject.id), `${ids.length} own projects`);
+  const direct = await hosp.get(`/api/projects/${retailProject.id}`);
+  record('security', 'tenant isolation: hospitality tenant cannot open a retail project by ID', direct.status === 404 || direct.status === 403, `HTTP ${direct.status}`);
+}
+
+// ---------------------------------------------------------------- 3. full workflow with writes
+async function workflow(s: Record<string, Session>) {
+  const pu = s['project.user@procucev-demo.local'];
+  const pa = s['project.approver@procucev-demo.local'];
+  const proc = s['procurement.user@procucev-demo.local'];
+  const cm = s['category.manager@procucev-demo.local'] || s['client.admin@procucev-demo.local'];
+  const stamp = Date.now().toString().slice(-6);
+  const step = (name: string, ok: boolean, detail = '') => { record('workflow', name, ok, detail); if (!ok) throw new Error(`stopped at: ${name}`); };
+
+  // Category
+  const catCode = `E2ED1${stamp}`;
+  let r = await cm.post('/api/masters/categories', { name: `${RUN} Category`, code: catCode });
+  step('create category', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const cat = d1(`SELECT id, name FROM categories WHERE code=${q(catCode)}`);
+  step('category persisted in D1', cat.length === 1, String(cat[0]?.id ?? ''));
+
+  // Project
+  r = await pu.post('/api/projects', { name: `${RUN} Project`, sector: 'RETAIL', projectType: 'NEW_BUILD', city: 'Bengaluru', budget: 2500000, currency: 'INR' });
+  step('create project', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const project = data(r)?.project ?? data(r);
+  const projectId: string = project.id;
+  const dbProject = d1(`SELECT id, projectCode, createdAt FROM projects WHERE id=${q(projectId)}`);
+  step('project persisted in D1', dbProject.length === 1, `${dbProject[0]?.projectCode} createdAt=${dbProject[0]?.createdAt}`);
+
+  // Two cost centres
+  const ccIds: string[] = [];
+  for (const n of [1, 2]) {
+    r = await pu.post('/api/cost-centres', { projectId, code: `E2E-${stamp}-${n}`, name: `${RUN} Cost Centre ${n}` });
+    step(`create cost centre ${n}`, r.status < 300, r.status < 300 ? '' : errorOf(r));
+    ccIds.push((data(r)?.costCentre ?? data(r)).id);
+  }
+  step('cost centres persisted in D1', d1(`SELECT id FROM cost_centres WHERE projectId=${q(projectId)}`).length === 2);
+
+  // BOQ with multiple lines
+  const lines = [
+    { lineNumber: '1', description: 'Vitrified tile flooring 600x600', uom: 'SQM', quantity: 120, category: 'Civil' },
+    { lineNumber: '2', description: 'Gypsum false ceiling', uom: 'SQM', quantity: 80, category: 'Civil' },
+    { lineNumber: '3', description: 'LED panel light 36W', uom: 'NOS', quantity: 24, category: 'Electrical' },
+  ];
+  r = await pu.post('/api/boq/manual', { projectId, costCentreId: ccIds[0], title: `${RUN} BOQ`, purpose: 'BUDGET', lines });
+  step('create BOQ with 3 lines', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const boqRow = d1<{ boqId: string; revisionId: string; status: string }>(
+    `SELECT b.id boqId, r.id revisionId, r.status FROM boqs b JOIN boq_revisions r ON r.boqId=b.id WHERE b.projectId=${q(projectId)} ORDER BY r.revisionNumber DESC LIMIT 1`)[0];
+  const lineCount = d1<{ c: number }>(`SELECT count(*) c FROM boq_lines WHERE boqRevisionId=${q(boqRow?.revisionId ?? '')}`)[0]?.c;
+  step('BOQ and lines persisted in D1', !!boqRow && lineCount === 3, `revision ${boqRow?.revisionId} status=${boqRow?.status} lines=${lineCount}`);
+
+  // Validate / submit / approve BOQ
+  await pu.post(`/api/boq/${boqRow.revisionId}/validate`);
+  r = await pu.post(`/api/boq/${boqRow.revisionId}/submit`);
+  step('submit BOQ', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/boq/${boqRow.revisionId}/approve`, { remarks: `${RUN} approved` });
+  step('approve BOQ (project approver)', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  step('BOQ approval persisted in D1', d1<{ status: string }>(`SELECT status FROM boq_revisions WHERE id=${q(boqRow.revisionId)}`)[0]?.status === 'APPROVED');
+
+  // PR from BOQ
+  r = await pu.post('/api/boq/create-pr', { boqRevisionId: boqRow.revisionId, boqId: boqRow.boqId, costCentreId: ccIds[0], projectId, title: `${RUN} PR` });
+  step('create PR from BOQ', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const pr = d1<{ id: string; prNumber: string; status: string }>(`SELECT id, prNumber, status FROM procurement_requests WHERE projectId=${q(projectId)} ORDER BY createdAt DESC LIMIT 1`)[0];
+  const prLines = d1<{ c: number }>(`SELECT count(*) c FROM pr_lines WHERE prId=${q(pr?.id ?? '')}`)[0]?.c;
+  step('PR persisted in D1, linked to BOQ and cost centre', !!pr && prLines === 3, `${pr?.prNumber} status=${pr?.status} lines=${prLines}`);
+
+  if (pr.status === 'PR_DRAFT') {
+    r = await pu.post(`/api/pr/${pr.id}/submit`);
+    step('submit PR', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  }
+  r = await pa.post(`/api/pr/${pr.id}/approve`, { remarks: `${RUN} approved` });
+  step('approve PR (project approver)', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/pr/${pr.id}/release-to-procurement`);
+  step('release PR to procurement', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const prStatus = d1<{ status: string }>(`SELECT status FROM procurement_requests WHERE id=${q(pr.id)}`)[0]?.status;
+  record('workflow', 'PR status persisted in D1', true, prStatus);
+
+  r = await proc.get('/api/procurement/approved-prs');
+  const approvedList = JSON.stringify(r.json ?? '');
+  step('approved PR available for RFQ creation', approvedList.includes(pr.id) || approvedList.includes(pr.prNumber), `HTTP ${r.status}`);
+
+  // RFQ
+  const deadline = new Date(Date.now() + 7 * 864e5).toISOString();
+  r = await proc.post('/api/procurement/rfqs', { projectId, prId: pr.id, title: `${RUN} RFQ`, scopeOfWork: 'E2E D1 regression scope', submissionDeadline: deadline });
+  step('create RFQ from approved PR', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const rfq = d1<{ id: string; rfqNumber: string; status: string }>(`SELECT id, rfqNumber, status FROM rfqs WHERE prId=${q(pr.id)} ORDER BY createdAt DESC LIMIT 1`)[0];
+  const rfqLines = d1<{ id: string }>(`SELECT id FROM rfq_lines WHERE rfqId=${q(rfq?.id ?? '')}`);
+  step('RFQ and lines persisted in D1', !!rfq && rfqLines.length === 3, `${rfq?.rfqNumber} status=${rfq?.status} lines=${rfqLines.length}`);
+
+  // Invite 3 vendors ($transaction)
+  const vendorLogins = ['bluepeak.engineering@vendor.procpx.local', 'craftline.interior@vendor.procpx.local', 'zenith.retail@vendor.procpx.local'];
+  const vendorIds = d1<{ vendorId: string; email: string }>(`SELECT vendorId, email FROM users WHERE email IN (${vendorLogins.map(q).join(',')})`);
+  r = await proc.post(`/api/procurement/rfqs/${rfq.id}/vendors`, { vendorIds: vendorIds.map((v) => v.vendorId) });
+  step('invite 3 vendors (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  step('vendor invitations persisted in D1', d1(`SELECT id FROM rfq_vendors WHERE rfqId=${q(rfq.id)}`).length === 3);
+
+  r = await proc.put(`/api/procurement/rfqs/${rfq.id}`, { action: 'RELEASE' });
+  step('release RFQ to vendors', r.status < 300, r.status < 300 ? '' : errorOf(r));
+
+  // Each vendor quotes ($transaction); different rates so L1/L2/L3 exist
+  const rates = [[950, 1450, 2100], [990, 1500, 2050], [1020, 1390, 2200]];
+  for (const [i, v] of vendorIds.entries()) {
+    const vs = await login(v.email, VENDOR_PASSWORD);
+    r = await vs.post(`/api/vendor-portal/rfqs/${rfq.id}`, {
+      lines: rfqLines.map((l, j) => ({ rfqLineId: l.id, unitRate: rates[i][j], gstPercent: 18, leadTimeDays: 14 })),
+      commercialNotes: `${RUN} quote`, deliveryLeadTimeDays: 14,
+      validUntil: new Date(Date.now() + 30 * 864e5).toISOString(),
+    });
+    step(`vendor ${i + 1} submits quote (transaction)`, r.status < 300, r.status < 300 ? '' : errorOf(r));
+  }
+  const quotes = d1<{ c: number }>(`SELECT count(*) c FROM quotes WHERE rfqId=${q(rfq.id)}`)[0]?.c;
+  const qLines = d1<{ c: number }>(`SELECT count(*) c FROM quote_lines ql JOIN quotes qq ON qq.id=ql.quoteId WHERE qq.rfqId=${q(rfq.id)}`)[0]?.c;
+  step('quotations persisted in D1', quotes === 3 && qLines === 9, `${quotes} quotes, ${qLines} quote lines`);
+
+  r = await proc.get(`/api/procurement/rfqs/${rfq.id}/compare`);
+  step('quote comparison loads', r.status === 200, `HTTP ${r.status}`);
+
+  // Negotiation counter-offer ($transaction) to the L1 vendor
+  const l1 = d1<{ vendorId: string; totalAmount: number }>(`SELECT vendorId, totalQuoteAmount totalAmount FROM quotes WHERE rfqId=${q(rfq.id)} ORDER BY totalQuoteAmount ASC LIMIT 1`)[0];
+  r = await proc.post('/api/procurement/negotiations', { rfqId: rfq.id, vendorId: l1.vendorId, counterOfferAmount: Math.round(l1.totalAmount * 0.95), notes: `${RUN} counter-offer` });
+  step('send negotiation counter-offer (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const rounds = d1<{ c: number }>(`SELECT count(*) c FROM negotiation_rounds nr JOIN negotiations n ON n.id=nr.negotiationId WHERE n.rfqId=${q(rfq.id)}`)[0]?.c;
+  step('negotiation round persisted in D1', rounds >= 1, `${rounds} round(s)`);
+
+  // Award
+  r = await proc.post('/api/procurement/awards', { rfqId: rfq.id, recommendedVendorId: l1.vendorId, originalQuoteAmount: l1.totalAmount, finalNegotiatedAmount: l1.totalAmount, justification: `${RUN} L1 award` });
+  step('submit award recommendation', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const award = d1<{ id: string; status: string }>(`SELECT id, status FROM award_recommendations WHERE rfqId=${q(rfq.id)} ORDER BY createdAt DESC LIMIT 1`)[0];
+  step('award persisted in D1', !!award, `status=${award?.status}`);
+  if (award.status !== 'APPROVED') {
+    const approver = s['client.admin@procucev-demo.local'] || proc;
+    r = await approver.put('/api/procurement/awards', { awardId: award.id, action: 'APPROVE', remarks: `${RUN} approved` });
+    record('workflow', 'approve award', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  }
+
+  // PPO ($transaction)
+  r = await proc.post('/api/procurement/ppos', { rfqId: rfq.id, awardRecommendationId: award.id, targetVendorId: l1.vendorId, justification: `${RUN} PPO`, deliveryTerms: 'Ex-site', paymentTerms: '30 days' });
+  step('generate PPO (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const ppo = d1<{ id: string; ppoNumber: string; status: string }>(`SELECT id, ppoNumber, status FROM ppos WHERE rfqId=${q(rfq.id)}`)[0];
+  const ppoLines = d1<{ c: number }>(`SELECT count(*) c FROM ppo_lines WHERE ppoId=${q(ppo?.id ?? '')}`)[0]?.c;
+  step('PPO and lines persisted in D1', !!ppo && ppoLines === 3, `${ppo?.ppoNumber} status=${ppo?.status} lines=${ppoLines}`);
+
+  r = await proc.post('/api/procurement/ppos', { rfqId: rfq.id, awardRecommendationId: award.id, targetVendorId: l1.vendorId, justification: `${RUN} duplicate` });
+  record('workflow', 'duplicate PPO for same vendor is blocked', r.status === 409, `HTTP ${r.status}`);
+
+  const audits = d1<{ c: number }>(`SELECT count(*) c FROM audit_logs WHERE entityId IN (${[projectId, boqRow.boqId, boqRow.revisionId, pr.id, rfq.id, ppo.id].map(q).join(',')})`)[0]?.c;
+  record('workflow', 'audit trail written in D1', audits > 0, `${audits} audit entries for the new records`);
+
+  return { projectId, prNumber: pr.prNumber, rfqNumber: rfq.rfqNumber, ppoNumber: ppo.ppoNumber };
+}
+
+// ---------------------------------------------------------------- main
+async function main() {
+  console.log(`proCPX D1 end-to-end regression against ${BASE_URL}  (run id "${RUN}")\n`);
+  const before = d1(BASELINE_SQL)[0];
+  const sessions = await roleSweep();
+  await securityChecks(sessions);
+  let created: Record<string, string> | null = null;
+  try {
+    created = await workflow(sessions);
+  } catch (e) {
+    console.log(`\nWorkflow ${String(e)}`);
+  }
+  // Existing references still intact
+  const refs = d1<{ c: number }>(`SELECT
+      (SELECT count(*) FROM quotes q LEFT JOIN rfqs r ON r.id=q.rfqId WHERE r.id IS NULL)
+    + (SELECT count(*) FROM negotiations n LEFT JOIN rfqs r ON r.id=n.rfqId WHERE r.id IS NULL)
+    + (SELECT count(*) FROM award_recommendations a LEFT JOIN rfqs r ON r.id=a.rfqId WHERE r.id IS NULL)
+    + (SELECT count(*) FROM ppos p LEFT JOIN vendors v ON v.id=p.vendorId WHERE v.id IS NULL) c`)[0].c;
+  record('integrity', 'vendor / quotation / negotiation / award / PPO references intact', refs === 0, `${refs} broken references`);
+
+  const after = d1(BASELINE_SQL)[0];
+  const shrunk = Object.keys(before).filter((k) => Number(after[k]) < Number(before[k]));
+  record('integrity', 'no baseline records deleted (counts never decrease)', shrunk.length === 0, shrunk.join(', '));
+  console.log('\nRecord counts (before -> after):');
+  console.table(Object.fromEntries(Object.keys(before).map((k) => [k, { before: before[k], after: after[k], added: Number(after[k]) - Number(before[k]) }])));
+
+  if (!created) record('workflow', 'full workflow completed', false, 'stopped early - see error above');
+  const failed = results.filter((r) => !r.ok);
+  console.log(`\n${results.length - failed.length}/${results.length} checks passed${created ? `; created ${JSON.stringify(created)}` : ''}`);
+  if (failed.length) {
+    console.log('Failures:');
+    for (const f of failed) console.log(`  - [${f.area}] ${f.check}: ${f.detail}`);
+    process.exitCode = 1;
+  }
+}
+
+main().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -22,7 +22,9 @@
       "binding": "DB",
       "database_name": "procpx-dev",
       "database_id": "12bf5e7f-4e82-43d2-9f85-52e861545367",
-      "migrations_dir": "migrations"
+      "migrations_dir": "migrations",
+      // Local `next dev` with DATABASE_PROVIDER=d1 talks to this real database.
+      "remote": true
     }
   ]
   // Uploads: enable R2 in the Cloudflare dashboard, run

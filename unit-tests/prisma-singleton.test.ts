@@ -1,6 +1,7 @@
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation((options) => ({ options, id: Symbol('client') })),
 }));
+jest.mock('../src/lib/d1-compat', () => ({ withD1Compat: jest.fn((client) => client) }));
 
 const PrismaClientMock = (require('@prisma/client') as { PrismaClient: jest.Mock }).PrismaClient;
 const prismaGlobal = globalThis as typeof globalThis & { prisma?: unknown };
@@ -79,6 +80,28 @@ describe('Prisma client singleton', () => {
     const loaded = loadPrismaModule();
     const { whoAmI } = loaded.prisma as unknown as { whoAmI: () => string };
     expect(whoAmI()).toBe('d1');
+
+    userAgent.mockRestore();
+    jest.dontMock('@opennextjs/cloudflare');
+    jest.dontMock('@prisma/adapter-d1');
+  });
+
+  it('runs interactive transactions directly on D1 and passes batches through', async () => {
+    const userAgent = jest.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Cloudflare-Workers');
+    jest.doMock('@opennextjs/cloudflare', () => ({ getCloudflareContext: () => ({ env: { DB: {} } }) }));
+    jest.doMock('@prisma/adapter-d1', () => ({ PrismaD1: jest.fn() }));
+    const batch = jest.fn().mockResolvedValue(['a', 'b']);
+    const d1Client = { tag: 'd1', $transaction: batch };
+    PrismaClientMock.mockImplementationOnce(() => d1Client);
+
+    const loaded = loadPrismaModule();
+    const callback = jest.fn(async (tx: unknown) => ({ usedClient: tx }));
+    await expect(loaded.prisma.$transaction(callback as never)).resolves.toEqual({ usedClient: d1Client });
+    expect(batch).not.toHaveBeenCalled();
+
+    const ops = [Promise.resolve('a'), Promise.resolve('b')];
+    await expect(loaded.prisma.$transaction(ops as never, { isolationLevel: 'Serializable' } as never)).resolves.toEqual(['a', 'b']);
+    expect(batch).toHaveBeenCalledWith(ops, { isolationLevel: 'Serializable' });
 
     userAgent.mockRestore();
     jest.dontMock('@opennextjs/cloudflare');

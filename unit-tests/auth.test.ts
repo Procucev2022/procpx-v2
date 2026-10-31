@@ -121,6 +121,17 @@ describe('NextAuth credentials provider', () => {
     });
   });
 
+  it('matches a vendor login by the contact user name when the vendor name differs', async () => {
+    userModel.findMany.mockResolvedValueOnce([{
+      ...dbUser, name: 'Ravi  Kumar', role: 'VENDOR', vendorId: 'vendor-2',
+      vendor: { name: 'Different Vendor Pvt Ltd', code: 'DIFF-01' },
+    }]);
+
+    await expect(authorize({ email: ' ravi kumar ', password: 'secret' })).resolves.toMatchObject({
+      role: 'VENDOR', vendorId: 'vendor-2',
+    });
+  });
+
   it('disambiguates same-name vendors by a matching vendor code', async () => {
     userModel.findMany.mockResolvedValueOnce([
       { ...dbUser, id: 'vendor-user-1', role: 'VENDOR', vendor: { name: 'Acme', code: 'OTHER' } },
@@ -149,6 +160,36 @@ describe('NextAuth credentials provider', () => {
     Reflect.set(process.env, 'NODE_ENV', 'production');
     await expect(authorize({ email: 'acme services', password: 'secret' })).resolves.toBeNull();
     expect(userModel.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('NextAuth secret', () => {
+  const saved = { NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET, AUTH_SECRET: process.env.AUTH_SECRET };
+
+  afterEach(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+
+  function secretFor(env: { NEXTAUTH_SECRET?: string; AUTH_SECRET?: string }) {
+    delete process.env.NEXTAUTH_SECRET;
+    delete process.env.AUTH_SECRET;
+    Object.assign(process.env, env);
+    let secret: unknown;
+    jest.isolateModules(() => {
+      require('../src/lib/auth');
+      const calls = (require('next-auth').default as jest.Mock).mock.calls;
+      secret = calls[calls.length - 1][0].secret;
+    });
+    return secret;
+  }
+
+  it('prefers NEXTAUTH_SECRET, then AUTH_SECRET, then the development default', () => {
+    expect(secretFor({ NEXTAUTH_SECRET: 'nextauth-secret', AUTH_SECRET: 'auth-secret' })).toBe('nextauth-secret');
+    expect(secretFor({ AUTH_SECRET: 'auth-secret' })).toBe('auth-secret');
+    expect(secretFor({})).toBe('procpx-super-secret-key-change-in-production-2024');
   });
 });
 

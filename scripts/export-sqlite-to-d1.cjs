@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint @typescript-eslint/no-require-imports: "off" -- This script is intentionally CommonJS. */
 // Exports the local SQLite database (prisma/dev.db) as an INSERT-only SQL file
 // for Cloudflare D1. Schema comes from migrations/; this file carries data only.
 //

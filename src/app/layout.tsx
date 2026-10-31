@@ -7,8 +7,11 @@ export { metadata };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    // Browser extensions (password managers, ATM/wallet helpers, etc.) add
+    // attributes such as data-*-ext-installed to <html>/<body> before React
+    // hydrates. This only ignores attribute differences on these two tags.
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

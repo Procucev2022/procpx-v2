@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "coverage/**",
     "next-env.d.ts",
+    // Cloudflare (OpenNext) build output and local Wrangler state.
+    ".open-next/**",
+    ".wrangler/**",
   ]),
 ]);
 
