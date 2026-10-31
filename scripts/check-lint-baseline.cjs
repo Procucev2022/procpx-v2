@@ -1,6 +1,7 @@
 /* eslint @typescript-eslint/no-require-imports: "off" -- This script is intentionally CommonJS. */
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { ESLint } = require('eslint');
 
 const root = path.resolve(__dirname, '..');
@@ -33,7 +34,12 @@ function collectDiagnostics(results) {
 async function main() {
   const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
   const eslint = new ESLint({ cwd: root });
-  const results = await eslint.lintFiles(['.']);
+  const repositoryFiles = execFileSync(
+    'git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { cwd: root, encoding: 'utf8' },
+  ).split('\0').filter((filename) => /\.(?:[cm]?[jt]sx?)$/i.test(filename));
+  const results = await eslint.lintFiles(repositoryFiles.length > 0 ? repositoryFiles : ['.']);
   const current = collectDiagnostics(results);
   const regressions = Object.entries(current.diagnostics)
     .filter(([key, count]) => count > (baseline.diagnostics[key] || 0))

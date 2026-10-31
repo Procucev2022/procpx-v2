@@ -73,6 +73,7 @@ for (const project of projects) {
 const stages = [
   { name: 'build', stage: 'build' },
   { name: 'unit-test coverage', stage: 'test:coverage', requireForTestProjects: true },
+  { name: 'client performance budgets', stage: 'check:performance', requireForNextProjects: true },
   { name: 'i18n string policy', stage: 'check:i18n' },
   { name: 'typecheck', stage: 'typecheck' },
   { name: 'lint', stage: 'lint' },
@@ -96,6 +97,11 @@ for (const step of stages) {
         .some((name) => fs.existsSync(path.join(project.directory, name)));
     if (step.requireForTestProjects && hasTestRunner) {
       failures.push(`No test:coverage script is configured in ${projectPath}`);
+    }
+    if (step.requireForNextProjects
+      && ['next.config.js', 'next.config.mjs', 'next.config.ts']
+        .some((name) => fs.existsSync(path.join(project.directory, name)))) {
+      failures.push(`No ${step.stage} script is configured in Next.js project ${projectPath}`);
     }
     if ((step.stage === 'db:migrate:safe' || step.stage === 'db:integrity')
       && fs.existsSync(path.join(project.directory, 'prisma', 'schema.prisma'))

@@ -53,6 +53,12 @@ jobs:
         timeout-minutes: 30
         continue-on-error: true
 
+      - name: Enforce client performance budgets
+        id: performance
+        run: npm run check:performance
+        timeout-minutes: 5
+        continue-on-error: true
+
       - name: Typecheck application
         id: typecheck
         run: npm run typecheck
@@ -83,6 +89,7 @@ jobs:
           INSTALL_OUTCOME: ${{ steps.install.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
+          PERFORMANCE_OUTCOME: ${{ steps.performance.outcome }}
           TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
           D1_MIGRATIONS_OUTCOME: ${{ steps.d1_migrations.outcome }}
@@ -98,6 +105,7 @@ jobs:
             install: process.env.INSTALL_OUTCOME || 'not run',
             build: process.env.BUILD_OUTCOME || 'not run',
             unitTests: process.env.UNIT_TEST_OUTCOME || 'not run',
+            performance: process.env.PERFORMANCE_OUTCOME || 'not run',
             typecheck: process.env.TYPECHECK_OUTCOME || 'not run',
             lint: process.env.LINT_OUTCOME || 'not run',
             d1Migrations: process.env.D1_MIGRATIONS_OUTCOME || 'not run',
@@ -116,6 +124,7 @@ jobs:
             ['Install', summary.install],
             ['Build', summary.build],
             ['Unit tests and coverage', summary.unitTests],
+            ['Client performance budgets', summary.performance],
             ['Typecheck', summary.typecheck],
             ['Lint', summary.lint],
             ['Local D1 migrations', summary.d1Migrations],
@@ -180,13 +189,14 @@ jobs:
           INSTALL_OUTCOME: ${{ steps.install.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
+          PERFORMANCE_OUTCOME: ${{ steps.performance.outcome }}
           TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
           D1_MIGRATIONS_OUTCOME: ${{ steps.d1_migrations.outcome }}
           DB_INTEGRITY_OUTCOME: ${{ steps.db_integrity.outcome }}
         run: |
           failed=0
-          for check in INSTALL BUILD UNIT_TEST TYPECHECK LINT D1_MIGRATIONS DB_INTEGRITY; do
+          for check in INSTALL BUILD UNIT_TEST PERFORMANCE TYPECHECK LINT D1_MIGRATIONS DB_INTEGRITY; do
             variable="${check}_OUTCOME"
             outcome="${!variable}"
             if [[ "$outcome" != "success" ]]; then
