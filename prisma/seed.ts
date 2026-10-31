@@ -1,11 +1,10 @@
 // prisma/seed.ts - Comprehensive Phase-1 Demonstration Seed Data for proCPX
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 import XLSX from 'xlsx';
 
-const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding proCPX Phase-1 Demonstration Database...\n');

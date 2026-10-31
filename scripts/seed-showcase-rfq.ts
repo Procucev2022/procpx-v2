@@ -1,7 +1,6 @@
 // scripts/seed-showcase-rfq.ts
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 async function seedShowcase() {
   const rfqId = '79490844-3600-4c7d-9254-901520b36449'; // RFQ-2026-000004

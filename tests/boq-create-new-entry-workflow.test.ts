@@ -2,9 +2,8 @@
 // Automated Test Suite for PROCPX — PROJECT USER BOQ CREATION ENTRY WORKFLOW
 // Validates: CREATE NEW BOQ -> BASIC BOQ DETAILS -> SAVE/CONTINUE -> CHOOSE GENERATION METHOD -> DUPLICATION & AUDIT
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 
 let passed = 0;

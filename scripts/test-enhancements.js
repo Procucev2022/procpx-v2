@@ -1,6 +1,23 @@
 // scripts/test-enhancements.js
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { PrismaD1 } = require('@prisma/adapter-d1');
+const requiredD1Values = [
+  process.env.CLOUDFLARE_ACCOUNT_ID,
+  process.env.CLOUDFLARE_API_TOKEN,
+  process.env.CLOUDFLARE_DATABASE_ID,
+];
+
+if (requiredD1Values.some((value) => !value)) {
+  throw new Error('Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, and CLOUDFLARE_DATABASE_ID before running this integration check.');
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaD1({
+    CLOUDFLARE_ACCOUNT_ID: requiredD1Values[0],
+    CLOUDFLARE_D1_TOKEN: requiredD1Values[1],
+    CLOUDFLARE_DATABASE_ID: requiredD1Values[2],
+  }),
+});
 
 async function runTests() {
   console.log('=== STARTING PROCPX ENHANCEMENTS TEST SUITE ===\n');

@@ -1,7 +1,6 @@
 // scripts/seed-rate-cards.ts - Seed vendor rate cards for Tenant A
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding Vendor Rate Cards...');

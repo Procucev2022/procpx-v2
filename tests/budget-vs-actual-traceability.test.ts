@@ -1,8 +1,7 @@
 // tests/budget-vs-actual-traceability.test.ts
 // Automated Acceptance Verification for Section 28 - Budget vs Actual Financial Traceability Architecture
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 let passed = 0;
 let failed = 0;

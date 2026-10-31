@@ -1,8 +1,7 @@
 // tests/procurement-workflow.test.ts - Comprehensive Procurement & Sourcing Workflow Test Suite
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { hasPermission, ROLE_PERMISSIONS, UserRole } from '../src/lib/permissions';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

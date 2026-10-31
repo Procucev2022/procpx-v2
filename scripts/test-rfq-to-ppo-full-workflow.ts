@@ -1,8 +1,7 @@
 // scripts/test-rfq-to-ppo-full-workflow.ts
 // proCPX End-to-End RFQ -> Quotation (v1..5) -> Counteroffer (1..4) -> Award -> PPO Integration Test
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 interface TestStepResult {
   step: string;

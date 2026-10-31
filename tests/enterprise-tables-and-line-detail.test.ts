@@ -1,10 +1,9 @@
 // tests/enterprise-tables-and-line-detail.test.ts
 // Comprehensive Test Suite for Enterprise Tables, SpecificationCell, and Line Item Detail View
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

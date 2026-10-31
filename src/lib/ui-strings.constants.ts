@@ -1726,7 +1726,7 @@ export const UI_STRINGS = {
     showCategoryControls: "Show Category Controls ▼",
     showing: "Showing ",
     sourcingLifecycleActions: "Sourcing Lifecycle Actions",
-    strictSQLiteRowLevelFK: "Strict SQLite Row-Level FK",
+    d1ReferentialIntegrity: "D1 Referential Integrity",
     submittedInReview: "Submitted & in review",
     superAdminPlatformOverview: "Super Admin Platform Overview",
     tURN: "TURN:",

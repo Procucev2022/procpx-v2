@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient();
 
 // Helper to consistently normalise vendor name for login username
 export function normaliseVendorUsername(name: string): string {

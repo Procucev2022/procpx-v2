@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -20,7 +21,6 @@ jobs:
     timeout-minutes: 45
     env:
       CI: true
-      DATABASE_URL: file:./ci.db
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: ci-only-not-a-real-secret
 
@@ -65,6 +65,18 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
+      - name: Apply reviewed migrations to local D1
+        id: d1_migrations
+        run: npm run db:migrate:safe
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Verify local D1 schema and integrity
+        id: db_integrity
+        run: npm run db:integrity
+        timeout-minutes: 5
+        continue-on-error: true
+
       - name: Prepare quality summary artifact
         if: always()
         env:
@@ -73,6 +85,8 @@ jobs:
           UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
           TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
+          D1_MIGRATIONS_OUTCOME: ${{ steps.d1_migrations.outcome }}
+          DB_INTEGRITY_OUTCOME: ${{ steps.db_integrity.outcome }}
           PR_NUMBER: ${{ github.event.pull_request.number || 0 }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -86,10 +100,46 @@ jobs:
             unitTests: process.env.UNIT_TEST_OUTCOME || 'not run',
             typecheck: process.env.TYPECHECK_OUTCOME || 'not run',
             lint: process.env.LINT_OUTCOME || 'not run',
+            d1Migrations: process.env.D1_MIGRATIONS_OUTCOME || 'not run',
+            databaseIntegrity: process.env.DB_INTEGRITY_OUTCOME || 'not run',
             prNumber: Number(process.env.PR_NUMBER) || null,
             prHeadSha: process.env.PR_HEAD_SHA || null,
           };
           fs.writeFileSync('ci-reports/quality-outcomes.json', JSON.stringify(summary, null, 2));
+
+          const readJson = (file) => {
+            try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+          };
+          const coverage = readJson('coverage/unit/coverage-summary.json')?.total || {};
+          const tests = readJson('coverage/unit/jest-results.json') || {};
+          const checks = [
+            ['Install', summary.install],
+            ['Build', summary.build],
+            ['Unit tests and coverage', summary.unitTests],
+            ['Typecheck', summary.typecheck],
+            ['Lint', summary.lint],
+            ['Local D1 migrations', summary.d1Migrations],
+            ['D1 schema integrity', summary.databaseIntegrity],
+          ];
+          const resultLabel = (outcome) => outcome === 'success' ? 'PASS' : `FAIL (${outcome})`;
+          const percent = (metric) => Number.isFinite(metric?.pct) ? `${metric.pct}%` : 'n/a';
+          const comment = [
+            '## Automated quality summary',
+            summary.prNumber ? `PR #${summary.prNumber} · commit \`${summary.prHeadSha}\`` : `Commit \`${summary.prHeadSha}\``,
+            '',
+            '| Check | Result |',
+            '| --- | --- |',
+            ...checks.map(([name, outcome]) => `| ${name} | ${resultLabel(outcome)} |`),
+            '',
+            '### Unit test results',
+            `${tests.numPassedTests ?? 'n/a'} passed, ${tests.numFailedTests ?? 'n/a'} failed, ${tests.numPendingTests ?? 'n/a'} pending (${tests.numTotalTests ?? 'n/a'} total).`,
+            '',
+            '### Overall coverage',
+            `Statements: ${percent(coverage.statements)} · Branches: ${percent(coverage.branches)} · Functions: ${percent(coverage.functions)} · Lines: ${percent(coverage.lines)}.`,
+            `Per-file 90% gate: ${resultLabel(summary.unitTests)}.`,
+          ].join('\n');
+          fs.writeFileSync('ci-reports/pr-comment.md', `${comment}\n`);
+          if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${comment}\n`);
 
           for (const file of [
             'unit-test-coverage-report.md',
@@ -114,6 +164,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Comment quality summary on pull request
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR_NUMBER" --body-file ci-reports/pr-comment.md
+        timeout-minutes: 3
+        continue-on-error: true
+
       - name: Enforce all quality checks
         id: quality_gate
         if: always()
@@ -123,9 +182,11 @@ jobs:
           UNIT_TEST_OUTCOME: ${{ steps.unit_tests.outcome }}
           TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
+          D1_MIGRATIONS_OUTCOME: ${{ steps.d1_migrations.outcome }}
+          DB_INTEGRITY_OUTCOME: ${{ steps.db_integrity.outcome }}
         run: |
           failed=0
-          for check in INSTALL BUILD UNIT_TEST TYPECHECK LINT; do
+          for check in INSTALL BUILD UNIT_TEST TYPECHECK LINT D1_MIGRATIONS DB_INTEGRITY; do
             variable="${check}_OUTCOME"
             outcome="${!variable}"
             if [[ "$outcome" != "success" ]]; then

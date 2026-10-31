@@ -1,10 +1,9 @@
 // scripts/test-vendor-management.ts
 // Comprehensive Acceptance Test Suite for proCPX Vendor Management Module
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { hasPermission, ROLE_PERMISSIONS } from '../src/lib/permissions';
 import { evaluateVendorProfile } from '../src/lib/vendor-ai-evaluator';
 
-const prisma = new PrismaClient();
 
 async function runAcceptanceTests() {
   console.log('===============================================================');

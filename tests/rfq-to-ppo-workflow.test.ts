@@ -1,9 +1,8 @@
 // tests/rfq-to-ppo-workflow.test.ts
 // Comprehensive 12-Point Automated Test Suite for proCPX Procurement User Workflow (RFQ-to-PPO)
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { hasPermission } from '../src/lib/permissions';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

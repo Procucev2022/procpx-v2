@@ -1,11 +1,10 @@
 // tests/phase1-validation.test.ts - Comprehensive Phase-1 Validation Test Suite
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { hasPermission, ROLE_PERMISSIONS, UserRole, Permission } from '../src/lib/permissions';
 import { validateBoqLine, computeQualityScore, summarizeIssues } from '../src/lib/boq-validate';
 import { standardiseDescription, standardiseUom } from '../src/lib/uom-standardise';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;

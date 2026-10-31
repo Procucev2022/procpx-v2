@@ -1,11 +1,10 @@
 // tests/audit-ppo-ratings.test.ts
 // Comprehensive Business-Rule and Security Audit Test Suite for PPO Vendor Performance Rating Workflow
 import assert from 'node:assert';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { hasPermission, UserRole } from '../src/lib/permissions';
 import { isUserAuthorizedForProject, getUserAuthorizedProjectIds } from '../src/lib/project-auth';
 
-const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 
 let testCount = 0;

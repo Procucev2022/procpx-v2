@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import fs from 'fs';
 
-const prisma = new PrismaClient();
 const BASE_URL = 'http://localhost:3000';
 
 async function main() {

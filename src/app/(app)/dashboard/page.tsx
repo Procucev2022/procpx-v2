@@ -282,7 +282,7 @@ export default function DashboardPage() {
                     <td><span className="badge badge-approved">{t.status}</span></td>
                     <td style={{ fontWeight: 600 }}>{t.projectCount}</td>
                     <td>{t.userCount}</td>
-                    <td><span className="badge badge-info">{UI_STRINGS.appAppDashboardPage.strictSQLiteRowLevelFK}</span></td>
+                    <td><span className="badge badge-info">{UI_STRINGS.appAppDashboardPage.d1ReferentialIntegrity}</span></td>
                   </tr>
                 ))}
               </tbody>

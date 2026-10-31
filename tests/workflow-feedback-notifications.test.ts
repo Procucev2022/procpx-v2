@@ -1,9 +1,8 @@
 // tests/workflow-feedback-notifications.test.ts
 // Comprehensive Test Suite for proCPX Standard Workflow Confirmation and Notification Behaviour
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/lib/prisma';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
 
-const prisma = new PrismaClient();
 
 let testsPassed = 0;
 let testsFailed = 0;
