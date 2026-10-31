@@ -12,6 +12,7 @@ import { RETENTION_DAYS, CLEANUP_INTERVAL_MS, PURGEABLE_EXTENSIONS, LOG_DIRECTOR
 
 
 let writeQueue: Promise<void> = Promise.resolve();
+const pendingLogWrites = new Set<Promise<unknown>>();
 let lastCleanupAt = 0;
 let initializedDirectory: string | null = null;
 let originalConsoleMethods: Partial<Record<'debug' | 'info' | 'log' | 'warn' | 'error', (...args: unknown[]) => void>> = {};
@@ -149,7 +150,7 @@ export function installConsoleCapture(): void {
     originalConsoleMethods[method] = console[method].bind(console) as (...args: unknown[]) => void;
     console[method] = (...args: unknown[]) => {
       const { message, context } = serializeConsoleArguments(args);
-      void writeStructuredLog(level, message, context, 'application');
+      trackPendingLogWrite(writeStructuredLog(level, message, context, 'application'));
     };
   }
   globalState.__procpxConsoleCaptureInstalled = true;
@@ -164,6 +165,17 @@ export function restoreConsoleCapture(): void {
   globalState.__procpxConsoleCaptureInstalled = false;
 }
 
+function trackPendingLogWrite(pending: Promise<unknown>): void {
+  pendingLogWrites.add(pending);
+  void pending.then(
+    () => pendingLogWrites.delete(pending),
+    () => pendingLogWrites.delete(pending),
+  );
+}
+
 export async function flushLogWrites(): Promise<void> {
+  while (pendingLogWrites.size > 0) {
+    await Promise.all([...pendingLogWrites]);
+  }
   await writeQueue;
 }

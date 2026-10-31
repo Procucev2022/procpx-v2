@@ -190,7 +190,6 @@ describe('server structured logging', () => {
       installConsoleCapture();
       console.info('category.loaded', { token: 'hidden' });
       console.error('request failed');
-      await new Promise((resolve) => setTimeout(resolve, 10));
       await flushLogWrites();
       const logFile = (await fs.readdir(temporaryDirectory)).find((file) => file.endsWith('.jsonl'));
       const text = await fs.readFile(path.join(temporaryDirectory, logFile!), 'utf8');

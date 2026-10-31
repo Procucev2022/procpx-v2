@@ -6,10 +6,10 @@ Files included: **240**. Files meeting all four 90% thresholds: **240/240**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.62% (84695/85010) |
-| branches | 94.37% (16797/17798) |
-| functions | 98.28% (1604/1632) |
-| lines | 99.62% (84695/85010) |
+| statements | 99.62% (84707/85022) |
+| branches | 94.37% (16801/17803) |
+| functions | 98.28% (1605/1633) |
+| lines | 99.62% (84707/85022) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -223,12 +223,12 @@ Files included: **240**. Files meeting all four 90% thresholds: **240/240**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.24% | 92.85% | 99.18% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.23% | 92.85% | 99.18% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.13% | 96.15% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/auth.ts` | 100.00% | 95.83% | 100.00% | 100.00% | PASS |
+| `src/lib/auth.ts` | 100.00% | 92.59% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
@@ -238,7 +238,7 @@ Files included: **240**. Files meeting all four 90% thresholds: **240/240**.
 | `src/lib/i18n.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/notifications.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.81% | 100.00% | 100.00% | 98.81% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.89% | 100.00% | 100.00% | 98.89% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.14% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
