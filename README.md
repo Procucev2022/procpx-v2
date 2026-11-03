@@ -13,25 +13,26 @@ npm install
 cp .env.example .env
 ```
 
-`prisma/dev.db` is not committed: each developer keeps their own local SQLite database.
+Cloudflare D1 is the only application database; there is no local SQLite file. Run `npx wrangler login` once so Wrangler and `npm run dev` can reach the `DB` binding in `wrangler.jsonc`.
 
-### 3. Initialize Database Schema
+### 2. Initialize Database Schema
+Local D1 state (under the ignored `.wrangler/` folder, used by the quality checks):
 ```bash
 npm run db:migrate:safe
 npm run db:integrity
 ```
 
-To apply the schema to your configured Cloudflare D1 database:
+Remote Cloudflare D1 (explicit commands only; check first, then migrate):
 ```bash
-npm run db:d1:migrate:remote
 npm run db:integrity:remote
+npm run db:d1:migrate:remote
 ```
 
-The current migration starts with an empty database. It does not import the legacy mocked SQLite records or seed demo accounts.
+Migrations never seed or import data; existing D1 records are preserved.
 
 **Production readiness:** Prisma's D1 adapter currently ignores transaction boundaries. Multi-write procurement flows must be redesigned before production traffic uses D1. The current affected routes are `src/app/api/vendor-portal/rfqs/[id]/route.ts`, `src/app/api/procurement/negotiations/route.ts`, `src/app/api/procurement/ppos/route.ts`, and `src/app/api/procurement/rfqs/[id]/vendors/route.ts`.
 
-### 4. Launch Development Server
+### 3. Launch Development Server
 ```bash
 npm run dev
 ```
@@ -46,13 +47,13 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 
 | Concern | Local dev | Cloudflare |
 |---|---|---|
-| Database | SQLite file from `DATABASE_URL` | D1 database bound as `DB` (via `@prisma/adapter-d1`) |
+| Database | D1 `DB` binding via `wrangler login` | D1 database bound as `DB` (via `@prisma/adapter-d1`) |
 | Uploads | `uploads/` folder | R2 bucket bound as `UPLOADS` |
 | Logs | `logs/` JSONL files | Workers Logs (console) |
 
-**Local dev against remote D1:** set `DATABASE_PROVIDER="d1"` in `.env` and run `npm run dev`. The app uses the `DB` database from `wrangler.jsonc` through your `npx wrangler login`, and no API token is needed. Set it back to `"sqlite"` to use `prisma/dev.db`.
+**Local dev against D1:** keep `DATABASE_PROVIDER="d1"` in `.env` and run `npm run dev`. The app uses the `DB` database from `wrangler.jsonc` through your `npx wrangler login`, and no API token is needed.
 
-**Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), then run `npm run cf:migrate`.
+**Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), apply it locally with `npm run db:migrate:safe`, then remotely with `npm run db:d1:migrate:remote` (alias: `npm run cf:migrate`). Never use `prisma db push`.
 
 **Secrets** (once per environment):
 ```bash
@@ -61,8 +62,6 @@ npx wrangler secret put NEXTAUTH_URL      # e.g. https://procpx.<subdomain>.work
 ```
 
 **Deploy:** `npm run cf:deploy`. On Windows the OpenNext build needs symlink permission, so turn on Developer Mode or build in WSL or CI.
-
-**Copy local test data into D1:** `node scripts/export-sqlite-to-d1.cjs`, then `npx wrangler d1 execute DB --remote --file prisma/backups/d1-data-export.sql`. Run this only against an empty database.
 
 ---
 

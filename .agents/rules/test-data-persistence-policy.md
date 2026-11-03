@@ -23,7 +23,7 @@ Maintain a persistent development database independent of code changes.
 - Schema changes must use controlled, non-destructive migrations wherever possible.
 - Preserve existing records when adding optional fields, new tables, relationships or status values.
 - Review the impact of every migration before execution.
-- Back up the development database (`prisma/dev.db`) to `prisma/backups/` before any potentially destructive schema operation.
+- Use Cloudflare D1 Time Travel or a Wrangler D1 export before any potentially destructive schema operation.
 - If a migration could cause data loss, stop and report the risk before proceeding.
 - Do not assume that `prisma db push`, migrations, application restarts or seed scripts are automatically safe for existing data.
 
@@ -65,7 +65,7 @@ At a minimum, verify:
 For unrelated UI changes, verify that existing records are still visible and functional without unnecessarily recreating them.
 
 ### 6. Pre-Change and Post-Change Data Integrity Check
-Before changes, record the counts and stable identifiers of the baseline test records using `npx tsx scripts/db-integrity-check.ts`.
+Before changes, record per-table counts with `npm run db:integrity:remote` (and `npm run db:integrity` for local D1), plus stable identifiers of the baseline test records via read-only Wrangler D1 queries.
 After changes, compare them and verify:
 - No baseline records were unintentionally deleted.
 - No IDs or relationships changed unexpectedly.

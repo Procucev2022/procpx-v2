@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { processDrawingFile, ExtractedDrawingItem } from '@/lib/drawing-parser';
 import { saveUpload } from '@/lib/storage';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
@@ -31,16 +34,16 @@ export async function POST(req: NextRequest) {
       } = body;
 
       if (!projectId) {
-        return apiError('Project ID is required to generate Draft BOQ.', 400);
+        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, 400);
       }
       if (!Array.isArray(lines) || lines.length === 0) {
-        return apiError('At least one BOQ line item is required.', 400);
+        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, 400);
       }
 
       const project = await prisma.project.findFirst({
         where: { id: projectId, tenantId: ctx.tenantId },
       });
-      if (!project) return apiError('Project not found.', 404);
+      if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
       // Unique BOQ Code
       const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
@@ -53,8 +56,8 @@ export async function POST(req: NextRequest) {
           projectId,
           costCentreId: costCentreId || null,
           boqCode,
-          title: title?.trim() || `Architectural Drawing — ${project.name}`,
-          description: description?.trim() || `Extracted from architectural drawing ${drawingNumber || 'DWG'}`,
+          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": title?.trim() || `Architectural Drawing — ${project.name}` }),
+          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": description?.trim() || `Extracted from architectural drawing ${drawingNumber || 'DWG'}` }),
           purpose: purpose || 'BUDGET',
           status: 'DRAFT',
           createdBy: ctx.userId,
@@ -114,13 +117,13 @@ export async function POST(req: NextRequest) {
           validationMessages.push({
             level: 'WARNING',
             code: 'UNVERIFIED_QUANTITY',
-            message: item.uncertainReason || 'Quantity unverified in drawing schedule. Field verification required.',
+            message: interpolateUiString(UI_STRINGS.common.value1, { "value1": item.uncertainReason || 'Quantity unverified in drawing schedule. Field verification required.' }),
           });
         } else {
           validationMessages.push({
             level: 'INFO',
             code: 'DRAWING_EXTRACTED',
-            message: `Extracted from drawing ${drawingNumber || ''}. ${item.location ? `Location: ${item.location}` : ''}`,
+            message: interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.extractedFromDrawingValue1Value2, { "value1": drawingNumber || '', "value2": item.location ? `Location: ${item.location}` : '' }),
           });
         }
 
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
           entityType: 'BOQ',
           entityId: boq.id,
           action: 'DRAWING_BOQ_GENERATED',
-          description: `Draft BOQ ${boq.boqCode} generated from drawing ${fileName || drawingNumber} (${lines.length} lines created)`,
+          description: interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.draftBOQBoqCodeGeneratedFromDrawingValue2LengthLinesCreated, { "boqCode": boq.boqCode, "value2": fileName || drawingNumber, "length": lines.length }),
         },
       });
 
@@ -186,20 +189,20 @@ export async function POST(req: NextRequest) {
     const drawingNumber = (formData.get('drawingNumber') as string) || 'DWG-A-101';
 
     if (!file || !projectId) {
-      return apiError('Drawing file and Project ID are required.', 400);
+      return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400);
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError('Project not found.', 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
     // Validate supported file extension
     const ext = file.name.split('.').pop()?.toLowerCase();
     const supportedExts = ['pdf', 'png', 'jpg', 'jpeg'];
     if (!ext || !supportedExts.includes(ext)) {
       return apiError(
-        `Unsupported drawing format (.${ext}). Supported formats are PDF, PNG, JPG, and JPEG.`,
+        interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { "ext": ext }),
         400
       );
     }
@@ -247,6 +250,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('Drawing processing error:', err);
-    return apiError(err.message || 'Drawing processing failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.drawingProcessingFailed }), 500);
   }
 }

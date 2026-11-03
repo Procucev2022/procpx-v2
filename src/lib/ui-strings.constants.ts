@@ -5568,6 +5568,11 @@ export const UI_STRINGS = {
     receptionCounterWallPanellingBespoke: "Reception Counter & Wall Panelling (Bespoke)",
     vitrifiedFloorTiling600x600mm: "Vitrified Floor Tiling (600x600mm)",
   },
+  libStorage: {
+    fileStorageIsNotConfiguredTheR2BucketBindingUPLOADSIsMissing: "File storage is not configured: the R2 bucket binding UPLOADS is missing.",
+    thisFileWasUploadedToALocalServerAndIsNotAvailableHere: "This file was uploaded to a local server and is not available here.",
+    uploadedFileNotFoundInStorage: "Uploaded file not found in storage.",
+  },
   libUomStandardiseConstants: {
     cubicMetres: "Cubic Metres",
     feet: "Feet",

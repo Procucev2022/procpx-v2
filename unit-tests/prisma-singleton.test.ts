@@ -3,12 +3,14 @@ jest.mock('@prisma/client', () => ({
 }));
 jest.mock('../src/lib/d1-compat', () => ({ withD1Compat: jest.fn((client) => client) }));
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- reads the jest.mock factory result above.
 const PrismaClientMock = (require('@prisma/client') as { PrismaClient: jest.Mock }).PrismaClient;
 const prismaGlobal = globalThis as typeof globalThis & { prisma?: unknown };
 
 function loadPrismaModule() {
   let moduleExports: typeof import('../src/lib/prisma') | undefined;
   jest.isolateModules(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a synchronous load.
     moduleExports = require('../src/lib/prisma') as typeof import('../src/lib/prisma');
   });
   return moduleExports!;

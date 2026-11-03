@@ -5,6 +5,9 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
 import * as XLSX from 'xlsx';
 import { saveUpload } from '@/lib/storage';
+import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
+
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
@@ -22,13 +25,13 @@ export async function POST(req: NextRequest) {
     const categoryParam = formData.get('category') as string | null;
 
     if (!file || !projectId) {
-      return apiError('Spreadsheet file and Project ID are required.', 400);
+      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.spreadsheetFileAndProjectIDAreRequired, 400);
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError('Project not found.', 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
     // Read buffer
     const arrayBuffer = await file.arrayBuffer();
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
     const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
     if (!rows || rows.length === 0) {
-      return apiError('Uploaded spreadsheet is empty or has no recognizable rows.', 400);
+      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.uploadedSpreadsheetIsEmptyOrHasNoRecognizableRows, 400);
     }
 
     // Check cost centres & categories for tenant
@@ -171,7 +174,7 @@ export async function POST(req: NextRequest) {
       let status = 'VALID';
 
       if (!desc) {
-        validationMessages.push({ level: 'ERROR', code: 'DESC_MISSING', message: 'Item Description is required.' });
+        validationMessages.push({ level: 'ERROR', code: 'DESC_MISSING', message: UI_STRINGS.appApiBoqUploadTemplateRoute.itemDescriptionIsRequired });
         status = 'ERROR';
       }
 
@@ -180,16 +183,16 @@ export async function POST(req: NextRequest) {
         // Section 13: If quantity is genuinely absent: Import the line as Quantity = NULL, Status = QUANTITY_REQUIRED
         qty = null;
         status = 'QUANTITY_REQUIRED';
-        validationMessages.push({ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: 'Quantity is required before budgeting or PR.' });
+        validationMessages.push({ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: UI_STRINGS.common.quantityIsRequiredBeforeBudgetingOrPR });
       } else if (isNaN(parsedQty)) {
-        validationMessages.push({ level: 'ERROR', code: 'QTY_INVALID', message: `Quantity "${cleanQtyStr}" must be numeric.` });
+        validationMessages.push({ level: 'ERROR', code: 'QTY_INVALID', message: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.quantityCleanQtyStrMustBeNumeric, { "cleanQtyStr": cleanQtyStr }) });
         status = 'ERROR';
       } else if (parsedQty === 0) {
         qty = 0;
-        validationMessages.push({ level: 'WARNING', code: 'QTY_ZERO', message: 'Quantity must be greater than zero.' });
+        validationMessages.push({ level: 'WARNING', code: 'QTY_ZERO', message: UI_STRINGS.common.quantityMustBeGreaterThanZero });
         if (status !== 'ERROR') status = 'WARNING';
       } else if (parsedQty < 0) {
-        validationMessages.push({ level: 'ERROR', code: 'QTY_NEGATIVE', message: 'Quantity cannot be negative.' });
+        validationMessages.push({ level: 'ERROR', code: 'QTY_NEGATIVE', message: UI_STRINGS.common.quantityCannotBeNegative });
         status = 'ERROR';
       } else {
         qty = parsedQty;
@@ -198,21 +201,21 @@ export async function POST(req: NextRequest) {
       // Check category match
       const matchedCategory = catMapByName.get(catName.toLowerCase());
       if (catName && !matchedCategory) {
-        validationMessages.push({ level: 'WARNING', code: 'CAT_UNRECOGNIZED', message: `Category "${catName}" not in standard taxonomy.` });
+        validationMessages.push({ level: 'WARNING', code: 'CAT_UNRECOGNIZED', message: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.categoryCatNameNotInStandardTaxonomy, { "catName": catName }) });
         if (status !== 'ERROR') status = 'WARNING';
       }
 
       // Check UOM match
       const matchedUom = uomMapByCode.get(uomRaw.toUpperCase());
       if (uomRaw && !matchedUom) {
-        validationMessages.push({ level: 'WARNING', code: 'UOM_NON_STANDARD', message: `UOM "${uomRaw}" mapped to raw text.` });
+        validationMessages.push({ level: 'WARNING', code: 'UOM_NON_STANDARD', message: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.uOMUomRawMappedToRawText, { "uomRaw": uomRaw }) });
         if (status !== 'ERROR') status = 'WARNING';
       }
 
       if (status === 'VALID') validCount++;
       else if (status === 'ERROR') {
         errorCount++;
-        exceptions.push({ line: lineNum, description: desc || '(blank)', errors: validationMessages });
+        exceptions.push({ line: lineNum, description: interpolateUiString(UI_STRINGS.common.value1, { "value1": desc || '(blank)' }), errors: validationMessages });
       } else {
         warningCount++;
       }
@@ -265,7 +268,7 @@ export async function POST(req: NextRequest) {
         entityType: 'BOQ',
         entityId: boq.id,
         action: 'BOQ_UPLOADED',
-        description: `Template BOQ uploaded: ${file.name} with ${rows.length} lines (Quality Score: ${qualityScore}%)`,
+        description: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.templateBOQUploadedNameWithLengthLinesQualityScoreQualityScore, { "name": file.name, "length": rows.length, "qualityScore": qualityScore }),
       },
     });
 
@@ -282,6 +285,6 @@ export async function POST(req: NextRequest) {
       exceptions,
     }, 201);
   } catch (err: any) {
-    return apiError(err.message || 'Template upload failed.', 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.templateUploadFailed }), 500);
   }
 }
