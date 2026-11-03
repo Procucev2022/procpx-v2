@@ -3,7 +3,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "procpx",
-  "account_id": "13a0babc81814551cad074685a88e2f9",
+  "account_id": "97a5dd65ad21c0f5dcd8547de147c806",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
