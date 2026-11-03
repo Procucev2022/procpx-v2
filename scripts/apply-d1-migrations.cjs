@@ -50,17 +50,21 @@ for (const filename of migrationFiles) {
 
 if (mode === '--remote') {
   const env = { ...readDotEnvValues(), ...process.env };
-  const required = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_DATABASE_ID'];
-  const missing = required.filter((key) => !env[key] || env[key].startsWith('replace-with-'));
-  if (missing.length) fail(`remote migration requires configured values for: ${missing.join(', ')}`);
-
   const configText = fs.readFileSync(configPath, 'utf8');
   if (configText.includes('replace-with-cloudflare-d1-database-id')) {
     fail('replace database_id in wrangler.jsonc with the D1 ID from your environment before a remote migration');
   }
-  const configuredDatabaseId = configText.match(/database_id\s*:\s*["']([^"']+)["']/)?.[1];
-  if (configuredDatabaseId !== env.CLOUDFLARE_DATABASE_ID) {
+  // Authentication comes from CLOUDFLARE_API_TOKEN or an interactive `wrangler login`.
+  // When a database ID is supplied it must match the tracked Wrangler configuration.
+  const configuredDatabaseId = configText.match(/"database_id"\s*:\s*["']([^"']+)["']/)?.[1];
+  const expectedDatabaseId = env.CLOUDFLARE_DATABASE_ID;
+  if (expectedDatabaseId && !expectedDatabaseId.startsWith('replace-with-') && configuredDatabaseId !== expectedDatabaseId) {
     fail('the database_id in wrangler.jsonc must match CLOUDFLARE_DATABASE_ID');
+  }
+  // A login with access to several accounts needs an explicit account in non-interactive runs.
+  if (!env.CLOUDFLARE_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID.startsWith('replace-with-')) {
+    const configuredAccountId = configText.match(/"account_id"\s*:\s*["']([^"']+)["']/)?.[1];
+    if (configuredAccountId) process.env.CLOUDFLARE_ACCOUNT_ID = configuredAccountId;
   }
 }
 

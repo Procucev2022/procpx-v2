@@ -1,10 +1,9 @@
 /* eslint @typescript-eslint/no-require-imports: "off" -- This script is intentionally CommonJS. */
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const { spawnNpm } = require('./spawn-npm.cjs');
 const skippedDirectories = new Set([
   '.git', '.next', '.turbo', '.cache', 'build', 'coverage', 'dist', 'node_modules', 'out',
 ]);
@@ -31,10 +30,9 @@ function findProjects(directory) {
 function run(project, label, args) {
   const relative = path.relative(root, project.directory) || '.';
   process.stdout.write(`\n=== ${label}: ${relative} ===\n`);
-  const result = spawnSync(npmCommand, args, {
+  const result = spawnNpm(args, {
     cwd: project.directory,
     env: process.env,
-    shell: process.platform === 'win32',
     stdio: 'inherit',
   });
   if (result.error || result.status !== 0) {

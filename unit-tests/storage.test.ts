@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'fs/promises';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { readUpload, saveUpload } from '../src/lib/storage';
 import { isCloudflareWorker } from '../src/lib/runtime';
+import { UI_STRINGS } from '../src/lib/ui-strings.constants';
 
 jest.mock('fs/promises', () => ({ mkdir: jest.fn(), writeFile: jest.fn(), readFile: jest.fn() }));
 jest.mock('../src/lib/runtime', () => ({ isCloudflareWorker: jest.fn() }));
@@ -52,12 +53,12 @@ describe('upload storage', () => {
 
   it('reports missing R2 objects, missing bindings and local paths on Workers', async () => {
     bucket.get.mockResolvedValue(null);
-    await expect(readUpload('r2://gone.xlsx')).rejects.toThrow('Uploaded file not found in storage.');
+    await expect(readUpload('r2://gone.xlsx')).rejects.toThrow(UI_STRINGS.libStorage.uploadedFileNotFoundInStorage);
 
     onWorker.mockReturnValue(true);
-    await expect(readUpload('/srv/uploads/file.xlsx')).rejects.toThrow('uploaded to a local server');
+    await expect(readUpload('/srv/uploads/file.xlsx')).rejects.toThrow(UI_STRINGS.libStorage.thisFileWasUploadedToALocalServerAndIsNotAvailableHere);
 
     cloudflareContext.mockReturnValue({ env: {} });
-    await expect(saveUpload(['t'], 'f.xlsx', Buffer.from('x'))).rejects.toThrow('binding UPLOADS is missing');
+    await expect(saveUpload(['t'], 'f.xlsx', Buffer.from('x'))).rejects.toThrow(UI_STRINGS.libStorage.fileStorageIsNotConfiguredTheR2BucketBindingUPLOADSIsMissing);
   });
 });
