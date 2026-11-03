@@ -63,6 +63,15 @@ npx wrangler secret put NEXTAUTH_URL      # e.g. https://procpx.<subdomain>.work
 
 **Deploy:** `npm run cf:deploy`. On Windows the OpenNext build needs symlink permission, so turn on Developer Mode or build in WSL or CI.
 
+### GitHub Actions dev deployment
+
+The `Deploy dev to Cloudflare` workflow deploys automatically when changes reach `main`, or can be started with **Run workflow**. Configure these GitHub Actions secrets in the `dev` environment:
+
+- `CLOUDFLARE_API_TOKEN` — a token with Workers Scripts and D1 edit permissions.
+- `CLOUDFLARE_ACCOUNT_ID` — the Cloudflare account ID that owns the Worker and D1 database.
+
+The workflow runs the full quality gate, checks remote D1 integrity, applies reviewed migrations, verifies integrity again, and deploys with OpenNext. It does not seed or reset D1 data.
+
 ---
 
 ## 👥 Demo Credentials
