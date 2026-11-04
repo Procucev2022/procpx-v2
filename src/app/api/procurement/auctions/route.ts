@@ -2,6 +2,7 @@
 // Comprehensive B2B Auction API: Guided creation, KPI aggregation, role-based visibility, and auto-scheduling
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -268,7 +269,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching auctions:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAuctions }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAuctions }), 500, { route: '/api/procurement/auctions', method: 'GET', error: error });
   }
 }
 
@@ -309,7 +310,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId || !title?.trim()) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.rFQIDAndAuctionNameAreMandatoryFields, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.rFQIDAndAuctionNameAreMandatoryFields, 400, { route: '/api/procurement/auctions', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -321,7 +322,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, 404, { route: '/api/procurement/auctions', method: 'POST' });
     }
 
     const quotedVendorIds = rfq.quotes
@@ -332,12 +333,11 @@ export async function POST(req: NextRequest) {
     if (missingVendors.length > 0 && !nonInvitedJustification?.trim() && !isDraft) {
       return apiError(
         UI_STRINGS.appApiProcurementAuctionsRoute.mandatoryJustificationIsRequiredWhenExcludingQuotedVendorsFromTheInvitedList,
-        400
-      );
+        400, { route: '/api/procurement/auctions', method: 'POST' });
     }
 
     if (!isDraft && invitedVendorIds.length === 0) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.atLeastOneVendorMustBeInvitedToScheduleAnAuction, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.atLeastOneVendorMustBeInvitedToScheduleAnAuction, 400, { route: '/api/procurement/auctions', method: 'POST' });
     }
 
     const now = new Date();
@@ -346,10 +346,10 @@ export async function POST(req: NextRequest) {
 
     if (!isDraft) {
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.pleaseProvideValidStartAndEndDateTime, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.pleaseProvideValidStartAndEndDateTime, 400, { route: '/api/procurement/auctions', method: 'POST' });
       }
       if (end <= start) {
-        return apiError(UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, 400);
+        return apiError(UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, 400, { route: '/api/procurement/auctions', method: 'POST' });
       }
     }
 
@@ -364,9 +364,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const count = await prisma.auction.count({ where: { tenantId: ctx.tenantId } });
     const prefix = auctionType === 'SEALED_BID' ? 'SLD' : (auctionType === 'FORWARD_AUCTION' ? 'FWD' : 'AUC');
-    const auctionNumber = `${prefix}-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const auctionNumber = await nextRecordCode(prisma.auction, 'auctionNumber', ctx.tenantId, `${prefix}-${new Date().getFullYear()}-`, 6);
 
     const effectiveLeadingPrice = auctionType === 'SEALED_BID' ? false : Boolean(hasLeadingPrice);
     const effectiveBidLimit = auctionType === 'SEALED_BID' ? 1 : Number(maxBidsPerParticipant || 10);
@@ -468,6 +467,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (error: any) {
     console.error('Error creating auction:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateAuction }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateAuction }), 500, { route: '/api/procurement/auctions', method: 'POST', error: error });
   }
 }

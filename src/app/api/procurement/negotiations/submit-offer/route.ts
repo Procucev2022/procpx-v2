@@ -16,11 +16,11 @@ export async function POST(req: NextRequest) {
 
   if (ctx.role === 'VENDOR') {
     if (!hasPermission(ctx.role, 'VENDOR_NEGOTIATE')) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenInsufficientVendorNegotiationPermissions, 403);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenInsufficientVendorNegotiationPermissions, 403, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
     }
   } else {
     if (!hasPermission(ctx.role, 'NEGOTIATION_MANAGE')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
     }
   }
 
@@ -41,17 +41,17 @@ export async function POST(req: NextRequest) {
     // Automatically resolve vendorId from authenticated session if VENDOR role
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId) {
-        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
       }
       if (!vendorId) {
         vendorId = ctx.vendorId;
       } else if (vendorId !== ctx.vendorId) {
-        return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenYouCanOnlySubmitOffersForYourOwnVendorAccount, 403);
+        return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.forbiddenYouCanOnlySubmitOffersForYourOwnVendorAccount, 403, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
       }
     }
 
     if (!rfqId || !vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQIDAndVendorIDAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQIDAndVendorIDAreRequired, 400, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -65,26 +65,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
 
     if (ctx.role === 'VENDOR') {
       const isInvited = await prisma.rfqVendor.findFirst({
         where: { rfqId, vendorId, tenantId: ctx.tenantId },
       });
       if (!isInvited) {
-        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
       }
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQStatusStatusDoesNotPermitVendorQuotationOffers, { "status": rfq.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.rFQStatusStatusDoesNotPermitVendorQuotationOffers, { "status": rfq.status }), 400, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
     }
 
     const vendor = await prisma.vendor.findFirst({
       where: { id: vendorId, tenantId: ctx.tenantId },
     });
 
-    if (!vendor) return apiError(UI_STRINGS.common.vendorNotFound, 404);
+    if (!vendor) return apiError(UI_STRINGS.common.vendorNotFound, 404, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
 
     // Find or create negotiation record
     let negotiation = await prisma.negotiation.findFirst({
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (isBuyer && vendorBuyerOffers.length >= 20) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.maximumLimitOf20BuyerCounteroffersReachedForThisVendor, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsSubmitOfferRoute.maximumLimitOf20BuyerCounteroffersReachedForThisVendor, 400, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
     }
 
     // Check vendor quote version limit
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       });
       nextQuoteVersion = existingQuotes.length > 0 ? existingQuotes[0].quoteVersion + 1 : 1;
       if (nextQuoteVersion > 20) {
-        return apiError(UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, 400);
+        return apiError(UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, 400, { route: '/api/procurement/negotiations/submit-offer', method: 'POST' });
       }
     }
 
@@ -372,6 +372,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (error: any) {
     console.error('Error submitting negotiation offer:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitNegotiationOffer }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitNegotiationOffer }), 500, { route: '/api/procurement/negotiations/submit-offer', method: 'POST', error: error });
   }
 }

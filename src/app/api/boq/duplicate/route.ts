@@ -1,6 +1,7 @@
 // src/app/api/boq/duplicate/route.ts - Duplicate BOQ Record and Lines
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { boqId } = await req.json();
-    if (!boqId) return apiError(UI_STRINGS.appApiBoqDuplicateRoute.boqIdIsRequired, 400);
+    if (!boqId) return apiError(UI_STRINGS.appApiBoqDuplicateRoute.boqIdIsRequired, 400, { route: '/api/boq/duplicate', method: 'POST' });
 
     const sourceBoq = await prisma.boq.findFirst({
       where: { id: boqId, tenantId: ctx.tenantId },
@@ -27,12 +28,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!sourceBoq) return apiError(UI_STRINGS.appApiBoqDuplicateRoute.sourceBOQNotFound, 404);
+    if (!sourceBoq) return apiError(UI_STRINGS.appApiBoqDuplicateRoute.sourceBOQNotFound, 404, { route: '/api/boq/duplicate', method: 'POST' });
 
-    const count = await prisma.boq.count({
-      where: { tenantId: ctx.tenantId, projectId: sourceBoq.projectId },
-    });
-    const newBoqCode = `BOQ-${sourceBoq.project.projectCode}-${String(count + 1).padStart(3, '0')}`;
+    const newBoqCode = await nextRecordCode(prisma.boq, 'boqCode', ctx.tenantId, `BOQ-${sourceBoq.project.projectCode}-`, 3);
 
     // Create cloned BOQ record
     const newBoq = await prisma.boq.create({
@@ -146,6 +144,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (err: any) {
     console.error('Duplicate BOQ error:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToDuplicateBoq }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToDuplicateBoq }), 500, { route: '/api/boq/duplicate', method: 'POST', error: err });
   }
 }

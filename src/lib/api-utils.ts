@@ -2,8 +2,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from './auth';
 import { hasPermission, UserRole, Permission } from './permissions';
-import type { ApiContext } from "@app-types/lib/api-utils.types";
+import type { ApiContext, ApiErrorDetails } from "@app-types/lib/api-utils.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { logEvent } from './observability/server-logger';
 
 export type { ApiContext };
 
@@ -94,8 +95,9 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
         select: { vendorId: true },
       });
       vendorId = dbUser?.vendorId || null;
-    } catch {
-      // ignore
+    } catch (error) {
+      // The vendor portal then shows no vendor data, so record why.
+      logEvent('warn', 'auth.vendor_lookup_failed', { userId: user.id, tenantId: user.tenantId, error });
     }
   }
 
@@ -114,7 +116,20 @@ export function isApiContext(val: unknown): val is ApiContext {
   return typeof val === 'object' && val !== null && 'userId' in val;
 }
 
-export function apiError(message: string, status = 400) {
+/**
+ * Builds an error response and records it. Server failures (5xx) are logged as
+ * errors with the caught exception; rejected requests (4xx other than 401) are
+ * logged as warnings so failing workflows are visible even when the UI recovers.
+ */
+export function apiError(message: string, status = 400, details: ApiErrorDetails = {}) {
+  if (status !== 401) {
+    const { event, ...context } = details;
+    logEvent(status >= 500 ? 'error' : 'warn', event ?? (status >= 500 ? 'api.request_failed' : 'api.request_rejected'), {
+      status,
+      responseMessage: message,
+      ...context,
+    });
+  }
   return NextResponse.json({ error: message }, { status });
 }
 

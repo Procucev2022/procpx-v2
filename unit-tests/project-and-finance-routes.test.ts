@@ -1,3 +1,4 @@
+import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
@@ -25,7 +26,7 @@ jest.mock('../src/lib/prisma', () => ({
     rateCardApproval: { create: jest.fn() },
     budgetContribution: { findFirst: jest.fn(), update: jest.fn() },
     budgetApproval: { create: jest.fn() },
-    budgetTransaction: { updateMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
+    budgetTransaction: { findMany: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
     budget: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
     auditLog: { create: jest.fn() },
   },
@@ -404,7 +405,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
       subcategory: 'Cable', amount: 900, quantity: 3, rate: 300, status: 'APPROVED', isReversal: false, transactionCode: 'BTX-0001',
     };
     db.budgetTransaction.findFirst.mockResolvedValueOnce(transaction);
-    db.budgetTransaction.count.mockResolvedValueOnce(4);
+    db.budgetTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', 'BTX-REV-', 5, 4));
     db.budgetTransaction.create.mockResolvedValueOnce({ id: 'tx-rev-1', transactionCode: 'BTX-REV-00005' });
     db.budget.findFirst.mockResolvedValueOnce({ id: 'budget-1', approvedAmount: 500, totalAmount: 650 });
     await expect(reverseBudgetTransaction(request({ transactionId: 'tx-1', reversalReason: '  Duplicate entry  ' }))).resolves.toEqual({
@@ -417,7 +418,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     expect(db.budget.update).toHaveBeenLastCalledWith({ where: { id: 'budget-1' }, data: { approvedAmount: 0, totalAmount: 0 } });
 
     db.budgetTransaction.findFirst.mockResolvedValueOnce({ ...transaction, quantity: 0 });
-    db.budgetTransaction.count.mockResolvedValueOnce(10);
+    db.budgetTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', 'BTX-REV-', 5, 10));
     db.budgetTransaction.create.mockResolvedValueOnce({ id: 'tx-rev-2' });
     db.budget.findFirst.mockResolvedValueOnce(null);
     await reverseBudgetTransaction(request({ transactionId: 'tx-1', reversalReason: 'Correction' }));

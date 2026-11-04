@@ -124,6 +124,22 @@ export async function writeDebugSnapshot(
   return filePath;
 }
 
+/**
+ * Writes one JSON line to the process output. On Cloudflare Workers the Node stream
+ * polyfills are not collected by Workers Logs, so the line goes through the console
+ * methods that existed before capture was installed (calling the patched console
+ * would recurse back into this logger).
+ */
+function emitLine(level: LogLevel, line: string): void {
+  if (isCloudflareWorker()) {
+    const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+    const write = originalConsoleMethods[method] ?? console[method].bind(console);
+    write(line.trimEnd());
+    return;
+  }
+  (level === 'error' ? process.stderr : process.stdout).write(line);
+}
+
 export async function writeStructuredLog(
   level: LogLevel,
   message: string,
@@ -133,7 +149,7 @@ export async function writeStructuredLog(
 ): Promise<LogRecord> {
   const record = createLogRecord(level, message, context, source, environment);
   const line = `${JSON.stringify(record)}\n`;
-  (level === 'error' ? process.stderr : process.stdout).write(line);
+  emitLine(level, line);
 
   if (isFileLoggingEnabled(environment)) {
     await initializeLogging(environment);
@@ -143,6 +159,18 @@ export async function writeStructuredLog(
     }
   }
   return record;
+}
+
+/**
+ * Logs without awaiting, for catch blocks and response helpers that must not fail
+ * or slow down because of logging. Errors inside the logger are swallowed here
+ * after being reported on stderr.
+ */
+export function logEvent(level: LogLevel, message: string, context: Record<string, unknown> = {}): void {
+  trackPendingLogWrite(writeStructuredLog(level, message, context).catch((error: unknown) => {
+    process.stderr.write(`observability.log_failed ${String(error)}
+`);
+  }));
 }
 
 export function installConsoleCapture(): void {

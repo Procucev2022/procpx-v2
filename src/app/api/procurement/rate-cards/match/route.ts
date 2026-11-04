@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const rfqId = searchParams.get('rfqId');
 
   if (!prId && !rfqId) {
-    return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.eitherPrIdOrRfqIdIsRequiredToMatchRateCards, 400);
+    return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.eitherPrIdOrRfqIdIsRequiredToMatchRateCards, 400, { route: '/api/procurement/rate-cards/match', method: 'GET' });
   }
 
   try {
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!pr) return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.procurementRequestNotFound, 404);
+      if (!pr) return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.procurementRequestNotFound, 404, { route: '/api/procurement/rate-cards/match', method: 'GET' });
       referenceEntity = {
         type: 'PR',
         id: pr.id,
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!rfq) return apiError(UI_STRINGS.common.rFQNotFound, 404);
+      if (!rfq) return apiError(UI_STRINGS.common.rFQNotFound, 404, { route: '/api/procurement/rate-cards/match', method: 'GET' });
       referenceEntity = {
         type: 'RFQ',
         id: rfq.id,
@@ -321,6 +321,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error matching rate cards:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToMatchRateCards }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToMatchRateCards }), 500, { route: '/api/procurement/rate-cards/match', method: 'GET', error: error });
   }
 }

@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ vendors: enrichedVendors, counts, total: enrichedVendors.length });
   } catch (error: any) {
     console.error('Error fetching vendors:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendors }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendors }), 500, { route: '/api/procurement/vendors', method: 'GET', error: error });
   }
 }
 
@@ -206,22 +206,22 @@ export async function POST(req: NextRequest) {
 
     // Validate Step 1 Mandatory Fields
     if (!name || name.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorLegalBusinessNameIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorLegalBusinessNameIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!vendorType || !['CLIENT_VENDOR', 'PROCUCEV_VENDOR'].includes(vendorType)) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorTypeMustBeEitherClientVendorOrProcucevVendor, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorTypeMustBeEitherClientVendorOrProcucevVendor, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!contactPerson || contactPerson.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryContactNameIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryContactNameIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if ((!email || email.trim() === '') && (!phone || phone.trim() === '')) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryMobileNumberOrEmailIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryMobileNumberOrEmailIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!category || category.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryProductServiceCategoryIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryProductServiceCategoryIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!operatingLocation && !city) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.operatingLocationIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.operatingLocationIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
 
     // Check if an existing vendor record was supplied to update rather than creating a duplicate
@@ -367,6 +367,6 @@ export async function POST(req: NextRequest) {
     return apiSuccess({ vendor, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardedSuccessfully, { "code": vendor.code }) }, 201);
   } catch (error: any) {
     console.error('Error creating vendor:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToOnboardVendor }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToOnboardVendor }), 500, { route: '/api/procurement/vendors', method: 'POST', error: error });
   }
 }

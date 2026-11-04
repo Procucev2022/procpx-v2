@@ -1,6 +1,7 @@
 // src/app/api/boq/manual/route.ts - Method 4: Manual BOQ Entry & Manipulation API
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     const { projectId, costCentreId, boqId, boqRevisionId, lines, action, title, description, purpose, category } = body;
 
     if (!projectId && !boqId) {
-      return apiError(UI_STRINGS.appApiBoqManualRoute.projectIDOrBOQIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqManualRoute.projectIDOrBOQIDIsRequired, 400, { route: '/api/boq/manual', method: 'POST' });
     }
 
     let targetBoqId = boqId;
@@ -23,8 +24,7 @@ export async function POST(req: NextRequest) {
 
     // If new BOQ creation
     if (!targetBoqId) {
-      const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-      const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
+      const boqCode = await nextRecordCode(prisma.boq, 'boqCode', ctx.tenantId, `BOQ-`, 6);
 
       const project = await prisma.project.findFirst({
         where: { id: projectId, tenantId: ctx.tenantId },
@@ -84,9 +84,9 @@ export async function POST(req: NextRequest) {
     const currentRev = await prisma.boqRevision.findFirst({
       where: { id: targetRevId, tenantId: ctx.tenantId },
     });
-    if (!currentRev) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    if (!currentRev) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/manual', method: 'POST' });
     if (currentRev.status === 'APPROVED') {
-      return apiError(UI_STRINGS.appApiBoqManualRoute.approvedBOQRevisionsAreStrictlyImmutableBranchANewRevisionToEdit, 403);
+      return apiError(UI_STRINGS.appApiBoqManualRoute.approvedBOQRevisionsAreStrictlyImmutableBranchANewRevisionToEdit, 403, { route: '/api/boq/manual', method: 'POST' });
     }
 
     // If lines provided, handle save/replace or operations
@@ -184,6 +184,6 @@ export async function POST(req: NextRequest) {
       totalLines: updatedRev?.lines.length || 0,
     });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.manualBoqOperationFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.manualBoqOperationFailed }), 500, { route: '/api/boq/manual', method: 'POST', error: err });
   }
 }

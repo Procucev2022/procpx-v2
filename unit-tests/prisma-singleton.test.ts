@@ -2,6 +2,10 @@ jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation((options) => ({ options, id: Symbol('client') })),
 }));
 jest.mock('../src/lib/d1-compat', () => ({ withD1Compat: jest.fn((client) => client) }));
+jest.mock('../src/lib/observability/query-logging', () => ({ withQueryLogging: jest.fn((client) => client) }));
+// Shared across jest.isolateModules registries, which each get their own module instances.
+const mockLogEvent = jest.fn();
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: (...args: unknown[]) => mockLogEvent(...args) }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- reads the jest.mock factory result above.
 const PrismaClientMock = (require('@prisma/client') as { PrismaClient: jest.Mock }).PrismaClient;
@@ -100,6 +104,11 @@ describe('Prisma client singleton', () => {
     const callback = jest.fn(async (tx: unknown) => ({ usedClient: tx }));
     await expect(loaded.prisma.$transaction(callback as never)).resolves.toEqual({ usedClient: d1Client });
     expect(batch).not.toHaveBeenCalled();
+
+    // D1 cannot roll back a failed callback, so the failure is logged before it propagates.
+    const failure = new Error('second write failed');
+    await expect(loaded.prisma.$transaction((async () => { throw failure; }) as never)).rejects.toBe(failure);
+    expect(mockLogEvent).toHaveBeenCalledWith('error', 'db.non_atomic_transaction_failed', { error: failure });
 
     const ops = [Promise.resolve('a'), Promise.resolve('b')];
     await expect(loaded.prisma.$transaction(ops as never, { isolationLevel: 'Serializable' } as never)).resolves.toEqual(['a', 'b']);

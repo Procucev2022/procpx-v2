@@ -16,7 +16,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     where: { id: revisionId, tenantId: ctx.tenantId },
     include: { boq: true },
   });
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/submit', method: 'POST' });
   if (revision.status !== 'DRAFT') return apiError(interpolateUiString(UI_STRINGS.appApiBoqRevisionIdSubmitRoute.cannotSubmitABOQInStatusStatus, { "status": revision.status }));
   if (revision.errorLines > 0) {
     return apiError(interpolateUiString(UI_STRINGS.appApiBoqRevisionIdSubmitRoute.bOQCannotBeSubmittedBecauseErrorLinesLinesContainErrors, { "errorLines": revision.errorLines }));

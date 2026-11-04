@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       email: email.trim().toLowerCase(),
       name: name.trim(),
       role,
-      passwordHash: await bcrypt.hash(password, 12),
+      passwordHash: await hashPassword(password),
       status: 'ACTIVE',
       createdBy: ctx.userId,
     },

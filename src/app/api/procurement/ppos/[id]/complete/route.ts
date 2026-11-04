@@ -3,6 +3,7 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -43,11 +44,11 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404, { route: '/api/procurement/ppos/[id]/complete', method: 'POST' });
     }
 
     if (ppo.status === 'CANCELLED') {
-      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, 400, { route: '/api/procurement/ppos/[id]/complete', method: 'POST' });
     }
 
     // Determine lines to complete
@@ -76,8 +77,7 @@ export async function POST(
       const totalActualAmount = actualAmount + taxAmount;
 
       // Generate Transaction Code ACT-YYYY-XXXXXX
-      const txCount = await prisma.actualCostTransaction.count({ where: { tenantId: ctx.tenantId } });
-      const transactionCode = `ACT-${new Date().getFullYear()}-${String(txCount + 1).padStart(6, '0')}`;
+      const transactionCode = await nextRecordCode(prisma.actualCostTransaction, 'transactionCode', ctx.tenantId, `ACT-${new Date().getFullYear()}-`, 6);
 
       // Create persistent Actual Cost Transaction preserving full originating lineage
       const actualTx = await prisma.actualCostTransaction.create({
@@ -176,6 +176,6 @@ export async function POST(
     });
   } catch (err: any) {
     console.error('Error recording PPO completion:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCompletePpo }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCompletePpo }), 500, { route: '/api/procurement/ppos/[id]/complete', method: 'POST', error: err });
   }
 }

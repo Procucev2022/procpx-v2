@@ -1,6 +1,7 @@
 // src/app/api/boq/from-standard-library/route.ts - Method 2: Standard BOQ Library Generation
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -15,25 +16,24 @@ export async function POST(req: NextRequest) {
     const { projectId, costCentreId, items } = body;
 
     if (!projectId || !items || !Array.isArray(items) || items.length === 0) {
-      return apiError(UI_STRINGS.appApiBoqFromStandardLibraryRoute.projectIDAndAListOfSelectedStandardItemsAreRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqFromStandardLibraryRoute.projectIDAndAListOfSelectedStandardItemsAreRequired, 400, { route: '/api/boq/from-standard-library', method: 'POST' });
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404, { route: '/api/boq/from-standard-library', method: 'POST' });
 
     // Verify Cost Centre if provided
     if (costCentreId) {
       const cc = await prisma.costCentre.findFirst({
         where: { id: costCentreId, projectId, tenantId: ctx.tenantId },
       });
-      if (!cc) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+      if (!cc) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/boq/from-standard-library', method: 'POST' });
     }
 
     // Generate unique BOQ Code
-    const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-    const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
+    const boqCode = await nextRecordCode(prisma.boq, 'boqCode', ctx.tenantId, `BOQ-`, 6);
 
     const boq = await prisma.boq.create({
       data: {
@@ -133,6 +133,6 @@ export async function POST(req: NextRequest) {
       qualityScore: 100,
     }, 201);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.standardBoqGenerationFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.standardBoqGenerationFailed }), 500, { route: '/api/boq/from-standard-library', method: 'POST', error: err });
   }
 }

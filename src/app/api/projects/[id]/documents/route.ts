@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const project = await prisma.project.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404);
+  if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/projects/[id]/documents', method: 'GET' });
 
   const docs = await prisma.projectDocument.findMany({
     where: { projectId: id, tenantId: ctx.tenantId },
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const project = await prisma.project.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404);
+  if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/projects/[id]/documents', method: 'POST' });
 
   const body = await req.json();
   const { name, fileType, fileSize, filePath, category } = body;

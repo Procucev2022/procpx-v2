@@ -2,6 +2,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { D1_MAX_PAGE_SIZE, D1_PARAMETER_LIMIT_ERRORS } from './d1-compat.constants';
 import type { FindManyRunner, PageableFindManyArgs } from '@app-types/lib/d1-compat.types';
+import { logEvent } from './observability/server-logger';
 
 export function isD1ParameterLimitError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -53,6 +54,8 @@ export async function findManyWithinD1Limits(args: PageableFindManyArgs, run: Fi
     return await run(args);
   } catch (error) {
     if (!isD1ParameterLimitError(error) || !canPage(args)) throw error;
+    // Recovered, but each page is another D1 query: a frequent event points at a query to narrow.
+    logEvent('warn', 'db.d1_parameter_limit_paging', { take: args.take, skip: args.skip, error });
     return findManyInPages(args, run);
   }
 }

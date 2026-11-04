@@ -20,17 +20,17 @@ export async function GET(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
     const isInvited = await prisma.rfqVendor.findFirst({
       where: { rfqId: id, vendorId: ctx.vendorId, tenantId: ctx.tenantId },
     });
     if (!isInvited) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
   }
 
@@ -129,13 +129,13 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
 
     return apiSuccess({ rfq });
   } catch (error: any) {
     console.error('Error fetching RFQ detail:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500, { route: '/api/procurement/rfqs/[id]', method: 'GET', error: error });
   }
 }
 
@@ -163,7 +163,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
     }
 
     const updateData: any = {};
@@ -172,7 +172,7 @@ export async function PUT(
 
     if (action === 'RELEASE' || status === 'RELEASED') {
       if (existing.status !== 'DRAFT' && existing.status !== 'UNDER_REVIEW') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdRoute.cannotReleaseRFQInStatusStatus, { "status": existing.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdRoute.cannotReleaseRFQInStatusStatus, { "status": existing.status }), 400, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
       }
       updateData.status = 'RELEASED';
       updateData.releasedAt = new Date();
@@ -186,7 +186,7 @@ export async function PUT(
       });
     } else if (action === 'CANCEL' || status === 'CANCELLED') {
       if (!reason) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
       }
       updateData.status = 'CANCELLED';
       auditAction = 'RFQ_CANCELLED';
@@ -227,6 +227,6 @@ export async function PUT(
     return apiSuccess({ rfq: updated, message: auditDesc });
   } catch (error: any) {
     console.error('Error updating RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRfq }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRfq }), 500, { route: '/api/procurement/rfqs/[id]', method: 'PUT', error: error });
   }
 }

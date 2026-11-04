@@ -2,6 +2,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!boqRevisionId || !costCentreId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDAndCostCentreIDAreMandatory, 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDAndCostCentreIDAreMandatory, 400, { route: '/api/pr', method: 'POST' });
     }
 
     const revision = await prisma.boqRevision.findFirst({
@@ -84,13 +85,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/pr', method: 'POST' });
 
     const targetProjectId = projectId || revision.boq.projectId;
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: costCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
-    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/pr', method: 'POST' });
 
     // Filter lines if specific line selection was provided
     const targetLines = selectedLineIds && selectedLineIds.length > 0
@@ -98,12 +99,11 @@ export async function POST(req: NextRequest) {
       : revision.lines;
 
     if (targetLines.length === 0) {
-      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400);
+      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/pr', method: 'POST' });
     }
 
     // Generate unique PR Number
-    const count = await prisma.procurementRequest.count({ where: { tenantId: ctx.tenantId } });
-    const prNumber = `PR-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const prNumber = await nextRecordCode(prisma.procurementRequest, 'prNumber', ctx.tenantId, `PR-${new Date().getFullYear()}-`, 6);
 
     let totalEstimatedPRValue = 0;
     for (const l of targetLines) {
@@ -195,6 +195,6 @@ export async function POST(req: NextRequest) {
       status: initialStatus,
     }, 201);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateProcurementRequest }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateProcurementRequest }), 500, { route: '/api/pr', method: 'POST', error: err });
   }
 }

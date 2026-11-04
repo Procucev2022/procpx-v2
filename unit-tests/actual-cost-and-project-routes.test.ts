@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
@@ -66,7 +67,7 @@ describe('actual cost API', () => {
       ok: false, error: UI_STRINGS.appApiActualCostsRoute.projectCategoryActualQuantityAndActualUnitRateAreRequired, status: 400,
     });
 
-    db.actualCostTransaction.count.mockResolvedValueOnce(3);
+    db.actualCostTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', `ACT-${currentYear}-`, 6, 3));
     const transaction = { id: 'actual-1', transactionCode: 'ACT-2025-000004' };
     db.actualCostTransaction.create.mockResolvedValueOnce(transaction);
     await expect(createActualCost(request('http://localhost/api/actual-costs', {
@@ -85,7 +86,7 @@ describe('actual cost API', () => {
   });
 
   it('accepts explicit amount, defaults optional values, supports string documents, and handles errors', async () => {
-    db.actualCostTransaction.count.mockResolvedValueOnce(0);
+    db.actualCostTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', `ACT-${currentYear}-`, 6, 0));
     db.actualCostTransaction.create.mockResolvedValueOnce({ id: 'actual-2' });
     await createActualCost(request('http://localhost/api/actual-costs', {
       projectId: 'p1', category: 'Civil', actualQuantity: 1, actualUnitRate: 2, actualAmount: '20', documents: 'uploaded-documents',
@@ -94,9 +95,9 @@ describe('actual cost API', () => {
       actualAmount: 20, totalActualAmount: 20, taxAmount: 0, source: 'MANUAL_ADJUSTMENT', status: UI_STRINGS.common.aPPROVED, documents: 'uploaded-documents',
       costCentreId: null, subcategory: null, erpDate: null, remarks: null,
     }) });
-    db.actualCostTransaction.count.mockRejectedValueOnce(new Error('actual cost unavailable'));
+    db.actualCostTransaction.findMany.mockRejectedValueOnce(new Error('actual cost unavailable'));
     await expect(createActualCost(request('http://localhost/api/actual-costs', { projectId: 'p1', category: 'Civil', actualQuantity: 1, actualUnitRate: 2 }))).resolves.toEqual({ ok: false, error: 'actual cost unavailable', status: 500 });
-    db.actualCostTransaction.count.mockRejectedValueOnce({});
+    db.actualCostTransaction.findMany.mockRejectedValueOnce({});
     await expect(createActualCost(request('http://localhost/api/actual-costs', { projectId: 'p1', category: 'Civil', actualQuantity: 1, actualUnitRate: 2 }))).resolves.toEqual({ ok: false, error: 'Failed to create actual cost transaction', status: 500 });
   });
 });

@@ -1,6 +1,7 @@
 // src/app/api/boq/standard-library/route.ts - Standard BOQ Library API
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logEvent } from '@/lib/observability/server-logger';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (rawItems.length === 0) {
-      return apiError(UI_STRINGS.appApiBoqStandardLibraryRoute.atLeastOneStandardBOQItemIsRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqStandardLibraryRoute.atLeastOneStandardBOQItemIsRequired, 400, { route: '/api/boq/standard-library', method: 'POST' });
     }
 
     // Validate all items before saving
@@ -91,27 +92,26 @@ export async function POST(req: NextRequest) {
       const uom = it.uom?.trim()?.toUpperCase();
 
       if (!itemCode) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeIsRequired, { "itemNum": itemNum }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeIsRequired, { "itemNum": itemNum }), 400, { route: '/api/boq/standard-library', method: 'POST' });
       }
       if (!standardDescription) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeStandardItemDescriptionIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeStandardItemDescriptionIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400, { route: '/api/boq/standard-library', method: 'POST' });
       }
       if (!category) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeCategoryIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeCategoryIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400, { route: '/api/boq/standard-library', method: 'POST' });
       }
       if (!validCatNames.has(category.toLowerCase())) {
         return apiError(
           interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeCategoryCategoryDoesNotExistInCategoryMasterCategoriesMustBeCreatedViaCategoryCreationFirst, { "itemNum": itemNum, "itemCode": itemCode, "category": category }),
-          400
-        );
+          400, { route: '/api/boq/standard-library', method: 'POST' });
       }
       if (!uom) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeUOMIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeUOMIsRequired, { "itemNum": itemNum, "itemCode": itemCode }), 400, { route: '/api/boq/standard-library', method: 'POST' });
       }
 
       // Check duplicate within the incoming batch
       if (seenCodes.has(itemCode.toLowerCase())) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.duplicateItemCodeDetectedWithinSubmissionItemCode, { "itemCode": itemCode }), 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.duplicateItemCodeDetectedWithinSubmissionItemCode, { "itemCode": itemCode }), 409, { route: '/api/boq/standard-library', method: 'POST' });
       }
       seenCodes.add(itemCode.toLowerCase());
 
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingInDb) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.itemCodeItemCodeAlreadyExistsInTheCentralStandardBOQMaster, { "itemCode": itemCode }), 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.itemCodeItemCodeAlreadyExistsInTheCentralStandardBOQMaster, { "itemCode": itemCode }), 409, { route: '/api/boq/standard-library', method: 'POST' });
       }
 
       sanitizedItems.push({
@@ -166,8 +166,9 @@ export async function POST(req: NextRequest) {
           newValue: JSON.stringify({ count: createdItems.length, codes: sanitizedItems.map(s => s.itemCode) }),
         },
       });
-    } catch {
-      // Non-fatal
+    } catch (error) {
+      // Non-fatal: the items exist, only the audit row is missing.
+      logEvent('error', 'audit_log.create_failed', { route: '/api/boq/standard-library', tenantId: ctx.tenantId, action: 'CREATE', error });
     }
 
     return apiSuccess(
@@ -179,6 +180,6 @@ export async function POST(req: NextRequest) {
       201
     );
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddStandardBoqItems }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddStandardBoqItems }), 500, { route: '/api/boq/standard-library', method: 'POST', error: err });
   }
 }

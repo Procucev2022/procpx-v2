@@ -15,16 +15,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { contributionId, remarks } = body;
 
-    if (!contributionId) return apiError(UI_STRINGS.common.contributionIDIsRequired, 400);
+    if (!contributionId) return apiError(UI_STRINGS.common.contributionIDIsRequired, 400, { route: '/api/budgets/finance-approve', method: 'POST' });
 
     const contribution = await prisma.budgetContribution.findFirst({
       where: { id: contributionId, tenantId: ctx.tenantId },
       include: { boqRevision: true, boq: true, costCentre: true },
     });
 
-    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
+    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404, { route: '/api/budgets/finance-approve', method: 'POST' });
     if (contribution.status !== 'PENDING_FINANCE_APPROVAL' && contribution.status !== 'PROJECT_APPROVED') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsFinanceApproveRoute.cannotFinanceApproveBudgetInStateStatusMustBeApprovedByProjectApproverFirst, { "status": contribution.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsFinanceApproveRoute.cannotFinanceApproveBudgetInStateStatusMustBeApprovedByProjectApproverFirst, { "status": contribution.status }), 400, { route: '/api/budgets/finance-approve', method: 'POST' });
     }
 
     // Record Finance Approval Log
@@ -108,6 +108,6 @@ export async function POST(req: NextRequest) {
       approvedAmount: contribution.acceptedEstimatedValue,
     });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.financeBudgetApprovalFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.financeBudgetApprovalFailed }), 500, { route: '/api/budgets/finance-approve', method: 'POST', error: err });
   }
 }

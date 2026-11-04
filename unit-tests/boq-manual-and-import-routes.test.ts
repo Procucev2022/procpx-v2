@@ -1,3 +1,4 @@
+import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { readFile } from 'fs/promises';
@@ -12,7 +13,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    boq: { count: jest.fn(), create: jest.fn() },
+    boq: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     project: { findFirst: jest.fn() },
     boqRevision: { create: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     boqLine: { deleteMany: jest.fn(), create: jest.fn(), createMany: jest.fn() },
@@ -56,7 +57,7 @@ describe('manual BOQ workspace API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(editManualBoq(request({}))).resolves.toBe(denied);
     await expect(editManualBoq(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqManualRoute.projectIDOrBOQIDIsRequired, status: 400 });
-    db.boq.count.mockResolvedValueOnce(0);
+    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-', 6, 0));
     db.project.findFirst.mockResolvedValueOnce(null);
     db.boq.create.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'BOQ-000001' });
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-1' });
@@ -67,7 +68,7 @@ describe('manual BOQ workspace API', () => {
   });
 
   it('creates a manual draft and replaces lines with validation, category/UOM matches, and quality metrics', async () => {
-    db.boq.count.mockResolvedValueOnce(4);
+    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-', 6, 4));
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', name: 'Retail Store' });
     db.boq.create.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'BOQ-000005' });
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-1' });

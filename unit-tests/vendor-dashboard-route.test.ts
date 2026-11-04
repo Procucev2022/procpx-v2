@@ -172,9 +172,9 @@ describe('vendor dashboard API', () => {
     await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'Failed to fetch vendor dashboard data', status: 500 });
     db.vendorRateCard.findMany.mockRejectedValueOnce(new Error('rate card lookup failed'));
     await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'rate card lookup failed', status: 500 });
-    expect(errorResult).toHaveBeenCalledWith('RFQ lookup failed', 500);
-    expect(errorResult).toHaveBeenCalledWith('Failed to fetch vendor dashboard data', 500);
-    expect(errorResult).toHaveBeenCalledWith('rate card lookup failed', 500);
+    expect(errorResult).toHaveBeenCalledWith('RFQ lookup failed', 500, expect.objectContaining({ route: expect.any(String) }));
+    expect(errorResult).toHaveBeenCalledWith('Failed to fetch vendor dashboard data', 500, expect.objectContaining({ route: expect.any(String) }));
+    expect(errorResult).toHaveBeenCalledWith('rate card lookup failed', 500, expect.objectContaining({ route: expect.any(String) }));
     expect(consoleError).toHaveBeenCalledTimes(3);
   });
 });

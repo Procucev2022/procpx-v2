@@ -2,6 +2,7 @@
 // Handles RFQ listing and RFQ creation from Approved BOQ
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
@@ -201,7 +202,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ rfqs: formatted, total: formatted.length });
   } catch (error: any) {
     console.error('Error fetching RFQs:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqs }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqs }), 500, { route: '/api/procurement/rfqs', method: 'GET', error: error });
   }
 }
 
@@ -255,11 +256,11 @@ export async function POST(req: NextRequest) {
       });
 
       if (!pr) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.procurementRequestNotFoundOrAccessDenied, 404);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.procurementRequestNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       if (!['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'].includes(pr.status)) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.cannotCreateRFQPRIsInStatusStatusSourcingIsOnlyPermittedForAPPROVEDOrRELEASEDPRs, { "status": pr.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.cannotCreateRFQPRIsInStatusStatusSourcingIsOnlyPermittedForAPPROVEDOrRELEASEDPRs, { "status": pr.status }), 400, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       // Check for duplicate active RFQ for this PR
@@ -274,8 +275,7 @@ export async function POST(req: NextRequest) {
       if (existingRfq) {
         return apiError(
           interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.anActiveRFQRfqNumberAlreadyExistsForThisApprovedPRDuplicateSourcingEventsAreBlocked, { "rfqNumber": existingRfq.rfqNumber }),
-          409
-        );
+          409, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       resolvedProjectId = pr.projectId;
@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
       if (Array.isArray(selectedLineIds)) {
         const uniqueSet = new Set(selectedLineIds);
         if (uniqueSet.size !== selectedLineIds.length) {
-          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400);
+          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400, { route: '/api/procurement/rfqs', method: 'POST' });
         }
       }
 
@@ -299,14 +299,13 @@ export async function POST(req: NextRequest) {
         if (foreignLineIds.length > 0) {
           return apiError(
             interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.invalidLineItemSelectionLineIDSJoinDoNotBelongToTheApprovedPRScopePrNumber, { "join": foreignLineIds.join(', '), "prNumber": pr.prNumber }),
-            400
-          );
+            400, { route: '/api/procurement/rfqs', method: 'POST' });
         }
         targetPrLines = pr.lines.filter((l) => selectedLineIds.includes(l.id));
       }
 
       if (targetPrLines.length === 0) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneApprovedPRLineItemMustBeSelectedForRFQFromPrNumber, { "prNumber": pr.prNumber }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneApprovedPRLineItemMustBeSelectedForRFQFromPrNumber, { "prNumber": pr.prNumber }), 400, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       rfqLinesData = targetPrLines.map((l) => {
@@ -339,7 +338,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Path B: Creating RFQ directly from an Approved BOQ Revision
       if (!resolvedProjectId || !resolvedBoqRevisionId || !title) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.projectApprovedBOQRevisionAndTitleAreRequired, 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.projectApprovedBOQRevisionAndTitleAreRequired, 400, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       const boqRevision = await prisma.boqRevision.findFirst({
@@ -362,7 +361,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (!boqRevision) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.approvedOrReleasedBOQRevisionNotFound, 404);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.approvedOrReleasedBOQRevisionNotFound, 404, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       boqRevisionCode = boqRevision.revisionCode;
@@ -375,20 +374,19 @@ export async function POST(req: NextRequest) {
         );
       } else if (selectedLineIds && selectedLineIds.length > 0) {
         if (new Set(selectedLineIds).size !== selectedLineIds.length) {
-          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400);
+          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400, { route: '/api/procurement/rfqs', method: 'POST' });
         }
         const foreignBoqLineIds = selectedLineIds.filter((id: string) => !boqLineIdMap.has(id));
         if (foreignBoqLineIds.length > 0) {
           return apiError(
             interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.invalidLineItemSelectionLineIDSJoinDoNotBelongToTheSelectedBOQRevisionRevisionCode, { "join": foreignBoqLineIds.join(', '), "revisionCode": boqRevision.revisionCode }),
-            400
-          );
+            400, { route: '/api/procurement/rfqs', method: 'POST' });
         }
         targetBoqLines = targetBoqLines.filter((l) => selectedLineIds.includes(l.id));
       }
 
       if (targetBoqLines.length === 0) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneBOQLineMustBeSelectedForTheRFQScope, 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneBOQLineMustBeSelectedForTheRFQScope, 400, { route: '/api/procurement/rfqs', method: 'POST' });
       }
 
       rfqLinesData = targetBoqLines.map((l) => {
@@ -414,8 +412,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Generate next RFQ Number
-    const count = await prisma.rfq.count({ where: { tenantId: ctx.tenantId } });
-    const rfqNumber = `RFQ-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const rfqNumber = await nextRecordCode(prisma.rfq, 'rfqNumber', ctx.tenantId, `RFQ-${new Date().getFullYear()}-`, 6);
 
     const isRelease = action === 'RELEASE_RFQ';
     const initialStatus = isRelease ? 'RELEASED' : 'DRAFT';
@@ -507,6 +504,6 @@ export async function POST(req: NextRequest) {
     return apiSuccess({ rfq, message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberSuccessfullyCreated, { "rfqNumber": rfqNumber }) }, 201);
   } catch (error: any) {
     console.error('Error creating RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRfq }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRfq }), 500, { route: '/api/procurement/rfqs', method: 'POST', error: error });
   }
 }

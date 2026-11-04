@@ -23,9 +23,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     },
   });
 
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/standardise', method: 'POST' });
   if (revision.status === 'APPROVED') {
-    return apiError(UI_STRINGS.appApiBoqRevisionIdStandardiseRoute.approvedBOQsAreImmutableAndCannotBeStandardisedCreateANewRevision, 400);
+    return apiError(UI_STRINGS.appApiBoqRevisionIdStandardiseRoute.approvedBOQsAreImmutableAndCannotBeStandardisedCreateANewRevision, 400, { route: '/api/boq/[revisionId]/standardise', method: 'POST' });
   }
 
   // Load masters for tenant

@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
@@ -15,7 +16,7 @@ jest.mock('../src/lib/prisma', () => ({
     user: { findMany: jest.fn() },
     ppo: { findFirst: jest.fn(), update: jest.fn() },
     ppoLine: { update: jest.fn(), findMany: jest.fn() },
-    actualCostTransaction: { count: jest.fn(), create: jest.fn() },
+    actualCostTransaction: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     auditLog: { create: jest.fn() },
   },
 }));
@@ -204,7 +205,7 @@ describe('PPO completion and actual-cost lineage', () => {
       lines: [{ id: 'ppo-line-1', orderedQuantity: 3, completedQuantity: 1, orderedUnitRate: 25, completedAmount: 25, costCentreId: null, category: null, subcategory: null, boqId: null, boqRevisionId: null, boqLineId: null, prLineId: null, rfqLineId: null }],
     };
     db.ppo.findFirst.mockResolvedValueOnce(ppo);
-    db.actualCostTransaction.count.mockResolvedValueOnce(8);
+    db.actualCostTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', `ACT-${currentYear}-`, 6, 8));
     const actualTx = { id: 'actual-1' };
     db.actualCostTransaction.create.mockResolvedValueOnce(actualTx);
     db.ppoLine.update.mockResolvedValueOnce({ id: 'ppo-line-1', completedQuantity: 3, status: 'COMPLETED' });
@@ -237,7 +238,7 @@ describe('PPO completion and actual-cost lineage', () => {
       lines: [{ id: 'ppo-line-2', orderedQuantity: 5, completedQuantity: 2, orderedUnitRate: 10, completedAmount: 20, costCentreId: null, category: 'Civil', subcategory: 'Floor', boqId: null, boqRevisionId: null, boqLineId: 'boq-line-2', prLineId: 'pr-line-2', rfqLineId: 'rfq-line-2' }],
     };
     db.ppo.findFirst.mockResolvedValueOnce(ppo);
-    db.actualCostTransaction.count.mockResolvedValueOnce(0);
+    db.actualCostTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', `ACT-${currentYear}-`, 6, 0));
     db.actualCostTransaction.create.mockResolvedValueOnce({ id: 'actual-2' });
     db.ppoLine.update.mockResolvedValueOnce({ id: 'ppo-line-2', status: 'PARTIALLY_COMPLETED' });
     db.ppoLine.findMany.mockResolvedValueOnce([{ id: 'ppo-line-2', status: 'PARTIALLY_COMPLETED', completedQuantity: 3 }]);
@@ -262,7 +263,7 @@ describe('PPO completion and actual-cost lineage', () => {
       }],
     };
     db.ppo.findFirst.mockResolvedValueOnce(ppo);
-    db.actualCostTransaction.count.mockResolvedValueOnce(1);
+    db.actualCostTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', `ACT-${currentYear}-`, 6, 1));
     db.actualCostTransaction.create.mockResolvedValueOnce({ id: 'actual-4' });
     db.ppoLine.update.mockResolvedValueOnce({ id: 'line-4', status: 'PARTIALLY_COMPLETED' });
     db.ppoLine.findMany.mockResolvedValueOnce([{ id: 'line-4', status: 'PARTIALLY_COMPLETED', completedQuantity: 2 }]);

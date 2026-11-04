@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/procurement/rate-cards/direct-ppo/route';
 import { prisma } from '../src/lib/prisma';
@@ -12,7 +13,7 @@ jest.mock('../src/lib/prisma', () => ({
     vendorRateCard: { findFirst: jest.fn() },
     procurementRequest: { findFirst: jest.fn() },
     rfq: { findFirst: jest.fn() },
-    ppo: { findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
+    ppo: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -58,7 +59,7 @@ describe('direct PPO from rate card route', () => {
     db.procurementRequest.findFirst.mockResolvedValue(pr);
     db.rfq.findFirst.mockResolvedValue(null);
     db.ppo.findFirst.mockResolvedValue(null);
-    db.ppo.count.mockResolvedValue(2);
+    db.ppo.findMany.mockResolvedValue(existingCodes('ppoNumber', `PPO-${currentYear}-`, 6, 2));
     db.ppo.create.mockResolvedValue({ id: 'ppo-1', ppoNumber: 'PPO-2026-000003' });
     audit.mockResolvedValue(undefined);
     notify.mockResolvedValue(undefined);
@@ -184,6 +185,6 @@ describe('direct PPO from rate card route', () => {
     await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toEqual({
       ok: false, error: 'database unavailable', status: 500,
     });
-    expect(errorResult).toHaveBeenCalledWith('database unavailable', 500);
+    expect(errorResult).toHaveBeenCalledWith('database unavailable', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 });

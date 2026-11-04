@@ -63,7 +63,7 @@ export async function GET(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionEventNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionEventNotFoundOrAccessDenied, 404, { route: '/api/procurement/auctions/[id]', method: 'GET' });
     }
 
     // Auto-update status if time has progressed
@@ -114,7 +114,7 @@ export async function GET(
       }
 
       if (!isInvitedVendor) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, 403);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, 403, { route: '/api/procurement/auctions/[id]', method: 'GET' });
       }
     }
 
@@ -243,7 +243,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching auction details:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAuctionDetails }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAuctionDetails }), 500, { route: '/api/procurement/auctions/[id]', method: 'GET', error: error });
   }
 }
 
@@ -266,12 +266,12 @@ export async function PUT(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionNotFoundOrAccessDenied, 404, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
     }
 
     if (action === 'PAUSE') {
       if (auction.status !== 'LIVE' && auction.status !== 'EXTENDED') {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyLiveAuctionsCanBePaused, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyLiveAuctionsCanBePaused, 400, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
       }
       await prisma.auction.update({
         where: { id },
@@ -291,7 +291,7 @@ export async function PUT(
 
     if (action === 'RESUME') {
       if (auction.status !== 'PAUSED') {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyPausedAuctionsCanBeResumed, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyPausedAuctionsCanBeResumed, 400, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
       }
       await prisma.auction.update({
         where: { id },
@@ -384,7 +384,7 @@ export async function PUT(
     }
 
     if (auction.status !== 'DRAFT') {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyDraftAuctionsCanBeReConfigured, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyDraftAuctionsCanBeReConfigured, 400, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
     }
 
     const updated = await prisma.auction.update({
@@ -403,7 +403,7 @@ export async function PUT(
     return apiSuccess({ auction: updated, message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionDraftUpdatedSuccessfully });
   } catch (error: any) {
     console.error('Error updating auction:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateAuction }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateAuction }), 500, { route: '/api/procurement/auctions/[id]', method: 'PUT', error: error });
   }
 }
 
@@ -423,11 +423,11 @@ export async function DELETE(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.common.auctionNotFound, 404);
+      return apiError(UI_STRINGS.common.auctionNotFound, 404, { route: '/api/procurement/auctions/[id]', method: 'DELETE' });
     }
 
     if (auction.status !== 'DRAFT' && auction.bids.length > 0) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.cannotDeleteAnAuctionThatHasAlreadyBeenScheduledOrReceivedBids, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.cannotDeleteAnAuctionThatHasAlreadyBeenScheduledOrReceivedBids, 400, { route: '/api/procurement/auctions/[id]', method: 'DELETE' });
     }
 
     await prisma.auctionVendor.deleteMany({ where: { auctionId: id } });
@@ -437,6 +437,6 @@ export async function DELETE(
     return apiSuccess({ message: UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionDeletedSuccessfully });
   } catch (error: any) {
     console.error('Error deleting auction:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToDeleteAuction }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToDeleteAuction }), 500, { route: '/api/procurement/auctions/[id]', method: 'DELETE', error: error });
   }
 }

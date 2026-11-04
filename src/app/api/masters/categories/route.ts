@@ -1,6 +1,7 @@
 // app/api/masters/categories/route.ts
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logEvent } from '@/lib/observability/server-logger';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest) {
     const { name, parentId, code } = body;
 
     if (!name?.trim()) {
-      return apiError(UI_STRINGS.common.categoryNameIsRequired, 400);
+      return apiError(UI_STRINGS.common.categoryNameIsRequired, 400, { route: '/api/masters/categories', method: 'POST' });
     }
 
     const normalizedName = name.trim();
@@ -146,7 +147,7 @@ export async function POST(req: NextRequest) {
         where: { id: targetParentId, tenantId: ctx.tenantId, isActive: true },
       });
       if (!parentCategory) {
-        return apiError(UI_STRINGS.appApiMastersCategoriesRoute.selectedParentCategoryDoesNotExist, 404);
+        return apiError(UI_STRINGS.appApiMastersCategoriesRoute.selectedParentCategoryDoesNotExist, 404, { route: '/api/masters/categories', method: 'POST' });
       }
     }
 
@@ -165,8 +166,7 @@ export async function POST(req: NextRequest) {
         targetParentId
           ? interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.subcategoryNormalizedNameAlreadyExistsUnderTheSelectedParentCategory, { "normalizedName": normalizedName })
           : interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.categoryNormalizedNameAlreadyExists, { "normalizedName": normalizedName }),
-        409
-      );
+        409, { route: '/api/masters/categories', method: 'POST' });
     }
 
     // Duplicate Check 2: If code provided, check uniqueness across tenant
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingCode) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.categoryCodeFinalCodeIsAlreadyInUseByName, { "finalCode": finalCode, "name": existingCode.name }), 409);
+        return apiError(interpolateUiString(UI_STRINGS.appApiMastersCategoriesRoute.categoryCodeFinalCodeIsAlreadyInUseByName, { "finalCode": finalCode, "name": existingCode.name }), 409, { route: '/api/masters/categories', method: 'POST' });
       }
     } else {
       // Automatic category code generation (Correction 1)
@@ -220,12 +220,13 @@ export async function POST(req: NextRequest) {
           newValue: JSON.stringify({ name: normalizedName, code: normalizedCode, parentId: targetParentId }),
         },
       });
-    } catch {
-      // Non-fatal audit log failure
+    } catch (error) {
+      // Non-fatal: the category exists, only the audit row is missing.
+      logEvent('error', 'audit_log.create_failed', { route: '/api/masters/categories', tenantId: ctx.tenantId, entityId: category.id, action: 'CREATE', error });
     }
 
     return apiSuccess(category, 201);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateCategory }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateCategory }), 500, { route: '/api/masters/categories', method: 'POST', error: err });
   }
 }

@@ -32,7 +32,7 @@ export async function POST(
         },
       });
       if (!vendorRecord) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorRecordNotFoundForThisUser, 404);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorRecordNotFoundForThisUser, 404, { route: '/api/procurement/auctions/[id]/terms-accept', method: 'POST' });
       }
       vendorId = vendorRecord.id;
     } else {
@@ -41,7 +41,7 @@ export async function POST(
     }
 
     if (!vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIDIsRequiredToAcceptTerms, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIDIsRequiredToAcceptTerms, 400, { route: '/api/procurement/auctions/[id]/terms-accept', method: 'POST' });
     }
 
     const auction = await prisma.auction.findFirst({
@@ -50,7 +50,7 @@ export async function POST(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.common.auctionNotFound, 404);
+      return apiError(UI_STRINGS.common.auctionNotFound, 404, { route: '/api/procurement/auctions/[id]/terms-accept', method: 'POST' });
     }
 
     const participant = await prisma.auctionVendor.findFirst({
@@ -63,7 +63,7 @@ export async function POST(
     });
 
     if (!participant) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIsNotInvitedToThisAuctionEvent, 403);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.vendorIsNotInvitedToThisAuctionEvent, 403, { route: '/api/procurement/auctions/[id]/terms-accept', method: 'POST' });
     }
 
     const now = new Date();
@@ -95,6 +95,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error accepting auction terms:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToAcceptAuctionTerms }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToAcceptAuctionTerms }), 500, { route: '/api/procurement/auctions/[id]/terms-accept', method: 'POST', error: error });
   }
 }

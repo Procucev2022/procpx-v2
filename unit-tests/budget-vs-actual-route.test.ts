@@ -159,6 +159,6 @@ describe('budget versus actual report route', () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     db.actualCostTransaction.findMany.mockRejectedValueOnce(new Error('actual cost query failed'));
     await expect(GET(request('?projectId=project-1'))).resolves.toEqual({ ok: false, error: 'actual cost query failed', status: 500 });
-    expect(errorResult).toHaveBeenCalledWith('actual cost query failed', 500);
+    expect(errorResult).toHaveBeenCalledWith('actual cost query failed', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 });

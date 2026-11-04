@@ -1,7 +1,9 @@
 import { prisma } from '../src/lib/prisma';
 import { createWorkflowNotification, notifyNextResponsibleParty } from '../src/lib/notifications';
+import { logEvent } from '../src/lib/observability/server-logger';
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { notification: { create: jest.fn() } } }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const createNotification = (prisma.notification as unknown as { create: jest.Mock }).create;
 
@@ -51,11 +53,11 @@ describe('createWorkflowNotification', () => {
     }) });
 
     const error = new Error('write failed');
-    const logError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     createNotification.mockRejectedValueOnce(error);
     await expect(createWorkflowNotification({ tenantId: 'tenant-1', title: 'Title', message: 'Message' })).resolves.toBeNull();
-    expect(logError).toHaveBeenCalledWith('Failed to create workflow notification:', error);
-    logError.mockRestore();
+    expect(logEvent).toHaveBeenCalledWith('error', 'notification.create_failed', {
+      tenantId: 'tenant-1', entityType: undefined, entityId: undefined, recordNumber: undefined, error,
+    });
   });
 });
 

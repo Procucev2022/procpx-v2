@@ -30,6 +30,12 @@ npm run db:d1:migrate:remote
 
 Migrations never seed or import data; existing D1 records are preserved.
 
+Read-only data-quality report (duplicates, orphans, summary totals that disagree with their lines):
+```bash
+npm run db:quality          # local D1
+npm run db:quality:remote   # remote D1
+```
+
 **Production readiness:** Prisma's D1 adapter currently ignores transaction boundaries. Multi-write procurement flows must be redesigned before production traffic uses D1. The current affected routes are `src/app/api/vendor-portal/rfqs/[id]/route.ts`, `src/app/api/procurement/negotiations/route.ts`, `src/app/api/procurement/ppos/route.ts`, and `src/app/api/procurement/rfqs/[id]/vendors/route.ts`.
 
 ### 3. Launch Development Server
@@ -50,6 +56,10 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 | Database | D1 `DB` binding via `wrangler login` | D1 database bound as `DB` (via `@prisma/adapter-d1`) |
 | Uploads | `uploads/` folder | R2 bucket bound as `UPLOADS` |
 | Logs | `logs/` JSONL files | Workers Logs (console) |
+
+**Logs and errors:** every `apiError` response is logged (`api.request_failed` for 5xx with the caught error, `api.request_rejected` for 4xx), Prisma failures and slow queries are logged as `db.query_failed` / `db.query_slow`, and browser crashes and failed API calls are posted to `/api/observability/client` (`browser.*` events). In Cloudflare, open Workers Logs for the `procpx` worker and filter on these event names; locally use `npm run logs:search -- --level error --since 24h`.
+
+**Uploads on Cloudflare:** drawing and BOQ template uploads need the R2 binding `UPLOADS` (see the commented block in `wrangler.jsonc`). Until it is added, those uploads fail in production while working locally.
 
 **Local dev against D1:** keep `DATABASE_PROVIDER="d1"` in `.env` and run `npm run dev`. The app uses the `DB` database from `wrangler.jsonc` through your `npx wrangler login`, and no API token is needed.
 

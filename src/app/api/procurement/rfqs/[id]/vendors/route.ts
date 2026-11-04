@@ -21,7 +21,7 @@ export async function POST(
     const { vendorIds = [] } = await req.json();
 
     if (!vendorIds.length) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -29,7 +29,7 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     // Verify vendors belong to this tenant and are not blacklisted
@@ -42,7 +42,7 @@ export async function POST(
     });
 
     if (eligibleVendors.length === 0) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     // Create RFQ vendor invitations
@@ -87,6 +87,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error inviting vendors to RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInviteVendors }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInviteVendors }), 500, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST', error: error });
   }
 }

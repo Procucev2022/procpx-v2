@@ -20,11 +20,11 @@ export async function GET(
   // Authorization & strict cross-vendor isolation
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId || ctx.vendorId !== vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsIdDashboardRoute.forbiddenYouCanOnlyAccessYourOwnVendorDashboard, 403);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdDashboardRoute.forbiddenYouCanOnlyAccessYourOwnVendorDashboard, 403, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET' });
     }
   } else {
     if (!hasPermission(ctx.role, 'VENDOR_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET' });
     }
   }
 
@@ -34,7 +34,7 @@ export async function GET(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET' });
     }
 
     // 1. Fetch all RFQs where vendor is invited
@@ -370,6 +370,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching vendor dashboard data:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }), 500, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET', error: error });
   }
 }

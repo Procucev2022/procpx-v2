@@ -156,8 +156,8 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('[POST /api/projects error]:', error);
     if (error?.code === 'P2002') {
-      return apiError(UI_STRINGS.appApiProjectsRoute.aProjectWithThisProjectCodeAlreadyExistsPleaseRetry, 409);
+      return apiError(UI_STRINGS.appApiProjectsRoute.aProjectWithThisProjectCodeAlreadyExistsPleaseRetry, 409, { route: '/api/projects', method: 'POST', error: error });
     }
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error?.message || UI_STRINGS.common.userMessages.failedToCreateProject }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error?.message || UI_STRINGS.common.userMessages.failedToCreateProject }), 500, { route: '/api/projects', method: 'POST', error: error });
   }
 }

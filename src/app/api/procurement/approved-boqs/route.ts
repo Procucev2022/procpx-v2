@@ -176,6 +176,6 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ approvedBoqs: formatted, total: formatted.length });
   } catch (error: any) {
     console.error('Error fetching approved BOQs for sourcing:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs }), 500, { route: '/api/procurement/approved-boqs', method: 'GET', error: error });
   }
 }

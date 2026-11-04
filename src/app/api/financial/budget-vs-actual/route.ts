@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const categoryFilter = searchParams.get('category');
 
   if (!projectId) {
-    return apiError(UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, 400);
+    return apiError(UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, 400, { route: '/api/financial/budget-vs-actual', method: 'GET' });
   }
 
   try {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!project) {
-      return apiError(UI_STRINGS.common.projectNotFound, 404);
+      return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/financial/budget-vs-actual', method: 'GET' });
     }
 
     // 1. Fetch all Budget Transactions for this project
@@ -303,6 +303,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error fetching budget vs actual report:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateBudgetVsActualAnalysis }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateBudgetVsActualAnalysis }), 500, { route: '/api/financial/budget-vs-actual', method: 'GET', error: err });
   }
 }

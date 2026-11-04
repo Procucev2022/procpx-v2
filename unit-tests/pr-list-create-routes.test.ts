@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../src/app/api/pr/route';
 import { prisma } from '../src/lib/prisma';
@@ -59,7 +60,7 @@ describe('PR list and create API', () => {
     db.procurementRequest.findMany.mockResolvedValue([]);
     db.boqRevision.findFirst.mockResolvedValue(revision());
     db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1', code: 'CC01', name: 'North Wing' });
-    db.procurementRequest.count.mockResolvedValue(4);
+    db.procurementRequest.findMany.mockResolvedValue(existingCodes('prNumber', `PR-${currentYear}-`, 6, 4));
     db.procurementRequest.create.mockResolvedValue({ id: 'pr-1', prNumber: 'PR-2026-000005' });
     db.pRLine.create.mockResolvedValue({ id: 'pr-line' });
     db.boqRevision.update.mockResolvedValue({ id: 'revision-1' });

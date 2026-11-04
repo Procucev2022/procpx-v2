@@ -12,12 +12,12 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/ppos', method: 'GET' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/ppos', method: 'GET' });
   }
 
   try {
@@ -37,6 +37,6 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ ppos, total: ppos.length });
   } catch (error: any) {
     console.error('Error fetching vendor PPOs:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpos }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpos }), 500, { route: '/api/vendor-portal/ppos', method: 'GET', error: error });
   }
 }

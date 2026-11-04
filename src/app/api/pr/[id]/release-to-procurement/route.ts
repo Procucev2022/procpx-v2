@@ -17,9 +17,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     where: { id, tenantId: ctx.tenantId },
   });
 
-  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/release-to-procurement', method: 'POST' });
   if (pr.status !== 'PR_APPROVED' && pr.status !== 'PR_RELEASED_TO_PROCUREMENT') {
-    return apiError(UI_STRINGS.appApiPrIdReleaseToProcurementRoute.pRMustBeApprovedBeforeReleasingToProcurement, 400);
+    return apiError(UI_STRINGS.appApiPrIdReleaseToProcurementRoute.pRMustBeApprovedBeforeReleasingToProcurement, 400, { route: '/api/pr/[id]/release-to-procurement', method: 'POST' });
   }
 
   const updated = await prisma.procurementRequest.update({

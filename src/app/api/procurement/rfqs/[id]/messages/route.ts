@@ -22,13 +22,13 @@ export async function GET(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET' });
     }
     // Force vendorId to authenticated vendor
     vendorId = ctx.vendorId;
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET' });
     }
   }
 
@@ -43,7 +43,7 @@ export async function GET(
       },
     });
 
-    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET' });
 
     const where: any = {
       tenantId: ctx.tenantId,
@@ -65,7 +65,7 @@ export async function GET(
     return apiSuccess({ messages, total: messages.length });
   } catch (error: any) {
     console.error('Error fetching RFQ messages:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchMessages2 }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchMessages2 }), 500, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET', error: error });
   }
 }
 
@@ -80,11 +80,11 @@ export async function POST(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
     }
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
     }
   }
 
@@ -93,7 +93,7 @@ export async function POST(
     const { message, attachments, vendorId, isVendorSent, senderName, senderRole } = body;
 
     if (!message || !message.trim()) {
-      return apiError(UI_STRINGS.common.messageTextIsRequired, 400);
+      return apiError(UI_STRINGS.common.messageTextIsRequired, 400, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -106,7 +106,7 @@ export async function POST(
       },
     });
 
-    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
 
     const effectiveVendorId = ctx.role === 'VENDOR' ? ctx.vendorId : (vendorId || null);
     const effectiveIsVendorSent = ctx.role === 'VENDOR' ? true : Boolean(isVendorSent);
@@ -138,6 +138,6 @@ export async function POST(
     return apiSuccess({ message: created }, 201);
   } catch (error: any) {
     console.error('Error sending RFQ message:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSendMessage }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSendMessage }), 500, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST', error: error });
   }
 }

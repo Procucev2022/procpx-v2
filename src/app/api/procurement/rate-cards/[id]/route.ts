@@ -43,7 +43,7 @@ export async function GET(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]', method: 'GET' });
     }
 
     const enrichedItems = rateCard.items.map((it) => {
@@ -81,7 +81,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching rate card details:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCard }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCard }), 500, { route: '/api/procurement/rate-cards/[id]', method: 'GET', error: error });
   }
 }
 
@@ -101,7 +101,7 @@ export async function PUT(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
     }
 
     const body = await req.json();
@@ -278,7 +278,7 @@ export async function PUT(
         'ROUND_2_BUYER_OFFER',
       ];
       if (!allowedSourceStatuses.includes(rateCard.status)) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.cannotPerformCategoryManagerAcceptanceFromStatusStatus, { "status": rateCard.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.cannotPerformCategoryManagerAcceptanceFromStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
       }
 
       // Handle optional formal agreement attached by Category Manager
@@ -336,7 +336,7 @@ export async function PUT(
     // ── ACTION 4: CATEGORY_MANAGER_SIGNOFF ─────────────────────
     if (body.action === 'CATEGORY_MANAGER_SIGNOFF') {
       if (rateCard.status !== 'VENDOR_ACCEPTED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignOffRequiresPriorVendorAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignOffRequiresPriorVendorAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
       }
 
       notesData.categoryManagerSignedOff = {
@@ -391,7 +391,7 @@ export async function PUT(
     // Editable if DRAFT, RETURNED_FOR_CORRECTION, or NEGOTIATION
     const editableStatuses = ['DRAFT', 'RETURNED_FOR_CORRECTION', 'NEGOTIATION', 'UNDER_REVIEW', 'ROUND_1_BUYER_OFFER'];
     if (!editableStatuses.includes(rateCard.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardCannotBeEditedInStatusStatus, { "status": rateCard.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardCannotBeEditedInStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
     }
 
     const {
@@ -478,7 +478,7 @@ export async function PUT(
     return apiSuccess({ rateCard: updated });
   } catch (error: any) {
     console.error('Error updating rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRateCard }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRateCard }), 500, { route: '/api/procurement/rate-cards/[id]', method: 'PUT', error: error });
   }
 }
 
@@ -497,11 +497,11 @@ export async function DELETE(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]', method: 'DELETE' });
     }
 
     if (rateCard.status !== 'DRAFT') {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, 400, { route: '/api/procurement/rate-cards/[id]', method: 'DELETE' });
     }
 
     await prisma.vendorRateCardItem.deleteMany({
@@ -517,6 +517,6 @@ export async function DELETE(
     return apiSuccess({ message: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardDeletedSuccessfully });
   } catch (error: any) {
     console.error('Error deleting rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToDeleteRateCard }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToDeleteRateCard }), 500, { route: '/api/procurement/rate-cards/[id]', method: 'DELETE', error: error });
   }
 }

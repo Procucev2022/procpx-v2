@@ -296,12 +296,11 @@ export async function GET() {
           },
         },
         costCentre: { select: { id: true, code: true, name: true } },
+        // Only the count and value inputs are used; loading every column and joined
+        // category/UOM per line made this the most CPU-expensive dashboard query.
         lines: {
           where: { isDeleted: false },
-          include: {
-            category: { select: { id: true, name: true, code: true } },
-            uom: { select: { id: true, code: true, name: true } },
-          },
+          select: { id: true, quantity: true, aiUnitCost: true },
         },
         prs: {
           where: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } },
@@ -322,16 +321,15 @@ export async function GET() {
         },
         rfqs: {
           include: {
-            invitedVendors: { include: { vendor: { select: { id: true, name: true, code: true } } } },
-            quotes: { select: { id: true, quoteNumber: true, totalQuoteAmount: true, quoteVersion: true, vendorId: true } },
+            invitedVendors: { select: { id: true } },
+            quotes: { select: { id: true } },
             negotiations: {
-              include: {
-                rounds: { select: { id: true, roundNumber: true, status: true, counterOfferAmount: true, revisedQuoteAmount: true } },
+              select: {
+                id: true,
+                rounds: { select: { id: true, status: true } },
               },
             },
-            awards: {
-              include: { recommendedVendor: { select: { id: true, name: true } } },
-            },
+            awards: { select: { id: true, status: true } },
             ppos: { select: { id: true, ppoNumber: true, status: true, totalValue: true } },
           },
           orderBy: { createdAt: 'desc' },
@@ -517,28 +515,26 @@ export async function GET() {
           },
           lines: {
             where: { isDeleted: false },
-            include: {
-              category: { select: { id: true, name: true } },
-              uom: { select: { id: true, code: true } },
-            },
+            select: { id: true, quantity: true, category: { select: { name: true } } },
           },
           rfqs: {
             include: {
-              invitedVendors: { include: { vendor: { select: { id: true, name: true, code: true } } } },
+              invitedVendors: { select: { id: true } },
               quotes: {
-                include: { vendor: { select: { id: true, name: true } } },
+                select: { id: true, totalQuoteAmount: true, vendor: { select: { name: true } } },
                 orderBy: { totalQuoteAmount: 'asc' },
               },
               negotiations: {
-                include: {
+                select: {
+                  id: true,
                   rounds: {
-                    include: { vendor: { select: { id: true, name: true } } },
+                    select: { id: true, roundNumber: true, status: true, nextResponsibleParty: true },
                     orderBy: { roundNumber: 'desc' },
                   },
                 },
               },
               awards: {
-                include: { recommendedVendor: { select: { id: true, name: true } } },
+                select: { id: true, status: true, recommendedVendor: { select: { name: true } } },
               },
               ppos: {
                 select: { id: true, ppoNumber: true, status: true, totalValue: true, createdAt: true },
@@ -562,21 +558,22 @@ export async function GET() {
           lines: { select: { id: true, category: true, quantity: true, estimatedRate: true, estimatedValue: true } },
           rfqs: {
             include: {
-              invitedVendors: { include: { vendor: { select: { id: true, name: true, code: true } } } },
+              invitedVendors: { select: { id: true } },
               quotes: {
-                include: { vendor: { select: { id: true, name: true } } },
+                select: { id: true, totalQuoteAmount: true, vendor: { select: { name: true } } },
                 orderBy: { totalQuoteAmount: 'asc' },
               },
               negotiations: {
-                include: {
+                select: {
+                  id: true,
                   rounds: {
-                    include: { vendor: { select: { id: true, name: true } } },
+                    select: { id: true, roundNumber: true, status: true, nextResponsibleParty: true },
                     orderBy: { roundNumber: 'desc' },
                   },
                 },
               },
               awards: {
-                include: { recommendedVendor: { select: { id: true, name: true } } },
+                select: { id: true, status: true, recommendedVendor: { select: { name: true } } },
               },
               ppos: {
                 select: { id: true, ppoNumber: true, status: true, totalValue: true, createdAt: true },

@@ -22,7 +22,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     },
   });
 
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/validate', method: 'POST' });
 
   // Check duplicate line numbers
   const lineNumCounts: Record<string, number> = {};
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     }
   }
 
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/validate', method: 'GET' });
 
   return apiSuccess({
     revision,

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rev
     where: { id: revisionId, tenantId: ctx.tenantId },
     include: { boq: true },
   });
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/approve', method: 'POST' });
   if (revision.status !== 'SUBMITTED') return apiError(UI_STRINGS.appApiBoqRevisionIdApproveRoute.onlySubmittedBOQsCanBeApproved);
 
   await prisma.boqRevision.update({

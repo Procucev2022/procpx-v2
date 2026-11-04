@@ -22,7 +22,7 @@ export async function POST(
     const { reason, vendorIds = [], submissionDeadline } = body;
 
     if (!reason || reason.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.mandatoryJustificationReasonIsRequiredForReRFQ, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.mandatoryJustificationReasonIsRequiredForReRFQ, 400, { route: '/api/procurement/rfqs/[id]/re-rfq', method: 'POST' });
     }
 
     const originalRfq = await prisma.rfq.findFirst({
@@ -34,7 +34,7 @@ export async function POST(
     });
 
     if (!originalRfq) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.originalRFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.originalRFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/re-rfq', method: 'POST' });
     }
 
     // Generate new RFQ Number (Re-RFQ suffix or new sequential number)
@@ -120,6 +120,6 @@ export async function POST(
     return apiSuccess({ reRfq, message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdReRfqRoute.reRFQRfqNumberCreatedSuccessfully, { "rfqNumber": rfqNumber }) }, 201);
   } catch (error: any) {
     console.error('Error creating Re-RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInitiateReRfq }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInitiateReRfq }), 500, { route: '/api/procurement/rfqs/[id]/re-rfq', method: 'POST', error: error });
   }
 }

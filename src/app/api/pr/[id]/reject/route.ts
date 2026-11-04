@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { reason } = body;
 
     if (!reason || !reason.trim()) {
-      return apiError(UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, 400);
+      return apiError(UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, 400, { route: '/api/pr/[id]/reject', method: 'POST' });
     }
 
     const pr = await prisma.procurementRequest.findFirst({
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { costCentre: true },
     });
 
-    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/reject', method: 'POST' });
 
     const updated = await prisma.procurementRequest.update({
       where: { id },
@@ -65,6 +65,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return apiSuccess({ pr: updated, status: 'PR_REJECTED' });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prRejectionFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prRejectionFailed }), 500, { route: '/api/pr/[id]/reject', method: 'POST', error: err });
   }
 }

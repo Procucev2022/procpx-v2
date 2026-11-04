@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ awards, total: awards.length });
   } catch (error: any) {
     console.error('Error fetching award recommendations:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAwards }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchAwards }), 500, { route: '/api/procurement/awards', method: 'GET', error: error });
   }
 }
 
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId || !recommendedVendorId || !justification) {
-      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.rFQIDRecommendedVendorAndJustificationAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.rFQIDRecommendedVendorAndJustificationAreRequired, 400, { route: '/api/procurement/awards', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/awards', method: 'POST' });
     }
 
     const vendor = await prisma.vendor.findFirst({
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.recommendedVendorNotFound, 404);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.recommendedVendorNotFound, 404, { route: '/api/procurement/awards', method: 'POST' });
     }
 
     const bench = Number(benchmarkAmount) || rfq.estimatedBenchmarkValue || 0;
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     return apiSuccess({ award, message: UI_STRINGS.appApiProcurementAwardsRoute.awardRecommendationSubmittedForApproval }, 201);
   } catch (error: any) {
     console.error('Error submitting award recommendation:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitAwardRecommendation }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitAwardRecommendation }), 500, { route: '/api/procurement/awards', method: 'POST', error: error });
   }
 }
 
@@ -162,7 +162,7 @@ export async function PUT(req: NextRequest) {
     const { awardId, action, remarks } = body;
 
     if (!awardId || !action) {
-      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.awardIDAndActionAPPROVEREJECTAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.awardIDAndActionAPPROVEREJECTAreRequired, 400, { route: '/api/procurement/awards', method: 'PUT' });
     }
 
     const award = await prisma.awardRecommendation.findFirst({
@@ -171,7 +171,7 @@ export async function PUT(req: NextRequest) {
     });
 
     if (!award) {
-      return apiError(UI_STRINGS.common.awardRecommendationNotFound, 404);
+      return apiError(UI_STRINGS.common.awardRecommendationNotFound, 404, { route: '/api/procurement/awards', method: 'PUT' });
     }
 
     const isApproved = action === 'APPROVE';
@@ -223,6 +223,6 @@ export async function PUT(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error reviewing award recommendation:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation }), 500, { route: '/api/procurement/awards', method: 'PUT', error: error });
   }
 }

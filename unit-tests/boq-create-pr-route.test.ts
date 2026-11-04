@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/create-pr/route';
 import { prisma } from '../src/lib/prisma';
@@ -10,7 +11,7 @@ jest.mock('../src/lib/prisma', () => ({
     boqRevision: { findFirst: jest.fn(), update: jest.fn() },
     boq: { findFirst: jest.fn(), update: jest.fn() },
     costCentre: { findFirst: jest.fn() },
-    procurementRequest: { findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
+    procurementRequest: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
     pRLine: { create: jest.fn() },
     auditLog: { create: jest.fn() },
   },
@@ -55,7 +56,7 @@ describe('create PR from BOQ route', () => {
     db.boq.findFirst.mockResolvedValue(null);
     db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1', code: 'CC01', name: 'North Wing' });
     db.procurementRequest.findFirst.mockResolvedValue(null);
-    db.procurementRequest.count.mockResolvedValue(8);
+    db.procurementRequest.findMany.mockResolvedValue(existingCodes('prNumber', `PR-${currentYear}-`, 6, 8));
     db.procurementRequest.create.mockResolvedValue({ id: 'pr-1', prNumber: 'PR-2026-000009' });
     db.pRLine.create.mockResolvedValue({ id: 'pr-line-1' });
     db.boqRevision.update.mockResolvedValue({ id: 'revision-1' });

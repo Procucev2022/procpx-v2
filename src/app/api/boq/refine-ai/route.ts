@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const { boqRevisionId, lineIds, acceptConfidenceThreshold } = body;
 
     if (!boqRevisionId) {
-      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.bOQRevisionIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.bOQRevisionIDIsRequired, 400, { route: '/api/boq/refine-ai', method: 'POST' });
     }
 
     const revision = await prisma.boqRevision.findFirst({
@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/refine-ai', method: 'POST' });
     if (revision.status === 'APPROVED') {
-      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.approvedBOQRevisionsCannotBeRefinedBranchANewRevisionFirst, 403);
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.approvedBOQRevisionsCannotBeRefinedBranchANewRevisionFirst, 403, { route: '/api/boq/refine-ai', method: 'POST' });
     }
 
     const refinedLines: any[] = [];
@@ -157,6 +157,6 @@ export async function POST(req: NextRequest) {
       lines: refinedLines,
     });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiRefinementFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiRefinementFailed }), 500, { route: '/api/boq/refine-ai', method: 'POST', error: err });
   }
 }

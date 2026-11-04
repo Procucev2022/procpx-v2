@@ -21,7 +21,7 @@ export async function POST(
     const reason = body.reason || body.remarks;
 
     if (!reason || !reason.trim()) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.remarksReasonForReturningForCorrectionIsMandatory, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.remarksReasonForReturningForCorrectionIsMandatory, 400, { route: '/api/procurement/rate-cards/[id]/revert', method: 'POST' });
     }
 
     const rateCard = await prisma.vendorRateCard.findUnique({
@@ -30,12 +30,12 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/revert', method: 'POST' });
     }
 
     const pendingStatuses = ['PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL'];
     if (!pendingStatuses.includes(rateCard.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.cannotReturnRateCardInStatusStatus, { "status": rateCard.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.cannotReturnRateCardInStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]/revert', method: 'POST' });
     }
 
     const now = new Date();
@@ -85,6 +85,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error returning rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToReturnRateCardForCorrection }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToReturnRateCardForCorrection }), 500, { route: '/api/procurement/rate-cards/[id]/revert', method: 'POST', error: error });
   }
 }

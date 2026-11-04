@@ -156,8 +156,8 @@ describe('vendor detail route', () => {
     await expect(GET({} as NextRequest, params())).resolves.toEqual({ ok: false, error: 'vendor read failed', status: 500 });
     db.vendor.findFirst.mockRejectedValueOnce({});
     await expect(GET({} as NextRequest, params())).resolves.toEqual({ ok: false, error: 'Failed to fetch vendor profile', status: 500 });
-    expect(errorResult).toHaveBeenCalledWith('vendor read failed', 500);
-    expect(errorResult).toHaveBeenCalledWith('Failed to fetch vendor profile', 500);
+    expect(errorResult).toHaveBeenCalledWith('vendor read failed', 500, expect.objectContaining({ route: expect.any(String) }));
+    expect(errorResult).toHaveBeenCalledWith('Failed to fetch vendor profile', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 
   it('updates profiles as internal managers with normalized values and audit history', async () => {
@@ -206,7 +206,7 @@ describe('vendor detail route', () => {
     await expect(PUT(putRequest({}), params())).resolves.toEqual({ ok: false, error: 'vendor write failed', status: 500 });
     db.vendor.update.mockRejectedValueOnce({});
     await expect(PUT(putRequest({}), params())).resolves.toEqual({ ok: false, error: 'Failed to update vendor profile', status: 500 });
-    expect(errorResult).toHaveBeenCalledWith('vendor write failed', 500);
-    expect(errorResult).toHaveBeenCalledWith('Failed to update vendor profile', 500);
+    expect(errorResult).toHaveBeenCalledWith('vendor write failed', 500, expect.objectContaining({ route: expect.any(String) }));
+    expect(errorResult).toHaveBeenCalledWith('Failed to update vendor profile', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 });

@@ -90,7 +90,7 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET' });
     }
 
     // 1. Group quotes by vendor to keep full version history and evaluate latest active quote
@@ -450,24 +450,25 @@ export async function GET(
     // Check if active negotiation exists for this RFQ
     const activeNegotiation = rfq.negotiations.find((n) => n.status === 'ACTIVE') || rfq.negotiations[0] || null;
 
-    // Auto-transition RFQ to COMPARISON status if still open
+    // Auto-transition RFQ to COMPARISON status if still open. The audit entry is written
+    // with that transition only: this is a read endpoint, and logging every page view
+    // filled the audit log with repeated rows and cost a D1 write per view.
     if (rfq.status === 'VENDOR_RESPONSE_OPEN' || rfq.status === 'RELEASED') {
       await prisma.rfq.update({
         where: { id },
         data: { status: 'COMPARISON' },
       });
-    }
 
-    // Audit comparison action
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: rfq.projectId,
-      entityType: 'RFQ',
-      entityId: rfq.id,
-      action: 'QUOTE_COMPARED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() }),
-    });
+      await createAuditLog({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        projectId: rfq.projectId,
+        entityType: 'RFQ',
+        entityId: rfq.id,
+        action: 'QUOTE_COMPARED',
+        description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() }),
+      });
+    }
 
     return apiSuccess({
       rfq: {
@@ -502,6 +503,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error generating quote comparison:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCompareQuotes }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCompareQuotes }), 500, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET', error: error });
   }
 }

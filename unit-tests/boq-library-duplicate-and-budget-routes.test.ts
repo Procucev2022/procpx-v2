@@ -1,3 +1,4 @@
+import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
@@ -11,14 +12,14 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: {
     project: { findFirst: jest.fn() },
     costCentre: { findFirst: jest.fn() },
-    boq: { count: jest.fn(), create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    boq: { findMany: jest.fn(), count: jest.fn(), create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     boqRevision: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     boqLine: { create: jest.fn() },
     category: { findMany: jest.fn() },
     uomMaster: { findMany: jest.fn() },
     auditLog: { create: jest.fn() },
     budgetContribution: { create: jest.fn() },
-    budgetTransaction: { count: jest.fn(), create: jest.fn() },
+    budgetTransaction: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -61,7 +62,7 @@ describe('BOQ generation from the standard library', () => {
   it('creates a draft BOQ and maps standard item categories, UOMs, quantities, and costs', async () => {
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.costCentre.findFirst.mockResolvedValueOnce({ id: 'cc-1' });
-    db.boq.count.mockResolvedValueOnce(8);
+    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-', 6, 8));
     db.boq.create.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'BOQ-000009' });
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-1', revisionCode: 'R0' });
     db.category.findMany.mockResolvedValueOnce([{ id: 'cat-1', name: 'Electrical' }]);
@@ -87,7 +88,7 @@ describe('BOQ generation from the standard library', () => {
 
   it('allows creation without a cost centre and reports generation failures', async () => {
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
-    db.boq.count.mockResolvedValueOnce(0);
+    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-', 6, 0));
     db.boq.create.mockResolvedValueOnce({ id: 'boq-2', boqCode: 'BOQ-000001' });
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-2', revisionCode: 'R0' });
     db.category.findMany.mockResolvedValueOnce([]);
@@ -131,7 +132,7 @@ describe('BOQ duplication', () => {
       id: 'boq-1', boqCode: 'SOURCE', projectId: 'project-1', costCentreId: 'cc-1', title: null, category: 'Electrical', scope: 'Wiring', purpose: 'PR',
       project: { projectCode: 'P-1' }, revisions: [{ sourceType: null, notes: null, validLines: 1, lines: [line] }],
     });
-    db.boq.count.mockResolvedValueOnce(2);
+    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-P-1-', 3, 2));
     const createdBoq = { id: 'boq-2', boqCode: 'BOQ-P-1-003', title: 'SOURCE (Copy)' };
     db.boq.create.mockResolvedValueOnce(createdBoq);
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-2', revisionCode: 'R0' });
@@ -150,7 +151,7 @@ describe('BOQ duplication', () => {
 
   it('creates a blank copy when the source has no revisions and tolerates audit failures', async () => {
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'SOURCE', projectId: 'project-1', costCentreId: null, title: 'Title', purpose: 'BUDGET', project: { projectCode: 'P-1' }, revisions: [] });
-    db.boq.count.mockResolvedValueOnce(0);
+    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-P-1-', 3, 0));
     db.boq.create.mockResolvedValueOnce({ id: 'boq-2', boqCode: 'BOQ-P-1-001' });
     db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-2' });
     db.auditLog.create.mockRejectedValueOnce(new Error('audit offline'));
@@ -200,7 +201,7 @@ describe('add BOQ to budget', () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(revision);
     db.costCentre.findFirst.mockResolvedValueOnce(costCentre);
     db.budgetContribution.create.mockResolvedValueOnce({ id: 'contribution-1' });
-    db.budgetTransaction.count.mockResolvedValueOnce(4);
+    db.budgetTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', 'BTX-', 6, 4));
     db.budgetTransaction.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => data);
 
     await expect(addBoqToBudget(post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', autoSubmit: true }))).resolves.toMatchObject({
@@ -221,7 +222,7 @@ describe('add BOQ to budget', () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(revision);
     db.costCentre.findFirst.mockResolvedValueOnce({ id: 'cc-1', code: 'CC-1', name: 'Office' });
     db.budgetContribution.create.mockResolvedValueOnce({ id: 'contribution-2' });
-    db.budgetTransaction.count.mockResolvedValueOnce(0);
+    db.budgetTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', 'BTX-', 6, 0));
     db.boqRevision.update.mockResolvedValueOnce({ id: 'revision-1' });
     db.boq.update.mockResolvedValueOnce({ id: 'boq-1' });
     await expect(addBoqToBudget(post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', projectId: 'new-project', autoSubmit: false }))).resolves.toMatchObject({

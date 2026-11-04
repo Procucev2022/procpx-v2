@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
@@ -51,8 +52,9 @@ describe('procurement quote routes', () => {
     isContext.mockReturnValue(true);
     errorResponse.mockImplementation((error: string, status = 400) => ({ ok: false, error, status }));
     successResponse.mockImplementation((data: unknown, status = 200) => ({ ok: true, data, status }));
-    db.quote.findMany.mockResolvedValue([]);
-    db.quote.count.mockResolvedValue(2);
+    // Version lookups see no earlier quotes; the quote-number lookup sees QTE-<year>-000002.
+    db.quote.findMany.mockImplementation(async (args?: { select?: Record<string, unknown> }) =>
+      (args?.select?.quoteNumber ? existingCodes('quoteNumber', `QTE-${currentYear}-`, 6, 2) : []));
     db.quote.create.mockResolvedValue({ id: 'quote-1', quoteNumber: 'QTE-2026-000003' });
     db.rfq.findFirst.mockResolvedValue({
       id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'RELEASED',

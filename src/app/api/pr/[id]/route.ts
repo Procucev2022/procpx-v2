@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
-  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]', method: 'GET' });
 
   return apiSuccess(pr);
 }

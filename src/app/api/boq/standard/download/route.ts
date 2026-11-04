@@ -214,6 +214,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error downloading standard BOQ:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateStandardBoqDownload }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateStandardBoqDownload }), 500, { route: '/api/boq/standard/download', method: 'GET', error: err });
   }
 }

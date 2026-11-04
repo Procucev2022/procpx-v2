@@ -2,6 +2,7 @@
 // Vendor quote submission and retrieval with immutable version history
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ quotes, total: quotes.length });
   } catch (error: any) {
     console.error('Error fetching quotes:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchQuotes }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchQuotes }), 500, { route: '/api/procurement/quotes', method: 'GET', error: error });
   }
 }
 
@@ -71,15 +72,15 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId || !vendorId || !lines.length) {
-      return apiError(UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, 400, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId) {
-        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403, { route: '/api/procurement/quotes', method: 'POST' });
       }
       if (vendorId !== ctx.vendorId) {
-        return apiError(UI_STRINGS.appApiProcurementQuotesRoute.forbiddenYouCanOnlySubmitQuotesForYourOwnVendorAccount, 403);
+        return apiError(UI_STRINGS.appApiProcurementQuotesRoute.forbiddenYouCanOnlySubmitQuotesForYourOwnVendorAccount, 403, { route: '/api/procurement/quotes', method: 'POST' });
       }
     }
 
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     if (ctx.role === 'VENDOR') {
@@ -98,12 +99,12 @@ export async function POST(req: NextRequest) {
         where: { rfqId, vendorId: ctx.vendorId!, tenantId: ctx.tenantId },
       });
       if (!isInvited) {
-        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403, { route: '/api/procurement/quotes', method: 'POST' });
       }
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     // 2. Verify vendor exists
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     // 3. Check existing quotes for this RFQ & Vendor to increment version
@@ -161,8 +162,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Generate Quote Number
-    const count = await prisma.quote.count({ where: { tenantId: ctx.tenantId } });
-    const quoteNumber = `QTE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const quoteNumber = await nextRecordCode(prisma.quote, 'quoteNumber', ctx.tenantId, `QTE-${new Date().getFullYear()}-`, 6);
 
     // 5. Create immutable Quote record
     const quote = await prisma.quote.create({
@@ -253,6 +253,6 @@ export async function POST(req: NextRequest) {
     return apiSuccess({ quote, message: interpolateUiString(UI_STRINGS.appApiProcurementQuotesRoute.quoteVNextVersionSubmittedSuccessfully, { "nextVersion": nextVersion }) }, 201);
   } catch (error: any) {
     console.error('Error submitting quote:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuote }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuote }), 500, { route: '/api/procurement/quotes', method: 'POST', error: error });
   }
 }

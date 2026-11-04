@@ -15,16 +15,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { contributionId } = body;
 
-    if (!contributionId) return apiError(UI_STRINGS.common.contributionIDIsRequired, 400);
+    if (!contributionId) return apiError(UI_STRINGS.common.contributionIDIsRequired, 400, { route: '/api/budgets/submit', method: 'POST' });
 
     const contribution = await prisma.budgetContribution.findFirst({
       where: { id: contributionId, tenantId: ctx.tenantId },
       include: { boqRevision: true, boq: true, costCentre: true },
     });
 
-    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
+    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404, { route: '/api/budgets/submit', method: 'POST' });
     if (contribution.status !== 'DRAFT') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsSubmitRoute.cannotSubmitContributionInStateStatus, { "status": contribution.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsSubmitRoute.cannotSubmitContributionInStateStatus, { "status": contribution.status }), 400, { route: '/api/budgets/submit', method: 'POST' });
     }
 
     const updated = await prisma.budgetContribution.update({
@@ -62,6 +62,6 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess({ contribution: updated, status: 'PENDING_PROJECT_APPROVAL' });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSubmitBudgetContribution }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSubmitBudgetContribution }), 500, { route: '/api/budgets/submit', method: 'POST', error: err });
   }
 }

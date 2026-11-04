@@ -123,7 +123,7 @@ describe('BOQ list and create API', () => {
       success: true, boqId: 'boq-1', revisionId: 'revision-0', boqCode: 'BOQ-P1-001',
       boq: { project: { id: 'project-1' }, costCentre: { id: 'cc-1' }, revisions: [{ id: 'revision-0' }] },
     } });
-    expect(db.boq.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', projectId: 'project-1' } });
+    expect(db.boq.findMany).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', boqCode: { startsWith: 'BOQ-P1-' } }, select: { boqCode: true } });
     expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-1', costCentreId: 'cc-1', boqCode: 'BOQ-P1-001', title: 'Store Electrical',
       description: 'L1 areas', category: 'Power, Lighting', scope: 'L1 areas', purpose: UI_STRINGS.componentsSidebar.bUDGET, status: 'DRAFT', createdBy: 'buyer@example.com',

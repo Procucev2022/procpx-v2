@@ -162,6 +162,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching auction RFQ options:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqOptions }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqOptions }), 500, { route: '/api/procurement/auctions/rfq-options', method: 'GET', error: error });
   }
 }

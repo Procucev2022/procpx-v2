@@ -1,3 +1,4 @@
+import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/standard/generate/route';
 import { prisma } from '../src/lib/prisma';
@@ -10,7 +11,7 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: {
     project: { findFirst: jest.fn() },
     costCentre: { findFirst: jest.fn() },
-    boq: { findFirst: jest.fn(), update: jest.fn(), count: jest.fn(), create: jest.fn() },
+    boq: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), count: jest.fn(), create: jest.fn() },
     boqRevision: { update: jest.fn() },
     boqLine: { create: jest.fn() },
     category: { findMany: jest.fn() },
@@ -47,7 +48,7 @@ describe('generate BOQ from standard upload API', () => {
       category: 'Old category', costCentreId: 'old-cc', scope: 'Old scope', revisions: [{ id: 'revision-0', totalLines: 0 }],
     });
     db.boq.update.mockResolvedValue({ id: 'boq-1', boqCode: 'BOQ-000001', revisions: [{ id: 'revision-0', totalLines: 0 }] });
-    db.boq.count.mockResolvedValue(5);
+    db.boq.findMany.mockResolvedValue(existingCodes('boqCode', 'BOQ-', 6, 5));
     db.boq.create.mockResolvedValue({ id: 'boq-new', boqCode: 'BOQ-000006', revisions: [] });
     db.boqRevision.update.mockResolvedValue({ id: 'revision-0', revisionCode: 'R0' });
     db.boqLine.create.mockResolvedValue({ id: 'line-created' });

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const targetId = boqRevisionId || boqId;
     if (!targetId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400, { route: '/api/boq/estimate-cost', method: 'POST' });
     }
 
     let revision = await prisma.boqRevision.findFirst({
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/estimate-cost', method: 'POST' });
 
     // Comprehensive Benchmark dictionary for retail, hospitality, banking & corporate fitouts
     const benchmarkRates: Record<string, { rate: number; source: string; conf: number; category: string }> = {
@@ -315,6 +315,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Error generating AI cost:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiCostEstimationFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiCostEstimationFailed }), 500, { route: '/api/boq/estimate-cost', method: 'POST', error: err });
   }
 }

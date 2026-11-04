@@ -1,6 +1,7 @@
 // src/app/api/boq/drawing-extract/route.ts - Method 3: AI Drawing to BOQ Extraction & Persistence
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { processDrawingFile, ExtractedDrawingItem } from '@/lib/drawing-parser';
 import { saveUpload } from '@/lib/storage';
@@ -34,20 +35,19 @@ export async function POST(req: NextRequest) {
       } = body;
 
       if (!projectId) {
-        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, 400);
+        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, 400, { route: '/api/boq/drawing-extract', method: 'POST' });
       }
       if (!Array.isArray(lines) || lines.length === 0) {
-        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, 400);
+        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, 400, { route: '/api/boq/drawing-extract', method: 'POST' });
       }
 
       const project = await prisma.project.findFirst({
         where: { id: projectId, tenantId: ctx.tenantId },
       });
-      if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
+      if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404, { route: '/api/boq/drawing-extract', method: 'POST' });
 
       // Unique BOQ Code
-      const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-      const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
+      const boqCode = await nextRecordCode(prisma.boq, 'boqCode', ctx.tenantId, `BOQ-`, 6);
 
       // Create Draft BOQ (Principle: Drawing extraction creates Draft BOQ)
       const boq = await prisma.boq.create({
@@ -189,13 +189,13 @@ export async function POST(req: NextRequest) {
     const drawingNumber = (formData.get('drawingNumber') as string) || 'DWG-A-101';
 
     if (!file || !projectId) {
-      return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400, { route: '/api/boq/drawing-extract', method: 'POST' });
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404, { route: '/api/boq/drawing-extract', method: 'POST' });
 
     // Validate supported file extension
     const ext = file.name.split('.').pop()?.toLowerCase();
@@ -203,8 +203,7 @@ export async function POST(req: NextRequest) {
     if (!ext || !supportedExts.includes(ext)) {
       return apiError(
         interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { "ext": ext }),
-        400
-      );
+        400, { route: '/api/boq/drawing-extract', method: 'POST' });
     }
 
     // Save drawing file to persistent uploads storage
@@ -250,6 +249,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('Drawing processing error:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.drawingProcessingFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.drawingProcessingFailed }), 500, { route: '/api/boq/drawing-extract', method: 'POST', error: err });
   }
 }

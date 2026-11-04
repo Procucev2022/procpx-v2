@@ -5,6 +5,7 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { signOut } from 'next-auth/react';
 import TopNav from '../src/components/ui/TopNav';
+import { NOTIFICATION_POLL_INTERVAL_MS } from '../src/components/ui/TopNav.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -82,7 +83,7 @@ describe('TopNav', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.markAllAsRead) })).not.toBeInTheDocument());
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.workflowNotifications))).toBeInTheDocument();
 
-    act(() => jest.advanceTimersByTime(15_000));
+    act(() => jest.advanceTimersByTime(NOTIFICATION_POLL_INTERVAL_MS));
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.noNotificationsYetWorkflowUpdatesWillAppearHere))).toBeInTheDocument());
 
@@ -123,11 +124,32 @@ describe('TopNav', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.noNotificationsYetWorkflowUpdatesWillAppearHere))).toBeInTheDocument();
 
     rerender(<TopNav user={{ name: '', role: 'VENDOR', tenantName: 'Vendor Tenant' }} />);
-    act(() => jest.advanceTimersByTime(15_000));
+    act(() => jest.advanceTimersByTime(NOTIFICATION_POLL_INTERVAL_MS));
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(2));
     expect(screen.getByText('CP')).toBeInTheDocument();
-    act(() => jest.advanceTimersByTime(15_000));
+    act(() => jest.advanceTimersByTime(NOTIFICATION_POLL_INTERVAL_MS));
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(3));
+  });
+
+  it('skips polls while the tab is hidden and refreshes when it is shown again', async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ notifications: [], unreadCount: 0 }));
+    const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      const { unmount } = render(<TopNav user={baseUser} />);
+      await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(1));
+      act(() => jest.advanceTimersByTime(NOTIFICATION_POLL_INTERVAL_MS));
+      expect(fetchMock()).toHaveBeenCalledTimes(1);
+
+      visibility.mockReturnValue('visible');
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      await waitFor(() => expect(fetchMock()).toHaveBeenCalledTimes(2));
+
+      unmount();
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      expect(fetchMock()).toHaveBeenCalledTimes(2);
+    } finally {
+      visibility.mockRestore();
+    }
   });
 
   it('keeps local read state when the mark-all request fails', async () => {

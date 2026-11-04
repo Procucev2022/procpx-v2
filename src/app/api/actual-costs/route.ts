@@ -3,6 +3,7 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -87,14 +88,13 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!projectId || !category || actualQuantity === undefined || actualUnitRate === undefined) {
-      return apiError(UI_STRINGS.appApiActualCostsRoute.projectCategoryActualQuantityAndActualUnitRateAreRequired, 400);
+      return apiError(UI_STRINGS.appApiActualCostsRoute.projectCategoryActualQuantityAndActualUnitRateAreRequired, 400, { route: '/api/actual-costs', method: 'POST' });
     }
 
     const calculatedAmount = actualAmount !== undefined ? Number(actualAmount) : Number(actualQuantity) * Number(actualUnitRate);
     const totalActualAmount = calculatedAmount + Number(taxAmount);
 
-    const txCount = await prisma.actualCostTransaction.count({ where: { tenantId: ctx.tenantId } });
-    const transactionCode = `ACT-${new Date().getFullYear()}-${String(txCount + 1).padStart(6, '0')}`;
+    const transactionCode = await nextRecordCode(prisma.actualCostTransaction, 'transactionCode', ctx.tenantId, `ACT-${new Date().getFullYear()}-`, 6);
 
     const actualTx = await prisma.actualCostTransaction.create({
       data: {
@@ -152,6 +152,6 @@ export async function POST(req: NextRequest) {
     return apiSuccess(actualTx, 201);
   } catch (err: any) {
     console.error('Error creating actual cost transaction:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateActualCostTransaction }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateActualCostTransaction }), 500, { route: '/api/actual-costs', method: 'POST', error: err });
   }
 }

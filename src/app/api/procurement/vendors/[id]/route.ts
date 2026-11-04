@@ -72,7 +72,7 @@ export async function GET(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]', method: 'GET' });
     }
 
     const isProcurementUser = ctx.role === 'PROCUREMENT_USER';
@@ -198,7 +198,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching vendor profile:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorProfile }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorProfile }), 500, { route: '/api/procurement/vendors/[id]', method: 'GET', error: error });
   }
 }
 
@@ -218,7 +218,7 @@ export async function PUT(
   const isVendorSelf = ctx.role === 'VENDOR' && hasPermission(ctx.role, 'VENDOR_PROFILE_EDIT') && ctx.vendorId === id;
 
   if (!isInternalManager && !isVendorSelf) {
-    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/vendors/[id]', method: 'PUT' });
   }
 
   try {
@@ -233,7 +233,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]', method: 'PUT' });
     }
 
     const body = await req.json();
@@ -304,6 +304,6 @@ export async function PUT(
     return apiSuccess({ vendor: updated, message: UI_STRINGS.appApiProcurementVendorsIdRoute.vendorProfileUpdatedSuccessfully });
   } catch (error: any) {
     console.error('Error updating vendor profile:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateVendorProfile }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateVendorProfile }), 500, { route: '/api/procurement/vendors/[id]', method: 'PUT', error: error });
   }
 }

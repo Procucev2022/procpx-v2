@@ -18,12 +18,12 @@ export async function GET(
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rfqs/[id]', method: 'GET' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rfqs/[id]', method: 'GET' });
   }
 
   const { id: rfqId } = await params;
@@ -70,13 +70,13 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/vendor-portal/rfqs/[id]', method: 'GET' });
     }
 
     return apiSuccess({ rfq });
   } catch (error: any) {
     console.error('Error fetching vendor RFQ detail:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500, { route: '/api/vendor-portal/rfqs/[id]', method: 'GET', error: error });
   }
 }
 
@@ -88,12 +88,12 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
   }
 
   const { id: rfqId } = await params;
@@ -119,11 +119,11 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.rFQNotFoundOrVendorNotInvited, 404);
+      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.rFQNotFoundOrVendorNotInvited, 404, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
     }
 
     // Determine quote version
@@ -136,12 +136,12 @@ export async function POST(
 
     // Rule: Maximum 20 quote versions per vendor per RFQ during multi-round negotiations
     if (nextVersion > 20) {
-      return apiError(UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, 400);
+      return apiError(UI_STRINGS.common.maximumLimitOf20QuoteVersionsReachedPerVendorForThisRFQ, 400, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
     }
 
     // Rule: Validate that all required line-item prices are provided and positive
     if (!Array.isArray(lines) || lines.length === 0) {
-      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemQuotationRatesAreMandatoryBeforeSubmitting, 400);
+      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemQuotationRatesAreMandatoryBeforeSubmitting, 400, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
     }
 
     const lineRateMap = new Map<string, number>();
@@ -157,8 +157,7 @@ export async function POST(
       if (rate === undefined || isNaN(rate) || rate <= 0) {
         return apiError(
           interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemLineNumberDescriptionMustHaveAValidPositiveUnitRateBeforeSubmission, { "lineNumber": rfqLine.lineNumber, "description": rfqLine.description }),
-          400
-        );
+          400, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST' });
       }
     }
 
@@ -360,6 +359,6 @@ export async function POST(
     return apiSuccess({ quote, message: confirmationMsg, version: nextVersion }, 201);
   } catch (error: any) {
     console.error('Error submitting quotation:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuotation }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuotation }), 500, { route: '/api/vendor-portal/rfqs/[id]', method: 'POST', error: error });
   }
 }

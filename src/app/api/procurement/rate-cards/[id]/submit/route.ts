@@ -23,16 +23,16 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/submit', method: 'POST' });
     }
 
     if (rateCard.items.length === 0) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.cannotSubmitRateCardWithNoItems, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.cannotSubmitRateCardWithNoItems, 400, { route: '/api/procurement/rate-cards/[id]/submit', method: 'POST' });
     }
 
     const submittableStatuses = ['DRAFT', 'RETURNED_FOR_CORRECTION', 'NEGOTIATION', 'UNDER_REVIEW'];
     if (!submittableStatuses.includes(rateCard.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardCannotBeSubmittedFromStatusStatus, { "status": rateCard.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardCannotBeSubmittedFromStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]/submit', method: 'POST' });
     }
 
     let remarks = 'Submitted for Level 1 Project Approval';
@@ -88,6 +88,6 @@ export async function POST(
     return apiSuccess({ rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardSubmittedForProjectApproval });
   } catch (error: any) {
     console.error('Error submitting rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCard }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCard }), 500, { route: '/api/procurement/rate-cards/[id]/submit', method: 'POST', error: error });
   }
 }

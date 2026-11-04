@@ -1,3 +1,4 @@
+import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../src/app/api/procurement/rate-cards/route';
 import { prisma } from '../src/lib/prisma';
@@ -124,7 +125,7 @@ describe('procurement rate cards route', () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     db.vendorRateCard.findMany.mockRejectedValueOnce(new Error('query failed'));
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'query failed', status: 500 });
-    expect(errorResult).toHaveBeenCalledWith('query failed', 500);
+    expect(errorResult).toHaveBeenCalledWith('query failed', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 
   it('creates draft cards with normalized defaults and all item comparison fallbacks', async () => {
@@ -159,7 +160,7 @@ describe('procurement rate cards route', () => {
   });
 
   it('sets project approval fields and sends buyer offers to vendors with notifications', async () => {
-    db.vendorRateCard.count.mockResolvedValue(8);
+    db.vendorRateCard.findMany.mockResolvedValue(existingCodes('rateCardNumber', `VRC-${currentYear}-`, 6, 8));
     await POST(postRequest({ ...requiredBody, status: 'PENDING_PROJECT_APPROVAL', version: 2 }));
     expect(db.vendorRateCard.create.mock.calls[0][0].data).toMatchObject({
       version: 2, status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT',
@@ -192,6 +193,6 @@ describe('procurement rate cards route', () => {
     await expect(POST(postRequest({ ...requiredBody, status: 'DRAFT' }))).resolves.toEqual({
       ok: false, error: 'write failed', status: 500,
     });
-    expect(errorResult).toHaveBeenCalledWith('write failed', 500);
+    expect(errorResult).toHaveBeenCalledWith('write failed', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 });

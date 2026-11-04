@@ -1,5 +1,6 @@
 // src/lib/notifications.ts - Enterprise Workflow Notification & Communication Helper
 import { prisma } from './prisma';
+import { logEvent } from './observability/server-logger';
 import type { WorkflowNotificationParams } from "@app-types/lib/notifications.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -24,8 +25,14 @@ export async function createWorkflowNotification(params: WorkflowNotificationPar
       },
     });
   } catch (err) {
-    console.error('Failed to create workflow notification:', err);
     // Notification creation failure should never crash the parent transaction
+    logEvent('error', 'notification.create_failed', {
+      tenantId: params.tenantId,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      recordNumber: params.recordNumber,
+      error: err,
+    });
     return null;
   }
 }

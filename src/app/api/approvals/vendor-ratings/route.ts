@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching vendor ratings approval queue:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovalsQueue }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovalsQueue }), 500, { route: '/api/approvals/vendor-ratings', method: 'GET', error: error });
   }
 }
 
@@ -148,11 +148,11 @@ export async function POST(req: NextRequest) {
     const { ratingId, action, approverComments = '' } = body;
 
     if (!ratingId) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingIDIsRequired, 400, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     if (!['ACCEPT', 'RETURN', 'REJECT'].includes(action)) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.invalidDecisionActionMustBeACCEPTRETURNOrREJECT, 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.invalidDecisionActionMustBeACCEPTRETURNOrREJECT, 400, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     const rating = await prisma.ppoVendorRating.findFirst({
@@ -167,23 +167,23 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rating) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingRecordNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingRecordNotFoundOrAccessDenied, 404, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     // Security Rule: Validate approver project scope
     const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, rating.projectId || rating.ppo?.projectId);
     if (!isAuthorized) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.accessDeniedYouAreNotAuthorisedToReviewAssessmentsForThisProject, 403);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.accessDeniedYouAreNotAuthorisedToReviewAssessmentsForThisProject, 403, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     // Business Rule: Only SUBMITTED ratings can be reviewed/decided
     if (rating.status !== 'SUBMITTED') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.cannotRecordDecisionOnAssessmentInStatusStatusOnlySubmittedAssessmentsCanBeReviewed, { "status": rating.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.cannotRecordDecisionOnAssessmentInStatusStatusOnlySubmittedAssessmentsCanBeReviewed, { "status": rating.status }), 400, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     // Require approver comments for Return or Reject per Requirement 2
     if ((action === 'RETURN' || action === 'REJECT') && !approverComments?.trim()) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.approverReviewCommentsAreMandatoryWhenRejectingOrReturningAnAssessmentForCorrection, 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.approverReviewCommentsAreMandatoryWhenRejectingOrReturningAnAssessmentForCorrection, 400, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     let existingCriteria: any = {};
@@ -334,6 +334,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error recording approver decision:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordApproverDecision }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordApproverDecision }), 500, { route: '/api/approvals/vendor-ratings', method: 'POST', error: error });
   }
 }

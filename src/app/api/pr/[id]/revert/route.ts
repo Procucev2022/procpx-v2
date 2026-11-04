@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { reason } = body;
 
     if (!reason || !reason.trim()) {
-      return apiError(UI_STRINGS.appApiPrIdRevertRoute.mandatoryReasonForRevertingForCorrectionMustBeProvided, 400);
+      return apiError(UI_STRINGS.appApiPrIdRevertRoute.mandatoryReasonForRevertingForCorrectionMustBeProvided, 400, { route: '/api/pr/[id]/revert', method: 'POST' });
     }
 
     const pr = await prisma.procurementRequest.findFirst({
@@ -30,10 +30,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
-    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/revert', method: 'POST' });
 
     if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.cannotRevertBOQInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.cannotRevertBOQInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400, { route: '/api/pr/[id]/revert', method: 'POST' });
     }
 
     const trimmedReason = reason.trim();
@@ -110,6 +110,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   } catch (err: any) {
     console.error('Error reverting BOQ for correction:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToRevertBoqForCorrection }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToRevertBoqForCorrection }), 500, { route: '/api/pr/[id]/revert', method: 'POST', error: err });
   }
 }

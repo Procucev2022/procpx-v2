@@ -2,6 +2,7 @@
 // Vendor Rate Card Management & Approved Catalogues
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching rate cards:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500, { route: '/api/procurement/rate-cards', method: 'GET', error: error });
   }
 }
 
@@ -150,11 +151,10 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!vendorId || !title || !category || !validFrom || !validTo) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsRoute.vendorIDTitleCategoryValidFromAndValidToAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsRoute.vendorIDTitleCategoryValidFromAndValidToAreRequired, 400, { route: '/api/procurement/rate-cards', method: 'POST' });
     }
 
-    const count = await prisma.vendorRateCard.count({ where: { tenantId: ctx.tenantId } });
-    const rateCardNumber = `VRC-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const rateCardNumber = await nextRecordCode(prisma.vendorRateCard, 'rateCardNumber', ctx.tenantId, `VRC-${new Date().getFullYear()}-`, 6);
 
     const isSubmittingL1 = status === 'PENDING_PROJECT_APPROVAL';
     const isSendingToVendor = status === 'ROUND_1_BUYER_OFFER' || status === 'SENT_TO_VENDOR';
@@ -272,6 +272,6 @@ export async function POST(req: NextRequest) {
     return apiSuccess({ rateCard }, 201);
   } catch (error: any) {
     console.error('Error creating rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRateCard }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRateCard }), 500, { route: '/api/procurement/rate-cards', method: 'POST', error: error });
   }
 }

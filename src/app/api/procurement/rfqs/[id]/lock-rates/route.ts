@@ -23,7 +23,7 @@ export async function POST(
     const { vendorId, finalCommercialValue, remarks } = body;
 
     if (!vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.winningVendorIDIsRequiredToLockRates, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.winningVendorIDIsRequiredToLockRates, 400, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -38,7 +38,7 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST' });
     }
 
     const vendor = await prisma.vendor.findFirst({
@@ -46,7 +46,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFound, 404);
+      return apiError(UI_STRINGS.common.vendorNotFound, 404, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST' });
     }
 
     const benchmark = rfq.estimatedBenchmarkValue || 0;
@@ -104,6 +104,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error locking final rates:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToLockFinalRates }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToLockFinalRates }), 500, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST', error: error });
   }
 }

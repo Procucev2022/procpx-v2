@@ -33,17 +33,17 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404, { route: '/api/procurement/ppos/[id]/vendor-accept', method: 'POST' });
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId || ctx.vendorId !== ppo.vendorId) {
-        return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.forbiddenYouCanOnlyAcceptPurchaseOrdersIssuedToYourCompany, 403);
+        return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.forbiddenYouCanOnlyAcceptPurchaseOrdersIssuedToYourCompany, 403, { route: '/api/procurement/ppos/[id]/vendor-accept', method: 'POST' });
       }
     }
 
     if (ppo.vendorStatus === 'ACCEPTED_BY_VENDOR') {
-      return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.thisPurchaseOrderHasAlreadyBeenAccepted, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.thisPurchaseOrderHasAlreadyBeenAccepted, 400, { route: '/api/procurement/ppos/[id]/vendor-accept', method: 'POST' });
     }
 
     const acceptedAt = new Date();
@@ -122,6 +122,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error accepting PPO as vendor:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder2 }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder2 }), 500, { route: '/api/procurement/ppos/[id]/vendor-accept', method: 'POST', error: error });
   }
 }

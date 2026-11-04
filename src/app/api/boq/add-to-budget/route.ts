@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const { boqId, costCentreId, projectId, autoSubmit } = body;
 
     if (!boqRevisionId && !boqId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400, { route: '/api/boq/add-to-budget', method: 'POST' });
     }
 
     // Resolve revision
@@ -64,21 +64,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (!revision) {
-      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/add-to-budget', method: 'POST' });
     }
 
     const targetProjectId = projectId || revision.boq.projectId;
     const targetCostCentreId = costCentreId || revision.costCentreId || revision.boq.costCentreId;
 
     if (!targetCostCentreId) {
-      return apiError(UI_STRINGS.appApiBoqAddToBudgetRoute.aValidCostCentreIsRequiredToAllocateBudget, 400);
+      return apiError(UI_STRINGS.appApiBoqAddToBudgetRoute.aValidCostCentreIsRequiredToAllocateBudget, 400, { route: '/api/boq/add-to-budget', method: 'POST' });
     }
 
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: targetCostCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
     if (!costCentre) {
-      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/boq/add-to-budget', method: 'POST' });
     }
 
     // Section 8: Commercial Budget Rule - block if any line has pending/blank/invalid quantity
@@ -86,8 +86,7 @@ export async function POST(req: NextRequest) {
     if (missingQtyLines.length > 0) {
       return apiError(
         interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.lengthBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget, { "length": missingQtyLines.length, "value2": missingQtyLines.length > 1 ? 's' : '' }),
-        400
-      );
+        400, { route: '/api/boq/add-to-budget', method: 'POST' });
     }
 
     // Compute line costs and category totals
@@ -147,7 +146,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (existingContribution.status === 'APPROVED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeHasAlreadyBeenApprovedInBudgetForCostCentreCode, { "boqCode": revision.boq.boqCode, "code": costCentre.code }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeHasAlreadyBeenApprovedInBudgetForCostCentreCode, { "boqCode": revision.boq.boqCode, "code": costCentre.code }), 400, { route: '/api/boq/add-to-budget', method: 'POST' });
       }
 
       // If previously REJECTED or DRAFT, allow re-submission as Under Approval
@@ -305,6 +304,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (err: any) {
     console.error('Error adding BOQ to budget:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500, { route: '/api/boq/add-to-budget', method: 'POST', error: err });
   }
 }

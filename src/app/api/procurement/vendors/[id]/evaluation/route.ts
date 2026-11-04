@@ -29,7 +29,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]/evaluation', method: 'POST' });
     }
 
     const body = await req.json();
@@ -43,7 +43,7 @@ export async function POST(
     } = body;
 
     if (!qualificationStatus || !['QUALIFIED', 'CONDITIONALLY_QUALIFIED', 'NOT_QUALIFIED'].includes(qualificationStatus)) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsIdEvaluationRoute.aValidQualificationStatusIsRequiredQUALIFIEDCONDITIONALLYQUALIFIEDOrNOTQUALIFIED, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdEvaluationRoute.aValidQualificationStatusIsRequiredQUALIFIEDCONDITIONALLYQUALIFIEDOrNOTQUALIFIED, 400, { route: '/api/procurement/vendors/[id]/evaluation', method: 'POST' });
     }
 
     const bpScore = scores?.businessProfile !== undefined ? Number(scores.businessProfile) : null;
@@ -125,6 +125,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error submitting vendor qualification:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitVendorQualification }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitVendorQualification }), 500, { route: '/api/procurement/vendors/[id]/evaluation', method: 'POST', error: error });
   }
 }

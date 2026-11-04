@@ -3,6 +3,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
 import { notifyNextResponsibleParty } from '@/lib/notifications';
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (!hasPermission(ctx.role, 'PPO_VIEW') && !hasPermission(ctx.role, 'VENDOR_RATE_PPO')) {
-    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/ppos', method: 'GET' });
   }
 
   const { searchParams } = new URL(req.url);
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching PPOs:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpos }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpos }), 500, { route: '/api/procurement/ppos', method: 'GET', error: error });
   }
 }
 
@@ -143,7 +144,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId) {
-      return apiError(UI_STRINGS.appApiProcurementPposRoute.rFQIDIsRequiredToGeneratePPO, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposRoute.rFQIDIsRequiredToGeneratePPO, 400, { route: '/api/procurement/ppos', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -165,7 +166,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/ppos', method: 'POST' });
     }
 
     // Evaluate latest quote per vendor to determine ranking and award details
@@ -186,7 +187,7 @@ export async function POST(req: NextRequest) {
         where: { id: awardRecommendationId, tenantId: ctx.tenantId },
         include: { recommendedVendor: true },
       });
-      if (!award) return apiError(UI_STRINGS.common.awardRecommendationNotFound, 404);
+      if (!award) return apiError(UI_STRINGS.common.awardRecommendationNotFound, 404, { route: '/api/procurement/ppos', method: 'POST' });
       vendorId = award.recommendedVendorId;
       selectedQuote = latestQuoteMap.get(vendorId) || null;
     } else if (!vendorId && rfq.awards.length > 0) {
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!vendorId || !selectedQuote) {
-      return apiError(UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, 400, { route: '/api/procurement/ppos', method: 'POST' });
     }
 
     // Determine ranking at award time
@@ -211,8 +212,7 @@ export async function POST(req: NextRequest) {
     if (!isL1 && (!justification || !justification.trim())) {
       return apiError(
         interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.vendorNameIsRankedLRankAtAwardAMandatoryCommercialJustificationIsRequiredWhenAwardingRaisingPPOForANonL1Vendor, { "name": selectedQuote.vendor.name, "rankAtAward": rankAtAward }),
-        400
-      );
+        400, { route: '/api/procurement/ppos', method: 'POST' });
     }
 
     // Rule: Prevent duplicate PPO creation for the same RFQ and vendor
@@ -228,8 +228,7 @@ export async function POST(req: NextRequest) {
     if (existingPpo) {
       return apiError(
         interpolateUiString(UI_STRINGS.appApiProcurementPposRoute.anActivePurchaseOrderPpoNumberHasAlreadyBeenRaisedForNameOnThisRFQ, { "ppoNumber": existingPpo.ppoNumber, "name": selectedQuote.vendor.name }),
-        409
-      );
+        409, { route: '/api/procurement/ppos', method: 'POST' });
     }
 
     const vendorName = selectedQuote.vendor.name;
@@ -237,8 +236,7 @@ export async function POST(req: NextRequest) {
     const quoteVersion = selectedQuote.quoteVersion;
 
     // Generate PPO Number
-    const count = await prisma.ppo.count({ where: { tenantId: ctx.tenantId } });
-    const ppoNumber = `PPO-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const ppoNumber = await nextRecordCode(prisma.ppo, 'ppoNumber', ctx.tenantId, `PPO-${new Date().getFullYear()}-`, 6);
     const isIssued = action === 'ISSUE_PPO';
     const initialStatus = isIssued ? 'ISSUED' : 'DRAFT';
 
@@ -383,6 +381,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (error: any) {
     console.error('Error generating PPO:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToGeneratePpo }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToGeneratePpo }), 500, { route: '/api/procurement/ppos', method: 'POST', error: error });
   }
 }

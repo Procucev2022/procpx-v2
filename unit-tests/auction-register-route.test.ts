@@ -235,7 +235,7 @@ describe('auction register API', () => {
       minDecrement: 5000, autoExtensionMinutes: 3, maxBidsPerParticipant: 10 }) });
 
     db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
-    db.auction.count.mockRejectedValueOnce({});
+    db.auction.findMany.mockRejectedValueOnce({});
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Broken count', isDraft: true }))).resolves.toEqual({
       ok: false, error: 'Failed to create auction', status: 500,
     });

@@ -18,7 +18,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
     where: { id: revisionId, tenantId: ctx.tenantId },
     include: { lines: { where: { isDeleted: false } } },
   });
-  if (!sourceRevision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!sourceRevision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/new-revision', method: 'POST' });
   if (sourceRevision.status !== 'APPROVED') {
     return apiError(UI_STRINGS.appApiBoqRevisionIdNewRevisionRoute.newRevisionsCanOnlyBeCreatedFromAnApprovedRevision);
   }

@@ -23,7 +23,7 @@ export async function POST(
     const { issueRemarks, raisedBy } = body;
 
     if (!issueRemarks || !issueRemarks.trim()) {
-      return apiError(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.issueClarificationDescriptionIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.issueClarificationDescriptionIsRequired, 400, { route: '/api/procurement/ppos/[id]/vendor-issue', method: 'POST' });
     }
 
     const ppo = await prisma.ppo.findFirst({
@@ -36,12 +36,12 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404, { route: '/api/procurement/ppos/[id]/vendor-issue', method: 'POST' });
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId || ctx.vendorId !== ppo.vendorId) {
-        return apiError(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.forbiddenYouCanOnlyRaiseIssuesOnPurchaseOrdersIssuedToYourCompany, 403);
+        return apiError(UI_STRINGS.appApiProcurementPposIdVendorIssueRoute.forbiddenYouCanOnlyRaiseIssuesOnPurchaseOrdersIssuedToYourCompany, 403, { route: '/api/procurement/ppos/[id]/vendor-issue', method: 'POST' });
       }
     }
 
@@ -118,6 +118,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error raising issue on PPO:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitIssueOnPurchaseOrder }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitIssueOnPurchaseOrder }), 500, { route: '/api/procurement/ppos/[id]/vendor-issue', method: 'POST', error: error });
   }
 }

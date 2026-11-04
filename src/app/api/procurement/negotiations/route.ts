@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ negotiations, total: negotiations.length });
   } catch (error: any) {
     console.error('Error fetching negotiations:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchNegotiations }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchNegotiations }), 500, { route: '/api/procurement/negotiations', method: 'GET', error: error });
   }
 }
 
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!rfqId) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -88,18 +88,18 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
     const permittedStatuses = ['RELEASED', 'VENDOR_RESPONSE_OPEN', 'RESPONSE_CLOSED', 'COMPARISON', 'NEGOTIATION'];
     if (!permittedStatuses.includes(rfq.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIsInStatusStatusAndDoesNotPermitCommercialNegotiationOffers, { "status": rfq.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIsInStatusStatusAndDoesNotPermitCommercialNegotiationOffers, { "status": rfq.status }), 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
     if (counterOfferAmount !== undefined && counterOfferAmount !== null) {
       const numAmt = Number(counterOfferAmount);
       if (isNaN(numAmt) || numAmt <= 0) {
-        return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.counterofferAmountMustBeAPositiveNumber, 400);
+        return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.counterofferAmountMustBeAPositiveNumber, 400, { route: '/api/procurement/negotiations', method: 'POST' });
       }
     }
 
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (negotiation && (negotiation.status === 'CONCLUDED' || negotiation.status === 'CANCELLED')) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.negotiationForRFQRfqNumberIsAlreadyToLowerCaseAndLockedAgainstFurtherOffers, { "rfqNumber": rfq.rfqNumber, "toLowerCase": negotiation.status.toLowerCase() }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.negotiationForRFQRfqNumberIsAlreadyToLowerCaseAndLockedAgainstFurtherOffers, { "rfqNumber": rfq.rfqNumber, "toLowerCase": negotiation.status.toLowerCase() }), 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
     if (!negotiation) {
@@ -437,7 +437,7 @@ export async function POST(req: NextRequest) {
 
     // SINGLE VENDOR DISPATCH
     if (!vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
     const singleResult = await dispatchToVendor(vendorId);
@@ -468,6 +468,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error logging negotiation round:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateNegotiationRound }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateNegotiationRound }), 500, { route: '/api/procurement/negotiations', method: 'POST', error: error });
   }
 }

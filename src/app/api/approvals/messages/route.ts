@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const contributionId = searchParams.get('contributionId');
 
   if (!prId && !contributionId) {
-    return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400);
+    return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400, { route: '/api/approvals/messages', method: 'GET' });
   }
 
   try {
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         where: { id: prId, tenantId: ctx.tenantId },
         select: { id: true, prNumber: true, requestedBy: true, createdAt: true },
       });
-      if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+      if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/approvals/messages', method: 'GET' });
 
       const approvals = await prisma.pRApproval.findMany({
         where: { prId, tenantId: ctx.tenantId },
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         where: { id: contributionId, tenantId: ctx.tenantId },
         select: { id: true, submittedBy: true, costCentreId: true, createdAt: true },
       });
-      if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
+      if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404, { route: '/api/approvals/messages', method: 'GET' });
 
       const approvals = await prisma.budgetApproval.findMany({
         where: { contributionId, tenantId: ctx.tenantId },
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       });
     }
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToFetchMessages }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToFetchMessages }), 500, { route: '/api/approvals/messages', method: 'GET', error: err });
   }
 }
 
@@ -115,11 +115,11 @@ export async function POST(req: NextRequest) {
     const { prId, contributionId, message, type = 'MESSAGE' } = body;
 
     if (!message || !message.trim()) {
-      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.messageContentCannotBeEmpty, 400);
+      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.messageContentCannotBeEmpty, 400, { route: '/api/approvals/messages', method: 'POST' });
     }
 
     if (!prId && !contributionId) {
-      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400);
+      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400, { route: '/api/approvals/messages', method: 'POST' });
     }
 
     const messageType = type === 'ENQUIRY' ? 'ENQUIRY' : 'MESSAGE';
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
         where: { id: prId, tenantId: ctx.tenantId },
         include: { costCentre: true },
       });
-      if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+      if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/approvals/messages', method: 'POST' });
 
       const created = await prisma.pRApproval.create({
         data: {
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
         where: { id: contributionId, tenantId: ctx.tenantId },
         include: { costCentre: true },
       });
-      if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
+      if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404, { route: '/api/approvals/messages', method: 'POST' });
 
       const created = await prisma.budgetApproval.create({
         data: {
@@ -236,6 +236,6 @@ export async function POST(req: NextRequest) {
       }, 201);
     }
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSendMessage2 }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToSendMessage2 }), 500, { route: '/api/approvals/messages', method: 'POST', error: err });
   }
 }

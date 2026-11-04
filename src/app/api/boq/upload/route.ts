@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   // Validate project belongs to tenant
   const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenantId } });
-  if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
+  if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404, { route: '/api/boq/upload', method: 'POST' });
 
   const allowedTypes = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!targetBoqId) return apiError(UI_STRINGS.appApiBoqUploadRoute.failedToCreateOrLocateTargetBOQ, 500);
+  if (!targetBoqId) return apiError(UI_STRINGS.appApiBoqUploadRoute.failedToCreateOrLocateTargetBOQ, 500, { route: '/api/boq/upload', method: 'POST' });
 
   // Create or update revision safely
   const latestRevision = await prisma.boqRevision.findFirst({

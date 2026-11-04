@@ -19,7 +19,12 @@ const originalConsole = {
 };
 let flushInProgress = false;
 
+// In production every forwarded batch is another Cloudflare Worker invocation, so
+// only warnings and errors leave the browser; development keeps every level.
+const forwardsInfoRecords = process.env.NODE_ENV !== 'production';
+
 function enqueueClientRecord(level: LogLevel, message: string, context: Record<string, unknown> = {}): void {
+  if (!forwardsInfoRecords && (level === 'debug' || level === 'info')) return;
   const record = createLogRecord(level, message, {
     ...context,
     path: safeRequestPath(window.location.pathname),

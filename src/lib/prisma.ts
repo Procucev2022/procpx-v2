@@ -1,10 +1,12 @@
 // lib/prisma.ts - Singleton Prisma client
-// Local dev uses the SQLite file in DATABASE_URL. On Cloudflare Workers (or
-// locally with DATABASE_PROVIDER=d1) the client is backed by the D1 binding `DB`
-// through the Prisma D1 adapter.
+// On Cloudflare Workers (or locally with DATABASE_PROVIDER=d1) the client is
+// backed by the D1 binding `DB` through the Prisma D1 adapter. Every client
+// logs failed and slow queries.
 import { PrismaClient } from '@prisma/client';
 import { usesD1Database } from './runtime';
 import { withD1Compat } from './d1-compat';
+import { withQueryLogging } from './observability/query-logging';
+import { logEvent } from './observability/server-logger';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -19,7 +21,7 @@ function createD1Client(): PrismaClient {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PrismaD1 } = require('@prisma/adapter-d1') as typeof import('@prisma/adapter-d1');
   const { env } = getCloudflareContext() as unknown as { env: { DB: ConstructorParameters<typeof PrismaD1>[0] } };
-  return withD1Compat(new PrismaClient({ adapter: new PrismaD1(env.DB), log }));
+  return withQueryLogging(withD1Compat(new PrismaClient({ adapter: new PrismaD1(env.DB), log })));
 }
 
 // The D1 binding is only readable inside a request, so the client
@@ -33,10 +35,14 @@ function createWorkerProxy(): PrismaClient {
       if (prop === '$transaction') {
         // Prisma refuses interactive transactions on D1. D1 has no interactive
         // transactions, so run the callback directly (as the adapter does for
-        // batches); batch arrays still go through $transaction.
+        // batches); batch arrays still go through $transaction. Writes made before a
+        // failure are not rolled back, so failures are logged for reconciliation.
         return (input: unknown, options?: unknown) =>
           typeof input === 'function'
-            ? (input as (tx: PrismaClient) => Promise<unknown>)(d1)
+            ? (input as (tx: PrismaClient) => Promise<unknown>)(d1).catch((error: unknown) => {
+              logEvent('error', 'db.non_atomic_transaction_failed', { error });
+              throw error;
+            })
             : (d1.$transaction as (i: unknown, o?: unknown) => Promise<unknown>)(input, options);
       }
       const value = Reflect.get(client, prop, client);
@@ -47,7 +53,7 @@ function createWorkerProxy(): PrismaClient {
 
 export const prisma =
   globalForPrisma.prisma ??
-  (usesD1Database() ? createWorkerProxy() : new PrismaClient({ log }));
+  (usesD1Database() ? createWorkerProxy() : withQueryLogging(new PrismaClient({ log })));
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 

@@ -1,3 +1,4 @@
+import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/drawing-extract/route';
 import { prisma } from '../src/lib/prisma';
@@ -8,7 +9,7 @@ import { saveUpload } from '../src/lib/storage';
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     project: { findFirst: jest.fn() },
-    boq: { count: jest.fn(), create: jest.fn() },
+    boq: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     boqRevision: { create: jest.fn() },
     category: { findMany: jest.fn() },
     uomMaster: { findMany: jest.fn() },
@@ -67,7 +68,7 @@ describe('BOQ drawing extraction route', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     db.project.findFirst.mockResolvedValue({ id: 'project-1', name: 'Clinic Extension' });
-    db.boq.count.mockResolvedValue(4);
+    db.boq.findMany.mockResolvedValue(existingCodes('boqCode', 'BOQ-', 6, 4));
     db.boq.create.mockResolvedValue({ id: 'boq-1', boqCode: 'BOQ-000005' });
     db.boqRevision.create.mockResolvedValue({ id: 'revision-1', revisionCode: 'R0' });
     db.category.findMany.mockResolvedValue([{ id: 'cat-electrical', name: 'Electrical' }]);
@@ -197,10 +198,10 @@ describe('BOQ drawing extraction route', () => {
     await expect(POST(formRequest({ file: upload('plan.png', 'image/png'), projectId: 'project-1' }))).resolves.toEqual({
       ok: false, error: 'OCR unavailable', status: 500,
     });
-    db.boq.count.mockRejectedValueOnce(new Error('storage unavailable'));
+    db.boq.findMany.mockRejectedValueOnce(new Error('storage unavailable'));
     await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: 'Pipe', quantity: 1 }] }))).resolves.toEqual({
       ok: false, error: 'storage unavailable', status: 500,
     });
-    expect(errorResult).toHaveBeenCalledWith('OCR unavailable', 500);
+    expect(errorResult).toHaveBeenCalledWith('OCR unavailable', 500, expect.objectContaining({ route: expect.any(String) }));
   });
 });

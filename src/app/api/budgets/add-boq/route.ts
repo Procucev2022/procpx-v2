@@ -2,6 +2,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     const { boqRevisionId, costCentreId, projectId, autoSubmit } = body;
 
     if (!boqRevisionId || !costCentreId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDAndCostCentreIDAreMandatory, 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDAndCostCentreIDAreMandatory, 400, { route: '/api/budgets/add-boq', method: 'POST' });
     }
 
     // Retrieve revision with lines and categories
@@ -34,13 +35,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/budgets/add-boq', method: 'POST' });
 
     const targetProjectId = projectId || revision.boq.projectId;
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: costCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
-    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/budgets/add-boq', method: 'POST' });
 
     // Calculate total value based on AI unit cost or benchmark rate
     let totalEstimated = 0;
@@ -78,8 +79,8 @@ export async function POST(req: NextRequest) {
     });
 
     // 2. Create Category-wise Budget Transactions
-    const txCount = await prisma.budgetTransaction.count({ where: { tenantId: ctx.tenantId } });
-    let txCounter = txCount + 1;
+    const firstTxCode = await nextRecordCode(prisma.budgetTransaction, 'transactionCode', ctx.tenantId, 'BTX-', 6);
+    let txCounter = Number(firstTxCode.slice('BTX-'.length));
     const createdTransactions = [];
 
     for (const [catName, catData] of categoryTotals.entries()) {
@@ -149,6 +150,6 @@ export async function POST(req: NextRequest) {
       categoriesCount: categoryTotals.size,
     }, 201);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500, { route: '/api/budgets/add-boq', method: 'POST', error: err });
   }
 }

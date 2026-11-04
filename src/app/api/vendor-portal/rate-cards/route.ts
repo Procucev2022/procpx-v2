@@ -13,12 +13,12 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rate-cards', method: 'GET' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rate-cards', method: 'GET' });
   }
 
   try {
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     return apiSuccess({ rateCards: formatted, total: formatted.length });
   } catch (error: any) {
     console.error('Error fetching vendor rate cards:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500, { route: '/api/vendor-portal/rate-cards', method: 'GET', error: error });
   }
 }
 
@@ -86,12 +86,12 @@ export async function POST(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
   }
 
   try {
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     const { rateCardId, items = [], remarks = '', action } = body;
 
     if (!rateCardId) {
-      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
     }
 
     const rateCard = await prisma.vendorRateCard.findFirst({
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rateCard) {
-      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, 404, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
     }
 
     const now = new Date();
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     // ── CASE 1: VENDOR_ACCEPT (Accept Final Rate Card Version & Terms) ──
     if (action === 'VENDOR_ACCEPT') {
       if (rateCard.status !== 'CATEGORY_MANAGER_ACCEPTED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorAcceptanceRequiresPriorCategoryManagerAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorAcceptanceRequiresPriorCategoryManagerAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
       }
 
       const { signature } = body;
@@ -323,6 +323,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error submitting vendor rate card negotiation offer:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals }), 500, { route: '/api/vendor-portal/rate-cards', method: 'POST', error: error });
   }
 }

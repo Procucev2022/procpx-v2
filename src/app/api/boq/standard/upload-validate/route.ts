@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const costCentreId = (formData.get('costCentreId') as string) || '';
 
     if (!file) {
-      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.pleaseSelectOrUploadACompletedStandardBOQExcelFile, 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.pleaseSelectOrUploadACompletedStandardBOQExcelFile, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -35,13 +35,13 @@ export async function POST(req: NextRequest) {
 
     const worksheet = workbook.Sheets[sheetName];
     if (!worksheet) {
-      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.invalidSpreadsheetCouldNotFindDataSheetInWorkbook, 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.invalidSpreadsheetCouldNotFindDataSheetInWorkbook, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
     }
 
     // Read as 2D array to intelligently identify header row (handles title rows or subtitles)
     const rawMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
     if (!rawMatrix || rawMatrix.length === 0) {
-      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.theUploadedFileDoesNotContainAnyDataRows, 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.theUploadedFileDoesNotContainAnyDataRows, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
     }
 
     // Find the header row index
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (rows.length === 0) {
-      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.noDataRowsFoundBelowHeadersInTheSpreadsheet, 400);
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.noDataRowsFoundBelowHeadersInTheSpreadsheet, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
     }
 
     // Load reference taxonomy from DB
@@ -306,6 +306,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('Validation error on uploaded Standard BOQ:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToValidateUploadedStandardBoqExcel }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToValidateUploadedStandardBoqExcel }), 500, { route: '/api/boq/standard/upload-validate', method: 'POST', error: err });
   }
 }

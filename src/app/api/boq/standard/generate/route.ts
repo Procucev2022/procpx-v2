@@ -1,6 +1,7 @@
 // src/app/api/boq/standard/generate/route.ts - Generates Draft BOQ from validated Standard BOQ upload
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -30,16 +31,16 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (!projectId) {
-      return apiError(UI_STRINGS.common.projectIDIsRequired, 400);
+      return apiError(UI_STRINGS.common.projectIDIsRequired, 400, { route: '/api/boq/standard/generate', method: 'POST' });
     }
     if (!validLines || !Array.isArray(validLines) || validLines.length === 0) {
-      return apiError(UI_STRINGS.appApiBoqStandardGenerateRoute.noValidLineItemsToGenerateBOQFrom, 400);
+      return apiError(UI_STRINGS.appApiBoqStandardGenerateRoute.noValidLineItemsToGenerateBOQFrom, 400, { route: '/api/boq/standard/generate', method: 'POST' });
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404, { route: '/api/boq/standard/generate', method: 'POST' });
 
     // Verify Cost Centre if provided
     let costCentre = null;
@@ -78,8 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!boq) {
-      const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-      const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
+      const boqCode = await nextRecordCode(prisma.boq, 'boqCode', ctx.tenantId, `BOQ-`, 6);
       boq = await prisma.boq.create({
         data: {
           tenantId: ctx.tenantId,
@@ -231,6 +231,6 @@ export async function POST(req: NextRequest) {
     }, 201);
   } catch (err: any) {
     console.error('Error generating BOQ from standard upload:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateDraftBoq2 }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateDraftBoq2 }), 500, { route: '/api/boq/standard/generate', method: 'POST', error: err });
   }
 }

@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const revision = await prisma.boqRevision.findFirst({
     where: { id: revisionId, tenantId: ctx.tenantId },
   });
-  if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/import', method: 'POST' });
   if (revision.status !== 'DRAFT') return apiError(UI_STRINGS.appApiBoqImportRoute.onlyDRAFTRevisionsCanBeImported);
   if (!revision.originalFilePath) return apiError(UI_STRINGS.appApiBoqImportRoute.noUploadedFileFoundForThisRevision);
 

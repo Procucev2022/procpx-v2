@@ -5568,6 +5568,12 @@ export const UI_STRINGS = {
     receptionCounterWallPanellingBespoke: "Reception Counter & Wall Panelling (Bespoke)",
     vitrifiedFloorTiling600x600mm: "Vitrified Floor Tiling (600x600mm)",
   },
+  appErrorBoundary: {
+    title: "Something went wrong",
+    description: "This page could not be displayed. The problem has been logged.",
+    reference: "Reference: {{digest}}",
+    retry: "Try again",
+  },
   libStorage: {
     fileStorageIsNotConfiguredTheR2BucketBindingUPLOADSIsMissing: "File storage is not configured: the R2 bucket binding UPLOADS is missing.",
     thisFileWasUploadedToALocalServerAndIsNotAvailableHere: "This file was uploaded to a local server and is not available here.",

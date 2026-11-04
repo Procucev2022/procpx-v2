@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const subcategory = searchParams.get('subcategory');
 
   if (!vendorId) {
-    return apiError(UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, 400);
+    return apiError(UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, 400, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET' });
   }
 
   try {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFound, 404);
+      return apiError(UI_STRINGS.common.vendorNotFound, 404, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET' });
     }
 
     // 2. Selected Vendor's Past Quotations
@@ -241,6 +241,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error in rate card compare-workspace:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData }), 500, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET', error: error });
   }
 }

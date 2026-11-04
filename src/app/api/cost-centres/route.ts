@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     const { projectId, code, name, description, areaSqFt, location, floorZone } = body;
 
     if (!projectId || !code || !name) {
-      return apiError(UI_STRINGS.appApiCostCentresRoute.projectIDCostCentreCodeAndNameAreMandatory, 400);
+      return apiError(UI_STRINGS.appApiCostCentresRoute.projectIDCostCentreCodeAndNameAreMandatory, 400, { route: '/api/cost-centres', method: 'POST' });
     }
 
     // Verify project belongs to tenant
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       where: { id: projectId, tenantId: ctx.tenantId },
     });
     if (!project) {
-      return apiError(UI_STRINGS.appApiCostCentresRoute.projectNotFoundOrInaccessible, 404);
+      return apiError(UI_STRINGS.appApiCostCentresRoute.projectNotFoundOrInaccessible, 404, { route: '/api/cost-centres', method: 'POST' });
     }
 
     // Check duplicate code within project
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       },
     });
     if (existing) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiCostCentresRoute.costCentreCodeCodeAlreadyExistsForThisProject, { "code": code }), 409);
+      return apiError(interpolateUiString(UI_STRINGS.appApiCostCentresRoute.costCentreCodeCodeAlreadyExistsForThisProject, { "code": code }), 409, { route: '/api/cost-centres', method: 'POST' });
     }
 
     const costCentre = await prisma.costCentre.create({
@@ -143,6 +143,6 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess(costCentre, 201);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateCostCentre2 }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateCostCentre2 }), 500, { route: '/api/cost-centres', method: 'POST', error: err });
   }
 }

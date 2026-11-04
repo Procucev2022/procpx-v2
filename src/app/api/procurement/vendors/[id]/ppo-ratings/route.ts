@@ -128,7 +128,7 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error fetching PPO vendor ratings:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpoRatings }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpoRatings }), 500, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'GET', error: error });
   }
 }
 
@@ -140,7 +140,7 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role === 'PROCUREMENT_USER') {
-    return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.forbiddenProcurementUsersHaveReadOnlyAccessToVendorRatings, 403);
+    return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.forbiddenProcurementUsersHaveReadOnlyAccessToVendorRatings, 403, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
   }
 
   const { id } = await params;
@@ -157,7 +157,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
     const body = await req.json();
@@ -181,7 +181,7 @@ export async function POST(
     } = body;
 
     if (!ppoId) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOIDIsRequiredToRecordPerformanceEvaluation, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOIDIsRequiredToRecordPerformanceEvaluation, 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
     const ppo = await prisma.ppo.findFirst({
@@ -197,18 +197,18 @@ export async function POST(
     });
 
     if (!ppo) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPONotFoundOrDoesNotBelongToThisVendor, 404);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPONotFoundOrDoesNotBelongToThisVendor, 404, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
     // Business Rule: PPO must be eligible (not DRAFT or CANCELLED)
     if (ppo.status === 'DRAFT' || ppo.status === 'CANCELLED') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberIsInStatusStatusAndIsNotEligibleForPerformanceEvaluation, { "ppoNumber": ppo.ppoNumber, "status": ppo.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberIsInStatusStatusAndIsNotEligibleForPerformanceEvaluation, { "ppoNumber": ppo.ppoNumber, "status": ppo.status }), 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
     // Security Rule: Project scope authorization check
     const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, ppo.projectId);
     if (!isAuthorized) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.accessDeniedYouAreNotAuthorisedToEvaluatePPOsForThisProject, 403);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.accessDeniedYouAreNotAuthorisedToEvaluatePPOsForThisProject, 403, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
     // Check for existing rating for this PPO & enforce immutability
@@ -218,10 +218,10 @@ export async function POST(
 
     if (existingRating) {
       if (existingRating.status === 'APPROVED' || existingRating.status === 'REJECTED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsInStatusStatusAndIsLockedAgainstModifications, { "ppoNumber": ppo.ppoNumber, "status": existingRating.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsInStatusStatusAndIsLockedAgainstModifications, { "ppoNumber": ppo.ppoNumber, "status": existingRating.status }), 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
       }
       if (existingRating.status === 'SUBMITTED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsCurrentlySubmittedAndUnderProjectApproverReviewItCannotBeModifiedUntilReviewedOrReturned, { "ppoNumber": ppo.ppoNumber }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsCurrentlySubmittedAndUnderProjectApproverReviewItCannotBeModifiedUntilReviewedOrReturned, { "ppoNumber": ppo.ppoNumber }), 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
       }
     }
 
@@ -243,7 +243,7 @@ export async function POST(
 
     if (!isDraft) {
       if (!overallImprovement && !comments && !qualityComments) {
-        return apiError(UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, 400);
+        return apiError(UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
       }
     }
 
@@ -390,6 +390,6 @@ export async function POST(
     }, 201);
   } catch (error: any) {
     console.error('Error submitting PPO vendor rating:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitPpoRating }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitPpoRating }), 500, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST', error: error });
   }
 }

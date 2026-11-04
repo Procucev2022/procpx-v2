@@ -18,11 +18,11 @@ export async function POST(req: NextRequest) {
     const { roundId, decision, remarks } = body;
 
     if (!roundId || !decision) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.roundIDAndDecisionAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.roundIDAndDecisionAreRequired, 400, { route: '/api/procurement/negotiations/decision', method: 'POST' });
     }
 
     if (!['ACCEPTED', 'REJECTED', 'FINAL_ACCEPTANCE_PENDING'].includes(decision)) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.decisionMustBeACCEPTEDREJECTEDOrFINALACCEPTANCEPENDING, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.decisionMustBeACCEPTEDREJECTEDOrFINALACCEPTANCEPENDING, 400, { route: '/api/procurement/negotiations/decision', method: 'POST' });
     }
 
     const round = await prisma.negotiationRound.findFirst({
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!round) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.negotiationRoundNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.negotiationRoundNotFoundOrAccessDenied, 404, { route: '/api/procurement/negotiations/decision', method: 'POST' });
     }
 
     const rfq = round.negotiation.rfq;
@@ -132,6 +132,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error recording buyer decision:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordBuyerDecision }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordBuyerDecision }), 500, { route: '/api/procurement/negotiations/decision', method: 'POST', error: error });
   }
 }

@@ -30,7 +30,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]/evaluate-ai', method: 'POST' });
     }
 
     // Run Structured & Evidence-Based AI Evaluation Engine
@@ -124,6 +124,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error running AI vendor evaluation:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRunAiEvaluation }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRunAiEvaluation }), 500, { route: '/api/procurement/vendors/[id]/evaluate-ai', method: 'POST', error: error });
   }
 }

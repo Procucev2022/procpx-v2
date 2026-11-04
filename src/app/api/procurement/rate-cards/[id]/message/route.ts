@@ -20,7 +20,7 @@ export async function POST(
     const { message } = body;
 
     if (!message || !message.trim()) {
-      return apiError(UI_STRINGS.common.messageTextIsRequired, 400);
+      return apiError(UI_STRINGS.common.messageTextIsRequired, 400, { route: '/api/procurement/rate-cards/[id]/message', method: 'POST' });
     }
 
     const rateCard = await prisma.vendorRateCard.findUnique({
@@ -28,7 +28,7 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/message', method: 'POST' });
     }
 
     const currentLevel = rateCard.approvalLevel || 'LEVEL_1_PROJECT';
@@ -51,7 +51,7 @@ export async function POST(
     return apiSuccess({ approvalEntry, message: UI_STRINGS.appApiProcurementRateCardsIdMessageRoute.clarificationMessageRecordedSuccessfully });
   } catch (error: any) {
     console.error('Error adding rate card message:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordMessage }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRecordMessage }), 500, { route: '/api/procurement/rate-cards/[id]/message', method: 'POST', error: error });
   }
 }
 
@@ -75,12 +75,12 @@ export async function GET(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/message', method: 'GET' });
     }
 
     return apiSuccess({ approvals: rateCard.approvals });
   } catch (error: any) {
     console.error('Error getting rate card messages:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToGetMessages }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToGetMessages }), 500, { route: '/api/procurement/rate-cards/[id]/message', method: 'GET', error: error });
   }
 }

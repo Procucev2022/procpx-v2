@@ -1,3 +1,4 @@
+import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { POST } from '../src/app/api/boq/upload-template/route';
@@ -12,7 +13,7 @@ jest.mock('../src/lib/prisma', () => ({
     costCentre: { findMany: jest.fn() },
     category: { findMany: jest.fn() },
     uomMaster: { findMany: jest.fn() },
-    boq: { findFirst: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
+    boq: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn() },
     boqLine: { deleteMany: jest.fn(), create: jest.fn() },
     boqRevision: { update: jest.fn() },
     auditLog: { create: jest.fn() },
@@ -72,7 +73,7 @@ describe('fixed template BOQ upload API', () => {
     db.category.findMany.mockReset().mockResolvedValue([category]);
     db.uomMaster.findMany.mockReset().mockResolvedValue([uom]);
     db.boq.findFirst.mockReset().mockResolvedValue(null);
-    db.boq.count.mockReset().mockResolvedValue(0);
+    db.boq.findMany.mockReset().mockResolvedValue(existingCodes('boqCode', 'BOQ-', 6, 0));
     db.boq.create.mockReset().mockResolvedValue(boq);
     db.boq.update.mockReset().mockResolvedValue(boq);
     db.boqLine.deleteMany.mockReset().mockResolvedValue({ count: 0 });

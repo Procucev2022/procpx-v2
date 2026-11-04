@@ -1,6 +1,7 @@
 // src/app/api/boq/upload-template/route.ts - Method 1: Fixed Format Upload
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createNextBoqRevision } from '@/lib/boq-revision-utils';
 import * as XLSX from 'xlsx';
@@ -25,13 +26,13 @@ export async function POST(req: NextRequest) {
     const categoryParam = formData.get('category') as string | null;
 
     if (!file || !projectId) {
-      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.spreadsheetFileAndProjectIDAreRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.spreadsheetFileAndProjectIDAreRequired, 400, { route: '/api/boq/upload-template', method: 'POST' });
     }
 
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
     });
-    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404, { route: '/api/boq/upload-template', method: 'POST' });
 
     // Read buffer
     const arrayBuffer = await file.arrayBuffer();
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
     if (!rows || rows.length === 0) {
-      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.uploadedSpreadsheetIsEmptyOrHasNoRecognizableRows, 400);
+      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.uploadedSpreadsheetIsEmptyOrHasNoRecognizableRows, 400, { route: '/api/boq/upload-template', method: 'POST' });
     }
 
     // Check cost centres & categories for tenant
@@ -91,8 +92,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!boq) {
-      const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-      const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
+      const boqCode = await nextRecordCode(prisma.boq, 'boqCode', ctx.tenantId, `BOQ-`, 6);
       const defaultTitle = categoryParam ? `${categoryParam} — ${project.name}` : `${project.name} BOQ`;
       boq = await prisma.boq.create({
         data: {
@@ -285,6 +285,6 @@ export async function POST(req: NextRequest) {
       exceptions,
     }, 201);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.templateUploadFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.templateUploadFailed }), 500, { route: '/api/boq/upload-template', method: 'POST', error: err });
   }
 }

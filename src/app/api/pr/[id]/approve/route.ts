@@ -22,9 +22,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { costCentre: true },
     });
 
-    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/approve', method: 'POST' });
     if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.cannotApprovePRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.cannotApprovePRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400, { route: '/api/pr/[id]/approve', method: 'POST' });
     }
 
     // Record PR approval log
@@ -75,6 +75,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       message: UI_STRINGS.appApiPrIdApproveRoute.pRApprovedAndReleasedToProcurementUserForSourcing,
     });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prApprovalFailed }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prApprovalFailed }), 500, { route: '/api/pr/[id]/approve', method: 'POST', error: err });
   }
 }

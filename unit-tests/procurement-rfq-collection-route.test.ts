@@ -256,7 +256,7 @@ describe('RFQ collection API', () => {
   it('maps creation and request failures to API errors', async () => {
     db.rfq.findFirst.mockRejectedValueOnce(new Error('duplicate lookup failed'));
     await expect(POST(postRequest({ prId: 'pr-1' }))).resolves.toEqual({ ok: false, error: 'duplicate lookup failed', status: 500 });
-    db.rfq.count.mockRejectedValueOnce({});
+    db.rfq.findMany.mockRejectedValueOnce({});
     await expect(POST(postRequest({ prId: 'pr-1' }))).resolves.toEqual({ ok: false, error: 'Failed to create RFQ', status: 500 });
     const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid RFQ body')) } as unknown as NextRequest;
     await expect(POST(badJson)).resolves.toEqual({ ok: false, error: 'invalid RFQ body', status: 500 });

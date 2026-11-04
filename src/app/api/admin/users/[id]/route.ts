@@ -15,7 +15,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const existing = await prisma.user.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!existing) return apiError(UI_STRINGS.appApiAdminUsersIdRoute.userNotFound, 404);
+  if (!existing) return apiError(UI_STRINGS.appApiAdminUsersIdRoute.userNotFound, 404, { route: '/api/admin/users/[id]', method: 'PUT' });
 
   const body = await req.json();
   const { name, role, status } = body;

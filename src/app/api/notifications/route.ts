@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       unreadCount,
     });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToFetchNotifications }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToFetchNotifications }), 500, { route: '/api/notifications', method: 'GET', error: err });
   }
 }
 
@@ -98,8 +98,8 @@ export async function PUT(req: NextRequest) {
       return apiSuccess({ success: true, message: UI_STRINGS.appApiNotificationsRoute.notificationMarkedAsRead });
     }
 
-    return apiError(UI_STRINGS.appApiNotificationsRoute.eitherNotificationIdOrMarkAllAsReadMustBeProvided, 400);
+    return apiError(UI_STRINGS.appApiNotificationsRoute.eitherNotificationIdOrMarkAllAsReadMustBeProvided, 400, { route: '/api/notifications', method: 'PUT' });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateNotificationStatus }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateNotificationStatus }), 500, { route: '/api/notifications', method: 'PUT', error: err });
   }
 }

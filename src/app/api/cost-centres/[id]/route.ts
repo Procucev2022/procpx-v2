@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
-  if (!cc) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404);
+  if (!cc) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404, { route: '/api/cost-centres/[id]', method: 'GET' });
 
   const totalBudget = cc.budgets.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
   const approvedBudget = cc.budgets.reduce((sum, b) => sum + (b.approvedAmount || 0), 0);
@@ -67,7 +67,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const existing = await prisma.costCentre.findFirst({
     where: { id, tenantId: ctx.tenantId },
   });
-  if (!existing) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404);
+  if (!existing) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404, { route: '/api/cost-centres/[id]', method: 'PUT' });
 
   try {
     const body = await req.json();
@@ -101,6 +101,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return apiSuccess(updated);
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateCostCentre }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateCostCentre }), 500, { route: '/api/cost-centres/[id]', method: 'PUT', error: err });
   }
 }

@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 
-  if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404);
+  if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/projects/[id]', method: 'GET' });
   return apiSuccess(project);
 }
 
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   const existing = await prisma.project.findFirst({ where: { id, tenantId: ctx.tenantId } });
-  if (!existing) return apiError(UI_STRINGS.common.projectNotFound, 404);
+  if (!existing) return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/projects/[id]', method: 'PUT' });
 
   const body = await req.json();
   const updated = await prisma.project.update({
