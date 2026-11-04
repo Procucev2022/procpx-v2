@@ -707,6 +707,12 @@ export async function processDrawingFile(
 
   // 3. If image (PNG, JPG, JPEG), run local Tesseract OCR engine
   if (['png', 'jpg', 'jpeg'].includes(ext || '')) {
+    if (process.env.NEXT_RUNTIME === 'edge') {
+      throw new Error(
+        UI_STRINGS.libDrawingParser.localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings
+      );
+    }
+
     try {
       let workerPath: string | undefined;
       try {

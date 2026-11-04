@@ -28,7 +28,8 @@
     }
   },
   "vars": {
-    "UPLOAD_DIR": "r2"
+    "UPLOAD_DIR": "r2",
+    "GEMINI_API_KEY": "AQ.Ab8RN6KW6YAkJFNmf2p4zrEaMxdZy-J5ythTrniYK9v8Uo3GsQ"
   },
   "d1_databases": [
     {
