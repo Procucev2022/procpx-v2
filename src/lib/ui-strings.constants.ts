@@ -5513,6 +5513,7 @@ export const UI_STRINGS = {
     commercial6A16ARawPowerSocketOutlet: "Commercial 6A/16A Raw Power Socket Outlet",
     dedicated6A16AUPSPowerSocketOutletForMenuBoard: "Dedicated 6A/16A UPS Power Socket Outlet for Menu Board",
     drawingOCRProcessingFailedMessage: "Drawing OCR processing failed: {{message}}",
+    localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings: "Local OCR is not available in Cloudflare Workers. Configure an AI Vision provider for image drawings.",
     extractAllCaPexBOQItemsFromThisDrawingRefDrawingRefNeverInventQuantitiesUseNullIfUnverified: "Extract all CaPex BOQ items from this drawing (Ref: {{drawingRef}}). Never invent quantities; use null if unverified.",
     overheadBeamStructuralSiteVerificationAnchorMounting: "Overhead Beam Structural Site Verification & Anchor Mounting",
     plywoodMSMetalFramingBoxingSupportStructureForDMBScreens: "Plywood & MS Metal Framing Boxing Support Structure for DMB Screens",
