@@ -112,6 +112,16 @@ describe('vendor commercial negotiation workspace', () => {
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1), { timeout: 2500 });
   });
 
+  it('refreshes buyer RFQs through the tenant-scoped procurement detail API', async () => {
+    configureFetch({ rfq: submittedRfq }, { user: { role: 'PROCUREMENT_MANAGER' } });
+    render(<VendorNegotiationWorkspace mode="RFQ" data={submittedRfq} isBuyer onBack={jest.fn()} />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(
+      '/api/procurement/rfqs/rfq-1?includeNegotiationHistory=true',
+    ));
+    expect(mockFetch).not.toHaveBeenCalledWith('/api/vendor-portal/rfqs/rfq-1');
+  });
+
   it('restores local drafts, handles buyer counters and malformed rounds, and refreshes current RFQ data', async () => {
     localStorage.setItem('procpx_neg_draft_rfq_rfq-1', JSON.stringify({ rates: { 'line-1': 440, 'line-2': 470 }, notes: 'Saved note', isFinalOffer: false, savedAt: '09:15' }));
     const dataWithCounter = {

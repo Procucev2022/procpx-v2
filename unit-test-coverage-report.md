@@ -6,10 +6,10 @@ Files included: **316**. Files meeting all four 90% thresholds: **266/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.73% (95925/97152) |
-| branches | 90.98% (20672/22720) |
+| statements | 98.73% (95928/97155) |
+| branches | 90.98% (20678/22726) |
 | functions | 97.85% (1825/1865) |
-| lines | 98.73% (95925/97152) |
+| lines | 98.73% (95928/97155) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -278,7 +278,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **266/316**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.23% | 92.85% | 99.18% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.27% | 92.85% | 99.18% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 99.64% | 88.00% | 96.77% | 99.64% | BELOW 90% |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -308,7 +308,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **266/316**.
 | `src/lib/observability/edge-logger.ts` | 94.36% | 94.73% | 100.00% | 94.36% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.94% | 95.77% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 95.94% | 100.00% | 98.94% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

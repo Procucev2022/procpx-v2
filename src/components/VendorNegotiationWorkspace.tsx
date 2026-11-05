@@ -86,7 +86,10 @@ export default function VendorNegotiationWorkspace({
     if (!isRfq || !data?.id) return;
     setIsRefreshing(true);
     try {
-      const res = await fetch(`/api/vendor-portal/rfqs/${data.id}`);
+      const detailUrl = isBuyerRole
+        ? `/api/procurement/rfqs/${data.id}?includeNegotiationHistory=true`
+        : `/api/vendor-portal/rfqs/${data.id}`;
+      const res = await fetch(detailUrl);
       if (res.ok) {
         const json = await res.json();
         if (json.rfq) {
@@ -100,7 +103,7 @@ export default function VendorNegotiationWorkspace({
 
   useEffect(() => {
     refreshRfqData();
-  }, [data?.id]);
+  }, [data?.id, isBuyerRole]);
 
   // Use fresh RFQ data if loaded, fallback to props
   const rfqSource = currentRfqData || data;
