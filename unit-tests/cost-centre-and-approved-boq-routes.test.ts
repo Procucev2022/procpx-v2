@@ -10,12 +10,11 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     costCentre: { findMany: jest.fn(), count: jest.fn(), aggregate: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
     budget: { aggregate: jest.fn(), groupBy: jest.fn() },
     project: { findFirst: jest.fn() },
     boqRevision: { findMany: jest.fn(), count: jest.fn() },
-    boqLine: { groupBy: jest.fn() },
-    category: { findMany: jest.fn() },
     auditLog: { create: jest.fn() },
   },
 }));
@@ -40,6 +39,7 @@ jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog:
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
+const rawQuery = (prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
@@ -56,8 +56,7 @@ describe('cost centre and approved BOQ APIs', () => {
     auth.mockResolvedValue(ctx);
     isContext.mockReturnValue(true);
     db.boqRevision.count.mockResolvedValue(2);
-    db.boqLine.groupBy.mockResolvedValue([]);
-    db.category.findMany.mockResolvedValue([]);
+    rawQuery.mockResolvedValue([]);
     db.budget.groupBy.mockResolvedValue([]);
     writeBatch.mockReset().mockResolvedValue([{ meta: { changes: 1 }, results: [{ id: 'created' }] }, { meta: { changes: 1 } }]);
   });
@@ -238,12 +237,10 @@ describe('cost centre and approved BOQ APIs', () => {
       },
     ];
     db.boqRevision.findMany.mockResolvedValueOnce(revisions);
-    db.boqLine.groupBy.mockResolvedValueOnce([
-      { boqRevisionId: 'rev-1', categoryId: 'category-electrical', aiUnitCost: 50, _count: { _all: 1 }, _sum: { quantity: 2 } },
-      { boqRevisionId: 'rev-1', categoryId: 'category-electrical', aiUnitCost: 0, _count: { _all: 1 }, _sum: { quantity: 1 } },
-      { boqRevisionId: 'rev-1', categoryId: null, aiUnitCost: null, _count: { _all: 1 }, _sum: { quantity: 0 } },
+    rawQuery.mockResolvedValueOnce([
+      { boqRevisionId: 'rev-1', categoryId: 'category-electrical', categoryName: 'Electrical', lineCount: 2, totalQty: 3, estimatedValue: 200 },
+      { boqRevisionId: 'rev-1', categoryId: null, categoryName: null, lineCount: 1, totalQty: 0, estimatedValue: 0 },
     ]);
-    db.category.findMany.mockResolvedValueOnce([{ id: 'category-electrical', name: 'Electrical' }]);
     await expect(listApprovedBoqs(request('http://localhost/api/procurement/approved-boqs?projectId=project-1&search=Store'))).resolves.toMatchObject({
       ok: true,
       data: { total: 2, approvedBoqs: [
@@ -271,16 +268,13 @@ describe('cost centre and approved BOQ APIs', () => {
       skip: 0,
       take: 50,
     }));
-    expect(db.boqLine.groupBy).toHaveBeenLastCalledWith({
-      by: ['boqRevisionId', 'categoryId', 'aiUnitCost'],
-      where: { tenantId: 'tenant-1', boqRevisionId: { in: ['rev-1', 'rev-2'] }, isDeleted: false },
-      _count: { _all: true },
-      _sum: { quantity: true },
-    });
-    expect(db.category.findMany).toHaveBeenCalledWith({
-      where: { tenantId: 'tenant-1', id: { in: ['category-electrical'] } },
-      select: { id: true, name: true },
-    });
+    const aggregateQuery = rawQuery.mock.calls.at(-1)?.[0] as { sql: string; values: unknown[] };
+    expect(aggregateQuery.sql).toContain('GROUP BY line."boqRevisionId", line."categoryId", category."name"');
+    expect(aggregateQuery.sql).not.toContain('GROUP BY line."boqRevisionId", line."categoryId", line."aiUnitCost"');
+    expect(aggregateQuery.sql).toContain('SUM(COALESCE(line."quantity", 0) * CASE WHEN line."aiUnitCost" > 0');
+    expect(aggregateQuery.sql).toContain('LEFT JOIN "categories"');
+    expect(aggregateQuery.values.filter((value) => value === 'tenant-1')).toHaveLength(2);
+    expect(aggregateQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rev-1', 'rev-2']));
 
     db.boqRevision.findMany.mockResolvedValueOnce([{
       ...revisions[0],
@@ -299,11 +293,31 @@ describe('cost centre and approved BOQ APIs', () => {
         })],
       },
     });
-    expect(db.boqLine.groupBy).toHaveBeenCalledTimes(1);
+    expect(rawQuery).toHaveBeenCalledTimes(1);
 
     db.boqRevision.findMany.mockRejectedValueOnce(new Error('boq database error'));
     await expect(listApprovedBoqs(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, status: 500 });
     db.boqRevision.findMany.mockRejectedValueOnce({});
     await expect(listApprovedBoqs(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, status: 500 });
+  });
+
+  it('splits a full approved BOQ page so aggregate queries stay within D1 binding limits', async () => {
+    const revisions = Array.from({ length: 100 }, (_, index) => ({
+      id: `revision-${index + 1}`, boqId: `boq-${index + 1}`, revisionCode: 'R1', approvedAt: null, approvedBy: null,
+      _count: { rfqs: 0 }, costCentre: null,
+      boq: { boqCode: `BOQ-${index + 1}`, project: {
+        id: `project-${index + 1}`, projectCode: `P-${index + 1}`, name: 'Project', city: '', state: '', location: '',
+      } },
+    }));
+    db.boqRevision.findMany.mockResolvedValueOnce(revisions);
+    db.boqRevision.count.mockResolvedValueOnce(100);
+    rawQuery.mockResolvedValue([]);
+
+    await expect(listApprovedBoqs(request('http://localhost/api/procurement/approved-boqs?pageSize=100'))).resolves.toMatchObject({
+      ok: true, data: { approvedBoqs: expect.arrayContaining([expect.any(Object)]) },
+    });
+    const bindingCounts = rawQuery.mock.calls.map(([query]) => (query as { values: unknown[] }).values.length);
+    expect(bindingCounts).toEqual([100, 4]);
+    expect(Math.max(...bindingCounts)).toBeLessThanOrEqual(100);
   });
 });

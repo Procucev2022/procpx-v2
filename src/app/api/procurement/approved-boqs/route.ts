@@ -1,12 +1,17 @@
 // app/api/procurement/approved-boqs/route.ts
 // Returns Approved BOQs eligible for Sourcing and RFQ creation
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
-import { APPROVED_BOQ_MAX_PAGE_SIZE, APPROVED_BOQ_MAX_SEARCH_LENGTH } from './route.constants';
-import type { ApprovedBoqRouteQuery } from '@app-types/app/api/procurement/approved-boqs.types';
+import {
+  APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE,
+  APPROVED_BOQ_MAX_PAGE_SIZE,
+  APPROVED_BOQ_MAX_SEARCH_LENGTH,
+} from './route.constants';
+import type { ApprovedBoqLineAggregateRow, ApprovedBoqRouteQuery } from '@app-types/app/api/procurement/approved-boqs.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
@@ -110,19 +115,28 @@ export async function GET(req: NextRequest) {
       prisma.boqRevision.count({ where }),
     ]);
 
-    const lineGroups = query.revisionId || approvedRevisions.length === 0
+    const revisionIdBatches = query.revisionId || approvedRevisions.length === 0
       ? []
-      : await prisma.boqLine.groupBy({
-        by: ['boqRevisionId', 'categoryId', 'aiUnitCost'],
-        where: { tenantId: ctx.tenantId, boqRevisionId: { in: approvedRevisions.map((revision) => revision.id) }, isDeleted: false },
-        _count: { _all: true },
-        _sum: { quantity: true },
-      });
-    const categoryIds = Array.from(new Set(lineGroups.map((group) => group.categoryId).filter((id): id is string => Boolean(id))));
-    const categoryNames = categoryIds.length > 0
-      ? await prisma.category.findMany({ where: { tenantId: ctx.tenantId, id: { in: categoryIds } }, select: { id: true, name: true } })
-      : [];
-    const categoryNameById = new Map(categoryNames.map((category) => [category.id, category.name]));
+      : Array.from({ length: Math.ceil(approvedRevisions.length / APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE) }, (_, index) =>
+        approvedRevisions.slice(
+          index * APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE,
+          (index + 1) * APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE,
+        ).map((revision) => revision.id));
+    const lineGroups = revisionIdBatches.length === 0 ? [] : (await Promise.all(revisionIdBatches.map((revisionIds) =>
+      prisma.$queryRaw<ApprovedBoqLineAggregateRow[]>(Prisma.sql`
+        SELECT line."boqRevisionId", line."categoryId", category."name" AS "categoryName", COUNT(*) AS "lineCount",
+          COALESCE(SUM(line."quantity"), 0) AS "totalQty",
+          COALESCE(SUM(COALESCE(line."quantity", 0) * CASE WHEN line."aiUnitCost" > 0 THEN line."aiUnitCost" ELSE 100 END), 0) AS "estimatedValue"
+        FROM "boq_lines" AS line
+        LEFT JOIN "categories" AS category
+          ON category."id" = line."categoryId" AND category."tenantId" = ${ctx.tenantId}
+        WHERE line."tenantId" = ${ctx.tenantId}
+          AND line."boqRevisionId" IN (${Prisma.join(revisionIds)})
+          AND line."isDeleted" = false
+        GROUP BY line."boqRevisionId", line."categoryId", category."name"
+        ORDER BY "boqRevisionId" ASC, COALESCE("categoryId", '') ASC
+      `),
+    ))).flat();
     const groupsByRevision = new Map<string, typeof lineGroups>();
     for (const group of lineGroups) {
       const groups = groupsByRevision.get(group.boqRevisionId) || [];
@@ -139,25 +153,28 @@ export async function GET(req: NextRequest) {
 
       const revisionLineGroups = query.revisionId ? null : (groupsByRevision.get(rev.id) || []);
       const summaryGroups = revisionLineGroups?.map((group) => ({
-        category: group.categoryId ? categoryNameById.get(group.categoryId) || 'General' : 'General',
-        lineCount: Number(group._count._all || 0),
-        quantity: Number(group._sum.quantity || 0),
-        benchmarkRate: Number(group.aiUnitCost) > 0 ? Number(group.aiUnitCost) : 100,
+        category: group.categoryName || 'General',
+        lineCount: Number(group.lineCount || 0),
+        quantity: Number(group.totalQty || 0),
+        estimatedValue: Number(group.estimatedValue || 0),
       })) || [];
 
       const categoryLineSummaries = query.revisionId
-        ? detailedLines.map((line) => ({
-          category: line.category?.name || 'General',
-          lineCount: 1,
-          quantity: Number(line.quantity || 0),
-          benchmarkRate: Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100,
-        }))
+        ? detailedLines.map((line) => {
+          const quantity = Number(line.quantity || 0);
+          const benchmarkRate = Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100;
+          return {
+            category: line.category?.name || 'General',
+            lineCount: 1,
+            quantity,
+            estimatedValue: quantity * benchmarkRate,
+          };
+        })
         : summaryGroups;
 
       for (const line of categoryLineSummaries) {
         const catName = line.category;
-        const lineTotal = line.quantity * line.benchmarkRate;
-        totalBenchmarkValue += lineTotal;
+        totalBenchmarkValue += line.estimatedValue;
 
         if (!categoriesMap[catName]) {
           categoriesMap[catName] = {
@@ -169,7 +186,7 @@ export async function GET(req: NextRequest) {
         }
         categoriesMap[catName].lineCount += line.lineCount;
         categoriesMap[catName].totalQty += line.quantity;
-        categoriesMap[catName].estimatedValue += lineTotal;
+        categoriesMap[catName].estimatedValue += line.estimatedValue;
       }
 
       return {

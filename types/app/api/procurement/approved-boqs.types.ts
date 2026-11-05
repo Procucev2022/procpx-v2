@@ -7,6 +7,15 @@ export type ApprovedBoqRouteQuery = {
   search: string;
 };
 
+export type ApprovedBoqLineAggregateRow = {
+  boqRevisionId: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  lineCount: number | bigint;
+  totalQty: number | bigint | null;
+  estimatedValue: number | bigint | null;
+};
+
 export type ApprovedBoqLine = {
   id: string;
   lineNumber: string;
