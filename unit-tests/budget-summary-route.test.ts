@@ -71,7 +71,6 @@ function costCentre(overrides: Record<string, any> = {}) {
 function primeBudgetAggregateGroups(projects: BudgetSummaryFixture[]) {
   const contributions = new Map<string, Map<string, { accepted: number; total: number }>>();
   const transactions = new Map<string, Map<string, { amount: number; count: number }>>();
-  const actuals = new Map<string, Map<string, { amount: number; total: number }>>();
   for (const project of projects) {
     for (const cc of project.costCentres || []) {
       for (const item of cc.budgetContributions || []) {
@@ -83,22 +82,13 @@ function primeBudgetAggregateGroups(projects: BudgetSummaryFixture[]) {
         contributions.set(cc.id, byStatus);
       }
       for (const item of cc.budgetTransactions || []) {
-        const key = `${item.category || 'General'}::${item.status}`;
+        const key = item.status;
         const byCategoryStatus = transactions.get(cc.id) || new Map();
         const current = byCategoryStatus.get(key) || { amount: 0, count: 0 };
         current.amount += item.amount || 0;
         current.count += 1;
         byCategoryStatus.set(key, current);
         transactions.set(cc.id, byCategoryStatus);
-      }
-      for (const item of cc.actualCosts || []) {
-        const category = item.category || 'General';
-        const byCategory = actuals.get(cc.id) || new Map();
-        const current = byCategory.get(category) || { amount: 0, total: 0 };
-        current.amount += item.actualAmount || 0;
-        current.total += item.totalActualAmount || 0;
-        byCategory.set(category, current);
-        actuals.set(cc.id, byCategory);
       }
     }
   }
@@ -108,17 +98,9 @@ function primeBudgetAggregateGroups(projects: BudgetSummaryFixture[]) {
       Array.from(byStatus.entries()).map(([status, sums]) => ({ costCentreId, status, _sum: { acceptedEstimatedValue: sums.accepted, totalEstimatedValue: sums.total }, _count: { _all: 1 } }))),
   ]);
   db.budgetTransaction.groupBy.mockResolvedValueOnce([
-    { costCentreId: null, category: null, status: 'DRAFT', _sum: { amount: 0 }, _count: { _all: 1 } },
+    { costCentreId: null, status: 'DRAFT', _sum: { amount: 0 }, _count: { _all: 1 } },
     ...Array.from(transactions.entries()).flatMap(([costCentreId, byKey]) =>
-      Array.from(byKey.entries()).map(([key, sums]) => {
-        const [category, status] = key.split('::');
-        return { costCentreId, category, status, _sum: { amount: sums.amount }, _count: { _all: sums.count } };
-      })),
-  ]);
-  db.actualCostTransaction.groupBy.mockResolvedValueOnce([
-    { costCentreId: null, category: null, _sum: { actualAmount: 0, totalActualAmount: 0 } },
-    ...Array.from(actuals.entries()).flatMap(([costCentreId, byCategory]) =>
-      Array.from(byCategory.entries()).map(([category, sums]) => ({ costCentreId, category, _sum: { actualAmount: sums.amount, totalActualAmount: sums.total } }))),
+      Array.from(byKey.entries()).map(([status, sums]) => ({ costCentreId, status, _sum: { amount: sums.amount }, _count: { _all: sums.count } }))),
   ]);
 }
 
@@ -128,7 +110,7 @@ describe('budget summary API', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     projectAccessFilter.mockResolvedValue(null);
-    db.$queryRaw.mockReset().mockResolvedValue([{ approvedBudget: 0, pendingBudget: 0, actualAmount: 0 }]);
+    db.$queryRaw.mockReset().mockResolvedValue([{ approvedBudget: 0, pendingBudget: 0, actualAmount: 0, costCentreActualsJson: '{}' }]);
     db.project.findFirst.mockReset().mockResolvedValue(null);
     db.costCentre.count.mockReset().mockResolvedValue(0);
     db.budgetContribution.groupBy.mockResolvedValue([]);
@@ -230,7 +212,10 @@ describe('budget summary API', () => {
     db.project.findFirst.mockResolvedValueOnce(project);
     db.costCentre.count.mockResolvedValueOnce(7);
     primeBudgetAggregateGroups([project]);
-    db.$queryRaw.mockResolvedValueOnce([{ approvedBudget: 1700, pendingBudget: 720, actualAmount: 320 }]);
+    db.$queryRaw.mockResolvedValueOnce([{
+      approvedBudget: 1700, pendingBudget: 720, actualAmount: 320,
+      costCentreActualsJson: JSON.stringify({ 'cc-approved': 200, 'cc-tx-pending': 50, 'cc-actual-only': 70 }),
+    }]);
 
     const result = await GET(request('?projectId=project-1'));
     expect(result).toMatchObject({ ok: true, status: 200, data: {
@@ -239,15 +224,13 @@ describe('budget summary API', () => {
         totalAreaSqFt: 1000, ratePerSqFt: 1.7, actualRatePerSqFt: 0.32, balanceRatePerSqFt: 1.38,
       },
       costCentres: [
-        { id: 'cc-approved', totalBudget: 1000, approvedBudget: 1000, pendingBudget: 0, actual: 200, balance: 800, budgetStatus: 'APPROVED', ratePerSqFt: 10,
-          categories: [{ category: 'Electrical', budget: 1000, approvedBudget: 1000, actual: 200, balance: 800, status: 'APPROVED', txCount: 1 }] },
-        { id: 'cc-pending', budgetStatus: 'UNDER_APPROVAL', categories: [{ category: 'Civil', status: 'UNDER_APPROVAL', approvedBudget: 0, pendingBudget: 500 }] },
+        { id: 'cc-approved', totalBudget: 1000, approvedBudget: 1000, pendingBudget: 0, actual: 200, balance: 800, budgetStatus: 'APPROVED', ratePerSqFt: 10, categories: [] },
+        { id: 'cc-pending', budgetStatus: 'UNDER_APPROVAL', categories: [] },
         { id: 'cc-finance', budgetStatus: 'PENDING FINANCE APPROVAL' },
         { id: 'cc-rejected', budgetStatus: 'REJECTED' },
-        { id: 'cc-partial', budgetStatus: 'PARTIALLY APPROVED', categories: [{ category: 'General', status: 'APPROVED', approvedBudget: 300, actual: 0 }] },
-        { id: 'cc-tx-pending', budgetStatus: 'PARTIALLY APPROVED', totalBudget: 500, actual: 50, balance: 350,
-          categories: [{ category: 'Electrical', status: 'APPROVED' }, { category: 'General', actual: 50 }] },
-        { id: 'cc-actual-only', budgetStatus: 'DRAFT', actual: 70 },
+        { id: 'cc-partial', budgetStatus: 'PARTIALLY APPROVED', categories: [] },
+        { id: 'cc-tx-pending', budgetStatus: 'PARTIALLY APPROVED', totalBudget: 500, actual: 50, balance: 350, categories: [] },
+        { id: 'cc-actual-only', budgetStatus: 'DRAFT', actual: 70, categories: [] },
       ],
       costCentrePagination: { page: 1, pageSize: 50, total: 7, hasMore: false },
       transactionLedgerUrl: '/api/budgets/transactions',
@@ -265,7 +248,7 @@ describe('budget summary API', () => {
     expect(db.costCentre.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', projectId: 'project-1' } });
     expect(db.project.findMany).not.toHaveBeenCalled();
     expect(db.budgetTransaction.groupBy).toHaveBeenCalledWith(expect.objectContaining({
-      by: ['costCentreId', 'category', 'status'], where: expect.objectContaining({
+      by: ['costCentreId', 'status'], where: expect.objectContaining({
         tenantId: 'tenant-1', projectId: 'project-1', costCentreId: { in: expect.arrayContaining([
           'cc-approved', 'cc-pending', 'cc-finance', 'cc-rejected', 'cc-partial', 'cc-tx-pending', 'cc-actual-only',
         ]) },
@@ -355,7 +338,7 @@ describe('budget summary API', () => {
         costCentre({ id: 'cc-empty', budgetContributions: null, budgetTransactions: null, actualCosts: null }),
       ],
     }]);
-    db.$queryRaw.mockResolvedValueOnce([{ approvedBudget: 40, pendingBudget: 50, actualAmount: 0 }]);
+    db.$queryRaw.mockResolvedValueOnce([{ approvedBudget: 40, pendingBudget: 50, actualAmount: 0, costCentreActualsJson: '{}' }]);
 
     await expect(GET(request('?projectId=project-zero'))).resolves.toMatchObject({ ok: true, data: {
       kpis: {
@@ -364,11 +347,11 @@ describe('budget summary API', () => {
       },
       costCentres: [
         { id: 'cc-draft', budgetStatus: 'DRAFT', totalBudget: 0, categories: [] },
-        { id: 'cc-rejected-tx', budgetStatus: 'REJECTED', categories: [{ category: 'Rejected', status: 'REJECTED', budget: 0, txCount: 1 }] },
-        { id: 'cc-finance-tx', budgetStatus: 'DRAFT', categories: [{ category: 'Finance', status: 'DRAFT', budget: 20, pendingBudget: 20 }] },
-        { id: 'cc-approved-tx', budgetStatus: 'APPROVED', categories: [{ category: 'Approved fallback', status: 'APPROVED', budget: 40, approvedBudget: 40 }] },
-        { id: 'cc-under-approval-tx', budgetStatus: 'UNDER_APPROVAL', categories: [{ category: 'Pending fallback', status: 'UNDER_APPROVAL', budget: 30, pendingBudget: 30 }] },
-        { id: 'cc-draft-tx', budgetStatus: 'DRAFT', categories: [{ category: 'Draft category', status: 'DRAFT', budget: 0 }] },
+        { id: 'cc-rejected-tx', budgetStatus: 'REJECTED', categories: [] },
+        { id: 'cc-finance-tx', budgetStatus: 'DRAFT', categories: [] },
+        { id: 'cc-approved-tx', budgetStatus: 'APPROVED', categories: [] },
+        { id: 'cc-under-approval-tx', budgetStatus: 'UNDER_APPROVAL', categories: [] },
+        { id: 'cc-draft-tx', budgetStatus: 'DRAFT', categories: [] },
         { id: 'cc-empty', budgetStatus: 'DRAFT', categories: [] },
       ],
       transactionLedgerUrl: '/api/budgets/transactions',

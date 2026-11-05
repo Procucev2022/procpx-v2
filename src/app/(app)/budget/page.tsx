@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/budget/page.tsx - Enterprise Project Budget Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -30,6 +30,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { BudgetCategoriesResponse, BudgetCategory, BudgetCategoryWorkspaceState } from '@app-types/app/api/budgets/categories.types';
 
 
 function ProjectBudgetContent() {
@@ -42,6 +43,17 @@ function ProjectBudgetContent() {
   const [selectedCostCentreId, setSelectedCostCentreId] = useState<string>('');
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [categoryResult, setCategoryResult] = useState<BudgetCategoryWorkspaceState | null>(null);
+  const [categoryReloadToken, setCategoryReloadToken] = useState(0);
+  const categoryRequestId = useRef(0);
+  const selectedCategoryKey = selectedProjectId && selectedCostCentreId
+    ? `${selectedProjectId}::${selectedCostCentreId}::${categoryReloadToken}`
+    : '';
+  const currentCategoryResult = categoryResult?.key === selectedCategoryKey ? categoryResult : null;
+  const categories = currentCategoryResult?.categories || [];
+  const categoryPagination = currentCategoryResult?.categoryPagination || null;
+  const categoryLoading = Boolean(selectedCategoryKey && (!currentCategoryResult || currentCategoryResult.loading));
+  const categoryError = currentCategoryResult?.error || false;
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -97,6 +109,36 @@ function ProjectBudgetContent() {
     }
   }, [selectedProjectId]);
 
+  useEffect(() => {
+    const projectId = selectedProjectId;
+    const costCentreId = selectedCostCentreId;
+    const key = selectedCategoryKey;
+    const requestId = ++categoryRequestId.current;
+    let active = true;
+
+    if (!projectId || !costCentreId || !key) {
+      return () => { active = false; };
+    }
+
+    const params = new URLSearchParams({ projectId, costCentreId, page: '1', pageSize: '50' });
+    fetch(`/api/budgets/categories?${params.toString()}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(UI_STRINGS.appAppBudgetPage.failedToLoadCategoryBudgetData);
+        return res.json();
+      })
+      .then((json) => {
+        if (!active || requestId !== categoryRequestId.current) return;
+        const result = json as BudgetCategoriesResponse;
+        setCategoryResult({ ...result, key, loading: false, error: false });
+      })
+      .catch(() => {
+        if (!active || requestId !== categoryRequestId.current) return;
+        setCategoryResult({ key, categories: [], categoryPagination: { page: 1, pageSize: 50, total: 0, hasMore: false }, loading: false, error: true });
+      });
+
+    return () => { active = false; };
+  }, [selectedProjectId, selectedCostCentreId, categoryReloadToken, selectedCategoryKey]);
+
   const loadBudgetData = async (projId: string, page = 1, append = false) => {
     setLoading(true);
     setErrorMessage('');
@@ -150,13 +192,49 @@ function ProjectBudgetContent() {
     void loadBudgetData(selectedProjectId, pagination.page + 1, true);
   };
 
+  const handleLoadMoreCategories = async () => {
+    if (!categoryPagination?.hasMore || categoryLoading || !selectedProjectId || !selectedCostCentreId) return;
+    const requestId = ++categoryRequestId.current;
+    const params = new URLSearchParams({
+      projectId: selectedProjectId,
+      costCentreId: selectedCostCentreId,
+      page: String(categoryPagination.page + 1),
+      pageSize: String(categoryPagination.pageSize || 50),
+    });
+    setCategoryResult((current) => current?.key === selectedCategoryKey
+      ? { ...current, loading: true, error: false }
+      : { key: selectedCategoryKey, categories: [], categoryPagination: categoryPagination!, loading: true, error: false });
+    try {
+      const res = await fetch(`/api/budgets/categories?${params.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.appAppBudgetPage.failedToLoadCategoryBudgetData);
+      const json = await res.json() as BudgetCategoriesResponse;
+      if (requestId !== categoryRequestId.current) return;
+      setCategoryResult((current) => {
+        if (current?.key !== selectedCategoryKey) return current;
+        const categoriesByName = new Map<string, BudgetCategory>();
+        [...current.categories, ...json.categories].forEach((category) => categoriesByName.set(category.category, category));
+        return { ...current, categories: Array.from(categoriesByName.values()), categoryPagination: json.categoryPagination, loading: false, error: false };
+      });
+    } catch {
+      if (requestId === categoryRequestId.current) {
+        setCategoryResult((current) => current?.key === selectedCategoryKey ? { ...current, loading: false, error: true } : current);
+      }
+    } finally {
+      if (requestId === categoryRequestId.current) {
+        setCategoryResult((current) => current?.key === selectedCategoryKey ? { ...current, loading: false } : current);
+      }
+    }
+  };
+
   const refreshBudgetData = () => {
     void loadBudgetData(selectedProjectId, 1, true);
+    setCategoryReloadToken((current) => current + 1);
   };
 
   // Change project handler
   const handleProjectChange = (newProjId: string) => {
     setSelectedProjectId(newProjId);
+    setSelectedCostCentreId('');
     // update URL query without navigation reload
     const url = new URL(window.location.href);
     url.searchParams.set('projectId', newProjId);
@@ -189,9 +267,6 @@ function ProjectBudgetContent() {
   const budgetPerSqFt = ccArea > 0 ? Math.round(((ccApprovedBudget > 0 ? ccApprovedBudget : ccTotalBudget) / ccArea) * 100) / 100 : null;
   const actualPerSqFt = ccArea > 0 ? Math.round((ccActual / ccArea) * 100) / 100 : null;
   const balancePerSqFt = ccArea > 0 ? Math.round((ccBalance / ccArea) * 100) / 100 : null;
-
-  // Category rows
-  const categories: any[] = selectedCC?.categories || [];
 
   // Approval Actions
   const handleApproveContribution = async (contribId: string) => {
@@ -506,7 +581,7 @@ function ProjectBudgetContent() {
             <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppBudgetPage.calculatedFromCommercialBOQAllocationsAndVerifiedCostTransactionsFor}{selectedCC?.code || UI_STRINGS.appAppBudgetPage.thisCostCentre}{UI_STRINGS.common.copyby08hd}</p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
-            {categories.length}{UI_STRINGS.appAppBudgetPage.commercialCategories}</span>
+            {categoryPagination?.total ?? categories.length}{UI_STRINGS.appAppBudgetPage.commercialCategories}</span>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
@@ -523,11 +598,17 @@ function ProjectBudgetContent() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {categoryLoading && categories.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                       <RefreshCw size={16} className="animate-spin" />{UI_STRINGS.appAppBudgetPage.loadingCategoryBudgetMetrics}</div>
+                  </td>
+                </tr>
+              ) : categoryError && categories.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
+                    {UI_STRINGS.appAppBudgetPage.failedToLoadCategoryBudgetData}
                   </td>
                 </tr>
               ) : categories.length === 0 ? (
@@ -592,6 +673,26 @@ function ProjectBudgetContent() {
             </tbody>
           </table>
         </div>
+        {categoryPagination && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', borderTop: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: 11, color: '#64748b' }}>
+              {interpolateUiString(UI_STRINGS.appAppBudgetPage.showingCategoriesOfTotal, {
+                shown: categories.length,
+                total: categoryPagination.total,
+              })}
+            </span>
+            {categoryPagination.hasMore && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={handleLoadMoreCategories} disabled={categoryLoading}>
+                {categoryLoading ? UI_STRINGS.appAppBudgetPage.loadingCategoryBudgetMetrics : UI_STRINGS.appAppBudgetPage.loadMoreCategories}
+              </button>
+            )}
+          </div>
+        )}
+        {categoryError && categories.length > 0 && (
+          <div role="alert" style={{ padding: '8px 16px', color: '#b91c1c', fontSize: 12 }}>
+            {UI_STRINGS.appAppBudgetPage.failedToLoadCategoryBudgetData}
+          </div>
+        )}
       </div>
 
       {/* REJECT MODAL */}

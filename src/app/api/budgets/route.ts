@@ -17,9 +17,13 @@ async function loadProjectBudgetAggregate(input: {
   tenantId: string;
   projectId: string;
   costCentreId: string | null;
+  costCentreIds: string[];
 }): Promise<BudgetProjectAggregate> {
   const pendingStatuses = Prisma.join(BUDGET_PENDING_STATUSES);
   const actualStatuses = Prisma.join(ACTUAL_COST_SUMMARY_STATUSES);
+  const pageCostCentreFilter = input.costCentreIds.length > 0
+    ? Prisma.sql`AND "costCentreId" IN (${Prisma.join(input.costCentreIds)})`
+    : Prisma.sql`AND 1 = 0`;
   const costCentreFilter = input.costCentreId
     ? Prisma.sql`AND cc."id" = ${input.costCentreId}`
     : Prisma.empty;
@@ -44,13 +48,24 @@ async function loadProjectBudgetAggregate(input: {
       WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
         AND "status" IN (${actualStatuses})
       GROUP BY "costCentreId"
+    ), actual_category_totals AS (
+      SELECT "costCentreId", COALESCE(NULLIF("category", ''), 'General') AS "category",
+        COALESCE(NULLIF(SUM("totalActualAmount"), 0), SUM("actualAmount"), 0) AS "actualAmount"
+      FROM "actual_cost_transactions"
+      WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
+        AND "status" IN (${actualStatuses}) ${pageCostCentreFilter}
+      GROUP BY "costCentreId", COALESCE(NULLIF("category", ''), 'General')
+    ), page_actual_totals AS (
+      SELECT "costCentreId", SUM("actualAmount") AS "actualAmount"
+      FROM actual_category_totals GROUP BY "costCentreId"
     )
     SELECT
       COALESCE(SUM(CASE WHEN COALESCE(contribution_totals."approvedContribution", 0) > 0
         THEN contribution_totals."approvedContribution" ELSE COALESCE(transaction_totals."approvedTransaction", 0) END), 0) AS "approvedBudget",
       COALESCE(SUM(CASE WHEN COALESCE(contribution_totals."pendingContribution", 0) > 0
         THEN contribution_totals."pendingContribution" ELSE COALESCE(transaction_totals."pendingTransaction", 0) END), 0) AS "pendingBudget",
-      COALESCE(SUM(COALESCE(actual_totals."actualAmount", 0)), 0) AS "actualAmount"
+      COALESCE(SUM(COALESCE(actual_totals."actualAmount", 0)), 0) AS "actualAmount",
+      COALESCE((SELECT json_group_object("costCentreId", "actualAmount") FROM page_actual_totals), '{}') AS "costCentreActualsJson"
     FROM "cost_centres" AS cc
     LEFT JOIN contribution_totals ON contribution_totals."costCentreId" = cc."id"
     LEFT JOIN transaction_totals ON transaction_totals."costCentreId" = cc."id"
@@ -59,6 +74,21 @@ async function loadProjectBudgetAggregate(input: {
       ${costCentreFilter}
   `);
   return rows[0] || { approvedBudget: 0, pendingBudget: 0, actualAmount: 0 };
+}
+
+function parseCostCentreActuals(value: unknown): Map<string, number> {
+  const parsed: unknown = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred);
+  }
+
+  return new Map(Object.entries(parsed).map(([costCentreId, amount]) => {
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount)) {
+      throw new Error(UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred);
+    }
+    return [costCentreId, numericAmount];
+  }));
 }
 
 
@@ -122,19 +152,15 @@ export async function GET(req: NextRequest) {
   if (projectId) aggregateWhere.projectId = projectId;
   if (costCentreId) aggregateWhere.costCentreId = costCentreId;
   const pageAggregateWhere = { ...aggregateWhere, costCentreId: { in: costCentreIds } };
-  const [projectAggregate, contributionGroups, transactionGroups, actualCostGroups] = await Promise.all([
-    loadProjectBudgetAggregate({ tenantId: ctx.tenantId, projectId, costCentreId: costCentreId || null }),
+  const [projectAggregate, contributionGroups, transactionGroups] = await Promise.all([
+    loadProjectBudgetAggregate({ tenantId: ctx.tenantId, projectId, costCentreId: costCentreId || null, costCentreIds }),
     costCentreIds.length > 0 ? prisma.budgetContribution.groupBy({
       by: ['costCentreId', 'status'], where: { ...pageAggregateWhere, isSuperSeded: false },
       _sum: { acceptedEstimatedValue: true, totalEstimatedValue: true }, _count: { _all: true },
     }) : Promise.resolve([]),
     costCentreIds.length > 0 ? prisma.budgetTransaction.groupBy({
-      by: ['costCentreId', 'category', 'status'], where: pageAggregateWhere,
+      by: ['costCentreId', 'status'], where: pageAggregateWhere,
       _sum: { amount: true }, _count: { _all: true },
-    }) : Promise.resolve([]),
-    costCentreIds.length > 0 ? prisma.actualCostTransaction.groupBy({
-      by: ['costCentreId', 'category'], where: { ...pageAggregateWhere, status: { in: [...ACTUAL_COST_SUMMARY_STATUSES] } },
-      _sum: { actualAmount: true, totalActualAmount: true },
     }) : Promise.resolve([]),
   ]);
 
@@ -153,16 +179,10 @@ export async function GET(req: NextRequest) {
   for (const group of transactionGroups) {
     if (!group.costCentreId) continue;
     const rows = transactionsByCostCentre.get(group.costCentreId) || [];
-    rows.push({ category: group.category, status: group.status, amount: group._sum.amount || 0, count: group._count._all });
+    rows.push({ status: group.status, amount: group._sum.amount || 0, count: group._count._all });
     transactionsByCostCentre.set(group.costCentreId, rows);
   }
-  const actualsByCostCentre = new Map<string, any[]>();
-  for (const group of actualCostGroups) {
-    if (!group.costCentreId) continue;
-    const rows = actualsByCostCentre.get(group.costCentreId) || [];
-    rows.push({ category: group.category, actualAmount: group._sum.actualAmount || 0, totalActualAmount: group._sum.totalActualAmount || 0 });
-    actualsByCostCentre.set(group.costCentreId, rows);
-  }
+  const actualsByCostCentre = parseCostCentreActuals(projectAggregate.costCentreActualsJson ?? '{}');
 
   // Calculate project-wide and cost-centre level aggregates
   let totalProjectBudget = 0;
@@ -185,7 +205,6 @@ export async function GET(req: NextRequest) {
     for (const cc of (proj.costCentres || [])) {
       const ccContributions = contributionsByCostCentre.get(cc.id) || [];
       const ccTransactions = transactionsByCostCentre.get(cc.id) || [];
-      const ccActualCosts = actualsByCostCentre.get(cc.id) || [];
       // 1. Contributions totals
       const ccApprovedContrib = ccContributions
         .filter((c: any) => c.status === 'APPROVED')
@@ -205,7 +224,7 @@ export async function GET(req: NextRequest) {
       const ccTotal = ccApproved + ccPending;
 
       // Actual costs for this cost centre
-      const ccActual = ccActualCosts.reduce((sum: number, a: any) => sum + (a.totalActualAmount || a.actualAmount || 0), 0);
+      const ccActual = actualsByCostCentre.get(cc.id) || 0;
       // Available Balance must be against approved budget, NEVER unapproved pending!
       const ccBalance = Math.max(0, ccApproved - ccActual);
 
@@ -239,89 +258,6 @@ export async function GET(req: NextRequest) {
         else if (txStatuses.some((s: string) => s === 'APPROVED')) budgetStatus = 'PARTIALLY APPROVED';
       }
 
-      // Group category totals for this cost centre (combining transactions and actuals)
-      const categoryMap = new Map<string, {
-        budget: number;
-        approved: number;
-        pending: number;
-        actual: number;
-        statuses: Set<string>;
-        txCount: number;
-      }>();
-
-      for (const tx of ccTransactions) {
-        const cat = tx.category || 'General';
-        const ex = categoryMap.get(cat) || {
-          budget: 0,
-          approved: 0,
-          pending: 0,
-          actual: 0,
-          statuses: new Set<string>(),
-          txCount: 0,
-        };
-        ex.budget += tx.amount;
-        if (tx.status === 'APPROVED') {
-          ex.approved += tx.amount;
-        } else if (tx.status === 'UNDER_APPROVAL' || tx.status === 'PENDING_PROJECT_APPROVAL' || tx.status === 'PENDING_FINANCE_APPROVAL') {
-          ex.pending += tx.amount;
-        }
-        ex.statuses.add(tx.status);
-        ex.txCount += tx.count;
-        categoryMap.set(cat, ex);
-      }
-
-      // Add actuals to categoryMap
-      for (const act of ccActualCosts) {
-        const cat = act.category || 'General';
-        const ex = categoryMap.get(cat) || {
-          budget: 0,
-          approved: 0,
-          pending: 0,
-          actual: 0,
-          statuses: new Set<string>(),
-          txCount: 0,
-        };
-        ex.actual += (act.totalActualAmount || act.actualAmount || 0);
-        categoryMap.set(cat, ex);
-      }
-
-      const categories = Array.from(categoryMap.entries()).map(([catName, cData]) => {
-        const catApproved = cData.approved;
-        const catPending = cData.pending;
-        const catBudget = catApproved + catPending;
-        const catActual = cData.actual;
-        const catBalance = Math.max(0, catApproved - catActual);
-
-        let catStatus = 'DRAFT';
-        if (cData.statuses.has('APPROVED') && !cData.statuses.has('UNDER_APPROVAL') && !cData.statuses.has('PENDING_PROJECT_APPROVAL')) {
-          catStatus = 'APPROVED';
-        } else if (cData.statuses.has('UNDER_APPROVAL') || cData.statuses.has('PENDING_PROJECT_APPROVAL')) {
-          catStatus = 'UNDER_APPROVAL';
-        } else if (cData.statuses.has('REJECTED') && !cData.statuses.has('APPROVED')) {
-          catStatus = 'REJECTED';
-        } else if (cData.statuses.has('APPROVED')) {
-          catStatus = 'PARTIALLY APPROVED';
-        } else if (cData.statuses.has('DRAFT')) {
-          catStatus = 'DRAFT';
-        } else if (catBudget > 0) {
-          catStatus = budgetStatus;
-        }
-
-        return {
-          category: catName,
-          budget: catBudget,
-          approvedBudget: catApproved,
-          pendingBudget: catPending,
-          actual: catActual,
-          balance: catBalance,
-          ratePerSqFt: cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((catApproved / cc.areaSqFt) * 100) / 100 : null,
-          actualRatePerSqFt: cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((catActual / cc.areaSqFt) * 100) / 100 : null,
-          balanceRatePerSqFt: cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((catBalance / cc.areaSqFt) * 100) / 100 : null,
-          status: catStatus,
-          txCount: cData.txCount,
-        };
-      });
-
       costCentreSummaries.push({
         id: cc.id,
         projectId: proj.id,
@@ -342,7 +278,7 @@ export async function GET(req: NextRequest) {
         totalRatePerSqFt,
         actualRatePerSqFt,
         balanceRatePerSqFt,
-        categories,
+        categories: [],
         contributions: (cc.budgetContributions || []).filter((c: any) => c.status === 'UNDER_APPROVAL' || c.status === 'PENDING_PROJECT_APPROVAL' || c.status === 'PENDING_FINANCE_APPROVAL'),
         transactionsCount: ccTransactions.reduce((count: number, tx: any) => count + tx.count, 0),
       });
