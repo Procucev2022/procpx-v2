@@ -17,6 +17,7 @@ jest.mock('../src/lib/prisma', () => ({
     rfq: { findFirst: jest.fn(), update: jest.fn() },
     vendor: { findFirst: jest.fn() },
     rfqMessage: { create: jest.fn() },
+    $queryRaw: jest.fn(),
     $transaction: jest.fn(),
   },
 }));
@@ -55,9 +56,22 @@ const rfq = (overrides: Record<string, any> = {}) => ({
   quotes: [{ vendorId: 'v1', quoteVersion: 1, totalQuoteAmount: 1000 }], ...overrides,
 });
 const negotiation = (overrides: Record<string, any> = {}) => ({ id: 'neg-1', status: 'ACTIVE', currentRound: 0, rounds: [], ...overrides });
+const roundSummary = (overrides: Record<string, unknown> = {}) => ({
+  vendorId: 'v1', latestRoundNumber: null, activeBuyerOfferCount: 0,
+  pendingRoundId: null, pendingRoundNumber: null, pendingCounterOfferAmount: null, pendingNotes: null,
+  duplicateRoundId: null, duplicateRoundNumber: null, duplicateDeadline: null, duplicateTargetPrice: null,
+  duplicatePreviousQuoteAmount: null, duplicateCounterOfferAmount: null, duplicateRevisedQuoteAmount: null,
+  duplicateSavingsAmount: null, duplicateSavingsPercent: null, duplicateStatus: null, duplicateNotes: null,
+  duplicateIsFinalOffer: null, duplicateBuyerDecision: null, duplicateBuyerDecisionDate: null,
+  duplicateBuyerDecisionRemarks: null, duplicateNextResponsibleParty: null, duplicateLineItemsJson: null,
+  duplicateSubmittedByVendor: null, duplicateCreatedAt: null, duplicateUpdatedAt: null,
+  ...overrides,
+});
 
 describe('procurement negotiations API', () => {
   let consoleError: jest.SpyInstance;
+  let latestQuoteRows: Array<{ vendorId: string; quoteVersion: number; totalQuoteAmount: number }>;
+  let roundSummaryRows: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -71,6 +85,11 @@ describe('procurement negotiations API', () => {
     db.rfq.findFirst.mockReset().mockResolvedValue(rfq());
     db.vendor.findFirst.mockReset().mockImplementation(async ({ where }: any) => where.id === 'missing' ? null : ({ id: where.id, name: `Vendor ${where.id}` }));
     db.rfqMessage.create.mockReset().mockResolvedValue({ id: 'message-1' });
+    latestQuoteRows = [{ vendorId: 'v1', quoteVersion: 1, totalQuoteAmount: 1000 }];
+    roundSummaryRows = [];
+    db.$queryRaw.mockReset().mockImplementation((query: { sql: string }) => query.sql.includes('latest_vendor_quotes')
+      ? latestQuoteRows
+      : roundSummaryRows);
     writeBatch.mockReset().mockImplementation(async (statements: unknown[]) => statements.map(() => ({ meta: { changes: 1 } })));
     structuredLog.mockReset().mockResolvedValue({});
     notify.mockReset().mockResolvedValue(undefined);
@@ -144,6 +163,19 @@ describe('procurement negotiations API', () => {
       failed: [{ vendorId: 'v2', status: 'FAILED', reason: expect.stringContaining('has not submitted') }],
     } });
     expect(db.negotiation.create).not.toHaveBeenCalled();
+    const rfqRead = db.rfq.findFirst.mock.calls.at(-1)?.[0];
+    expect(rfqRead.include).not.toHaveProperty('lines');
+    expect(rfqRead.include).not.toHaveProperty('quotes');
+    expect(rfqRead.include.invitedVendors.select).toEqual({ vendorId: true });
+    const latestQuotesQuery = db.$queryRaw.mock.calls.find(([query]: [{ sql: string }]) => query.sql.includes('latest_vendor_quotes'))?.[0];
+    expect(latestQuotesQuery.sql).toContain('MAX(quote."quoteVersion") AS "latestVersion"');
+    expect(latestQuotesQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
+    const roundSummaryQuery = db.$queryRaw.mock.calls.find(([query]: [{ sql: string }]) => query.sql.includes('vendor_round_stats'))?.[0];
+    expect(roundSummaryQuery.sql).toContain('SUM(CASE WHEN rounds."status" <>');
+    expect(roundSummaryQuery.sql).toContain('MAX(CASE WHEN rounds."status" <>');
+    expect(roundSummaryQuery.sql).toContain('"duplicateRoundNumber"');
+    expect(roundSummaryQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'neg-new']));
+    expect(db.negotiation.findFirst.mock.calls.every(([query]: [{ select: Record<string, unknown> }]) => !('rounds' in query.select))).toBe(true);
     const createStatements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
     expect(createStatements.map(({ sql }) => sql)).toEqual([NEGOTIATION_INSERT_IF_ABSENT_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL]);
     expect(createStatements[0].values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
@@ -162,37 +194,32 @@ describe('procurement negotiations API', () => {
   });
 
   it('handles pending rounds, confirmation failures, recent duplicates, and capped vendors', async () => {
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: [{ id: 'pending', vendorId: 'v1', status: 'ROUND_ACTIVE',
-      counterOfferAmount: 800, revisedQuoteAmount: null, nextResponsibleParty: 'VENDOR', roundNumber: 2, notes: 'Waiting' }] }));
+    roundSummaryRows = [roundSummary({ latestRoundNumber: 2, activeBuyerOfferCount: 1, pendingRoundId: 'pending',
+      pendingRoundNumber: 2, pendingCounterOfferAmount: 800, pendingNotes: 'Waiting' })];
     const pending = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', counterOfferAmount: 700 }));
     expect(pending.status).toBe(400);
     await expect(pending.json()).resolves.toMatchObject({ requiresSupersedeConfirm: true, pendingRoundNumber: 2, pendingAmount: 800 });
     expect(writeBatch).not.toHaveBeenCalled();
 
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: [{ id: 'recent', vendorId: 'v1', status: 'ROUND_ACTIVE',
-      counterOfferAmount: 700, revisedQuoteAmount: null, nextResponsibleParty: 'VENDOR', roundNumber: 1, createdAt: new Date() }] }));
+    roundSummaryRows = [roundSummary({ latestRoundNumber: 1, activeBuyerOfferCount: 1, duplicateRoundId: 'recent',
+      duplicateRoundNumber: 1, duplicateCounterOfferAmount: 700, duplicateStatus: 'ROUND_ACTIVE',
+      duplicateCreatedAt: new Date() })];
     const duplicate = await POST(postRequest({ rfqId: 'rfq-1', vendorIds: ['v1'], counterOfferAmount: 700, allowSupersede: true }));
     expect(duplicate).toMatchObject({ ok: true, status: 201, data: { dispatched: [{ isDuplicate: true, roundNumber: 1 }] } });
 
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: Array.from({ length: 4 }, (_, index) => ({
-      vendorId: 'v1', status: 'ROUND_ACTIVE', counterOfferAmount: 500 + index, revisedQuoteAmount: null,
-      nextResponsibleParty: 'BUYER', roundNumber: index + 1,
-    })) }));
+    roundSummaryRows = [roundSummary({ latestRoundNumber: 4, activeBuyerOfferCount: 4 })];
     const capped = await POST(postRequest({ rfqId: 'rfq-1', vendorIds: ['v1'], counterOfferAmount: 400 }));
     expect(capped).toMatchObject({ ok: true, status: 400, data: { failed: [{ reason: expect.stringContaining('Maximum limit of 4') }] } });
 
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: [
-      { vendorId: 'v1', status: 'SUPERSEDED', roundNumber: 1, counterOfferAmount: 900, revisedQuoteAmount: null },
-      { vendorId: 'v1', status: 'ROUND_ACTIVE', roundNumber: 2, counterOfferAmount: 600, revisedQuoteAmount: 500, nextResponsibleParty: 'BUYER' },
-    ] }));
+    roundSummaryRows = [roundSummary({ latestRoundNumber: 2, activeBuyerOfferCount: 1 })];
     await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', counterOfferAmount: 450 }));
     const afterSupersede = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
     expect(afterSupersede.find(({ sql }) => sql === NEGOTIATION_ROUND_INSERT_SQL)?.values[4]).toBe(3);
   });
 
   it('supersedes an approved pending offer and accepts vendor revisions through single dispatch', async () => {
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: [{ id: 'old-round', vendorId: 'v1', status: 'ROUND_ACTIVE',
-      counterOfferAmount: 800, revisedQuoteAmount: null, nextResponsibleParty: 'VENDOR', roundNumber: 1, notes: 'Waiting' }] }));
+    roundSummaryRows = [roundSummary({ latestRoundNumber: 1, activeBuyerOfferCount: 1, pendingRoundId: 'old-round',
+      pendingRoundNumber: 1, pendingCounterOfferAmount: 800, pendingNotes: 'Waiting' })];
     const superseded = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', counterOfferAmount: 700, allowSupersede: true }));
     expect(superseded).toMatchObject({ ok: true, status: 201, data: { message: expect.stringContaining('Superseding Buyer Offer') } });
     const supersedeStatements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
@@ -202,7 +229,8 @@ describe('procurement negotiations API', () => {
     });
     expect(supersedeStatements.some(({ sql }) => sql === AUDIT_LOG_INSERT_SQL)).toBe(true);
 
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ currentRound: 1, rounds: [] }));
+    roundSummaryRows = [];
+    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ currentRound: 1 }));
     const revision = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', revisedQuoteAmount: 900, lineItemsJson: '[]' }));
     expect(revision).toMatchObject({ ok: true, status: 201, data: { message: expect.stringContaining('Vendor Revised Quote') } });
     const revisionStatements = writeBatch.mock.calls[1][0] as Array<{ sql: string; values: unknown[] }>;
@@ -212,7 +240,7 @@ describe('procurement negotiations API', () => {
     expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED' }), { prepareOnly: true });
 
     auth.mockResolvedValueOnce({ ...context, userName: '' });
-    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ currentRound: 0, rounds: null }));
+    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ currentRound: 0 }));
     const targetOnly = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', targetPrice: 750 }));
     expect(targetOnly).toMatchObject({ ok: true, status: 201, data: { message: 'Buyer Offer Submitted Successfully (Round 1)' } });
     const targetOnlyStatements = writeBatch.mock.calls[2][0] as Array<{ sql: string; values: unknown[] }>;
@@ -233,14 +261,19 @@ describe('procurement negotiations API', () => {
     expect(uninvited.status).toBe(400);
     await expect(uninvited.json()).resolves.toMatchObject({ error: expect.stringContaining('is not invited') });
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ quotes: [] }));
+    latestQuoteRows = [];
     const noQuote = await POST(postRequest({ rfqId: 'rfq-1', vendorIds: ['v1'] }));
     expect(noQuote).toMatchObject({ ok: true, status: 400, data: { failed: [{ reason: expect.stringContaining('has not submitted') }] } });
+    db.$queryRaw.mockRejectedValueOnce(new Error('latest negotiation state unavailable'));
+    await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500,
+    });
     db.rfq.findFirst.mockRejectedValueOnce(new Error('negotiation write failed'));
     await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
     await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
     const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid negotiation payload')) } as unknown as NextRequest;
     await expect(POST(badJson)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
-    expect(structuredLog).toHaveBeenCalledTimes(3);
+    expect(structuredLog).toHaveBeenCalledTimes(4);
   });
 });

@@ -6,10 +6,10 @@ Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.73% (95791/97018) |
-| branches | 90.98% (20658/22705) |
+| statements | 98.73% (95865/97092) |
+| branches | 91.00% (20660/22703) |
 | functions | 97.85% (1825/1865) |
-| lines | 98.73% (95791/97018) |
+| lines | 98.73% (95865/97092) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -181,7 +181,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
 | `src/app/api/procurement/awards/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/awards/route.ts` | 93.86% | 79.27% | 100.00% | 93.86% | BELOW 90% |
 | `src/app/api/procurement/negotiations/decision/route.ts` | 98.83% | 92.75% | 100.00% | 98.83% | PASS |
-| `src/app/api/procurement/negotiations/route.ts` | 99.61% | 92.21% | 100.00% | 99.61% | PASS |
+| `src/app/api/procurement/negotiations/route.ts` | 99.66% | 94.54% | 100.00% | 99.66% | PASS |
 | `src/app/api/procurement/negotiations/submit-offer/route.ts` | 95.05% | 90.10% | 100.00% | 95.05% | PASS |
 | `src/app/api/procurement/ppos/[id]/complete/route.ts` | 100.00% | 98.51% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/ppos/[id]/vendor-accept/route.ts` | 94.59% | 84.00% | 100.00% | 94.59% | BELOW 90% |

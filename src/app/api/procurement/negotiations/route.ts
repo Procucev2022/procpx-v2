@@ -1,6 +1,7 @@
 // app/api/procurement/negotiations/route.ts
 // Handles Negotiation Rounds and Counter-Offers across RFQs
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '@/lib/notifications';
@@ -21,6 +22,10 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { getListPageWindow } from '@/lib/api-utils';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import type {
+  NegotiationDispatchLatestQuoteRow,
+  NegotiationDispatchRoundSummaryRow,
+} from '@app-types/app/api/procurement/negotiations.types';
 
 
 export async function GET(req: NextRequest) {
@@ -104,13 +109,7 @@ export async function POST(req: NextRequest) {
     const rfq = await prisma.rfq.findFirst({
       where: { id: rfqId, tenantId: ctx.tenantId },
       include: {
-        lines: true,
-        invitedVendors: {
-          include: { vendor: true },
-        },
-        quotes: {
-          orderBy: { quoteVersion: 'desc' },
-        },
+        invitedVendors: { select: { vendorId: true } },
       },
     });
 
@@ -133,12 +132,7 @@ export async function POST(req: NextRequest) {
     // Find or create negotiation container for this RFQ
     let negotiation = await prisma.negotiation.findFirst({
       where: { rfqId, tenantId: ctx.tenantId },
-      include: {
-        rounds: {
-          include: { vendor: true },
-          orderBy: { roundNumber: 'desc' },
-        },
-      },
+      select: { id: true, status: true, currentRound: true },
     });
 
     if (negotiation && (negotiation.status === 'CONCLUDED' || negotiation.status === 'CANCELLED')) {
@@ -166,12 +160,7 @@ export async function POST(req: NextRequest) {
       ]);
       negotiation = await prisma.negotiation.findFirst({
         where: { rfqId, tenantId: ctx.tenantId },
-        include: {
-          rounds: {
-            include: { vendor: true },
-            orderBy: { roundNumber: 'desc' },
-          },
-        },
+        select: { id: true, status: true, currentRound: true },
       });
       if (!negotiation) throw new Error();
     }
@@ -182,6 +171,76 @@ export async function POST(req: NextRequest) {
     const currentUserRole = ctx.role;
     const currentRfq: any = rfq;
     const currentNegotiation: any = negotiation;
+    const requestedCounterOfferAmount = counterOfferAmount ? Number(counterOfferAmount) : null;
+    const requestedRevisedQuoteAmount = revisedQuoteAmount ? Number(revisedQuoteAmount) : null;
+    const duplicateWindowStart = new Date(Date.now() - 4_000);
+    const [latestQuoteRows, roundSummaryRows] = await Promise.all([
+      prisma.$queryRaw<NegotiationDispatchLatestQuoteRow[]>(Prisma.sql`
+        WITH latest_vendor_quotes AS (
+          SELECT quote."tenantId", quote."rfqId", quote."vendorId", MAX(quote."quoteVersion") AS "latestVersion"
+          FROM "quotes" AS quote
+          WHERE quote."tenantId" = ${currentTenantId} AND quote."rfqId" = ${rfqId}
+          GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+        )
+        SELECT quote."vendorId", quote."quoteVersion", quote."totalQuoteAmount"
+        FROM latest_vendor_quotes AS latest
+        INNER JOIN "quotes" AS quote
+          ON quote."tenantId" = latest."tenantId" AND quote."rfqId" = latest."rfqId"
+            AND quote."vendorId" = latest."vendorId" AND quote."quoteVersion" = latest."latestVersion"
+      `),
+      prisma.$queryRaw<NegotiationDispatchRoundSummaryRow[]>(Prisma.sql`
+        WITH vendor_round_stats AS (
+          SELECT rounds."tenantId", rounds."negotiationId", rounds."vendorId",
+            MAX(rounds."roundNumber") AS "latestRoundNumber",
+            SUM(CASE WHEN rounds."status" <> 'SUPERSEDED' AND (
+              rounds."counterOfferAmount" IS NOT NULL OR
+              ((rounds."revisedQuoteAmount" IS NULL OR rounds."revisedQuoteAmount" = 0)
+                AND rounds."nextResponsibleParty" = 'VENDOR')
+            ) THEN 1 ELSE 0 END) AS "activeBuyerOfferCount",
+            MAX(CASE WHEN rounds."status" <> 'SUPERSEDED' AND rounds."counterOfferAmount" IS NOT NULL
+              AND rounds."counterOfferAmount" <> 0
+              AND ((rounds."revisedQuoteAmount" IS NULL OR rounds."revisedQuoteAmount" = 0)
+                OR rounds."nextResponsibleParty" = 'VENDOR')
+              THEN rounds."roundNumber" END) AS "pendingRoundNumber",
+            MAX(CASE WHEN rounds."status" <> 'SUPERSEDED'
+              AND ((${requestedCounterOfferAmount} IS NOT NULL AND rounds."counterOfferAmount" = ${requestedCounterOfferAmount})
+                OR (${requestedRevisedQuoteAmount} IS NOT NULL AND rounds."revisedQuoteAmount" = ${requestedRevisedQuoteAmount}))
+              AND julianday(rounds."createdAt") >= julianday(${duplicateWindowStart.toISOString()})
+              THEN rounds."roundNumber" END) AS "duplicateRoundNumber"
+          FROM "negotiation_rounds" AS rounds
+          WHERE rounds."tenantId" = ${currentTenantId} AND rounds."negotiationId" = ${currentNegotiation.id}
+          GROUP BY rounds."tenantId", rounds."negotiationId", rounds."vendorId"
+        )
+        SELECT stats."vendorId", stats."latestRoundNumber", stats."activeBuyerOfferCount",
+          pending."id" AS "pendingRoundId", stats."pendingRoundNumber",
+          pending."counterOfferAmount" AS "pendingCounterOfferAmount", pending."notes" AS "pendingNotes",
+          duplicate."id" AS "duplicateRoundId", stats."duplicateRoundNumber",
+          duplicate."deadline" AS "duplicateDeadline", duplicate."targetPrice" AS "duplicateTargetPrice",
+          duplicate."previousQuoteAmount" AS "duplicatePreviousQuoteAmount",
+          duplicate."counterOfferAmount" AS "duplicateCounterOfferAmount",
+          duplicate."revisedQuoteAmount" AS "duplicateRevisedQuoteAmount",
+          duplicate."savingsAmount" AS "duplicateSavingsAmount", duplicate."savingsPercent" AS "duplicateSavingsPercent",
+          duplicate."status" AS "duplicateStatus", duplicate."notes" AS "duplicateNotes",
+          duplicate."isFinalOffer" AS "duplicateIsFinalOffer", duplicate."buyerDecision" AS "duplicateBuyerDecision",
+          duplicate."buyerDecisionDate" AS "duplicateBuyerDecisionDate",
+          duplicate."buyerDecisionRemarks" AS "duplicateBuyerDecisionRemarks",
+          duplicate."nextResponsibleParty" AS "duplicateNextResponsibleParty",
+          duplicate."lineItemsJson" AS "duplicateLineItemsJson",
+          duplicate."submittedByVendor" AS "duplicateSubmittedByVendor",
+          duplicate."createdAt" AS "duplicateCreatedAt", duplicate."updatedAt" AS "duplicateUpdatedAt"
+        FROM vendor_round_stats AS stats
+        LEFT JOIN "negotiation_rounds" AS pending
+          ON pending."tenantId" = stats."tenantId" AND pending."negotiationId" = stats."negotiationId"
+            AND pending."vendorId" = stats."vendorId" AND pending."roundNumber" = stats."pendingRoundNumber"
+            AND pending."status" <> 'SUPERSEDED'
+        LEFT JOIN "negotiation_rounds" AS duplicate
+          ON duplicate."tenantId" = stats."tenantId" AND duplicate."negotiationId" = stats."negotiationId"
+            AND duplicate."vendorId" = stats."vendorId" AND duplicate."roundNumber" = stats."duplicateRoundNumber"
+            AND duplicate."status" <> 'SUPERSEDED'
+      `),
+    ]);
+    const latestQuoteByVendor = new Map(latestQuoteRows.map((quote) => [quote.vendorId, quote]));
+    const roundSummaryByVendor = new Map(roundSummaryRows.map((summary) => [summary.vendorId, summary]));
 
     // Internal helper to dispatch an offer to a single vendor
     async function dispatchToVendor(targetVendorId: string) {
@@ -202,8 +261,7 @@ export async function POST(req: NextRequest) {
         };
       }
 
-      const vendorQuotes = (currentRfq.quotes || []).filter((q: any) => q.vendorId === targetVendorId);
-      const latestQuote = vendorQuotes.sort((a: any, b: any) => b.quoteVersion - a.quoteVersion)[0];
+      const latestQuote = latestQuoteByVendor.get(targetVendorId);
       if (!latestQuote) {
         return {
           success: false,
@@ -215,13 +273,11 @@ export async function POST(req: NextRequest) {
 
       const previousQuoteAmount = latestQuote.totalQuoteAmount;
 
-      const vendorRounds = (currentNegotiation.rounds || []).filter((r: any) => r.vendorId === targetVendorId);
-      const vendorActiveBuyerOffers = vendorRounds.filter(
-        (r: any) => r.status !== 'SUPERSEDED' && (r.counterOfferAmount !== null || (!r.revisedQuoteAmount && r.nextResponsibleParty === 'VENDOR'))
-      );
+      const roundSummary = roundSummaryByVendor.get(targetVendorId);
+      const activeBuyerOfferCount = Number(roundSummary?.activeBuyerOfferCount || 0);
 
       // Rule: Category Managers may submit a maximum of 4 active buyer counteroffers per vendor per RFQ
-      if (vendorActiveBuyerOffers.length >= 4) {
+      if (activeBuyerOfferCount >= 4) {
         return {
           success: false,
           vendorId: targetVendorId,
@@ -231,9 +287,12 @@ export async function POST(req: NextRequest) {
       }
 
       // Check for pending round awaiting vendor response
-      const activePendingRound = vendorRounds.find(
-        (r: any) => r.status !== 'SUPERSEDED' && r.counterOfferAmount && (!r.revisedQuoteAmount || r.nextResponsibleParty === 'VENDOR')
-      );
+      const activePendingRound = roundSummary?.pendingRoundId ? {
+        id: roundSummary.pendingRoundId,
+        roundNumber: roundSummary.pendingRoundNumber,
+        counterOfferAmount: roundSummary.pendingCounterOfferAmount,
+        notes: roundSummary.pendingNotes,
+      } : null;
 
       if (activePendingRound && !revisedQuoteAmount && !allowSupersede) {
         return {
@@ -248,10 +307,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Active offer count enforces the cap; the historical maximum keeps round IDs sequential after superseding.
-      const roundNumber = vendorRounds.reduce(
-        (highest: number, round: { roundNumber?: number | string }) => Math.max(highest, Number(round.roundNumber) || 0),
-        0,
-      ) + 1;
+      const roundNumber = (Number(roundSummary?.latestRoundNumber) || 0) + 1;
       const finalRevised = revisedQuoteAmount ? Number(revisedQuoteAmount) : null;
       const targetCounter = counterOfferAmount ? Number(counterOfferAmount) : null;
       const savingsAmount = finalRevised
@@ -262,14 +318,32 @@ export async function POST(req: NextRequest) {
       const savingsPercent = previousQuoteAmount > 0 ? (savingsAmount / previousQuoteAmount) * 100 : 0;
 
       // Prevent duplicate offers from repeated clicks or rapid retries within 4s window
-      const recentDuplicate = (currentNegotiation.rounds || []).find(
-        (r: any) =>
-          r.vendorId === targetVendorId &&
-          r.status !== 'SUPERSEDED' &&
-          ((targetCounter && r.counterOfferAmount === targetCounter) ||
-            (finalRevised && r.revisedQuoteAmount === finalRevised)) &&
-          new Date().getTime() - new Date(r.createdAt).getTime() < 4000
-      );
+      const recentDuplicate = roundSummary?.duplicateRoundId ? {
+        id: roundSummary.duplicateRoundId,
+        tenantId: currentTenantId,
+        negotiationId: currentNegotiation.id,
+        vendorId: targetVendorId,
+        roundNumber: roundSummary.duplicateRoundNumber,
+        deadline: roundSummary.duplicateDeadline,
+        targetPrice: roundSummary.duplicateTargetPrice,
+        previousQuoteAmount: roundSummary.duplicatePreviousQuoteAmount,
+        counterOfferAmount: roundSummary.duplicateCounterOfferAmount,
+        revisedQuoteAmount: roundSummary.duplicateRevisedQuoteAmount,
+        savingsAmount: roundSummary.duplicateSavingsAmount,
+        savingsPercent: roundSummary.duplicateSavingsPercent,
+        status: roundSummary.duplicateStatus,
+        notes: roundSummary.duplicateNotes,
+        isFinalOffer: Boolean(roundSummary.duplicateIsFinalOffer),
+        buyerDecision: roundSummary.duplicateBuyerDecision,
+        buyerDecisionDate: roundSummary.duplicateBuyerDecisionDate,
+        buyerDecisionRemarks: roundSummary.duplicateBuyerDecisionRemarks,
+        nextResponsibleParty: roundSummary.duplicateNextResponsibleParty,
+        lineItemsJson: roundSummary.duplicateLineItemsJson,
+        submittedByVendor: roundSummary.duplicateSubmittedByVendor,
+        createdAt: roundSummary.duplicateCreatedAt,
+        updatedAt: roundSummary.duplicateUpdatedAt,
+        vendor,
+      } : null;
       if (recentDuplicate) {
         return {
           success: true,
@@ -320,12 +394,12 @@ export async function POST(req: NextRequest) {
       };
       const isSuperseding = Boolean(activePendingRound && allowSupersede);
       const auditDescription = isSuperseding
-        ? `Superseding Round ${roundNumber} counteroffer issued to ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous Round ${activePendingRound.roundNumber} marked SUPERSEDED.`
+        ? `Superseding Round ${roundNumber} counteroffer issued to ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous Round ${activePendingRound?.roundNumber} marked SUPERSEDED.`
         : `Round ${roundNumber} initiated with ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous: ₹ ${previousQuoteAmount.toLocaleString()}, Target/Counter: ₹ ${(targetCounter || targetPrice || 0).toLocaleString()}`;
       const rfqTimelineMessage = finalRevised
         ? `[REVISED QUOTE RECORDED] Recorded vendor revised quote of ₹ ${finalRevised.toLocaleString()} (Round ${roundNumber}) for ${vendor.name}.`
         : isSuperseding
-        ? `[SUPERSEDING COUNTEROFFER] Buyer issued superseding counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}, replacing pending Round ${activePendingRound.roundNumber}.`
+        ? `[SUPERSEDING COUNTEROFFER] Buyer issued superseding counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}, replacing pending Round ${activePendingRound?.roundNumber}.`
         : `[BUYER COUNTEROFFER] Buyer submitted counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}. ${notes || ''}`;
       const auditId = crypto.randomUUID();
       const notificationPayload = finalRevised
