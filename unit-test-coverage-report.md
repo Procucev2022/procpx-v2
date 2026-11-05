@@ -2,12 +2,12 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **315**. Files meeting all four 90% thresholds: **263/315**.
+Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 
 | Overall | Coverage |
 | --- | ---: |
 | statements | 98.72% (95598/96834) |
-| branches | 90.93% (20603/22656) |
+| branches | 90.94% (20598/22650) |
 | functions | 97.80% (1823/1864) |
 | lines | 98.72% (95598/96834) |
 
@@ -82,8 +82,7 @@ Files included: **315**. Files meeting all four 90% thresholds: **263/315**.
 | `src/app/api/admin/users/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/admin/users/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/messages/route.ts` | 94.77% | 84.73% | 100.00% | 94.77% | BELOW 90% |
-| `src/app/api/approvals/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/approvals/route.ts` | 100.00% | 91.74% | 100.00% | 100.00% | PASS |
+| `src/app/api/approvals/route.ts` | 100.00% | 92.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/audit/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -169,7 +168,7 @@ Files included: **315**. Files meeting all four 90% thresholds: **263/315**.
 | `src/app/api/pr/[id]/revert/route.ts` | 100.00% | 95.45% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/route.ts` | 100.00% | 72.72% | 100.00% | 100.00% | BELOW 90% |
 | `src/app/api/pr/[id]/submit/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/pr/route.ts` | 87.22% | 87.76% | 100.00% | 87.22% | BELOW 90% |
+| `src/app/api/pr/route.ts` | 87.13% | 87.21% | 100.00% | 87.13% | BELOW 90% |
 | `src/app/api/procurement/approved-boqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/approved-boqs/route.ts` | 100.00% | 95.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/approved-prs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -279,7 +278,7 @@ Files included: **315**. Files meeting all four 90% thresholds: **263/315**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.24% | 92.85% | 99.18% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.23% | 92.85% | 99.18% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 99.64% | 88.00% | 96.77% | 99.64% | BELOW 90% |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -293,6 +292,8 @@ Files included: **315**. Files meeting all four 90% thresholds: **263/315**.
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-upload.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
+| `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.ts` | 100.00% | 97.14% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

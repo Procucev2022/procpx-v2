@@ -249,6 +249,9 @@ export default function MyPrsPage() {
                         </div>
                         <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
                           {(pr.categories || []).join(', ') || UI_STRINGS.appAppPrPage.generalCapex}
+                          {pr.remainingCategoryCount > 0 && (
+                            <span style={{ marginLeft: 4 }}>{interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: pr.remainingCategoryCount })}</span>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '0 16px', color: '#334155' }}>

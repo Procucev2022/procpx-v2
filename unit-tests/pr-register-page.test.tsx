@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { uiStringPattern } from '@/lib/i18n';
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -56,7 +56,7 @@ const prs = [
     id: 'draft', prNumber: 'PR-DRAFT', title: 'Copper cable package', status: 'PR_DRAFT',
     projectId: 'project-1', project: { name: 'West Campus', projectCode: 'WC-01' },
     costCentreId: 'cc-1', costCentre: { name: 'Electrical', code: 'CC-01' }, boqId: 'boq-1', boq: { boqCode: 'BOQ-01' },
-    categories: ['Electrical', 'Cable'], totalLines: 3, totalEstimatedValue: 1200,
+    categories: ['Electrical', 'Cable'], remainingCategoryCount: 6, totalLines: 3, totalEstimatedValue: 1200,
   },
   {
     id: 'returned', prNumber: 'PR-RETURN', title: 'Returned panel order', status: 'PR_RETURNED_FOR_CORRECTION',
@@ -105,6 +105,7 @@ describe('PR register page', () => {
     expect(screen.getByText('Pending Approval: 1')).toBeInTheDocument();
     expect(screen.getByText('Draft / Corrections: 2')).toBeInTheDocument();
     expect(screen.getByRole('row', { name: /BOQ-01/ })).toHaveTextContent(`${UI_STRINGS.common.bOQ2}BOQ-01`);
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: 6 })))).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppPrPage.generalCapex))).toHaveLength(3);
     expect(screen.getByText('Attach a revised quote')).toBeInTheDocument();
     expect(screen.getByText('Budget exceeded')).toBeInTheDocument();

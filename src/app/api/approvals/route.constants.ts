@@ -1,1 +1,0 @@
-export const APPROVAL_CATEGORY_PREVIEW_LIMIT = 8;

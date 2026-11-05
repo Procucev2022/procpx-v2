@@ -10,10 +10,11 @@ import { MAX_PR_BATCH_LINES } from '../src/lib/d1-batch.constants';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     procurementRequest: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), groupBy: jest.fn(), create: jest.fn() },
     boqRevision: { findFirst: jest.fn(), update: jest.fn() },
     costCentre: { findFirst: jest.fn() },
-    pRLine: { groupBy: jest.fn(), create: jest.fn() },
+    pRLine: { create: jest.fn() },
     boq: { update: jest.fn() },
     auditLog: { create: jest.fn() },
   },
@@ -36,6 +37,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
+const rawQuery = (prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
@@ -78,7 +80,7 @@ describe('PR list and create API', () => {
     db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1', code: 'CC01', name: 'North Wing' });
     db.procurementRequest.count.mockResolvedValue(4);
     db.procurementRequest.groupBy.mockResolvedValue([]);
-    db.pRLine.groupBy.mockResolvedValue([]);
+    rawQuery.mockResolvedValue([]);
     db.procurementRequest.create.mockResolvedValue({ id: 'pr-1', prNumber: 'PR-2026-000005' });
     db.pRLine.create.mockResolvedValue({ id: 'pr-line' });
     db.boqRevision.update.mockResolvedValue({ id: 'revision-1' });
@@ -112,16 +114,19 @@ describe('PR list and create API', () => {
     ]);
     db.procurementRequest.count.mockResolvedValueOnce(25);
     db.procurementRequest.groupBy.mockResolvedValueOnce([{ status: 'PR_APPROVED', _count: { _all: 7 } }]);
-    db.pRLine.groupBy.mockResolvedValueOnce([
-      { prId: 'pr-1', category: 'Electrical' },
-      { prId: 'pr-1', category: 'Electrical' },
-      { prId: 'pr-1', category: null },
+    rawQuery.mockResolvedValueOnce([
+      ...Array.from({ length: 8 }, (_, index) => ({ entityId: 'pr-1', category: `Category ${index + 1}`, categoryCount: 14 })),
+      { entityId: 'pr-2', category: 'Civil', categoryCount: 1 },
     ]);
     const scopedProjectFilter = { OR: [{ team: { some: { userId: 'user-1', active: true } } }] };
     projectAccessFilter.mockResolvedValueOnce(scopedProjectFilter);
     await expect(GET(getRequest('?projectId=p-1&costCentreId=cc-1&status=APPROVED&search=wire&page=2&pageSize=10'))).resolves.toMatchObject({
       ok: true, data: { total: 25, page: 2, pageSize: 10, totalPages: 3, statusCounts: { PR_APPROVED: 7 }, data: [
-        { id: 'pr-1', categories: ['Electrical'] },
+        {
+          id: 'pr-1',
+          categories: ['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 5', 'Category 6', 'Category 7', 'Category 8'],
+          remainingCategoryCount: 6,
+        },
         { id: 'pr-2', categories: ['Civil'] },
         { id: 'pr-3', categories: ['Standard'] },
       ] },
@@ -137,9 +142,10 @@ describe('PR list and create API', () => {
       skip: 10,
       take: 10,
     }));
-    expect(db.pRLine.groupBy).toHaveBeenCalledWith({
-      by: ['prId', 'category'], where: { tenantId: 'tenant-1', prId: { in: ['pr-1', 'pr-2', 'pr-3'] } },
-    });
+    const categoryQuery = rawQuery.mock.calls[0][0] as { sql: string; values: unknown[] };
+    expect(categoryQuery.sql).toContain('ROW_NUMBER() OVER (PARTITION BY "entityId"');
+    expect(categoryQuery.sql).toContain('WHERE "categoryRank" <= ?');
+    expect(categoryQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'pr-1', 'pr-2', 'pr-3']));
     expect(db.procurementRequest.findMany.mock.calls[0][0].include).not.toHaveProperty('lines');
     db.procurementRequest.findMany.mockResolvedValueOnce([{ id: 'pr-empty', _count: { lines: 0 } }]);
     await expect(GET(getRequest())).resolves.toMatchObject({ ok: true, data: { data: [{ id: 'pr-empty', categories: ['Standard'] }] } });

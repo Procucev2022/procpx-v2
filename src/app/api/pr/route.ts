@@ -14,6 +14,7 @@ import {
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { getCategoryPreviews } from '@/lib/category-preview';
 
 function requestId(req: NextRequest): string | undefined {
   const value = req.headers.get('x-request-id') || req.headers.get('cf-ray');
@@ -68,21 +69,18 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const lineCategoryGroups = prs.length > 0 ? await prisma.pRLine.groupBy({
-      by: ['prId', 'category'],
-      where: { tenantId: ctx.tenantId, prId: { in: prs.map(({ id }) => id) } },
-    }) : [];
-    const categoriesByRequest = new Map<string, string[]>();
-    for (const group of lineCategoryGroups) {
-      const categories = categoriesByRequest.get(group.prId) || [];
-      if (group.category && !categories.includes(group.category)) categories.push(group.category);
-      categoriesByRequest.set(group.prId, categories);
-    }
+    const categoriesByRequest = await getCategoryPreviews({
+      tenantId: ctx.tenantId, entityIds: prs.map(({ id }) => id), source: 'purchaseRequests',
+    });
     const formatted = prs.map((pr) => {
-      const categories = categoriesByRequest.get(pr.id) || [];
+      const categoryPreview = categoriesByRequest.get(pr.id) || { categories: [], total: 0 };
+      const fallbackCategories = pr.boq?.category ? [pr.boq.category] : ['Standard'];
+      const categories = categoryPreview.categories.length ? categoryPreview.categories : fallbackCategories;
+      const categoryCount = Math.max(categoryPreview.total, categories.length);
       return {
         ...pr,
-        categories: categories.length > 0 ? categories : (pr.boq?.category ? [pr.boq.category] : ['Standard']),
+        categories,
+        remainingCategoryCount: Math.max(categoryCount - categories.length, 0),
       };
     });
     const statusCounts = Object.fromEntries(statusGroups.map((group) => [group.status, group._count._all]));

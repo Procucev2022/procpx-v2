@@ -1,55 +1,8 @@
 // src/app/api/approvals/route.ts - Dual Approvals Queues API (Budget Approval & PR / BOQ Approval)
 import { NextRequest } from 'next/server';
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, getListPageWindow } from '@/lib/api-utils';
-import { APPROVAL_CATEGORY_PREVIEW_LIMIT } from './route.constants';
-
-type ApprovalCategoryPreviewRow = {
-  entityId: string;
-  category: string;
-  categoryCount: number | bigint;
-};
-
-type ApprovalCategoryPreview = { categories: string[]; total: number };
-
-function mapApprovalCategoryPreviews(rows: ApprovalCategoryPreviewRow[]) {
-  const previews = new Map<string, ApprovalCategoryPreview>();
-  for (const row of rows) {
-    const preview = previews.get(row.entityId) || { categories: [], total: Number(row.categoryCount) || 0 };
-    preview.categories.push(row.category);
-    previews.set(row.entityId, preview);
-  }
-  return previews;
-}
-
-async function getCategoryPreviews(input: {
-  tenantId: string;
-  entityIds: string[];
-  table: 'budget_transactions' | 'pr_lines';
-  entityColumn: 'contributionId' | 'prId';
-}) {
-  if (input.entityIds.length === 0) return new Map<string, ApprovalCategoryPreview>();
-  const rows = await prisma.$queryRaw<ApprovalCategoryPreviewRow[]>(Prisma.sql`
-    WITH distinct_categories AS (
-      SELECT DISTINCT "${Prisma.raw(input.entityColumn)}" AS "entityId", "category"
-      FROM "${Prisma.raw(input.table)}"
-      WHERE "tenantId" = ${input.tenantId}
-        AND "${Prisma.raw(input.entityColumn)}" IN (${Prisma.join(input.entityIds)})
-        AND "category" IS NOT NULL AND TRIM("category") <> ''
-    ), ranked_categories AS (
-      SELECT "entityId", "category",
-        ROW_NUMBER() OVER (PARTITION BY "entityId" ORDER BY "category" COLLATE NOCASE, "category") AS "categoryRank",
-        COUNT(*) OVER (PARTITION BY "entityId") AS "categoryCount"
-      FROM distinct_categories
-    )
-    SELECT "entityId", "category", "categoryCount"
-    FROM ranked_categories
-    WHERE "categoryRank" <= ${APPROVAL_CATEGORY_PREVIEW_LIMIT}
-    ORDER BY "entityId" ASC, "categoryRank" ASC
-  `);
-  return mapApprovalCategoryPreviews(rows);
-}
+import { getCategoryPreviews } from '@/lib/category-preview';
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -122,7 +75,7 @@ export async function GET(req: NextRequest) {
     const [categoriesByContribution] = await Promise.all([
       getCategoryPreviews({
         tenantId: ctx.tenantId, entityIds: rawBudgetQueue.map(({ id }) => id),
-        table: 'budget_transactions', entityColumn: 'contributionId',
+        source: 'budgetContributions',
       }),
       addQueueUsers(rawBudgetQueue.flatMap((item) => [item.submittedBy, item.createdBy])),
       addQueueBudgets(rawBudgetQueue.map((item) => item.costCentreId)),
@@ -179,7 +132,7 @@ export async function GET(req: NextRequest) {
     const [prLineCategoryGroups] = await Promise.all([
       getCategoryPreviews({
         tenantId: ctx.tenantId, entityIds: rawPrQueue.map(({ id }) => id),
-        table: 'pr_lines', entityColumn: 'prId',
+        source: 'purchaseRequests',
       }),
       addQueueUsers(rawPrQueue.map((item) => item.requestedBy)),
     ]);
@@ -229,7 +182,7 @@ export async function GET(req: NextRequest) {
     const [categoriesByContribution] = await Promise.all([
       getCategoryPreviews({
         tenantId: ctx.tenantId, entityIds: rawFinanceQueue.map(({ id }) => id),
-        table: 'budget_transactions', entityColumn: 'contributionId',
+        source: 'budgetContributions',
       }),
       addQueueUsers(rawFinanceQueue.flatMap((item) => [item.submittedBy, item.createdBy, item.projectApprovedBy])),
       addQueueBudgets(rawFinanceQueue.map((item) => item.costCentreId)),
