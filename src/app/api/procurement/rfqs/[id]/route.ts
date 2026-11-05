@@ -1,6 +1,7 @@
 // app/api/procurement/rfqs/[id]/route.ts
 // Detailed RFQ view and status transition/editing endpoint
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { hasPermission } from '@/lib/permissions';
@@ -10,6 +11,7 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { RFQ_INVITATION_MARK_RELEASED_SQL, RFQ_TRANSITION_ALLOWED_FIELDS } from './route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { RfqDetailQuoteSummary, RfqLatestQuoteSummaryRow } from '@app-types/app/api/procurement/rfqs.types';
 
 
 export async function GET(
@@ -82,39 +84,6 @@ export async function GET(
             vendor: { select: { id: true, name: true, code: true } },
           },
         },
-        quotes: {
-          where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
-          select: {
-            id: true,
-            vendorId: true,
-            quoteNumber: true,
-            quoteVersion: true,
-            status: true,
-            totalBaseAmount: true,
-            taxAmount: true,
-            discountAmount: true,
-            totalQuoteAmount: true,
-            commercialTerms: true,
-            paymentTermsOffered: true,
-            deliveryLeadTimeDays: true,
-            validUntil: true,
-            submittedAt: true,
-            createdAt: true,
-            vendor: { select: { id: true, name: true, code: true } },
-            lines: {
-              select: {
-                id: true,
-                rfqLineId: true,
-                unitRate: true,
-                taxPercent: true,
-                discountPercent: true,
-                lineTotal: true,
-                remarks: true,
-              },
-            },
-          },
-          orderBy: [{ vendorId: 'asc' }, { quoteVersion: 'desc' }],
-        },
         negotiations: {
           include: {
             rounds: {
@@ -184,7 +153,78 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
-    return apiSuccess({ rfq });
+    const vendorScope = ctx.role === 'VENDOR' ? Prisma.sql`AND q."vendorId" = ${ctx.vendorId}` : Prisma.empty;
+    const quoteRows = await prisma.$queryRaw<RfqLatestQuoteSummaryRow[]>(Prisma.sql`
+      WITH quote_summaries AS (
+        SELECT q."tenantId", q."rfqId", q."vendorId", COUNT(*) AS "versionCount",
+          MAX(q."quoteVersion") AS "latestVersion"
+        FROM "quotes" AS q
+        WHERE q."tenantId" = ${ctx.tenantId} AND q."rfqId" = ${id}
+          ${vendorScope}
+        GROUP BY q."tenantId", q."rfqId", q."vendorId"
+      )
+      SELECT latest."id" AS "quoteId", latest."vendorId", latest."quoteNumber", latest."quoteVersion",
+        summary."versionCount", latest."status", latest."totalBaseAmount", latest."taxAmount",
+        latest."discountAmount", latest."totalQuoteAmount", latest."commercialTerms",
+        latest."paymentTermsOffered", latest."deliveryLeadTimeDays", latest."validUntil",
+        latest."submittedAt", latest."createdAt", vendor."id" AS "vendorRecordId",
+        vendor."name" AS "vendorName", vendor."code" AS "vendorCode",
+        quoteLine."id" AS "quoteLineId", quoteLine."rfqLineId", quoteLine."unitRate",
+        quoteLine."taxPercent", quoteLine."discountPercent", quoteLine."lineTotal",
+        quoteLine."remarks" AS "lineRemarks"
+      FROM quote_summaries AS summary
+      INNER JOIN "quotes" AS latest
+        ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
+          AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
+      LEFT JOIN "vendors" AS vendor
+        ON vendor."id" = latest."vendorId" AND vendor."tenantId" = latest."tenantId"
+      LEFT JOIN "quote_lines" AS quoteLine
+        ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
+      LEFT JOIN "rfq_lines" AS rfqLine
+        ON rfqLine."id" = quoteLine."rfqLineId" AND rfqLine."tenantId" = latest."tenantId"
+          AND rfqLine."rfqId" = latest."rfqId"
+      ORDER BY latest."vendorId" ASC, rfqLine."lineNumber" ASC, quoteLine."id" ASC
+    `);
+    const quotesById = new Map<string, RfqDetailQuoteSummary>();
+    for (const row of quoteRows) {
+      let quote = quotesById.get(row.quoteId);
+      if (!quote) {
+        quote = {
+          id: row.quoteId,
+          vendorId: row.vendorId,
+          quoteNumber: row.quoteNumber,
+          quoteVersion: Number(row.quoteVersion),
+          versionCount: Number(row.versionCount),
+          status: row.status,
+          totalBaseAmount: Number(row.totalBaseAmount),
+          taxAmount: Number(row.taxAmount),
+          discountAmount: Number(row.discountAmount),
+          totalQuoteAmount: Number(row.totalQuoteAmount),
+          commercialTerms: row.commercialTerms,
+          paymentTermsOffered: row.paymentTermsOffered,
+          deliveryLeadTimeDays: row.deliveryLeadTimeDays,
+          validUntil: row.validUntil,
+          submittedAt: row.submittedAt,
+          createdAt: row.createdAt,
+          vendor: row.vendorRecordId ? { id: row.vendorRecordId, name: row.vendorName || '', code: row.vendorCode || '' } : null,
+          lines: [],
+        };
+        quotesById.set(row.quoteId, quote);
+      }
+      if (row.quoteLineId && row.rfqLineId) {
+        quote.lines.push({
+          id: row.quoteLineId,
+          rfqLineId: row.rfqLineId,
+          unitRate: Number(row.unitRate || 0),
+          taxPercent: Number(row.taxPercent || 0),
+          discountPercent: Number(row.discountPercent || 0),
+          lineTotal: Number(row.lineTotal || 0),
+          remarks: row.lineRemarks,
+        });
+      }
+    }
+
+    return apiSuccess({ rfq: { ...rfq, quotes: [...quotesById.values()] } });
   } catch (error: any) {
     await writeStructuredLog('error', 'procurement.rfq_detail_read_failed', {
       operation: 'read_rfq_detail', route: `/api/procurement/rfqs/${id}`,

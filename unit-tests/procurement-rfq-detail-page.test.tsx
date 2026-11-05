@@ -274,6 +274,8 @@ describe('RFQ detail lifecycle page', () => {
         const quote = {
           id: 'quote-live-1',
           quoteNumber: 'QTE-LIVE-001',
+          quoteVersion: 3,
+          versionCount: 4,
           vendorId: 'v-live-1',
           totalQuoteAmount: 180,
           status: '',
@@ -358,6 +360,7 @@ describe('RFQ detail lifecycle page', () => {
     fireEvent.click(within(details).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.closeModal) }));
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copyfg2yyg) }));
+    expect(screen.getByText('4 versions')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation2) })[0]);
     const awardDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.submitCommercialAwardRecommendation) });
     fireEvent.change(within(awardDialog).getByRole('combobox'), { target: { value: '' } });
@@ -435,7 +438,7 @@ describe('RFQ detail lifecycle page', () => {
       lines: [],
       invitedVendors: [],
       quotes: [
-        { id: 'quote-fallback', vendorId: 'external-1', vendor: { name: 'Fallback Supplier' }, totalQuoteAmount: 0, lines: undefined, validityDays: 0, deliveryLeadTimeDays: 0, commercialTerms: '', status: '' },
+        { id: 'quote-fallback', vendorId: 'external-1', vendor: { name: 'Fallback Supplier' }, totalQuoteAmount: 0, quoteVersion: 3, lines: undefined, validityDays: 0, deliveryLeadTimeDays: 0, commercialTerms: '', status: '' },
         { id: 'quote-generic', vendorId: 'external-2', totalQuoteAmount: 0, lines: [], validityDays: 0, deliveryLeadTimeDays: 0, commercialTerms: '' },
       ],
       negotiations: [{ currentRound: 0, rounds: [] }],

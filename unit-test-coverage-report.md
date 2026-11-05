@@ -6,10 +6,10 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.72% (95667/96904) |
-| branches | 90.94% (20601/22653) |
+| statements | 98.73% (95716/96944) |
+| branches | 90.93% (20610/22664) |
 | functions | 97.80% (1823/1864) |
-| lines | 98.72% (95667/96904) |
+| lines | 98.73% (95716/96944) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -56,7 +56,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/(app)/procurement/ppos/page.tsx` | 100.00% | 95.19% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/quotes/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rate-cards/page.tsx` | 94.81% | 62.56% | 92.30% | 94.81% | BELOW 90% |
-| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.26% | 88.41% | 91.22% | 98.26% | BELOW 90% |
+| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.26% | 88.45% | 91.22% | 98.26% | BELOW 90% |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 98.31% | 89.43% | 92.64% | 98.31% | BELOW 90% |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
@@ -211,7 +211,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/api/procurement/rfqs/[id]/re-rfq/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/re-rfq/route.ts` | 94.65% | 92.94% | 100.00% | 94.65% | PASS |
 | `src/app/api/procurement/rfqs/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rfqs/[id]/route.ts` | 94.95% | 91.86% | 100.00% | 94.95% | PASS |
+| `src/app/api/procurement/rfqs/[id]/route.ts` | 97.87% | 90.81% | 100.00% | 97.87% | PASS |
 | `src/app/api/procurement/rfqs/[id]/vendors/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/post.ts` | 93.91% | 88.46% | 100.00% | 93.91% | BELOW 90% |
 | `src/app/api/procurement/rfqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -308,7 +308,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/lib/observability/edge-logger.ts` | 94.36% | 94.73% | 100.00% | 94.36% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.94% | 95.94% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 95.77% | 100.00% | 98.94% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

@@ -1453,7 +1453,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     const sortedQuotes = [...vQuotes].sort((a: any, b: any) => b.quoteVersion - a.quoteVersion);
                     const latestQuote = sortedQuotes[0];
                     const latestVersion = latestQuote?.quoteVersion || 1;
-                    const quoteCount = vQuotes.length || 1;
+                    const quoteCount = Number(latestQuote?.versionCount || vQuotes.length || 1);
 
                     // Existing PPO for this vendor
                     const existingPpo = (rfq.ppos || []).find((p: any) => p.vendorId === v.vendorId);
