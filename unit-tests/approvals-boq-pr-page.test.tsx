@@ -47,7 +47,7 @@ const originalFetch = global.fetch;
 const primaryPr = {
   id: 'pr-1', prNumber: 'PR-001', title: 'Electrical package', totalLines: 2,
   totalEstimatedValue: 12500, totalQuantity: 12, requesterName: 'Asha Rao', requesterEmail: 'asha@example.test',
-  requestedDate: '2026-10-20', hasEnquiry: true, categories: ['Electrical', 'Power'],
+  requestedDate: '2026-10-20', hasEnquiry: true, categories: ['Electrical', 'Power'], remainingCategoryCount: 3,
   boq: { boqCode: 'BOQ-01' }, boqRevision: { revisionCode: 'R2' },
   project: { name: 'North Plant', projectCode: 'NP-1' }, costCentre: { code: 'CC-01', name: 'Electrical' },
 };
@@ -102,6 +102,7 @@ describe('BOQ and PR approval workspace', () => {
     expect(screen.getByText('1 Inquiries')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.clarificationPending))).toBeInTheDocument();
     expect(screen.getByText('General package')).toBeInTheDocument();
+    expect(screen.getByText('+3 more categories')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.standard))).toBeInTheDocument();
     expect(screen.getByText('Mira')).toBeInTheDocument();
     expect(screen.getByText('BOQ-01')).toBeInTheDocument();

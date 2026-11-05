@@ -303,6 +303,9 @@ export default function BoqPrApprovalPage() {
                   <td style={{ padding: '0 16px' }}>
                     <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#334155', fontWeight: 500 }}>
                       {(pr.categories || []).join(', ') || UI_STRINGS.common.standard}
+                      {pr.remainingCategoryCount > 0 && (
+                        <span style={{ marginLeft: 4 }}>{interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: pr.remainingCategoryCount })}</span>
+                      )}
                     </span>
                   </td>
                   <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(pr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}

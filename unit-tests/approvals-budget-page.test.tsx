@@ -35,7 +35,7 @@ const queue = [
     category: { name: 'Electrical' },
     boqRevision: { revisionCode: 'R2' },
     project: { name: 'North Plant' }, costCentre: { code: 'CC-01', name: 'Electrical' },
-    categories: ['Electrical', 'Power'], submitterName: 'Asha', submitterEmail: 'asha@example.test',
+    categories: ['Electrical', 'Power'], remainingCategoryCount: 3, submitterName: 'Asha', submitterEmail: 'asha@example.test',
     submittedAt: '2026-01-05', hasEnquiry: true,
     financialImpact: { currentApprovedAmount: 5000, projectedApprovedTotal: 17500 },
   },
@@ -92,6 +92,7 @@ describe('project budget approval workspace', () => {
     expect(await screen.findByText('BOQ-01')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.clarificationPending))).toBeInTheDocument();
     expect(screen.getByText('Electrical package')).toBeInTheDocument();
+    expect(screen.getByText('+3 more categories')).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.projectUser))).toHaveLength(2);
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
     expect(screen.getByText(/12,500/)).toBeInTheDocument();

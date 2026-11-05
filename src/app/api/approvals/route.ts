@@ -1,22 +1,54 @@
 // src/app/api/approvals/route.ts - Dual Approvals Queues API (Budget Approval & PR / BOQ Approval)
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, getListPageWindow } from '@/lib/api-utils';
+import { APPROVAL_CATEGORY_PREVIEW_LIMIT } from './route.constants';
 
-async function getContributionCategories(tenantId: string, contributionIds: string[]) {
-  const categoriesByContribution = new Map<string, string[]>();
-  if (contributionIds.length === 0) return categoriesByContribution;
-  const groups = await prisma.budgetTransaction.groupBy({
-    by: ['contributionId', 'category'],
-    where: { tenantId, contributionId: { in: contributionIds } },
-  });
-  for (const { contributionId, category } of groups) {
-    if (!contributionId || !category) continue;
-    const categories = categoriesByContribution.get(contributionId) || [];
-    if (!categories.includes(category)) categories.push(category);
-    categoriesByContribution.set(contributionId, categories);
+type ApprovalCategoryPreviewRow = {
+  entityId: string;
+  category: string;
+  categoryCount: number | bigint;
+};
+
+type ApprovalCategoryPreview = { categories: string[]; total: number };
+
+function mapApprovalCategoryPreviews(rows: ApprovalCategoryPreviewRow[]) {
+  const previews = new Map<string, ApprovalCategoryPreview>();
+  for (const row of rows) {
+    const preview = previews.get(row.entityId) || { categories: [], total: Number(row.categoryCount) || 0 };
+    preview.categories.push(row.category);
+    previews.set(row.entityId, preview);
   }
-  return categoriesByContribution;
+  return previews;
+}
+
+async function getCategoryPreviews(input: {
+  tenantId: string;
+  entityIds: string[];
+  table: 'budget_transactions' | 'pr_lines';
+  entityColumn: 'contributionId' | 'prId';
+}) {
+  if (input.entityIds.length === 0) return new Map<string, ApprovalCategoryPreview>();
+  const rows = await prisma.$queryRaw<ApprovalCategoryPreviewRow[]>(Prisma.sql`
+    WITH distinct_categories AS (
+      SELECT DISTINCT "${Prisma.raw(input.entityColumn)}" AS "entityId", "category"
+      FROM "${Prisma.raw(input.table)}"
+      WHERE "tenantId" = ${input.tenantId}
+        AND "${Prisma.raw(input.entityColumn)}" IN (${Prisma.join(input.entityIds)})
+        AND "category" IS NOT NULL AND TRIM("category") <> ''
+    ), ranked_categories AS (
+      SELECT "entityId", "category",
+        ROW_NUMBER() OVER (PARTITION BY "entityId" ORDER BY "category" COLLATE NOCASE, "category") AS "categoryRank",
+        COUNT(*) OVER (PARTITION BY "entityId") AS "categoryCount"
+      FROM distinct_categories
+    )
+    SELECT "entityId", "category", "categoryCount"
+    FROM ranked_categories
+    WHERE "categoryRank" <= ${APPROVAL_CATEGORY_PREVIEW_LIMIT}
+    ORDER BY "entityId" ASC, "categoryRank" ASC
+  `);
+  return mapApprovalCategoryPreviews(rows);
 }
 
 export async function GET(req: NextRequest) {
@@ -88,7 +120,10 @@ export async function GET(req: NextRequest) {
       },
     });
     const [categoriesByContribution] = await Promise.all([
-      getContributionCategories(ctx.tenantId, rawBudgetQueue.map(({ id }) => id)),
+      getCategoryPreviews({
+        tenantId: ctx.tenantId, entityIds: rawBudgetQueue.map(({ id }) => id),
+        table: 'budget_transactions', entityColumn: 'contributionId',
+      }),
       addQueueUsers(rawBudgetQueue.flatMap((item) => [item.submittedBy, item.createdBy])),
       addQueueBudgets(rawBudgetQueue.map((item) => item.costCentreId)),
     ]);
@@ -99,14 +134,17 @@ export async function GET(req: NextRequest) {
       const proposed = item.totalEstimatedValue || 0;
       const projected = currentApproved + proposed;
 
-      const categories = categoriesByContribution.get(item.id) || [];
+      const categoryPreview = categoriesByContribution.get(item.id) || { categories: [], total: 0 };
+      const categories = categoryPreview.categories.length ? categoryPreview.categories : ['General'];
+      const categoryCount = Math.max(categoryPreview.total, categories.length);
       const submitterInfo = userMap.get(item.submittedBy || '') || userMap.get(item.createdBy);
 
       return {
         ...item,
         submitterName: submitterInfo?.name || item.submittedBy || 'Project User',
         submitterEmail: submitterInfo?.email || '',
-        categories: categories.length > 0 ? categories : ['General'],
+        categories,
+        remainingCategoryCount: Math.max(categoryCount - categories.length, 0),
         financialImpact: {
           currentApprovedAmount: currentApproved,
           proposedContribution: proposed,
@@ -139,23 +177,18 @@ export async function GET(req: NextRequest) {
       },
     });
     const [prLineCategoryGroups] = await Promise.all([
-      rawPrQueue.length > 0 ? prisma.pRLine.groupBy({
-        by: ['prId', 'category'],
-        where: { tenantId: ctx.tenantId, prId: { in: rawPrQueue.map(({ id }) => id) } },
-      }) : Promise.resolve([]),
+      getCategoryPreviews({
+        tenantId: ctx.tenantId, entityIds: rawPrQueue.map(({ id }) => id),
+        table: 'pr_lines', entityColumn: 'prId',
+      }),
       addQueueUsers(rawPrQueue.map((item) => item.requestedBy)),
     ]);
-    const categoriesByPr = new Map<string, string[]>();
-    for (const group of prLineCategoryGroups) {
-      if (!group.category) continue;
-      const categories = categoriesByPr.get(group.prId) || [];
-      if (!categories.includes(group.category)) categories.push(group.category);
-      categoriesByPr.set(group.prId, categories);
-    }
-
     results.prQueue = rawPrQueue.map(item => {
       const requesterInfo = userMap.get(item.requestedBy);
-      const categories = categoriesByPr.get(item.id) || [];
+      const categoryPreview = prLineCategoryGroups.get(item.id) || { categories: [], total: 0 };
+      const fallbackCategories = item.boq?.category ? [item.boq.category] : ['Standard'];
+      const categories = categoryPreview.categories.length ? categoryPreview.categories : fallbackCategories;
+      const categoryCount = Math.max(categoryPreview.total, categories.length);
 
       return {
         ...item,
@@ -163,7 +196,8 @@ export async function GET(req: NextRequest) {
         totalRfqs: item._count.rfqs,
         requesterName: requesterInfo?.name || item.requestedBy,
         requesterEmail: requesterInfo?.email || '',
-        categories: categories.length > 0 ? categories : (item.boq?.category ? [item.boq.category] : ['Standard']),
+        categories,
+        remainingCategoryCount: Math.max(categoryCount - categories.length, 0),
         hasEnquiry: (item.approvals || []).some(a => a.status === 'ENQUIRY'),
         latestMessage: item.approvals?.[0] || null,
       };
@@ -193,7 +227,10 @@ export async function GET(req: NextRequest) {
       },
     });
     const [categoriesByContribution] = await Promise.all([
-      getContributionCategories(ctx.tenantId, rawFinanceQueue.map(({ id }) => id)),
+      getCategoryPreviews({
+        tenantId: ctx.tenantId, entityIds: rawFinanceQueue.map(({ id }) => id),
+        table: 'budget_transactions', entityColumn: 'contributionId',
+      }),
       addQueueUsers(rawFinanceQueue.flatMap((item) => [item.submittedBy, item.createdBy, item.projectApprovedBy])),
       addQueueBudgets(rawFinanceQueue.map((item) => item.costCentreId)),
     ]);
@@ -204,7 +241,9 @@ export async function GET(req: NextRequest) {
       const proposed = item.acceptedEstimatedValue || item.totalEstimatedValue || 0;
       const projected = currentApproved + proposed;
 
-      const categories = categoriesByContribution.get(item.id) || [];
+      const categoryPreview = categoriesByContribution.get(item.id) || { categories: [], total: 0 };
+      const categories = categoryPreview.categories.length ? categoryPreview.categories : ['General'];
+      const categoryCount = Math.max(categoryPreview.total, categories.length);
       const submitterInfo = userMap.get(item.submittedBy || '') || userMap.get(item.createdBy);
       const projectApproverInfo = userMap.get(item.projectApprovedBy || '');
       const projectApprovalRecord = item.approvals?.find(a => a.status === 'APPROVED');
@@ -220,7 +259,8 @@ export async function GET(req: NextRequest) {
           approvedAt: item.projectApprovedAt || projectApprovalRecord?.timestamp,
           remarks: projectApprovalRecord?.reason || 'Project level scope and commercial estimate approved.',
         },
-        categories: categories.length > 0 ? categories : ['General'],
+        categories,
+        remainingCategoryCount: Math.max(categoryCount - categories.length, 0),
         financialImpact: {
           currentApprovedAmount: currentApproved,
           proposedContribution: proposed,

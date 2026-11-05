@@ -3950,6 +3950,7 @@ export const UI_STRINGS = {
     zenithRetailSystems: "Zenith Retail Systems",
   },
   common: {
+    additionalCategoryCount: "+{{count}} more categories",
     untitledItemFallback: "Untitled Item",
     failedToFetchCategories: "Failed to fetch categories.",
     workflowRecordChangedRetryAfterRefresh: "This record changed while the action was being saved. Refresh and try again.",
