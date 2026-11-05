@@ -4,6 +4,12 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
+import {
+  decodeRateCardApprovalCursor,
+  getRateCardApprovalHistoryMetadata,
+  paginateRateCardApprovalHistory,
+} from '@/lib/rate-card-approval-history';
 
 
 export async function POST(
@@ -74,22 +80,38 @@ export async function GET(
 
   const { id } = await params;
   const startedAt = Date.now();
+  const cursorParam = req.nextUrl.searchParams.get('cursor');
+  const cursor = cursorParam ? decodeRateCardApprovalCursor(cursorParam) : null;
+
+  if (cursorParam && !cursor) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
 
   try {
     const rateCard = await prisma.vendorRateCard.findUnique({
       where: { id, tenantId: ctx.tenantId },
-      include: {
-        approvals: {
-          orderBy: { timestamp: 'desc' },
-        },
-      },
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
       return apiError(UI_STRINGS.common.rateCardNotFound, 404);
     }
 
-    return apiSuccess({ approvals: rateCard.approvals });
+    const approvals = await prisma.rateCardApproval.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        rateCardId: id,
+        ...(cursor ? {
+          OR: [
+            { timestamp: { lt: cursor.timestamp } },
+            { timestamp: cursor.timestamp, id: { lt: cursor.id } },
+          ],
+        } : {}),
+      },
+      select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+      orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+      take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE + 1,
+    });
+    const page = paginateRateCardApprovalHistory(approvals);
+
+    return apiSuccess({ approvals: page.approvals, approvalHistory: getRateCardApprovalHistoryMetadata(page) });
   } catch (error) {
     await writeStructuredLog('error', 'rate_card.clarification_messages_read_failed', {
       operation: 'read_rate_card_clarification_messages',

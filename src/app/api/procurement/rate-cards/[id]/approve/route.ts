@@ -8,6 +8,7 @@ import { writeRateCardTransitionAtomically } from '@/lib/d1-batch';
 import { RATE_CARD_APPROVE_FINANCE_UPDATE_SQL, RATE_CARD_APPROVE_PROJECT_UPDATE_SQL } from '@/lib/d1-batch.constants';
 import { parseStoredJsonObject } from '@/lib/rate-card-utils';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
 
 
 export async function POST(
@@ -23,7 +24,11 @@ export async function POST(
   try {
     const rateCard = await prisma.vendorRateCard.findFirst({
       where: { id, tenantId: ctx.tenantId },
-      include: { items: true, vendor: true, approvals: { orderBy: { timestamp: 'desc' } } },
+      include: { items: true, vendor: true, approvals: {
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+        take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+        select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+      } },
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
@@ -68,7 +73,7 @@ export async function POST(
       const updated = {
         ...rateCard, status: 'PENDING_FINANCE_APPROVAL', approvalLevel: 'LEVEL_2_FINANCE',
         projectApprovedBy: approverName, projectApprovedAt: now, updatedAt: now,
-        approvals: [approval, ...(rateCard.approvals || [])],
+        approvals: [approval, ...(rateCard.approvals || [])].slice(0, RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE),
       };
 
       return apiSuccess({
@@ -124,7 +129,7 @@ export async function POST(
       const updated = {
         ...rateCard, status: 'APPROVED', approvalLevel: 'COMPLETED',
         financeApprovedBy: approverName, financeApprovedAt: now, approvedBy: approverName, approvedAt: now,
-        updatedAt: now, approvals: [approval, ...(rateCard.approvals || [])],
+        updatedAt: now, approvals: [approval, ...(rateCard.approvals || [])].slice(0, RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE),
       };
 
       return apiSuccess({

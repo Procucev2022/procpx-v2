@@ -1386,6 +1386,7 @@ model RateCardApproval {
 
   rateCard      VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId, rateCardId, timestamp, id], map: "rate_card_approvals_tenant_card_timestamp_idx")
   @@map("rate_card_approvals")
 }
 

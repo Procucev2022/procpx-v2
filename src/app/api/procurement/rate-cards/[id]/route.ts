@@ -26,6 +26,8 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareRateCardNotificationOutbox } from '@/lib/notification-outbox';
 import { dispatchPreparedWorkflowNotification } from '@/lib/notifications';
 import { MAX_RATE_CARD_NOTES_LENGTH, MAX_RATE_CARD_TERMS_LENGTH, MAX_RATE_CARD_TEXT_LENGTH } from '../route.constants';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
+import { getRateCardApprovalHistoryMetadata, paginateRateCardApprovalHistory } from '@/lib/rate-card-approval-history';
 import type { RateCardDetailItemInput, RateCardDetailUpdateBody, RateCardItemStateUpdate } from '@app-types/app/api/procurement/rate-card-detail.types';
 import { parseStoredJsonObject } from '@/lib/rate-card-utils';
 
@@ -183,7 +185,9 @@ export async function GET(
         },
         items: true,
         approvals: {
-          orderBy: { timestamp: 'desc' },
+          orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+          take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE + 1,
+          select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
         },
       },
     });
@@ -214,6 +218,7 @@ export async function GET(
     const parsedNotes = parseStoredJsonObject(rateCard.notes);
     if (rateCard.notes && !parsedNotes) invalidStoredFields.push({ recordId: rateCard.id, field: 'notes' });
     const notesData = parsedNotes || {};
+    const approvalHistoryPage = paginateRateCardApprovalHistory(rateCard.approvals);
 
     if (invalidStoredFields.length > 0) {
       await writeStructuredLog('warn', 'rate_card.stored_metadata_invalid', {
@@ -228,6 +233,8 @@ export async function GET(
       rateCard: {
         ...rateCard,
         items: enrichedItems,
+        approvals: approvalHistoryPage.approvals,
+        approvalHistory: getRateCardApprovalHistoryMetadata(approvalHistoryPage),
         agreement: notesData.agreement || null,
       },
     });
@@ -255,7 +262,11 @@ export async function PUT(
   try {
     const rateCard = await prisma.vendorRateCard.findFirst({
       where: { id, tenantId: ctx.tenantId },
-      include: { items: true, vendor: true, approvals: { orderBy: { timestamp: 'desc' } } },
+      include: { items: true, vendor: true, approvals: {
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+        take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+        select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+      } },
     });
 
     if (!rateCard) {

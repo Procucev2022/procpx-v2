@@ -30,7 +30,14 @@ import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedD
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { DEFAULT_RATE_CARD_LIST_PAGE_SIZE } from '@/app/api/procurement/rate-cards/route.constants';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
+import { encodeRateCardApprovalCursor } from '@/lib/rate-card-approval-history';
 import type { RateCardPageRecord } from '@app-types/app/(app)/procurement/rate-cards/page.types';
+import type {
+  RateCardApprovalHistoryMetadata,
+  RateCardApprovalHistoryUiCard,
+  RateCardApprovalHistoryUiEntry,
+} from '@app-types/lib/rate-card-approval-history.types';
 
 
 export default function RateCardApprovalsPage() {
@@ -46,6 +53,8 @@ export default function RateCardApprovalsPage() {
   const [selectedCard, setSelectedCard] = useState<any | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [approvalDetailsLoading, setApprovalDetailsLoading] = useState(false);
+  const [loadingOlderApprovalHistory, setLoadingOlderApprovalHistory] = useState(false);
+  const [approvalHistoryError, setApprovalHistoryError] = useState<string | null>(null);
   const reviewRequestSequence = useRef(0);
 
   // Return & Reject modals
@@ -134,6 +143,37 @@ export default function RateCardApprovalsPage() {
       }
     } finally {
       if (sequence === reviewRequestSequence.current) setApprovalDetailsLoading(false);
+    }
+  };
+
+  const handleLoadOlderApprovalHistory = async () => {
+    if (!selectedCard || !selectedCard.approvalHistory?.nextCursor || loadingOlderApprovalHistory) return;
+    const cardId = selectedCard.id;
+    setLoadingOlderApprovalHistory(true);
+    setApprovalHistoryError(null);
+    try {
+      const cursor = encodeURIComponent(selectedCard.approvalHistory.nextCursor);
+      const response = await fetch(`/api/procurement/rate-cards/${cardId}/message?cursor=${cursor}`);
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data.approvals) || !data.approvalHistory) {
+        throw new Error(UI_STRINGS.appAppApprovalsRateCardsPage.failedToLoadOlderApprovalHistory);
+      }
+      const olderApprovals = data.approvals as RateCardApprovalHistoryUiEntry[];
+      const approvalHistory = data.approvalHistory as RateCardApprovalHistoryMetadata;
+      setSelectedCard((current: RateCardApprovalHistoryUiCard | null) => {
+        if (!current || current.id !== cardId) return current;
+        const seenIds = new Set((current.approvals || []).map((approval) => approval.id));
+        const uniqueOlderApprovals = olderApprovals.filter((approval) => !seenIds.has(approval.id));
+        return {
+          ...current,
+          approvals: [...(current.approvals || []), ...uniqueOlderApprovals],
+          approvalHistory,
+        };
+      });
+    } catch {
+      setApprovalHistoryError(UI_STRINGS.appAppApprovalsRateCardsPage.failedToLoadOlderApprovalHistory);
+    } finally {
+      setLoadingOlderApprovalHistory(false);
     }
   };
 
@@ -229,8 +269,22 @@ export default function RateCardApprovalsPage() {
       if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToSendMessage }));
 
       // Update local card approvals
-      const updatedApprovals = [data.approvalEntry, ...(selectedCard.approvals || [])];
-      setSelectedCard({ ...selectedCard, approvals: updatedApprovals });
+      setSelectedCard((current: RateCardApprovalHistoryUiCard | null) => {
+        if (!current || current.id !== selectedCard.id) return current;
+        const mergedApprovals = [data.approvalEntry, ...(current.approvals || [])];
+        const approvals = mergedApprovals.slice(0, RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE);
+        const hasMore = Boolean(current.approvalHistory?.hasMore) || mergedApprovals.length > RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE;
+        const lastVisibleApproval = approvals[approvals.length - 1];
+        return {
+          ...current,
+          approvals,
+          approvalHistory: {
+            hasMore,
+            nextCursor: hasMore && lastVisibleApproval ? encodeRateCardApprovalCursor(lastVisibleApproval) : null,
+            pageSize: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+          },
+        };
+      });
       setMessageText('');
     } catch (err: any) {
       alert(err.message);
@@ -651,6 +705,24 @@ export default function RateCardApprovalsPage() {
                     </div>
                   )}
                 </div>
+                {approvalHistoryError && (
+                  <div role="alert" style={{ color: '#b91c1c', fontSize: 11, marginTop: 6 }}>
+                    {approvalHistoryError}
+                  </div>
+                )}
+                {selectedCard.approvalHistory?.hasMore && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { void handleLoadOlderApprovalHistory(); }}
+                    disabled={loadingOlderApprovalHistory}
+                    style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                  >
+                    {loadingOlderApprovalHistory
+                      ? UI_STRINGS.appAppApprovalsRateCardsPage.loadingOlderApprovalHistory
+                      : UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory}
+                  </button>
+                )}
               </div>
 
               {/* Complete Item-wise Comparison Table (Requirement 7) */}

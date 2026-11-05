@@ -31,7 +31,7 @@ jest.mock('../src/lib/prisma', () => ({
     boqRevision: { findFirst: jest.fn(), update: jest.fn() },
     boqLine: { createMany: jest.fn() },
     vendorRateCard: { findUnique: jest.fn() },
-    rateCardApproval: { create: jest.fn() },
+    rateCardApproval: { create: jest.fn(), findMany: jest.fn() },
     budgetContribution: { findFirst: jest.fn(), update: jest.fn() },
     budgetApproval: { create: jest.fn() },
     budgetTransaction: { updateMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
@@ -81,6 +81,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
+    db.rateCardApproval.findMany.mockReset().mockResolvedValue([]);
     (writeD1BatchAtomically as jest.Mock).mockResolvedValue(Array.from({ length: 10 }, () => ({ meta: { changes: 1 } })));
   });
 
@@ -462,12 +463,21 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'other-tenant' });
     await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'tenant-1', approvals: [{ id: 'message-1' }] });
-    await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: true, data: { approvals: [{ id: 'message-1' }] }, status: 200 });
+    db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'tenant-1' });
+    db.rateCardApproval.findMany.mockResolvedValueOnce([{ id: 'message-1', timestamp: new Date('2026-04-02T10:00:00.000Z') }]);
+    await expect(getRateCardMessages(request(), cardParams())).resolves.toMatchObject({
+      ok: true,
+      data: { approvals: [{ id: 'message-1' }], approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 } },
+      status: 200,
+    });
     expect(db.vendorRateCard.findUnique).toHaveBeenLastCalledWith({
       where: { id: 'rate-card-1', tenantId: 'tenant-1' },
-      include: { approvals: { orderBy: { timestamp: 'desc' } } },
     });
+    expect(db.rateCardApproval.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', rateCardId: 'rate-card-1' },
+      orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], take: 26,
+      select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+    }));
 
     db.vendorRateCard.findUnique.mockRejectedValueOnce(new Error('database detail that must not reach the client'));
     await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({
@@ -490,6 +500,28 @@ describe('project document, project detail, BOQ revision, rate-card message and 
       operation: 'read_rate_card_clarification_messages',
       tenantId: 'tenant-1', userId: 'user-1', rateCardId: 'rate-card-1',
       error: { name: 'Error' },
+    }));
+  });
+
+  it('validates and applies stable tenant-scoped clarification history cursors', async () => {
+    await expect(getRateCardMessages(
+      new NextRequest('http://localhost/api/test?cursor=not-a-cursor'), cardParams(),
+    )).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    expect(db.vendorRateCard.findUnique).not.toHaveBeenCalled();
+
+    const cursor = '2026-04-02T10:00:00.000Z~approval-1';
+    db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'tenant-1' });
+    await expect(getRateCardMessages(
+      new NextRequest(`http://localhost/api/test?cursor=${encodeURIComponent(cursor)}`), cardParams(),
+    )).resolves.toMatchObject({ ok: true, data: { approvals: [], approvalHistory: { hasMore: false } } });
+    expect(db.rateCardApproval.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        tenantId: 'tenant-1', rateCardId: 'rate-card-1',
+        OR: [
+          { timestamp: { lt: new Date('2026-04-02T10:00:00.000Z') } },
+          { timestamp: new Date('2026-04-02T10:00:00.000Z'), id: { lt: 'approval-1' } },
+        ],
+      },
     }));
   });
 

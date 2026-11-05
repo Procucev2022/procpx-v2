@@ -12,6 +12,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { RATE_CARD_APPROVE_PROJECT_UPDATE_SQL } from '../src/lib/d1-batch.constants';
 import { PPO_VENDOR_ACCEPT_UPDATE_IF_ISSUED_SQL, PPO_VENDOR_ISSUE_UPDATE_IF_ISSUED_SQL, RFQ_VENDOR_MESSAGE_INSERT_AFTER_AUDIT_SQL } from '../src/lib/d1-batch.constants';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '../src/lib/rate-card-approval-history.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -60,6 +61,14 @@ const rateCard = (overrides: Record<string, unknown> = {}) => ({
   id: 'card-1', tenantId: 'tenant-1', vendorId: 'vendor-1', rateCardNumber: 'RC-001', status: 'PENDING_PROJECT_APPROVAL',
   approvalLevel: 'LEVEL_1_PROJECT', notes: null, items: [], vendor: { id: 'vendor-1', name: 'Acme' }, ...overrides,
 });
+const expectBoundedApprovalHistoryRead = () => expect(db.vendorRateCard.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+  where: { id: 'card-1', tenantId: 'tenant-1' },
+  include: expect.objectContaining({ approvals: expect.objectContaining({
+    orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+    take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+    select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+  }) }),
+}));
 
 describe('auction terms, vendor PPO actions, and rate card approval routes', () => {
   let consoleError: jest.SpyInstance;
@@ -247,6 +256,7 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     await expect(approveRateCard(request({ remarks: 'Commercial review complete' }), params('card-1'))).resolves.toMatchObject({
       ok: true, data: { message: expect.stringContaining('forwarded to Finance') },
     });
+    expectBoundedApprovalHistoryRead();
     expect(transition).toHaveBeenLastCalledWith(expect.objectContaining({
       updateSql: RATE_CARD_APPROVE_PROJECT_UPDATE_SQL,
       updateValues: expect.arrayContaining(['Vendor User', 'card-1', 'tenant-1', 'PENDING_PROJECT_APPROVAL']),

@@ -148,6 +148,39 @@ describe('rate card detail API', () => {
     await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCard, status: 500 });
   });
 
+  it('bounds approval history in detail and exposes the stable older-page cursor', async () => {
+    const approvals = Array.from({ length: 26 }, (_, index) => {
+      const sequence = 25 - index;
+      return {
+        id: `approval-${sequence}`,
+        level: 'LEVEL_1_PROJECT',
+        approverName: `Approver ${sequence}`,
+        action: 'APPROVED',
+        remarks: `Decision ${sequence}`,
+        timestamp: new Date(Date.UTC(2026, 3, 2, 10, 0, sequence)),
+      };
+    });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ approvals }));
+
+    const result = await GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params());
+    expect(result).toMatchObject({
+      ok: true,
+      data: { rateCard: {
+        approvals: approvals.slice(0, 25),
+        approvalHistory: { hasMore: true, nextCursor: '2026-04-02T10:00:01.000Z~approval-1', pageSize: 25 },
+      } },
+    });
+    const resultData = result as { data?: { rateCard?: { approvals?: unknown[] } } };
+    expect(resultData.data?.rateCard?.approvals).toHaveLength(25);
+    expect(db.vendorRateCard.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 'rc-1', tenantId: 'tenant-1' },
+      include: expect.objectContaining({ approvals: expect.objectContaining({
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], take: 26,
+        select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+      }) }),
+    }));
+  });
+
   it('submits buyer offer two atomically, rejects unknown rows, and clears signed evidence', async () => {
     db.vendorRateCard.findFirst.mockResolvedValueOnce(card({
       status: 'ROUND_1_VENDOR_QUOTE',

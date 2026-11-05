@@ -6,6 +6,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeRateCardTransitionAtomically } from '@/lib/d1-batch';
 import { RATE_CARD_REVERT_UPDATE_SQL } from '@/lib/d1-batch.constants';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
 
 
 export async function POST(
@@ -27,7 +28,11 @@ export async function POST(
 
     const rateCard = await prisma.vendorRateCard.findFirst({
       where: { id, tenantId: ctx.tenantId },
-      include: { vendor: true, items: true, approvals: { orderBy: { timestamp: 'desc' } } },
+      include: { vendor: true, items: true, approvals: {
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+        take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+        select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+      } },
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
@@ -61,7 +66,7 @@ export async function POST(
     };
     const updated = {
       ...rateCard, status: 'RETURNED_FOR_CORRECTION', revertReason: correctionReason, updatedAt: now,
-      approvals: [approval, ...(rateCard.approvals || [])],
+      approvals: [approval, ...(rateCard.approvals || [])].slice(0, RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE),
     };
 
     return apiSuccess({

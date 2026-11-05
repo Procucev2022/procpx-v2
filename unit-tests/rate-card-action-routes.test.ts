@@ -8,6 +8,7 @@ import { POST as rejectRateCard } from '../src/app/api/procurement/rate-cards/[i
 import { POST as revertRateCard } from '../src/app/api/procurement/rate-cards/[id]/revert/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { RATE_CARD_REJECT_UPDATE_SQL, RATE_CARD_REVERT_UPDATE_SQL, RATE_CARD_SUBMIT_UPDATE_SQL } from '../src/lib/d1-batch.constants';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '../src/lib/rate-card-approval-history.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -44,6 +45,14 @@ const card = (overrides: Record<string, unknown> = {}) => ({
   id: 'card-1', tenantId: 'tenant-1', vendorId: 'vendor-1', rateCardNumber: 'RC-001', status: 'DRAFT',
   items: [{ id: 'item-1' }], vendor: { id: 'vendor-1' }, ...overrides,
 });
+const expectBoundedApprovalHistoryRead = () => expect(db.vendorRateCard.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+  where: { id: 'card-1', tenantId: 'tenant-1' },
+  include: expect.objectContaining({ approvals: expect.objectContaining({
+    orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+    take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+    select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+  }) }),
+}));
 
 describe('vendor rate card submit, reject, and correction routes', () => {
   let consoleError: jest.SpyInstance;
@@ -77,6 +86,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     await expect(submitRateCard(request({ remarks: '  Re-submitted with changes  ' }), params())).resolves.toMatchObject({
       ok: true, data: { rateCard: { id: 'card-1', status: 'PENDING_PROJECT_APPROVAL' }, message: UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardSubmittedForProjectApproval }, status: 200,
     });
+    expectBoundedApprovalHistoryRead();
     expect(transition).toHaveBeenLastCalledWith(expect.objectContaining({
       updateSql: RATE_CARD_SUBMIT_UPDATE_SQL,
       updateValues: expect.arrayContaining(['Approver One', 'card-1', 'tenant-1', 'RETURNED_FOR_CORRECTION']),
@@ -134,6 +144,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     await expect(rejectRateCard(request({ remarks: '  Pricing needs correction  ' }), params())).resolves.toMatchObject({
       ok: true, data: { rateCard: { id: 'card-1', status: 'REJECTED' }, message: UI_STRINGS.appApiProcurementRateCardsIdRejectRoute.rateCardRejectedWithReasonRecorded }, status: 200,
     });
+    expectBoundedApprovalHistoryRead();
     expect(transition).toHaveBeenLastCalledWith(expect.objectContaining({
       updateSql: RATE_CARD_REJECT_UPDATE_SQL,
       updateValues: expect.arrayContaining(['Pricing needs correction', 'card-1', 'tenant-1', 'PENDING_PROJECT_APPROVAL']),
@@ -175,6 +186,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     await expect(revertRateCard(request({ remarks: '  Attach current tax certificate  ' }), params())).resolves.toMatchObject({
       ok: true, data: { rateCard: { id: 'card-1', status: 'RETURNED_FOR_CORRECTION' }, message: UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.rateCardReturnedForCorrectionWithRemarksRecorded }, status: 200,
     });
+    expectBoundedApprovalHistoryRead();
     expect(transition).toHaveBeenLastCalledWith(expect.objectContaining({
       updateSql: RATE_CARD_REVERT_UPDATE_SQL,
       updateValues: expect.arrayContaining(['Attach current tax certificate', 'card-1', 'tenant-1', 'PENDING_FINANCE_APPROVAL']),

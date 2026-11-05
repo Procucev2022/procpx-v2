@@ -862,6 +862,7 @@ export const UI_STRINGS = {
   appAppApprovalsRateCardsPage: {
     failedToApproveRateCard: "Failed to approve Rate Card",
     conversationClarificationThread: " Conversation & Clarification Thread",
+    failedToLoadOlderApprovalHistory: "Failed to load older approval history.",
     itemWiseCommercialComparisonMatrix: " Item-wise Commercial Comparison Matrix (",
     pendingApproval: " Pending Approval",
     postMessage: " Post Message",
@@ -894,6 +895,8 @@ export const UI_STRINGS = {
     level2FinanceApproverQueueLevel2Count: "Level 2: Finance Approver Queue ({{level2Count}})",
     level2FinanceApproverReview: "Level 2: Finance Approver Review",
     loadingApprovalsQueue: "Loading Approvals Queue...",
+    loadingOlderApprovalHistory: "Loading older history...",
+    loadOlderApprovalHistory: "Load older history",
     mandatoryTwoLevelGovernanceLevel1ProjectApproverLevel2FinanceApproverActiveRateCard: "Mandatory Two-Level Governance: Level 1 (Project Approver) → Level 2 (Finance Approver) → Active Rate Card",
     mandatoryRejectionReason: "Mandatory rejection reason...",
     mandatoryRemarksForCorrection: "Mandatory remarks for correction...",
