@@ -6,10 +6,10 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.72% (95643/96879) |
-| branches | 90.95% (20594/22643) |
+| statements | 98.72% (95667/96904) |
+| branches | 90.94% (20601/22653) |
 | functions | 97.80% (1823/1864) |
-| lines | 98.72% (95643/96879) |
+| lines | 98.72% (95667/96904) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -59,7 +59,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.26% | 88.41% | 91.22% | 98.26% | BELOW 90% |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 98.31% | 89.43% | 92.64% | 98.31% | BELOW 90% |
-| `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.56% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/vendors/[id]/page.tsx` | 99.23% | 89.74% | 100.00% | 99.23% | BELOW 90% |
 | `src/app/(app)/procurement/vendors/page.tsx` | 99.46% | 91.70% | 98.61% | 99.46% | PASS |
 | `src/app/(app)/projects/[id]/page.tsx` | 97.58% | 85.08% | 90.00% | 97.58% | BELOW 90% |
@@ -215,7 +215,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/api/procurement/rfqs/[id]/vendors/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/post.ts` | 93.91% | 88.46% | 100.00% | 93.91% | BELOW 90% |
 | `src/app/api/procurement/rfqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rfqs/route.ts` | 100.00% | 93.87% | 100.00% | 100.00% | PASS |
+| `src/app/api/procurement/rfqs/route.ts` | 99.62% | 90.32% | 100.00% | 99.62% | PASS |
 | `src/app/api/procurement/vendors/[id]/dashboard/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/[id]/dashboard/route.ts` | 99.15% | 83.79% | 100.00% | 99.15% | BELOW 90% |
 | `src/app/api/procurement/vendors/[id]/eligible-ppos/route.ts` | 98.76% | 75.00% | 100.00% | 98.76% | BELOW 90% |
