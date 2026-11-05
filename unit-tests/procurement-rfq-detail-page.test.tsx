@@ -88,7 +88,7 @@ describe('RFQ detail lifecycle page', () => {
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rFQNotFoundOrAccessDenied))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing');
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing/compare');
-    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rate-cards/match?rfqId=rfq-missing');
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rate-cards/match?rfqId=rfq-missing&page=1');
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.backToRFQsRegister, "", false) })).toHaveAttribute('href', '/procurement/rfqs');
   });
 
@@ -256,7 +256,7 @@ describe('RFQ detail lifecycle page', () => {
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/auth/session') return reply({ user: { role: 'FINANCE_APPROVER' } });
       if (url === '/api/procurement/rfqs/rfq-live/compare') return reply(comparison);
-      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-live') return reply({ matchedRateCards });
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-live&page=1') return reply({ matchedRateCards });
       if (url === '/api/procurement/rfqs/rfq-live' && init?.method === 'PUT') {
         if (releaseFails) {
           releaseFails = false;
@@ -410,7 +410,8 @@ describe('RFQ detail lifecycle page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open rate cards' }));
     const rateCardDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approvedVendorRateCardSourcingComparison) });
     expect(within(rateCardDialog).getByText('Coverage is incomplete')).toBeInTheDocument();
-    expect(within(rateCardDialog).getAllByText('88/100').length).toBeGreaterThan(0);
+    expect(within(rateCardDialog).getByText('0/100')).toBeInTheDocument();
+    expect(within(rateCardDialog).getByText(uiStringPattern(UI_STRINGS.common.notAvailable))).toBeInTheDocument();
     (window.confirm as jest.Mock).mockReturnValueOnce(false);
     fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
     fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
@@ -445,7 +446,7 @@ describe('RFQ detail lifecycle page', () => {
       if (url === '/api/auth/session') return { ok: true, json: async () => ({ user: {} }) };
       if (url === '/api/procurement/rfqs/rfq-sparse') return { ok: true, json: async () => ({ rfq: sparseRfq }) };
       if (url === '/api/procurement/rfqs/rfq-sparse/compare') throw new Error('Comparison unavailable');
-      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-sparse') throw new Error('Rate cards unavailable');
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-sparse&page=1') throw new Error('Rate cards unavailable');
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -505,7 +506,7 @@ describe('RFQ detail lifecycle page', () => {
       if (url === '/api/procurement/rfqs/rfq-fallback' && init?.method === 'PUT') throw new Error('');
       if (url === '/api/procurement/rfqs/rfq-fallback') return { ok: true, json: async () => ({ rfq: sparseRfq }) };
       if (url === '/api/procurement/rfqs/rfq-fallback/compare') return { ok: true, json: async () => comparison };
-      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-fallback') return { ok: true, json: async () => ({ matchedRateCards: [] }) };
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-fallback&page=1') return { ok: true, json: async () => ({ matchedRateCards: [] }) };
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -534,7 +535,7 @@ describe('RFQ detail lifecycle page', () => {
       if (url === '/api/procurement/rfqs/rfq-draft' && init?.method === 'PUT') return { ok: true, json: async () => ({}) };
       if (url === '/api/procurement/rfqs/rfq-draft') return { ok: true, json: async () => ({ rfq: draft }) };
       if (url === '/api/procurement/rfqs/rfq-draft/compare') return { ok: true, json: async () => ({ vendors: [], lines: [] }) };
-      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-draft') return { ok: true, json: async () => ({ matchedRateCards: [] }) };
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-draft&page=1') return { ok: true, json: async () => ({ matchedRateCards: [] }) };
       throw new Error(`Unexpected fetch: ${url}`);
     });
     renderRfq('rfq-draft');

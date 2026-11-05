@@ -3,10 +3,24 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
-import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '@/lib/notifications';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  AUDIT_LOG_INSERT_SQL,
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  NEGOTIATION_INSERT_IF_ABSENT_SQL,
+  NEGOTIATION_ROUND_INSERT_SQL,
+  NEGOTIATION_ROUND_SUPERSEDE_SQL,
+  NEGOTIATION_UPDATE_AFTER_ROUND_SQL,
+  RFQ_MARK_NEGOTIATION_SQL,
+  RFQ_MESSAGE_INSERT_SQL,
+} from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { getListPageWindow } from '@/lib/api-utils';
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
+import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 
 
 export async function GET(req: NextRequest) {
@@ -15,6 +29,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const rfqId = searchParams.get('rfqId');
+  const { page, pageSize, skip } = getListPageWindow(searchParams);
+  const startedAt = Date.now();
 
   try {
     const where: any = {
@@ -23,35 +39,45 @@ export async function GET(req: NextRequest) {
 
     if (rfqId) where.rfqId = rfqId;
 
-    const negotiations = await prisma.negotiation.findMany({
-      where,
-      include: {
-        rfq: {
-          include: {
-            project: { select: { id: true, name: true, projectCode: true } },
-            boqRevision: { select: { id: true, revisionCode: true } },
+    const [total, statusGroups, negotiations] = await Promise.all([
+      prisma.negotiation.count({ where }),
+      prisma.negotiation.groupBy({ by: ['status'], where, _count: { _all: true } }),
+      prisma.negotiation.findMany({
+        where,
+        include: {
+          rfq: {
+            include: {
+              project: { select: { id: true, name: true, projectCode: true } },
+              boqRevision: { select: { id: true, revisionCode: true } },
+            },
           },
+          _count: { select: { rounds: true } },
         },
-        rounds: {
-          include: {
-            vendor: true,
-          },
-          orderBy: { roundNumber: 'desc' },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: pageSize,
+      }),
+    ]);
 
-    return apiSuccess({ negotiations, total: negotiations.length });
-  } catch (error: any) {
-    console.error('Error fetching negotiations:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchNegotiations }), 500);
+    const statusCounts = Object.fromEntries(statusGroups.map((group) => [group.status, group._count._all]));
+    return apiSuccess({ negotiations, total, statusCounts, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+  } catch (error) {
+    await writeStructuredLog('error', 'procurement.negotiations_read_failed', {
+      operation: 'read_negotiations', route: '/api/procurement/negotiations',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      rfqId, page, pageSize, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchNegotiations, 500);
   }
 }
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('NEGOTIATION_MANAGE');
   if (!isApiContext(ctx)) return ctx;
+  const startedAt = Date.now();
+  const requestId = req.headers?.get('x-request-id') || undefined;
+  let failedRfqId: string | undefined;
 
   try {
     const body = await req.json();
@@ -73,6 +99,7 @@ export async function POST(req: NextRequest) {
     if (!rfqId) {
       return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, 400);
     }
+    failedRfqId = rfqId;
 
     const rfq = await prisma.rfq.findFirst({
       where: { id: rfqId, tenantId: ctx.tenantId },
@@ -119,13 +146,26 @@ export async function POST(req: NextRequest) {
     }
 
     if (!negotiation) {
-      negotiation = await prisma.negotiation.create({
-        data: {
-          tenantId: ctx.tenantId,
-          rfqId,
-          currentRound: 1,
-          status: 'ACTIVE',
+      const negotiationId = crypto.randomUUID();
+      const now = new Date();
+      const auditId = crypto.randomUUID();
+      const description = interpolateUiString(
+        UI_STRINGS.appApiProcurementNegotiationsRoute.startedNegotiationProcessForRFQRfqNumber,
+        { rfqNumber: rfq.rfqNumber },
+      );
+      await writeD1BatchAtomically([
+        {
+          sql: NEGOTIATION_INSERT_IF_ABSENT_SQL,
+          values: [negotiationId, ctx.tenantId, rfqId, now, now, rfqId, ctx.tenantId, ctx.tenantId, rfqId],
         },
+        {
+          sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+          values: [auditId, ctx.tenantId, ctx.userId, rfq.projectId, 'NEGOTIATION', negotiationId,
+            'NEGOTIATION_CREATED', description, null, JSON.stringify({ rfqId, status: 'ACTIVE' }), null, null, now],
+        },
+      ]);
+      negotiation = await prisma.negotiation.findFirst({
+        where: { rfqId, tenantId: ctx.tenantId },
         include: {
           rounds: {
             include: { vendor: true },
@@ -133,16 +173,7 @@ export async function POST(req: NextRequest) {
           },
         },
       });
-
-      await createAuditLog({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: rfq.projectId,
-        entityType: 'NEGOTIATION',
-        entityId: negotiation.id,
-        action: 'NEGOTIATION_CREATED',
-        description: interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.startedNegotiationProcessForRFQRfqNumber, { "rfqNumber": rfq.rfqNumber }),
-      });
+      if (!negotiation) throw new Error();
     }
 
     const currentTenantId = ctx.tenantId;
@@ -216,8 +247,11 @@ export async function POST(req: NextRequest) {
         };
       }
 
-      // Calculate sequential round number for this vendor (1 through 4)
-      const roundNumber = vendorActiveBuyerOffers.length + 1;
+      // Active offer count enforces the cap; the historical maximum keeps round IDs sequential after superseding.
+      const roundNumber = vendorRounds.reduce(
+        (highest: number, round: { roundNumber?: number | string }) => Math.max(highest, Number(round.roundNumber) || 0),
+        0,
+      ) + 1;
       const finalRevised = revisedQuoteAmount ? Number(revisedQuoteAmount) : null;
       const targetCounter = counterOfferAmount ? Number(counterOfferAmount) : null;
       const savingsAmount = finalRevised
@@ -248,124 +282,131 @@ export async function POST(req: NextRequest) {
         };
       }
 
-      const { round } = await prisma.$transaction(async (tx) => {
-        // If an earlier round was pending and superseding was approved, mark earlier round as SUPERSEDED
-        if (activePendingRound && allowSupersede) {
-          await tx.negotiationRound.update({
-            where: { id: activePendingRound.id },
-            data: {
-              status: 'SUPERSEDED',
-              notes: `${activePendingRound.notes ? activePendingRound.notes + ' ' : ''}[Superseded by Buyer Offer Round ${roundNumber}]`,
-            },
-          });
-        }
-
-        const createdRound = await tx.negotiationRound.create({
-          data: {
-            tenantId: currentTenantId,
-            negotiationId: currentNegotiation.id,
-            vendorId: targetVendorId,
-            roundNumber,
-            deadline: deadline ? new Date(deadline) : null,
-            targetPrice: targetPrice ? Number(targetPrice) : null,
-            previousQuoteAmount,
-            counterOfferAmount: targetCounter,
-            revisedQuoteAmount: finalRevised,
-            savingsAmount,
-            savingsPercent: Math.round(savingsPercent * 100) / 100,
-            status: finalRevised ? 'REVISED_SUBMITTED' : 'ROUND_ACTIVE',
-            notes: notes || (activePendingRound && allowSupersede ? `Superseding counteroffer (Round ${roundNumber}) replacing previous pending offer.` : null),
-            lineItemsJson: lineItemsJson ? (typeof lineItemsJson === 'string' ? lineItemsJson : JSON.stringify(lineItemsJson)) : null,
-            nextResponsibleParty: nextResponsibleParty || (finalRevised ? 'BUYER' : 'VENDOR'),
-          },
-          include: {
-            vendor: true,
-          },
-        });
-
-        // Update parent negotiation record
-        await tx.negotiation.update({
-          where: { id: currentNegotiation.id },
-          data: {
-            currentRound: Math.max(currentNegotiation.currentRound, roundNumber),
-            bestQuoteAmount: finalRevised || previousQuoteAmount,
-          },
-        });
-
-        // Update RFQ status to NEGOTIATION
-        if (currentRfq.status !== 'NEGOTIATION') {
-          await tx.rfq.update({
-            where: { id: rfqId },
-            data: { status: 'NEGOTIATION' },
-          });
-        }
-
-        return { round: createdRound };
-      });
-
-      // Audit log
-      await createAuditLog({
+      const now = new Date();
+      const roundId = crypto.randomUUID();
+      const roundNotes = notes || (activePendingRound && allowSupersede
+        ? `Superseding counteroffer (Round ${roundNumber}) replacing previous pending offer.`
+        : null);
+      const serializedLineItems = lineItemsJson
+        ? (typeof lineItemsJson === 'string' ? lineItemsJson : JSON.stringify(lineItemsJson))
+        : null;
+      const resolvedNextParty = nextResponsibleParty || (finalRevised ? 'BUYER' : 'VENDOR');
+      const roundStatus = finalRevised ? 'REVISED_SUBMITTED' : 'ROUND_ACTIVE';
+      const round = {
+        id: roundId,
         tenantId: currentTenantId,
-        userId: currentUserId,
-        projectId: currentRfq.projectId,
-        entityType: 'NEGOTIATION',
-        entityId: round.id,
-        action: activePendingRound && allowSupersede ? 'SUPERSEDING_COUNTEROFFER_ISSUED' : 'NEGOTIATION_ROUND_CREATED',
-        description: activePendingRound && allowSupersede
-          ? `Superseding Round ${roundNumber} counteroffer issued to ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous Round ${activePendingRound.roundNumber} marked SUPERSEDED.`
-          : `Round ${roundNumber} initiated with ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous: ₹ ${previousQuoteAmount.toLocaleString()}, Target/Counter: ₹ ${(targetCounter || targetPrice || 0).toLocaleString()}`,
-        newValue: {
-          roundNumber,
-          vendorId: targetVendorId,
-          previousQuoteAmount,
-          counterOfferAmount: targetCounter,
-          revisedQuoteAmount: finalRevised,
-          supersededRoundId: activePendingRound && allowSupersede ? activePendingRound.id : null,
-        },
-      });
+        negotiationId: currentNegotiation.id,
+        vendorId: targetVendorId,
+        roundNumber,
+        deadline: deadline ? new Date(deadline) : null,
+        targetPrice: targetPrice ? Number(targetPrice) : null,
+        previousQuoteAmount,
+        counterOfferAmount: targetCounter,
+        revisedQuoteAmount: finalRevised,
+        savingsAmount,
+        savingsPercent: Math.round(savingsPercent * 100) / 100,
+        status: roundStatus,
+        notes: roundNotes,
+        isFinalOffer: false,
+        buyerDecision: null,
+        buyerDecisionDate: null,
+        buyerDecisionRemarks: null,
+        nextResponsibleParty: resolvedNextParty,
+        lineItemsJson: serializedLineItems,
+        submittedByVendor: null,
+        createdAt: now,
+        updatedAt: now,
+        vendor,
+      };
+      const isSuperseding = Boolean(activePendingRound && allowSupersede);
+      const auditDescription = isSuperseding
+        ? `Superseding Round ${roundNumber} counteroffer issued to ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous Round ${activePendingRound.roundNumber} marked SUPERSEDED.`
+        : `Round ${roundNumber} initiated with ${vendor.name} for RFQ ${currentRfq.rfqNumber}. Previous: ₹ ${previousQuoteAmount.toLocaleString()}, Target/Counter: ₹ ${(targetCounter || targetPrice || 0).toLocaleString()}`;
+      const rfqTimelineMessage = finalRevised
+        ? `[REVISED QUOTE RECORDED] Recorded vendor revised quote of ₹ ${finalRevised.toLocaleString()} (Round ${roundNumber}) for ${vendor.name}.`
+        : isSuperseding
+        ? `[SUPERSEDING COUNTEROFFER] Buyer issued superseding counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}, replacing pending Round ${activePendingRound.roundNumber}.`
+        : `[BUYER COUNTEROFFER] Buyer submitted counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}. ${notes || ''}`;
+      const auditId = crypto.randomUUID();
+      const notificationPayload = finalRevised
+        ? await notifyNextResponsibleParty({
+          tenantId: currentTenantId, event: 'REVISED_QUOTE_RECEIVED', recordNumber: currentRfq.rfqNumber,
+          entityId: currentRfq.id, details: { vendorName: vendor.name, amount: finalRevised, roundNumber },
+        }, { prepareOnly: true })
+        : await notifyNextResponsibleParty({
+          tenantId: currentTenantId, event: 'COUNTER_OFFER_SENT', recordNumber: currentRfq.rfqNumber,
+          entityId: currentRfq.id, details: { vendorName: vendor.name, amount: targetCounter ? Number(targetCounter) : undefined, roundNumber },
+        }, { prepareOnly: true });
+      const preparedNotification = notificationPayload
+        ? prepareNotificationOutbox(notificationPayload, now, auditId)
+        : null;
+      const batchStatements: D1BatchInputStatement[] = [];
 
-      // Create persistent RFQ message for negotiation audit timeline
-      await prisma.rfqMessage.create({
-        data: {
-          tenantId: currentTenantId,
-          rfqId,
-          senderId: currentUserId,
-          senderName: currentUserName,
-          senderRole: currentUserRole,
-          message: finalRevised
-            ? `[REVISED QUOTE RECORDED] Recorded vendor revised quote of ₹ ${finalRevised.toLocaleString()} (Round ${roundNumber}) for ${vendor.name}.`
-            : activePendingRound && allowSupersede
-            ? `[SUPERSEDING COUNTEROFFER] Buyer issued superseding counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}, replacing pending Round ${activePendingRound.roundNumber}.`
-            : `[BUYER COUNTEROFFER] Buyer submitted counteroffer of ₹ ${(targetCounter || targetPrice || 0).toLocaleString()} (Round ${roundNumber}) to ${vendor.name}. ${notes || ''}`,
-          isVendorSent: Boolean(finalRevised),
-          vendorId: vendor.id,
-        },
-      });
-
-      // Notify next responsible party
-      if (finalRevised) {
-        await notifyNextResponsibleParty({
-          tenantId: currentTenantId,
-          event: 'REVISED_QUOTE_RECEIVED',
-          recordNumber: currentRfq.rfqNumber,
-          entityId: currentRfq.id,
-          details: {
-            vendorName: vendor.name,
-            amount: finalRevised,
-            roundNumber,
-          },
+      if (isSuperseding && activePendingRound) {
+        batchStatements.push({
+          sql: NEGOTIATION_ROUND_SUPERSEDE_SQL,
+          values: [
+            `${activePendingRound.notes ? `${activePendingRound.notes} ` : ''}[Superseded by Buyer Offer Round ${roundNumber}]`,
+            now.toISOString(), activePendingRound.id, currentTenantId,
+          ],
         });
-      } else {
-        await notifyNextResponsibleParty({
-          tenantId: currentTenantId,
-          event: 'COUNTER_OFFER_SENT',
-          recordNumber: currentRfq.rfqNumber,
-          entityId: currentRfq.id,
-          details: {
-            vendorName: vendor.name,
-            amount: targetCounter ? Number(targetCounter) : undefined,
-            roundNumber,
-          },
+      }
+      batchStatements.push(
+        {
+          sql: NEGOTIATION_ROUND_INSERT_SQL,
+          values: [
+            round.id, round.tenantId, round.negotiationId, round.vendorId, round.roundNumber,
+            round.deadline?.toISOString() || null, round.targetPrice, round.previousQuoteAmount,
+            round.counterOfferAmount, round.revisedQuoteAmount, round.savingsAmount,
+            round.savingsPercent, round.status, round.notes, round.nextResponsibleParty,
+            round.lineItemsJson, now.toISOString(), now.toISOString(),
+          ],
+        },
+        {
+          sql: NEGOTIATION_UPDATE_AFTER_ROUND_SQL,
+          values: [Math.max(Number(currentNegotiation.currentRound) || 0, roundNumber), finalRevised || previousQuoteAmount, now.toISOString(), currentNegotiation.id, currentTenantId],
+        },
+      );
+      if (currentRfq.status !== 'NEGOTIATION') {
+        batchStatements.push({
+          sql: RFQ_MARK_NEGOTIATION_SQL,
+          values: [now.toISOString(), rfqId, currentTenantId],
+        });
+      }
+      batchStatements.push(
+        {
+          sql: AUDIT_LOG_INSERT_SQL,
+          values: [
+            auditId, currentTenantId, currentUserId, currentRfq.projectId, 'NEGOTIATION', round.id,
+            isSuperseding ? 'SUPERSEDING_COUNTEROFFER_ISSUED' : 'NEGOTIATION_ROUND_CREATED',
+            auditDescription, null, JSON.stringify({
+              roundNumber,
+              vendorId: targetVendorId,
+              previousQuoteAmount,
+              counterOfferAmount: targetCounter,
+              revisedQuoteAmount: finalRevised,
+              supersededRoundId: isSuperseding ? activePendingRound?.id : null,
+            }), null, null, now.toISOString(),
+          ],
+        },
+        {
+          sql: RFQ_MESSAGE_INSERT_SQL,
+          values: [
+            crypto.randomUUID(), currentTenantId, rfqId, currentUserId, currentUserName, currentUserRole,
+            rfqTimelineMessage, null, Boolean(finalRevised), vendor.id, now.toISOString(),
+          ],
+        },
+      );
+      if (preparedNotification) batchStatements.push(preparedNotification.statement);
+      const writeResults = await writeD1BatchAtomically(batchStatements);
+      if (preparedNotification && Number(writeResults[writeResults.length - 1]?.meta?.changes || 0) !== 1) {
+        throw new Error();
+      }
+
+      if (preparedNotification) {
+        await dispatchPreparedWorkflowNotification(preparedNotification.id, now, {
+          tenantId: currentTenantId, entityType: 'NEGOTIATION', entityId: round.id,
+          route: '/api/procurement/negotiations',
         });
       }
 
@@ -467,7 +508,17 @@ export async function POST(req: NextRequest) {
       201
     );
   } catch (error: any) {
-    console.error('Error logging negotiation round:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateNegotiationRound }), 500);
+    await writeStructuredLog('error', 'procurement.negotiation_round_batch_failed', {
+      operation: 'create_negotiation_round',
+      route: '/api/procurement/negotiations',
+      requestId,
+      tenantId: ctx.tenantId,
+      rfqId: failedRfqId,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 500) }
+        : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, 500);
   }
 }

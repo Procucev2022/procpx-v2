@@ -39,7 +39,7 @@ function setupFetch() {
     if (url === '/api/projects') return response({ data: [project] });
     if (url === '/api/boq' && init?.method === 'POST') return response({ boq: { ...boq, latestRevision: revision } });
     if (url === '/api/boq') return response({ data: [boq] });
-    if (url === '/api/cost-centres?projectId=project-1') return response([costCentre]);
+    if (url.startsWith('/api/cost-centres?')) return response([costCentre]);
     if (url === '/api/boq/manual') return response({});
     if (url === '/api/boq/boq-1') return response({ boq, revision, lines });
     if (url === '/api/boq/estimate-cost') return response({ totalEstimatedBenchmarkValue: 3100, categoryBreakdown: { Electrical: 600 }, unestimatedItems: [] });
@@ -101,6 +101,34 @@ describe('BOQ studio page', () => {
     expect(screen.getAllByText('Fitout scope').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges, "", false) })).toBeInTheDocument();
+  });
+
+  it('loads project cost centres in stable pages and supports a bounded search', async () => {
+    const laterCentre = { ...costCentre, id: 'cc-2', code: 'CC-2', name: 'Operations' };
+    const searchedCentre = { ...costCentre, id: 'cc-3', code: 'CC-3', name: 'Warehouse' };
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/masters/categories') return response({ data: [] });
+      if (url === '/api/projects') return response({ data: [project] });
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [] });
+      if (url.startsWith('/api/cost-centres?')) {
+        const query = new URL(`http://localhost${url}`).searchParams;
+        if (query.get('search')) return response({ costCentres: [searchedCentre], pagination: { page: 1, total: 1, hasMore: false } });
+        if (query.get('page') === '2') return response({ costCentres: [laterCentre], pagination: { page: 2, total: 101, hasMore: false } });
+        return response({ costCentres: [costCentre], pagination: { page: 1, total: 101, hasMore: true } });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    render(<BoqStudioPage />);
+    expect(await screen.findByRole('option', { name: /CC-1/ })).toBeInTheDocument();
+    expect(await screen.findByText(/Showing 1 of 101 cost centres/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) }));
+    expect(await screen.findByRole('option', { name: /CC-2/ })).toBeInTheDocument();
+
+    const searchLabel = uiStringPattern(UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation);
+    fireEvent.change(screen.getByPlaceholderText(searchLabel), { target: { value: 'Warehouse' } });
+    fireEvent.click(screen.getByRole('button', { name: searchLabel }));
+    expect(await screen.findByRole('option', { name: /CC-3/ })).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('search=Warehouse'));
   });
 
   it('runs the active BOQ estimate, validation, edit, line, budget and submission actions', async () => {
@@ -366,7 +394,7 @@ describe('BOQ studio page', () => {
       if (url === '/api/masters/categories') return response({ data: [] });
       if (url === '/api/projects') return response([recoveredProject]);
       if (url === '/api/boq' && init?.method !== 'POST') return response([recoveredBoq]);
-      if (url === '/api/cost-centres?projectId=project-2') return response([
+      if (url.startsWith('/api/cost-centres?projectId=project-2')) return response([
         { ...costCentre, id: 'cc-45', code: 'CC45', projectId: 'project-2', areaSqFt: 0 },
         { ...costCentre, id: 'cc-second', code: 'CC-SECOND', projectId: 'project-2' },
       ]);
@@ -401,7 +429,7 @@ describe('BOQ studio page', () => {
       if (url === '/api/projects') return response([]);
       if (url === '/api/masters/categories') return response([]);
       if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [sparseBoq] });
-      if (url === '/api/cost-centres?projectId=project-1') return response([]);
+      if (url.startsWith('/api/cost-centres?projectId=project-1')) return response([]);
       if (url === '/api/boq/boq-1') return response({ data: { boq: sparseBoq, revision: { id: 'revision-1', revisionCode: '' }, lines: sparseLines } });
       throw new Error(`Unexpected fetch: ${url}`);
     });

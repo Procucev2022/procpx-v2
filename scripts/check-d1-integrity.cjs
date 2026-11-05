@@ -4,7 +4,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const {
   DATABASE_NAME,
-  EXPECTED_D1_MODEL_TABLES,
+  EXPECTED_D1_TABLE_NAMES,
+  LOGICAL_DUPLICATE_CHECKS,
 } = require('./database.constants.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -84,8 +85,12 @@ if (mode === '--remote') {
 const inventory = execute(inventorySql);
 const tables = collectRows(inventory, (row) => typeof row.tableName === 'string')
   .map((row) => row.tableName);
-if (tables.length !== EXPECTED_D1_MODEL_TABLES) {
-  fail(`expected ${EXPECTED_D1_MODEL_TABLES} application tables from the current Prisma schema, found ${tables.length}; apply migrations or review the schema`);
+const expectedTables = new Set(EXPECTED_D1_TABLE_NAMES);
+const actualTables = new Set(tables);
+const missingTables = EXPECTED_D1_TABLE_NAMES.filter((tableName) => !actualTables.has(tableName));
+const unexpectedTables = tables.filter((tableName) => !expectedTables.has(tableName));
+if (missingTables.length > 0 || unexpectedTables.length > 0) {
+  fail(`Prisma and D1 table inventory differs; missing in D1: ${missingTables.join(', ') || 'none'}; unexpected in D1: ${unexpectedTables.join(', ') || 'none'}`);
 }
 
 const countSelects = tables.map((tableName) => {
@@ -97,14 +102,56 @@ const countResult = collectRows(execute(`SELECT ${countSelects}`), (row) =>
 if (!countResult) fail('D1 did not return row counts for all application tables');
 const rowCounts = Object.fromEntries(tables.map((tableName) => [tableName, Number(countResult[tableName])]));
 
+const duplicateResults = execute(LOGICAL_DUPLICATE_CHECKS.map(({ sql }) => sql).join(';'));
+const duplicateRows = collectRows(duplicateResults, (row) => Object.prototype.hasOwnProperty.call(row, 'duplicateGroups'));
+const duplicateFailures = duplicateRows
+  .filter((row) => Number(row.duplicateGroups) > 0)
+  .map((row, index) => ({ check: LOGICAL_DUPLICATE_CHECKS[index]?.name || 'logical_duplicate', count: Number(row.duplicateGroups) }));
+if (duplicateFailures.length > 0) {
+  fail(`logical duplicate groups found: ${duplicateFailures.map(({ check, count }) => `${check}=${count}`).join(', ')}`);
+}
+
 let foreignKeyViolations = null;
+let crossTenantViolations = null;
 if (mode === '--local') {
   foreignKeyViolations = collectRows(execute('PRAGMA foreign_key_check'), (row) => typeof row.table === 'string').length;
   if (foreignKeyViolations > 0) fail(`local D1 reported ${foreignKeyViolations} foreign-key violations`);
+
+  const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""')}"`;
+  const tableInfoResults = execute(tables.map((tableName) => `PRAGMA table_info(${quoteIdentifier(tableName)})`).join(';'));
+  const tenantScopedTables = new Set(tables.filter((tableName, index) => {
+    const resultRows = tableInfoResults[index]?.results || [];
+    return resultRows.some((row) => row.name === 'tenantId');
+  }));
+  const foreignKeyResults = execute(tables.map((tableName) => `PRAGMA foreign_key_list(${quoteIdentifier(tableName)})`).join(';'));
+  const crossTenantQueries = [];
+  for (const [index, childTable] of tables.entries()) {
+    if (!tenantScopedTables.has(childTable)) continue;
+    for (const foreignKey of foreignKeyResults[index]?.results || []) {
+      const parentTable = foreignKey.table;
+      if (!tenantScopedTables.has(parentTable) || !foreignKey.from || !foreignKey.to) continue;
+      const label = `${childTable}.${foreignKey.from}->${parentTable}.${foreignKey.to}`.replace(/'/g, "''");
+      crossTenantQueries.push(
+        `SELECT '${label}' AS relationship, COUNT(*) AS violationCount FROM ${quoteIdentifier(childTable)} AS child `
+        + `JOIN ${quoteIdentifier(parentTable)} AS parent ON child.${quoteIdentifier(foreignKey.from)} = parent.${quoteIdentifier(foreignKey.to)} `
+        + `WHERE child.${quoteIdentifier('tenantId')} <> parent.${quoteIdentifier('tenantId')}`,
+      );
+    }
+  }
+  if (crossTenantQueries.length > 0) {
+    const relationshipRows = collectRows(execute(crossTenantQueries.join(';')), (row) => typeof row.relationship === 'string');
+    const failures = relationshipRows.filter((row) => Number(row.violationCount) > 0);
+    crossTenantViolations = failures.reduce((total, row) => total + Number(row.violationCount), 0);
+    if (crossTenantViolations > 0) {
+      fail(`local D1 reported ${crossTenantViolations} cross-tenant foreign-key references: ${failures.map((row) => row.relationship).join(', ')}`);
+    }
+  } else {
+    crossTenantViolations = 0;
+  }
 }
 
 const totalRows = Object.values(rowCounts).reduce((total, count) => total + count, 0);
-process.stdout.write(`D1 ${mode === '--local' ? 'local' : 'remote'} schema integrity passed: ${tables.length} application tables, ${totalRows} records, ${foreignKeyViolations === null ? 'remote foreign-key scan not run' : `${foreignKeyViolations} foreign-key violations`}.\n`);
+process.stdout.write(`D1 ${mode === '--local' ? 'local' : 'remote'} schema integrity passed: ${tables.length} application tables, ${totalRows} records, ${LOGICAL_DUPLICATE_CHECKS.length} logical duplicate checks passed, ${foreignKeyViolations === null ? 'remote foreign-key scan not run' : `${foreignKeyViolations} foreign-key violations`}, ${crossTenantViolations === null ? 'remote cross-tenant scan not run' : `${crossTenantViolations} cross-tenant references`}.\n`);
 console.table(Object.entries(rowCounts).map(([tableName, rowCount]) => ({ tableName, rowCount })));
 
 if (mode === '--local') {
@@ -116,6 +163,8 @@ if (mode === '--local') {
     applicationTableCount: tables.length,
     totalRows,
     foreignKeyViolations,
+    crossTenantViolations,
+    logicalDuplicateChecks: LOGICAL_DUPLICATE_CHECKS.length,
     rowCounts,
   }, null, 2), 'utf8');
   process.stdout.write(`D1 integrity snapshot written to ${path.relative(root, snapshotPath)}.\n`);

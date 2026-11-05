@@ -97,24 +97,40 @@ function ProjectBudgetContent() {
     }
   }, [selectedProjectId]);
 
-  const loadBudgetData = async (projId: string) => {
+  const loadBudgetData = async (projId: string, page = 1, append = false) => {
     setLoading(true);
     setErrorMessage('');
     try {
-      const res = await fetch(`/api/budgets?projectId=${projId}`);
+      const params = new URLSearchParams({
+        projectId: projId,
+        page: String(page),
+        pageSize: String(data?.costCentrePagination?.pageSize || 50),
+      });
+      const res = await fetch(`/api/budgets?${params.toString()}`);
       if (res.ok) {
         const json = await res.json();
-        setData(json);
+        const currentCostCentres = append ? (data?.costCentres || []) : [];
+        const mergedCostCentres = append
+          ? Array.from(new Map([...currentCostCentres, ...(json.costCentres || [])].map(costCentre => [costCentre.id, costCentre])).values())
+          : (json.costCentres || []);
+        const currentPage = data?.costCentrePagination?.page || 0;
+        const pagination = json.costCentrePagination || { page, pageSize: 50, total: mergedCostCentres.length, hasMore: false };
+        setData({
+          ...json,
+          costCentres: mergedCostCentres,
+          costCentrePagination: { ...pagination, page: append ? Math.max(currentPage, pagination.page) : pagination.page },
+        });
 
         // Resolve cost centre selection
-        const ccs = json.costCentres || [];
+        const ccs = mergedCostCentres;
         const paramCc = searchParams?.get('costCentreId');
 
         if (paramCc && ccs.some((c: any) => c.id === paramCc)) {
           setSelectedCostCentreId(paramCc);
+        } else if (selectedCostCentreId && ccs.some((c: any) => c.id === selectedCostCentreId)) {
+          // Keep the selected centre while appending another page.
         } else if (ccs.length > 0) {
-          // If current selected CC belongs to this project, keep it, otherwise pick first
-          setSelectedCostCentreId(prev => (ccs.some((c: any) => c.id === prev) ? prev : ccs[0].id));
+          setSelectedCostCentreId(ccs[0].id);
         } else {
           setSelectedCostCentreId('');
         }
@@ -126,6 +142,16 @@ function ProjectBudgetContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLoadMoreCostCentres = () => {
+    const pagination = data?.costCentrePagination;
+    if (!pagination?.hasMore || loading) return;
+    void loadBudgetData(selectedProjectId, pagination.page + 1, true);
+  };
+
+  const refreshBudgetData = () => {
+    void loadBudgetData(selectedProjectId, 1, true);
   };
 
   // Change project handler
@@ -184,7 +210,7 @@ function ProjectBudgetContent() {
       }
       toast.success(UI_STRINGS.common.budgetApprovedSuccessfully, currentProject?.name, UI_STRINGS.common.approved);
       setStatusMessage(UI_STRINGS.common.budgetApprovedSuccessfully);
-      loadBudgetData(selectedProjectId);
+      refreshBudgetData();
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -218,7 +244,7 @@ function ProjectBudgetContent() {
       setSelectedRejectContrib(null);
       setRejectReason('');
       setStatusMessage(UI_STRINGS.common.budgetContributionRejectedWithAuditNotes);
-      loadBudgetData(selectedProjectId);
+      refreshBudgetData();
     } catch (err: any) {
       setErrorMessage(err.message);
     } finally {
@@ -282,7 +308,7 @@ function ProjectBudgetContent() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => loadBudgetData(selectedProjectId)}
+              onClick={refreshBudgetData}
               className="btn btn-secondary btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               title={UI_STRINGS.appAppBudgetPage.refreshBudget}
@@ -341,6 +367,26 @@ function ProjectBudgetContent() {
               ))
             )}
           </select>
+          {data?.costCentrePagination && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 6 }}>
+              <span style={{ fontSize: 11, color: '#64748b' }}>
+                {interpolateUiString(UI_STRINGS.appAppCostCentresPage.showingCostCentreCountOfTotal, {
+                  loaded: costCentres.length,
+                  total: data.costCentrePagination.total,
+                })}
+              </span>
+              {data.costCentrePagination.hasMore && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={handleLoadMoreCostCentres}
+                  disabled={loading}
+                >
+                  {loading ? UI_STRINGS.appAppCostCentresPage.loadingMoreCostCentres : UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {selectedCC && (

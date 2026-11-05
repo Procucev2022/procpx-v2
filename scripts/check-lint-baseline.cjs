@@ -34,12 +34,16 @@ function collectDiagnostics(results) {
 async function main() {
   const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
   const eslint = new ESLint({ cwd: root });
-  const repositoryFiles = execFileSync(
-    'git',
-    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-    { cwd: root, encoding: 'utf8' },
-  ).split('\0').filter((filename) => /\.(?:[cm]?[jt]sx?)$/i.test(filename));
-  const results = await eslint.lintFiles(repositoryFiles.length > 0 ? repositoryFiles : ['.']);
+  const requestedFiles = process.argv.slice(2).filter((filename) => !filename.startsWith('--'));
+  const repositoryFiles = requestedFiles.length > 0
+    ? requestedFiles
+    : execFileSync(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+      { cwd: root, encoding: 'utf8' },
+    ).split('\0').filter((filename) => /\.(?:[cm]?[jt]sx?)$/i.test(filename));
+  const existingRepositoryFiles = repositoryFiles.filter((filename) => fs.existsSync(path.resolve(root, filename)));
+  const results = await eslint.lintFiles(existingRepositoryFiles.length > 0 ? existingRepositoryFiles : ['.']);
   const current = collectDiagnostics(results);
   const regressions = Object.entries(current.diagnostics)
     .filter(([key, count]) => count > (baseline.diagnostics[key] || 0))

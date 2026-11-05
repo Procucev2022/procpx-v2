@@ -1,181 +1,261 @@
-// src/app/api/procurement/ppos/[id]/complete/route.ts
-// Handles PPO / PO Completion and records Actual Cost Transactions
-
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  MAX_PPO_COMPLETION_LINES,
+  MAX_PPO_CREATE_LINES,
+  PPO_ACTUAL_COST_INSERT_AFTER_LINE_UPDATE_SQL,
+  PPO_LINE_COMPLETION_UPDATE_SQL,
+  PPO_STATUS_UPDATE_AFTER_COMPLETION_SQL,
+} from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import type { PreparedPpoLineCompletion } from '@app-types/app/api/procurement/ppos/complete.types';
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, canonicalize(record[key])]));
+  }
+  return value;
+}
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function fingerprintRequest(ppoId: string, body: Record<string, unknown>): Promise<string> {
+  const payload = { ...body };
+  delete payload.idempotencyKey;
+  const bytes = new TextEncoder().encode(JSON.stringify(canonicalize({ ppoId, payload })));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function getReplayResponse(tenantId: string, ppoId: string, requestId: string, fingerprint: string) {
+  const actualTransactions = await prisma.actualCostTransaction.findMany({
+    where: { tenantId, ppoId, completionRequestId: requestId },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: MAX_PPO_COMPLETION_LINES + 1,
+  });
+  if (actualTransactions.length > MAX_PPO_COMPLETION_LINES) {
+    void writeStructuredLog('error', 'procurement.ppo_completion_replay_limit_exceeded', {
+      operation: 'replay_completion',
+      route: '/api/procurement/ppos/[id]/complete',
+      tenantId,
+      ppoId,
+      transactionCount: actualTransactions.length,
+      maximumTransactions: MAX_PPO_COMPLETION_LINES,
+    }, 'next');
+    return apiError(UI_STRINGS.common.userMessages.failedToCompletePpo, 500);
+  }
+  if (actualTransactions.length === 0) return null;
+  if (actualTransactions.some((transaction) => transaction.completionFingerprint !== fingerprint)) {
+    return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.completionRequestKeyReusedWithDifferentData, 409);
+  }
+  const ppo = await prisma.ppo.findFirst({
+    where: { id: ppoId, tenantId },
+    include: {
+      lines: {
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        take: MAX_PPO_CREATE_LINES,
+      },
+    },
+  });
+  if (!ppo) return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
+  return apiSuccess({
+    message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOCompletionRecordedSuccessfullyGeneratedLengthActualCostTransactionS, { length: actualTransactions.length }),
+    ppo,
+    actualTransactions,
+  });
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('ACTUAL_COST_CREATE');
   if (!isApiContext(ctx)) return ctx;
 
   const { id: ppoId } = await params;
-
+  const startedAt = Date.now();
+  let idempotencyKey: string | undefined;
+  let fingerprint: string | undefined;
   try {
-    const body = await req.json().catch(() => ({}));
-    const {
-      completionDate = new Date().toISOString(),
-      completionReference,
-      documents,
-      remarks,
-      lineCompletions, // Array of { ppoLineId, completedQuantity, finalRate, actualAmount, remarks }
-    } = body;
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json() as Record<string, unknown>;
+    } catch {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    idempotencyKey = req.headers.get('idempotency-key')?.trim()
+      || (typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim() : undefined);
+    if (!idempotencyKey || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.completionRequestIdempotencyKeyRequired, 400);
+    }
+    fingerprint = await fingerprintRequest(ppoId, body);
 
     const ppo = await prisma.ppo.findFirst({
       where: { id: ppoId, tenantId: ctx.tenantId },
       include: {
         lines: true,
         project: true,
-        rfq: {
-          include: {
-            pr: true,
-            boqRevision: true,
-          },
-        },
+        rfq: { include: { pr: true, boqRevision: true } },
       },
     });
+    if (!ppo) return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
 
-    if (!ppo) {
-      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
-    }
-
+    const replay = await getReplayResponse(ctx.tenantId, ppoId, idempotencyKey, fingerprint);
+    if (replay) return replay;
     if (ppo.status === 'CANCELLED') {
       return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, 400);
     }
+    if (!['ISSUED', 'CONFIRMED', 'PARTIALLY_COMPLETED'].includes(ppo.status)) {
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.completionCannotBeRecordedInCurrentStatus, 409);
+    }
 
-    // Determine lines to complete
-    const linesToProcess = lineCompletions && Array.isArray(lineCompletions) && lineCompletions.length > 0
-      ? lineCompletions
-      : ppo.lines.map((l) => ({
-          ppoLineId: l.id,
-          completedQuantity: l.orderedQuantity - l.completedQuantity,
-          finalRate: l.orderedUnitRate,
-          actualAmount: (l.orderedQuantity - l.completedQuantity) * l.orderedUnitRate,
+    const now = new Date();
+    let completionDate = now;
+    if (body.completionDate !== undefined && body.completionDate !== null && body.completionDate !== '') {
+      if (typeof body.completionDate !== 'string' || !Number.isFinite(Date.parse(body.completionDate))) {
+        return apiError(UI_STRINGS.common.invalidDate, 400);
+      }
+      completionDate = new Date(body.completionDate);
+    }
+    const completionReference = typeof body.completionReference === 'string' && body.completionReference.trim()
+      ? body.completionReference.trim()
+      : `WCC-${ppo.ppoNumber}`;
+    const documents = body.documents === undefined || body.documents === null
+      ? null
+      : typeof body.documents === 'string' ? body.documents : JSON.stringify(body.documents);
+    const requestRemarks = typeof body.remarks === 'string' ? body.remarks.trim() : '';
+
+    let items: Array<Record<string, unknown>>;
+    if (body.lineCompletions === undefined || body.lineCompletions === null) {
+      items = ppo.lines
+        .filter((line) => line.orderedQuantity > line.completedQuantity)
+        .map((line) => ({
+          ppoLineId: line.id,
+          completedQuantity: line.orderedQuantity - line.completedQuantity,
+          finalRate: line.orderedUnitRate,
+          actualAmount: (line.orderedQuantity - line.completedQuantity) * line.orderedUnitRate,
           remarks: 'Full order line completion',
         }));
+    } else if (Array.isArray(body.lineCompletions)) {
+      items = body.lineCompletions as Array<Record<string, unknown>>;
+    } else {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    if (items.length === 0) return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.noValidPpoLinesToComplete, 400);
+    if (items.length > MAX_PPO_COMPLETION_LINES) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.ppoCompletionLineLimitExceeded, { limit: MAX_PPO_COMPLETION_LINES }), 400);
+    }
 
-    const createdActualTransactions = [];
+    const seenLineIds = new Set<string>();
+    const preparedLines: PreparedPpoLineCompletion[] = [];
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.ppoLineId !== 'string') {
+        return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      }
+      if (seenLineIds.has(item.ppoLineId)) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      seenLineIds.add(item.ppoLineId);
+      const line = ppo.lines.find((candidate) => candidate.id === item.ppoLineId);
+      if (!line || !['ISSUED', 'PARTIALLY_COMPLETED'].includes(line.status)) {
+        return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      }
 
-    for (const item of linesToProcess) {
-      const ppoLine = ppo.lines.find((l) => l.id === item.ppoLineId);
-      if (!ppoLine) continue;
+      const completedQuantity = Number(item.completedQuantity);
+      const finalRate = item.finalRate === undefined || item.finalRate === null ? line.orderedUnitRate : Number(item.finalRate);
+      const actualAmount = item.actualAmount === undefined || item.actualAmount === null
+        ? completedQuantity * finalRate
+        : Number(item.actualAmount);
+      const taxAmount = item.taxAmount === undefined || item.taxAmount === null ? 0 : Number(item.taxAmount);
+      const remainingQuantity = line.orderedQuantity - line.completedQuantity;
+      if (!Number.isFinite(completedQuantity) || completedQuantity <= 0 || completedQuantity > remainingQuantity
+        || !Number.isFinite(finalRate) || finalRate < 0 || !Number.isFinite(actualAmount) || actualAmount < 0
+        || !Number.isFinite(taxAmount) || taxAmount < 0) {
+        return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      }
 
-      const completedQty = Number(item.completedQuantity) || 0;
-      if (completedQty <= 0) continue;
-
-      const finalRate = Number(item.finalRate) || ppoLine.orderedUnitRate;
-      const actualAmount = Number(item.actualAmount) || completedQty * finalRate;
-      const taxAmount = Number(item.taxAmount) || 0;
-      const totalActualAmount = actualAmount + taxAmount;
-
-      // Generate Transaction Code ACT-YYYY-XXXXXX
-      const txCount = await prisma.actualCostTransaction.count({ where: { tenantId: ctx.tenantId } });
-      const transactionCode = `ACT-${new Date().getFullYear()}-${String(txCount + 1).padStart(6, '0')}`;
-
-      // Create persistent Actual Cost Transaction preserving full originating lineage
-      const actualTx = await prisma.actualCostTransaction.create({
-        data: {
-          tenantId: ctx.tenantId,
-          transactionCode,
-          projectId: ppo.projectId,
-          costCentreId: ppoLine.costCentreId || ppo.costCentreId || null,
-          category: ppoLine.category || 'General',
-          subcategory: ppoLine.subcategory || null,
-          boqId: ppoLine.boqId || ppo.boqId || ppo.rfq?.boqRevision?.boqId || null,
-          boqRevisionId: ppoLine.boqRevisionId || ppo.boqRevisionId || ppo.rfq?.boqRevisionId || null,
-          boqLineId: ppoLine.boqLineId || null,
-          prId: ppo.rfq?.prId || null,
-          prLineId: ppoLine.prLineId || null,
-          rfqId: ppo.rfqId,
-          rfqLineId: ppoLine.rfqLineId || null,
-          ppoId: ppo.id,
-          ppoLineId: ppoLine.id,
-          vendorId: ppo.vendorId,
-          actualQuantity: completedQty,
-          actualUnitRate: finalRate,
-          actualAmount,
-          taxAmount,
-          totalActualAmount,
-          actualDate: completionDate ? new Date(completionDate) : new Date(),
-          source: 'PPO_COMPLETION',
-          status: 'APPROVED',
-          completionReference: completionReference || `WCC-${ppo.ppoNumber}`,
-          documents: documents ? (typeof documents === 'string' ? documents : JSON.stringify(documents)) : null,
-          remarks: item.remarks || remarks || 'PPO milestone completion verified',
-          createdById: ctx.userId,
-          createdBy: ctx.userName || 'System User',
-        },
-      });
-
-      createdActualTransactions.push(actualTx);
-
-      // Update PpoLine completion progress
-      const newCompletedQty = ppoLine.completedQuantity + completedQty;
-      const newCompletedAmt = ppoLine.completedAmount + actualAmount;
-      const lineStatus = newCompletedQty >= ppoLine.orderedQuantity ? 'COMPLETED' : 'PARTIALLY_COMPLETED';
-
-      await prisma.ppoLine.update({
-        where: { id: ppoLine.id },
-        data: {
-          completedQuantity: newCompletedQty,
-          completedAmount: newCompletedAmt,
-          status: lineStatus,
-        },
+      const newCompletedQuantity = line.completedQuantity + completedQuantity;
+      const newCompletedAmount = line.completedAmount + actualAmount;
+      preparedLines.push({
+        line,
+        completedQuantity,
+        finalRate,
+        actualAmount,
+        taxAmount,
+        totalActualAmount: actualAmount + taxAmount,
+        newCompletedQuantity,
+        newCompletedAmount,
+        status: newCompletedQuantity >= line.orderedQuantity ? 'COMPLETED' : 'PARTIALLY_COMPLETED',
+        remarks: typeof item.remarks === 'string' && item.remarks.trim()
+          ? item.remarks.trim()
+          : requestRemarks || 'PPO milestone completion verified',
       });
     }
 
-    // Refresh lines to evaluate total PPO status
-    const updatedLines = await prisma.ppoLine.findMany({ where: { ppoId: ppo.id } });
-    const allCompleted = updatedLines.length > 0 && updatedLines.every((l) => l.status === 'COMPLETED');
-    const hasAnyCompletion = updatedLines.some((l) => l.completedQuantity > 0);
+    const batch = [] as Array<{ sql: string; values: unknown[] }>;
+    const transactionIds = preparedLines.map(() => crypto.randomUUID());
+    const createdBy = ctx.userName || 'System User';
+    const year = completionDate.getUTCFullYear();
+    const createdAt = now.toISOString();
+    const actualDate = completionDate.toISOString();
+    for (let index = 0; index < preparedLines.length; index += 1) {
+      const item = preparedLines[index];
+      const line = item.line;
+      batch.push({
+        sql: PPO_LINE_COMPLETION_UPDATE_SQL,
+        values: [item.newCompletedQuantity, item.newCompletedAmount, item.status, createdAt,
+          line.id, ctx.tenantId, ppo.id, line.completedQuantity, line.completedAmount,
+          item.completedQuantity, ctx.tenantId],
+      });
+      batch.push({
+        sql: PPO_ACTUAL_COST_INSERT_AFTER_LINE_UPDATE_SQL,
+        values: [transactionIds[index], ctx.tenantId, year, ctx.tenantId, year,
+          ppo.projectId, line.costCentreId || ppo.costCentreId || null, line.category || 'General', line.subcategory || null,
+          line.boqId || ppo.boqId || ppo.rfq?.boqRevision?.boqId || null,
+          line.boqRevisionId || ppo.boqRevisionId || ppo.rfq?.boqRevisionId || null,
+          line.boqLineId || null, ppo.prId || ppo.rfq?.prId || null, line.prLineId || null,
+          ppo.rfqId, line.rfqLineId || null, ppo.id, line.id, ppo.vendorId, line.uom,
+          item.completedQuantity, item.finalRate, item.actualAmount, item.taxAmount, item.totalActualAmount,
+          actualDate, completionReference, documents, item.remarks, ctx.userId, createdBy, createdAt, createdAt,
+          idempotencyKey, fingerprint],
+      });
+    }
 
-    const newPpoStatus = allCompleted
-      ? 'COMPLETED'
-      : hasAnyCompletion
-      ? 'PARTIALLY_COMPLETED'
-      : ppo.status;
-
-    const updatedPpo = await prisma.ppo.update({
-      where: { id: ppo.id },
-      data: {
-        status: newPpoStatus,
-        completedAt: allCompleted ? new Date() : ppo.completedAt,
-      },
-      include: {
-        lines: true,
-        actualCosts: true,
-      },
+    const auditId = crypto.randomUUID();
+    batch.push({
+      sql: PPO_STATUS_UPDATE_AFTER_COMPLETION_SQL,
+      values: [createdAt, createdAt, ppo.id, ctx.tenantId, ctx.tenantId, idempotencyKey],
+    });
+    batch.push({
+      sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+      values: [auditId, ctx.tenantId, ctx.userId, ppo.projectId, 'PPO', ppo.id, 'PPO_COMPLETION_RECORDED',
+        interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.ppoCompletionRecordedAuditDescription, { ppoNumber: ppo.ppoNumber, length: preparedLines.length }),
+        JSON.stringify({ status: ppo.status }), JSON.stringify({ completionRequestId: idempotencyKey, actualTransactionsCount: preparedLines.length, completionReference }),
+        null, null, createdAt],
     });
 
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: ppo.projectId,
-      entityType: 'PPO',
-      entityId: ppo.id,
-      action: 'PPO_COMPLETED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPpoNumberCompletionRecordedGeneratedLengthActualCostTransactionsStatusNewPpoStatus, { "ppoNumber": ppo.ppoNumber, "length": createdActualTransactions.length, "newPpoStatus": newPpoStatus }),
-      newValue: {
-        status: newPpoStatus,
-        actualTransactionsCount: createdActualTransactions.length,
-        completionReference,
-      },
+    await writeD1BatchAtomically(batch);
+    const replayAfterWrite = await getReplayResponse(ctx.tenantId, ppoId, idempotencyKey, fingerprint);
+    if (replayAfterWrite) return replayAfterWrite;
+    return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+  } catch (error) {
+    if (idempotencyKey && fingerprint) {
+      try {
+        const replayAfterFailure = await getReplayResponse(ctx.tenantId, ppoId, idempotencyKey, fingerprint);
+        if (replayAfterFailure) return replayAfterFailure;
+      } catch {
+        // Preserve the original failure for structured diagnostics.
+      }
+    }
+    await writeStructuredLog('error', 'procurement.ppo_completion_failed', {
+      operation: 'complete_ppo', route: '/api/procurement/ppos/[id]/complete',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId, ppoId, idempotencyKey,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
     });
-
-    return apiSuccess({
-      message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOCompletionRecordedSuccessfullyGeneratedLengthActualCostTransactionS, { "length": createdActualTransactions.length }),
-      ppo: updatedPpo,
-      actualTransactions: createdActualTransactions,
-    });
-  } catch (err: any) {
-    console.error('Error recording PPO completion:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCompletePpo }), 500);
+    return apiError(UI_STRINGS.common.userMessages.failedToCompletePpo, 500);
   }
 }

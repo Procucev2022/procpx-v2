@@ -48,6 +48,7 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { useToast } from '@/components/ui/Toast';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { VendorPagePagination } from '@app-types/app/api/procurement/vendors.types';
 
 
 export default function VendorManagementPage() {
@@ -86,6 +87,14 @@ export default function VendorManagementPage() {
     notEvaluatedCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [vendorPagination, setVendorPagination] = useState<VendorPagePagination>({
+    page: 1,
+    pageSize: 0,
+    hasMore: false,
+    total: 0,
+  });
+  const vendorFetchSequence = useRef(0);
 
   // Explicit Vendor Selection Dropdown State
   const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
@@ -163,25 +172,61 @@ export default function VendorManagementPage() {
     fetchVendors();
   }, [vendorGroup, qualificationFilter, categoryFilter, search]);
 
-  const fetchVendors = async () => {
-    setLoading(true);
+  const fetchVendors = async (page = 1, append = false) => {
+    const requestSequence = ++vendorFetchSequence.current;
+    if (append) setLoadingMore(true);
+    else {
+      setLoading(true);
+      setLoadingMore(false);
+    }
     try {
       const params = new URLSearchParams();
       if (vendorGroup !== 'ALL') params.set('vendorType', vendorGroup);
       if (qualificationFilter !== 'ALL') params.set('qualificationStatus', qualificationFilter);
       if (categoryFilter !== 'ALL') params.set('category', categoryFilter);
       if (search.trim()) params.set('search', search.trim());
+      if (page > 1) params.set('page', String(page));
 
       const res = await fetch(`/api/procurement/vendors?${params.toString()}`);
+      if (requestSequence !== vendorFetchSequence.current) return;
       if (res.ok) {
         const data = await res.json();
-        setVendors(data.vendors || []);
+        const incomingVendors = data.vendors || [];
+        setVendors((current) => {
+          if (!append) return incomingVendors;
+          const existingIds = new Set(current.map((vendor) => vendor.id));
+          return [...current, ...incomingVendors.filter((vendor: { id: string }) => !existingIds.has(vendor.id))];
+        });
+        setVendorPagination(data.pagination || {
+          page,
+          pageSize: incomingVendors.length,
+          hasMore: false,
+          total: incomingVendors.length,
+        });
         if (data.counts) setCounts(data.counts);
+      } else if (!append) {
+        setVendors([]);
+        setVendorPagination({ page: 1, pageSize: 0, hasMore: false, total: 0 });
       }
     } catch (err) {
-      console.error('Failed to load vendors', err);
+      if (requestSequence === vendorFetchSequence.current && err instanceof Error && err.name !== 'AbortError') {
+        console.error('Failed to load vendors', err);
+        if (!append) {
+          setVendors([]);
+          setVendorPagination({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+        }
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence === vendorFetchSequence.current) {
+        if (append) setLoadingMore(false);
+        else setLoading(false);
+      }
+    }
+  };
+
+  const loadMoreVendors = () => {
+    if (!loading && !loadingMore && vendorPagination.hasMore) {
+      void fetchVendors(vendorPagination.page + 1, true);
     }
   };
 
@@ -1085,6 +1130,19 @@ export default function VendorManagementPage() {
               </table>
             </div>
           </div>
+          {vendorPagination.total > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 4px', color: '#64748b', fontSize: 12 }}>
+              <span>{interpolateUiString(UI_STRINGS.appAppProcurementVendorsPage.loadedVendorCountOfTotal, {
+                loaded: vendors.length,
+                total: vendorPagination.total,
+              })}</span>
+              {vendorPagination.hasMore && (
+                <button type="button" className="btn btn-outline" onClick={loadMoreVendors} disabled={loading || loadingMore}>
+                  {loadingMore ? UI_STRINGS.appAppProcurementVendorsPage.loadingMoreVendors : UI_STRINGS.appAppProcurementVendorsPage.loadMoreVendors}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -2966,6 +3024,11 @@ export default function VendorManagementPage() {
 
               {/* Table Action Controls */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {vendorPagination.hasMore && (
+                  <button type="button" className="btn btn-outline" onClick={loadMoreVendors} disabled={loading || loadingMore}>
+                    {loadingMore ? UI_STRINGS.appAppProcurementVendorsPage.loadingMoreVendors : UI_STRINGS.appAppProcurementVendorsPage.loadMoreVendors}
+                  </button>
+                )}
                 {selectedVendorIds.length > 0 && (
                   <span
                     style={{

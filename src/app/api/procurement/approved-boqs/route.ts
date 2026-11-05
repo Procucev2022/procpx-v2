@@ -2,9 +2,12 @@
 // Returns Approved BOQs eligible for Sourcing and RFQ creation
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { APPROVED_BOQ_MAX_PAGE_SIZE, APPROVED_BOQ_MAX_SEARCH_LENGTH } from './route.constants';
+import type { ApprovedBoqRouteQuery } from '@app-types/app/api/procurement/approved-boqs.types';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function GET(req: NextRequest) {
@@ -12,8 +15,14 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get('projectId');
-  const search = searchParams.get('search') || '';
+  const pageWindow = getListPageWindow(searchParams);
+  const query: ApprovedBoqRouteQuery = {
+    ...pageWindow,
+    pageSize: Math.min(pageWindow.pageSize, APPROVED_BOQ_MAX_PAGE_SIZE),
+    projectId: searchParams.get('projectId'),
+    revisionId: searchParams.get('revisionId'),
+    search: (searchParams.get('search') || '').trim().slice(0, APPROVED_BOQ_MAX_SEARCH_LENGTH),
+  };
 
   try {
     const statusCondition = {
@@ -30,99 +39,124 @@ export async function GET(req: NextRequest) {
       AND: [statusCondition],
     };
 
-    if (projectId) {
-      where.AND.push({ boq: { projectId } });
+    if (query.projectId) {
+      where.AND.push({ boq: { projectId: query.projectId } });
+    }
+    if (query.revisionId) {
+      where.AND.push({ id: query.revisionId });
     }
 
-    if (search) {
+    if (query.search) {
       where.AND.push({
         OR: [
-          { revisionCode: { contains: search } },
-          { boq: { boqCode: { contains: search } } },
-          { boq: { project: { name: { contains: search } } } },
-          { boq: { project: { projectCode: { contains: search } } } },
+          { revisionCode: { contains: query.search } },
+          { boq: { boqCode: { contains: query.search } } },
+          { boq: { project: { name: { contains: query.search } } } },
+          { boq: { project: { projectCode: { contains: query.search } } } },
         ],
       });
     }
 
-    const approvedRevisions = await prisma.boqRevision.findMany({
-      where,
-      include: {
-        boq: {
-          include: {
-            project: {
-              select: {
-                id: true,
-                projectCode: true,
-                name: true,
-                sector: true,
-                location: true,
-                city: true,
-                state: true,
-                budget: true,
-                currency: true,
+    const [approvedRevisions, total] = await Promise.all([
+      prisma.boqRevision.findMany({
+        where,
+        skip: query.skip,
+        take: query.pageSize,
+        orderBy: [{ approvedAt: 'desc' }, { id: 'desc' }],
+        include: {
+          _count: { select: { rfqs: true } },
+          boq: {
+            include: {
+              project: {
+                select: {
+                  id: true,
+                  projectCode: true,
+                  name: true,
+                  sector: true,
+                  location: true,
+                  city: true,
+                  state: true,
+                  budget: true,
+                  currency: true,
+                },
               },
             },
           },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+          approvedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
-        },
-        lines: {
-          where: { isDeleted: false },
-          include: {
-            category: { select: { id: true, name: true, code: true } },
-            uom: { select: { id: true, code: true, name: true } },
-          },
-        },
-        costCentre: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        },
-        rfqs: {
-          select: {
-            id: true,
-            rfqNumber: true,
-            title: true,
-            status: true,
-            packageName: true,
-            createdAt: true,
-            ppos: {
-              select: {
-                id: true,
-                ppoNumber: true,
-                status: true,
-                totalValue: true,
-                issuedAt: true,
-                completedAt: true,
-                createdAt: true,
-                vendor: { select: { id: true, name: true } },
+          ...(query.revisionId ? {
+            lines: {
+              where: { isDeleted: false },
+              include: {
+                category: { select: { id: true, name: true, code: true } },
+                uom: { select: { id: true, code: true, name: true } },
               },
-              take: 1,
+            },
+          } : {}),
+          costCentre: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
             },
           },
         },
-      },
-      orderBy: { approvedAt: 'desc' },
-    });
+      }),
+      prisma.boqRevision.count({ where }),
+    ]);
+
+    const lineGroups = query.revisionId || approvedRevisions.length === 0
+      ? []
+      : await prisma.boqLine.groupBy({
+        by: ['boqRevisionId', 'categoryId', 'aiUnitCost'],
+        where: { tenantId: ctx.tenantId, boqRevisionId: { in: approvedRevisions.map((revision) => revision.id) }, isDeleted: false },
+        _count: { _all: true },
+        _sum: { quantity: true },
+      });
+    const categoryIds = Array.from(new Set(lineGroups.map((group) => group.categoryId).filter((id): id is string => Boolean(id))));
+    const categoryNames = categoryIds.length > 0
+      ? await prisma.category.findMany({ where: { tenantId: ctx.tenantId, id: { in: categoryIds } }, select: { id: true, name: true } })
+      : [];
+    const categoryNameById = new Map(categoryNames.map((category) => [category.id, category.name]));
+    const groupsByRevision = new Map<string, typeof lineGroups>();
+    for (const group of lineGroups) {
+      const groups = groupsByRevision.get(group.boqRevisionId) || [];
+      groups.push(group);
+      groupsByRevision.set(group.boqRevisionId, groups);
+    }
 
     // Compute summary metrics per approved revision
     const formatted = approvedRevisions.map((rev) => {
+      const detailedLines: any[] = query.revisionId ? ((rev as any).lines || []) : [];
       // Calculate benchmark value and category breakdown
       const categoriesMap: Record<string, { category: string; lineCount: number; totalQty: number; estimatedValue: number }> = {};
       let totalBenchmarkValue = 0;
 
-      for (const line of rev.lines) {
-        const catName = line.category?.name || 'General';
-        const benchmarkRate = (line as any).benchmarkRate || 100; // fallback if benchmark is not set
-        const lineTotal = (line.quantity || 0) * benchmarkRate;
+      const revisionLineGroups = query.revisionId ? null : (groupsByRevision.get(rev.id) || []);
+      const summaryGroups = revisionLineGroups?.map((group) => ({
+        category: group.categoryId ? categoryNameById.get(group.categoryId) || 'General' : 'General',
+        lineCount: Number(group._count._all || 0),
+        quantity: Number(group._sum.quantity || 0),
+        benchmarkRate: Number(group.aiUnitCost) > 0 ? Number(group.aiUnitCost) : 100,
+      })) || [];
+
+      const categoryLineSummaries = query.revisionId
+        ? detailedLines.map((line) => ({
+          category: line.category?.name || 'General',
+          lineCount: 1,
+          quantity: Number(line.quantity || 0),
+          benchmarkRate: Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100,
+        }))
+        : summaryGroups;
+
+      for (const line of categoryLineSummaries) {
+        const catName = line.category;
+        const lineTotal = line.quantity * line.benchmarkRate;
         totalBenchmarkValue += lineTotal;
 
         if (!categoriesMap[catName]) {
@@ -133,12 +167,10 @@ export async function GET(req: NextRequest) {
             estimatedValue: 0,
           };
         }
-        categoriesMap[catName].lineCount += 1;
-        categoriesMap[catName].totalQty += line.quantity || 0;
+        categoriesMap[catName].lineCount += line.lineCount;
+        categoriesMap[catName].totalQty += line.quantity;
         categoriesMap[catName].estimatedValue += lineTotal;
       }
-
-      const linkedPpo = rev.rfqs.find((r: any) => r.ppos && r.ppos.length > 0)?.ppos[0] || null;
 
       return {
         id: rev.id,
@@ -152,13 +184,13 @@ export async function GET(req: NextRequest) {
         approvedRevisionCode: rev.revisionCode,
         approvedAt: rev.approvedAt,
         approvedBy: rev.approvedBy?.name || rev.approvedBy?.email || 'Project Approver',
-        totalLines: rev.lines.length,
+        totalLines: query.revisionId
+          ? detailedLines.length
+          : summaryGroups.reduce((count, group) => count + group.lineCount, 0),
         estimatedBenchmarkValue: totalBenchmarkValue,
         categories: Object.values(categoriesMap),
-        rfqCount: rev.rfqs.length,
-        rfqs: rev.rfqs,
-        linkedPpo,
-        lines: rev.lines.map((l) => ({
+        rfqCount: rev._count?.rfqs || 0,
+        ...(query.revisionId ? { lines: detailedLines.map((l) => ({
           id: l.id,
           lineNumber: l.lineNumber || l.itemCode || 'L-1',
           description: interpolateUiString(UI_STRINGS.common.value1, { "value1": l.standardDescription || l.originalDescription }),
@@ -167,15 +199,22 @@ export async function GET(req: NextRequest) {
           subcategory: (l as any).subcategoryId || '',
           uom: l.uom?.code || l.uomRaw || 'NOS',
           quantity: l.quantity,
-          benchmarkRate: (l as any).benchmarkRate || 100,
-          benchmarkAmount: (l.quantity || 0) * ((l as any).benchmarkRate || 100),
-        })),
+          benchmarkRate: Number(l.aiUnitCost) > 0 ? Number(l.aiUnitCost) : 100,
+          benchmarkAmount: (l.quantity || 0) * (Number(l.aiUnitCost) > 0 ? Number(l.aiUnitCost) : 100),
+        })) } : {}),
       };
     });
 
-    return apiSuccess({ approvedBoqs: formatted, total: formatted.length });
-  } catch (error: any) {
-    console.error('Error fetching approved BOQs for sourcing:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs }), 500);
+    return apiSuccess({
+      approvedBoqs: formatted, total, page: query.page, pageSize: query.pageSize,
+      totalPages: Math.ceil(total / query.pageSize), hasMore: query.page * query.pageSize < total,
+    });
+  } catch (error) {
+    await writeStructuredLog('error', 'procurement.approved_boq_register_read_failed', {
+      operation: 'list_approved_boqs', route: '/api/procurement/approved-boqs', requestId: req.headers.get('x-request-id'),
+      tenantId: ctx.tenantId, page: query.page, pageSize: query.pageSize, searchLength: query.search.length,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, 500);
   }
 }

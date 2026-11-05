@@ -1,0 +1,1 @@
+export const COST_CENTRE_FILTER_PAGE_SIZE = 100;

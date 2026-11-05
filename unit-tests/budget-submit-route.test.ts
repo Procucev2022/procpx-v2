@@ -3,6 +3,7 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { POST } from '../src/app/api/budgets/submit/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -13,6 +14,8 @@ jest.mock('../src/lib/prisma', () => ({
     auditLog: { create: jest.fn() },
   },
 }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -38,6 +41,7 @@ describe('budget submission route', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(ctx);
     isContext.mockReturnValue(true);
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValue(Array.from({ length: 4 }, () => ({ meta: { changes: 1 } })));
   });
 
   it('authorizes submission and validates the contribution state', async () => {
@@ -57,36 +61,46 @@ describe('budget submission route', () => {
     });
   });
 
-  it('submits drafts, updates transactions and the BOQ revision, then audits', async () => {
+  it('submits drafts with one guarded D1 batch for all dependent records', async () => {
     const contribution = {
       id: 'budget-1', status: 'DRAFT', boqRevisionId: 'revision-1', projectId: 'project-1',
       costCentre: { code: 'CC-1' }, totalEstimatedValue: 15000,
     };
-    const updated = { ...contribution, status: 'PENDING_PROJECT_APPROVAL' };
     db.budgetContribution.findFirst.mockResolvedValue(contribution);
-    db.budgetContribution.update.mockResolvedValue(updated);
 
     await expect(POST(makeRequest({ contributionId: 'budget-1' }))).resolves.toEqual({
-      ok: true, data: { contribution: updated, status: 'PENDING_PROJECT_APPROVAL' }, status: 200,
+      ok: true, data: { contribution: expect.objectContaining({ ...contribution, status: 'PENDING_PROJECT_APPROVAL', submittedBy: 'user-1' }), status: 'PENDING_PROJECT_APPROVAL' }, status: 200,
     });
     expect(db.budgetContribution.findFirst).toHaveBeenCalledWith({
       where: { id: 'budget-1', tenantId: 'tenant-1' }, include: { boqRevision: true, boq: true, costCentre: true },
     });
-    expect(db.budgetContribution.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'budget-1' }, data: expect.objectContaining({ status: 'PENDING_PROJECT_APPROVAL', submittedAt: expect.any(Date), submittedBy: 'user-1' }),
-    }));
-    expect(db.budgetTransaction.updateMany).toHaveBeenCalledWith({ where: { contributionId: 'budget-1' }, data: { status: 'PENDING_PROJECT_APPROVAL' } });
-    expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { budgetStatus: 'BUDGET_PENDING_PROJECT_APPROVAL' } });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', userId: 'user-1', projectId: 'project-1', entityId: 'budget-1', action: 'BUDGET_SUBMITTED',
-      description: expect.stringContaining('Cost Centre CC-1 submitted for Project Approver review'),
-    }) });
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0];
+    expect(batch).toHaveLength(4);
+    expect(batch[0].sql).toContain('"status" = \'DRAFT\'');
+    expect(batch[1].sql).toContain('WHERE changes() = 1');
+    expect(batch[1].values).toEqual(expect.arrayContaining(['BUDGET_SUBMITTED', 'budget-1']));
+    expect(batch[2].sql).toContain('budget_transactions');
+    expect(batch[3].sql).toContain('boq_revisions');
+    expect(db.budgetContribution.update).not.toHaveBeenCalled();
+    expect(db.budgetTransaction.updateMany).not.toHaveBeenCalled();
+    expect(db.boqRevision.update).not.toHaveBeenCalled();
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('returns a conflict when another request wins the status compare-and-set', async () => {
+    db.budgetContribution.findFirst.mockResolvedValue({
+      id: 'budget-1', status: 'DRAFT', boqRevisionId: 'revision-1', projectId: 'project-1', costCentre: { code: 'CC-1' }, totalEstimatedValue: 15,
+    });
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(POST(makeRequest({ contributionId: 'budget-1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.budgetContributionChangedPleaseRefresh, status: 409,
+    });
   });
 
   it('converts database and body parsing errors to API responses', async () => {
     db.budgetContribution.findFirst.mockRejectedValueOnce(new Error('database offline'));
     await expect(POST(makeRequest({ contributionId: 'budget-1' }))).resolves.toEqual({
-      ok: false, error: 'database offline', status: 500,
+      ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitBudgetContribution, status: 500,
     });
 
     db.budgetContribution.findFirst.mockRejectedValueOnce({});
@@ -94,7 +108,9 @@ describe('budget submission route', () => {
       ok: false, error: 'Failed to submit budget contribution.', status: 500,
     });
 
-    const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid request body')) } as unknown as NextRequest;
-    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: 'invalid request body', status: 500 });
+    const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid request body')), headers: new Headers() } as unknown as NextRequest;
+    await expect(POST(badJson)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitBudgetContribution, status: 500,
+    });
   });
 });

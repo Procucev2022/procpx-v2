@@ -14,6 +14,10 @@ const mockToastError = jest.fn();
 const mockFetch = jest.fn();
 const originalFetch = global.fetch;
 
+function stripBoqLines<T extends { lines?: unknown }>(boq: T): Omit<T, 'lines'> {
+  return Object.fromEntries(Object.entries(boq).filter(([key]) => key !== 'lines')) as Omit<T, 'lines'>;
+}
+
 jest.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams(),
   useRouter: () => ({ push: mockPush, replace: jest.fn(), refresh: jest.fn() }),
@@ -52,6 +56,7 @@ const rateCards = [
 ];
 const response = (body: unknown, ok = true) => ({ ok, json: jest.fn().mockResolvedValue(body) });
 const defaultBoqs = [boq('rev-1', 'North Plant'), boq('rev-2', 'South Plant', 'Civil')];
+const defaultBoqSummaries = defaultBoqs.map(stripBoqLines);
 const pr = {
   id: 'pr-1', prNumber: 'PR-100', title: 'Cable installation', status: 'PR_APPROVED',
   projectId: 'project-pr', project: { id: 'project-pr', name: 'PR Project', projectCode: 'PRP', city: 'Delhi' },
@@ -63,7 +68,10 @@ const pr = {
 function configureFetch(overrides: Record<string, unknown> = {}) {
   mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url === '/api/procurement/approved-boqs') return response(overrides.boqs ?? { approvedBoqs: defaultBoqs });
+    if (url.startsWith('/api/procurement/approved-boqs')) {
+      if (url.includes('revisionId=')) return response(overrides.boqDetails ?? { approvedBoqs: defaultBoqs });
+      return response(overrides.boqs ?? { approvedBoqs: defaultBoqSummaries });
+    }
     if (url === '/api/procurement/vendors') return response(overrides.vendors ?? { vendors });
     if (url === '/api/procurement/rate-cards') return response(overrides.rateCards ?? { rateCards });
     if (url === '/api/pr/pr-1') return response(overrides.pr ?? pr, overrides.prOk !== false);
@@ -110,6 +118,8 @@ describe('new procurement RFQ workflow', () => {
     expect(screen.getByText('North Plant')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'rev-2' } });
     expect(screen.getByText('South Plant')).toBeInTheDocument();
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/approved-boqs?revisionId=rev-2&pageSize=1'));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
 
     continueTo(2);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.sCOPEPACKAGEDEFINITION))).toBeInTheDocument();

@@ -3,3 +3,4 @@
 export const COMMON_UOMS = ['SQFT', 'NOS', 'RMT', 'SQM', 'KG', 'LOT', 'MTR', 'SET', 'TON', 'BAG', 'LTR'];
 
 export const SECTORS = ['RETAIL', 'HOSPITALITY', 'BANKING', 'INSURANCE', 'OFFICE', 'OTHER'];
+export const STANDARD_BOQ_LIST_PAGE_SIZE = 50;

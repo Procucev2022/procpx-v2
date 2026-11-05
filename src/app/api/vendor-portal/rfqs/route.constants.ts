@@ -1,0 +1,3 @@
+export const VENDOR_RFQ_DEFAULT_PAGE_SIZE = 50;
+export const VENDOR_RFQ_MAX_PAGE_SIZE = 100;
+export const VENDOR_RFQ_MAX_PAGE_NUMBER = 1_000;

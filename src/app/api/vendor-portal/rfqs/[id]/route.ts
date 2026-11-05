@@ -4,10 +4,25 @@ import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
-import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '@/lib/notifications';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  MAX_D1_BATCH_STATEMENTS,
+  AUDIT_LOG_INSERT_SQL,
+  NEGOTIATION_BEST_QUOTE_UPDATE_SQL,
+  NEGOTIATION_ROUND_MARK_REVISED_SQL,
+  QUOTE_INSERT_SQL,
+  QUOTE_LINE_INSERT_SQL,
+  RFQ_MARK_RESPONSE_OPEN_SQL,
+  RFQ_MESSAGE_INSERT_SQL,
+  RFQ_VENDOR_MARK_SUBMITTED_SQL,
+} from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
+import type { NegotiationQuoteLineSnapshot } from '@app-types/app/api/vendor-portal-rfqs.types';
 
 
 export async function GET(
@@ -86,6 +101,7 @@ export async function POST(
 ) {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
+  const startedAt = Date.now();
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
     return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
@@ -145,11 +161,22 @@ export async function POST(
     }
 
     const lineRateMap = new Map<string, number>();
+    const rfqLineIds = new Set(rfq.lines.map((line) => line.id));
     for (const item of lines) {
-      const rate = Number(item.unitRate);
-      if (item.rfqLineId) {
-        lineRateMap.set(item.rfqLineId, rate);
+      if (!item.rfqLineId || !rfqLineIds.has(item.rfqLineId) || lineRateMap.has(item.rfqLineId)) {
+        return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemsMustReferenceEachRFQLineExactlyOnce, 400);
       }
+      const rate = Number(item.unitRate);
+      if (!Number.isFinite(rate)) {
+        return apiError(
+          interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemLineNumberDescriptionMustHaveAValidPositiveUnitRateBeforeSubmission, {
+            "lineNumber": rfq.lines.find((line) => line.id === item.rfqLineId)?.lineNumber || '',
+            "description": rfq.lines.find((line) => line.id === item.rfqLineId)?.description || '',
+          }),
+          400,
+        );
+      }
+      lineRateMap.set(item.rfqLineId, rate);
     }
 
     for (const rfqLine of rfq.lines) {
@@ -184,13 +211,34 @@ export async function POST(
     // Calculate totals
     let totalBaseAmount = 0;
     let taxAmount = 0;
-    const quoteLinesData: any[] = [];
+    const quoteLinesData: Array<{
+      tenantId: string;
+      rfqLineId: string;
+      unitRate: number;
+      taxPercent: number;
+      discountPercent: number;
+      lineTotal: number;
+      remarks: string | null;
+    }> = [];
 
     for (const item of lines) {
-      const rfqLine = rfq.lines.find((l) => l.id === item.rfqLineId);
-      const qty = rfqLine ? rfqLine.quantity : 1;
-      const rate = Number(item.unitRate) || 0;
-      const gst = Number(item.gstPercent) || 0;
+      // The validation above guarantees every submitted ID maps to an RFQ line
+      // and every rate is finite and positive.
+      const rfqLine = rfq.lines.find((l) => l.id === item.rfqLineId)!;
+      const qty = rfqLine.quantity;
+      const rate = Number(item.unitRate);
+      const gst = item.gstPercent === undefined || item.gstPercent === null || item.gstPercent === ''
+        ? 0
+        : Number(item.gstPercent);
+      if (!Number.isFinite(gst) || gst < 0 || gst > 100) {
+        return apiError(
+          interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemLineNumberDescriptionMustHaveAValidTaxRateBeforeSubmission, {
+            "lineNumber": rfqLine.lineNumber || '',
+            "description": rfqLine.description || '',
+          }),
+          400,
+        );
+      }
       const lineSubtotal = qty * rate;
       const lineTax = lineSubtotal * (gst / 100);
       const lineTotal = lineSubtotal + lineTax;
@@ -211,51 +259,7 @@ export async function POST(
 
     const totalQuoteAmount = totalBaseAmount + taxAmount;
 
-    // Execute quote creation, vendor status update, negotiation round response transactionally
-    const { quote, updatedRound } = await prisma.$transaction(async (tx) => {
-      const newQuote = await tx.quote.create({
-        data: {
-          tenantId: ctx.tenantId,
-          rfqId,
-          vendorId,
-          quoteNumber,
-          quoteVersion: nextVersion,
-          totalBaseAmount,
-          taxAmount,
-          totalQuoteAmount,
-          status: 'SUBMITTED',
-          validUntil: validUntil ? new Date(validUntil) : null,
-          commercialTerms: commercialNotes || null,
-          deliveryLeadTimeDays: deliveryLeadTimeDays ? Number(deliveryLeadTimeDays) : null,
-          submittedAt: new Date(),
-          submittedBy: ctx.userName || 'Vendor Representative',
-          lines: {
-            create: quoteLinesData,
-          },
-        },
-        include: { lines: true },
-      });
-
-      // Update invited vendor status
-      await tx.rfqVendor.updateMany({
-        where: { rfqId, vendorId },
-        data: {
-          invitationStatus: 'SUBMITTED',
-          submissionStatus: 'SUBMITTED',
-        },
-      });
-
-      // Transition RFQ status to VENDOR_RESPONSE_OPEN if currently RELEASED
-      if (rfq.status === 'RELEASED') {
-        await tx.rfq.update({
-          where: { id: rfqId },
-          data: { status: 'VENDOR_RESPONSE_OPEN' },
-        });
-      }
-
-      // Sync active negotiation round if vendor is responding to an open buyer counteroffer
-      let matchedRound: any = null;
-      const activeNeg = await tx.negotiation.findFirst({
+    const activeNeg = await prisma.negotiation.findFirst({
         where: { rfqId, tenantId: ctx.tenantId },
         include: {
           rounds: {
@@ -265,101 +269,171 @@ export async function POST(
           },
         },
       });
-
-      if (activeNeg && activeNeg.rounds.length > 0) {
-        const activeRound = activeNeg.rounds[0];
-        if (!activeRound.revisedQuoteAmount || activeRound.nextResponsibleParty === 'VENDOR') {
-          // Merge line items so both buyer counter rates and vendor revised rates are preserved
-          let mergedLineItemsJson = activeRound.lineItemsJson;
-          if (Array.isArray(lines) && lines.length > 0) {
-            let prevItems: any[] = [];
-            try {
-              if (activeRound.lineItemsJson) {
-                prevItems = typeof activeRound.lineItemsJson === 'string' ? JSON.parse(activeRound.lineItemsJson) : activeRound.lineItemsJson;
-              }
-            } catch {}
-            const merged = lines.map((li: any) => {
-              const prev = prevItems.find((p: any) => (p.rfqLineId || p.id) === (li.rfqLineId || li.id));
-              const rfqLine = rfq.lines.find((l: any) => l.id === (li.rfqLineId || li.id));
-              const qty = rfqLine?.quantity || prev?.quantity || 1;
-              const rate = Number(li.unitRate || 0);
-              return {
-                rfqLineId: li.rfqLineId || li.id,
-                description: interpolateUiString(UI_STRINGS.common.value1, { "value1": rfqLine?.description || prev?.description || UI_STRINGS.appAppBoqStudioPage.item }),
-                uom: rfqLine?.uom || prev?.uom || 'Unit',
-                quantity: qty,
-                counterRate: prev?.counterRate ?? null,
-                revisedRate: rate,
-                lineTotal: rate * qty,
-              };
-            });
-            mergedLineItemsJson = JSON.stringify(merged);
-          }
-
-          matchedRound = await tx.negotiationRound.update({
-            where: { id: activeRound.id },
-            data: {
-              revisedQuoteAmount: totalQuoteAmount,
-              status: 'REVISED_SUBMITTED',
-              nextResponsibleParty: 'BUYER',
-              lineItemsJson: mergedLineItemsJson,
-            },
-          });
-
-          await tx.negotiation.update({
-            where: { id: activeNeg.id },
-            data: {
-              bestQuoteAmount: totalQuoteAmount,
-            },
-          });
-
-          await tx.rfqMessage.create({
-            data: {
-              tenantId: ctx.tenantId,
-              rfqId,
-              senderId: ctx.userId,
-              senderName: ctx.userName || 'Vendor Representative',
-              senderRole: 'VENDOR',
-              message: interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.rEVISEDQUOTERECORDEDVendorSubmittedQuoteVNextVersionToLocaleStringRespondingToRoundRoundNumber, { "nextVersion": nextVersion, "toLocaleString": totalQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale), "roundNumber": activeRound.roundNumber }),
-              isVendorSent: true,
-              vendorId,
-            },
-          });
-        }
-      }
-
-      return { quote: newQuote, updatedRound: matchedRound };
-    });
-
-    await createAuditLog({
+    const now = new Date();
+    const validUntilDate = validUntil ? new Date(validUntil) : null;
+    const submittedBy = ctx.userName || UI_STRINGS.common.vendorRepresentative;
+    const quoteId = crypto.randomUUID();
+    const quoteLines = quoteLinesData.map((line) => ({ ...line, id: crypto.randomUUID(), quoteId }));
+    const quote = {
+      id: quoteId,
       tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      entityType: 'QUOTE',
-      entityId: quote.id,
-      action: 'VENDOR_QUOTE_SUBMITTED',
-      description: interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.quoteQuoteNumberVNextVersionSubmittedForRFQRfqNumberWithTotalToLocaleString, { "quoteNumber": quoteNumber, "nextVersion": nextVersion, "rfqNumber": rfq.rfqNumber, "toLocaleString": totalQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale) }),
-    });
-
-    await notifyNextResponsibleParty({
+      rfqId,
+      vendorId,
+      quoteNumber,
+      quoteVersion: nextVersion,
+      status: 'SUBMITTED',
+      totalBaseAmount,
+      taxAmount,
+      discountAmount: 0,
+      totalQuoteAmount,
+      commercialTerms: commercialNotes || null,
+      paymentTermsOffered: null,
+      deliveryLeadTimeDays: deliveryLeadTimeDays ? Number(deliveryLeadTimeDays) : null,
+      validUntil: validUntilDate,
+      submittedAt: now,
+      submittedBy,
+      createdAt: now,
+      updatedAt: now,
+      lines: quoteLines,
+    };
+    const auditId = crypto.randomUUID();
+    const auditDescription = interpolateUiString(
+      UI_STRINGS.appApiVendorPortalRfqsIdRoute.quoteQuoteNumberVNextVersionSubmittedForRFQRfqNumberWithTotalToLocaleString,
+      { quoteNumber, nextVersion, rfqNumber: rfq.rfqNumber, toLocaleString: totalQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale) },
+    );
+    const notificationPayload = await notifyNextResponsibleParty({
       tenantId: ctx.tenantId,
       event: nextVersion > 1 ? 'REVISED_QUOTE_RECEIVED' : 'QUOTE_SUBMITTED',
       recordNumber: rfq.rfqNumber,
       entityId: rfq.id,
-      actorName: ctx.userName || 'Vendor Representative',
+      actorName: ctx.userName || UI_STRINGS.common.vendorRepresentative,
       details: {
-        vendorName: ctx.userName || 'Vendor',
+        vendorName: ctx.userName || UI_STRINGS.common.vendor,
         amount: totalQuoteAmount,
         roundNumber: nextVersion,
       },
+    }, { prepareOnly: true });
+    const preparedNotification = notificationPayload
+      ? prepareNotificationOutbox(notificationPayload, now, auditId)
+      : null;
+    const batchStatements: D1BatchInputStatement[] = [
+      {
+        sql: QUOTE_INSERT_SQL,
+        values: [
+          quote.id, quote.tenantId, quote.rfqId, quote.vendorId, quote.quoteNumber, quote.quoteVersion,
+          quote.status, quote.totalBaseAmount, quote.taxAmount, quote.discountAmount, quote.totalQuoteAmount,
+          quote.commercialTerms, quote.paymentTermsOffered, quote.deliveryLeadTimeDays,
+          quote.validUntil?.toISOString() || null, now.toISOString(), quote.submittedBy,
+          now.toISOString(), now.toISOString(),
+        ],
+      },
+      ...quoteLines.map((line) => ({
+        sql: QUOTE_LINE_INSERT_SQL,
+        values: [line.id, line.tenantId, line.quoteId, line.rfqLineId, line.unitRate, line.taxPercent, line.discountPercent, line.lineTotal, line.remarks],
+      })),
+      { sql: RFQ_VENDOR_MARK_SUBMITTED_SQL, values: [rfqId, vendorId, ctx.tenantId] },
+    ];
+
+    if (rfq.status === 'RELEASED') {
+      batchStatements.push({ sql: RFQ_MARK_RESPONSE_OPEN_SQL, values: [now.toISOString(), rfqId, ctx.tenantId] });
+    }
+
+    const candidateRound = activeNeg?.rounds[0];
+    const activeRound = candidateRound && (!candidateRound.revisedQuoteAmount || candidateRound.nextResponsibleParty === 'VENDOR')
+      ? candidateRound
+      : null;
+
+    if (activeRound && activeNeg) {
+      let previousLineItems: NegotiationQuoteLineSnapshot[] = [];
+      if (activeRound.lineItemsJson) {
+        try {
+          const parsed = typeof activeRound.lineItemsJson === 'string'
+            ? JSON.parse(activeRound.lineItemsJson)
+            : activeRound.lineItemsJson;
+          if (Array.isArray(parsed)) {
+            previousLineItems = parsed.filter((item): item is NegotiationQuoteLineSnapshot => typeof item === 'object' && item !== null);
+          }
+        } catch {
+          previousLineItems = [];
+        }
+      }
+      const mergedLineItems = lines.map((line: any) => {
+        const lineId = line.rfqLineId;
+        const previous = previousLineItems.find((item) => (item.rfqLineId || item.id) === lineId);
+        const rfqLine = rfq.lines.find((item) => item.id === lineId)!;
+        const quantity = rfqLine.quantity || previous?.quantity || 1;
+        const rate = Number(line.unitRate);
+        return {
+          rfqLineId: lineId,
+          description: rfqLine.description || previous?.description || UI_STRINGS.appAppBoqStudioPage.item,
+          uom: rfqLine.uom || previous?.uom || 'Unit',
+          quantity,
+          counterRate: previous?.counterRate ?? null,
+          revisedRate: rate,
+          lineTotal: rate * quantity,
+        };
+      });
+      batchStatements.push(
+        {
+          sql: NEGOTIATION_ROUND_MARK_REVISED_SQL,
+          values: [totalQuoteAmount, JSON.stringify(mergedLineItems), now.toISOString(), activeRound.id, ctx.tenantId],
+        },
+        {
+          sql: NEGOTIATION_BEST_QUOTE_UPDATE_SQL,
+          values: [totalQuoteAmount, now.toISOString(), activeNeg.id, ctx.tenantId],
+        },
+        {
+          sql: RFQ_MESSAGE_INSERT_SQL,
+          values: [
+            crypto.randomUUID(), ctx.tenantId, rfqId, ctx.userId, submittedBy, 'VENDOR',
+            interpolateUiString(UI_STRINGS.appApiVendorPortalRfqsIdRoute.rEVISEDQUOTERECORDEDVendorSubmittedQuoteVNextVersionToLocaleStringRespondingToRoundRoundNumber, {
+              "nextVersion": nextVersion,
+              "toLocaleString": totalQuoteAmount.toLocaleString(I18N_CONFIG.defaultLocale),
+              "roundNumber": activeRound.roundNumber,
+            }),
+            null, true, vendorId, now.toISOString(),
+          ],
+        },
+      );
+    }
+
+    batchStatements.push({
+      sql: AUDIT_LOG_INSERT_SQL,
+      values: [
+        auditId, ctx.tenantId, ctx.userId, rfq.projectId || null, 'QUOTE', quote.id, 'VENDOR_QUOTE_SUBMITTED',
+        auditDescription, null,
+        JSON.stringify({ rfqId: rfq.id, vendorId, quoteNumber, version: nextVersion, totalAmount: totalQuoteAmount }),
+        null, null, now.toISOString(),
+      ],
     });
+    if (preparedNotification) batchStatements.push(preparedNotification.statement);
+
+    if (batchStatements.length > MAX_D1_BATCH_STATEMENTS || !isD1BatchWithinLimits(batchStatements)) {
+      return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.quotationHasTooManyLineItemsToSubmitAtomically, 400);
+    }
+    await writeD1BatchAtomically(batchStatements);
+    if (preparedNotification) {
+      await dispatchPreparedWorkflowNotification(preparedNotification.id, now, {
+        tenantId: ctx.tenantId, entityType: 'QUOTE', entityId: quote.id,
+        route: '/api/vendor-portal/rfqs/[id]',
+      });
+    }
 
     const confirmationMsg = nextVersion === 1
       ? '1st Quote Submitted Successfully'
       : `Quote Version ${nextVersion} Submitted Successfully`;
 
     return apiSuccess({ quote, message: confirmationMsg, version: nextVersion }, 201);
-  } catch (error: any) {
-    console.error('Error submitting quotation:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitQuotation }), 500);
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'vendor_portal.quote_submission_failed', {
+      operation: 'submit_quote',
+      route: '/api/vendor-portal/rfqs/[id]',
+      tenantId: ctx.tenantId,
+      vendorId,
+      durationMs: Date.now() - startedAt,
+      requestId: req.headers?.get('x-request-id') || undefined,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToSubmitQuotation, 500);
   }
 }

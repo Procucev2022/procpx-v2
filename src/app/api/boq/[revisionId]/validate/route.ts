@@ -1,50 +1,48 @@
-// app/api/boq/[revisionId]/validate/route.ts
-// Re-validate all lines in revision and produce comprehensive quality score breakdown
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { validateBoqLine, summarizeIssues } from '@/lib/boq-validate';
-import { createAuditLog } from '@/lib/audit';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, MAX_BOQ_BATCH_LINES } from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import type { BoqRevisionLinesRouteContext } from '@app-types/app/api/boq/revision-lines.types';
+import type { BoqLineInput } from '@app-types/lib/boq-validate.types';
+import { BOQ_VALIDATE_LINES_UPDATE_JSON_SQL, BOQ_VALIDATE_REVISION_UPDATE_SQL } from './route.constants';
 
-
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
+export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteContext) {
   const ctx = await requireAuth('BOQ_VALIDATE');
   if (!isApiContext(ctx)) return ctx;
   const { revisionId } = await params;
+  const startedAt = Date.now();
 
-  const revision = await prisma.boqRevision.findFirst({
-    where: { id: revisionId, tenantId: ctx.tenantId },
-    include: {
-      lines: { where: { isDeleted: false } },
-      boq: true,
-    },
-  });
+  try {
+    const revision = await prisma.boqRevision.findFirst({
+      where: { id: revisionId, tenantId: ctx.tenantId },
+      include: {
+        lines: {
+          where: { isDeleted: false },
+          take: MAX_BOQ_BATCH_LINES + 1,
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        },
+        boq: true,
+      },
+    });
+    if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+    if (revision.lines.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
 
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
-
-  // Check duplicate line numbers
-  const lineNumCounts: Record<string, number> = {};
-  for (const line of revision.lines) {
-    if (line.lineNumber) {
-      lineNumCounts[line.lineNumber] = (lineNumCounts[line.lineNumber] || 0) + 1;
+    const lineNumberCounts: Record<string, number> = {};
+    for (const line of revision.lines) {
+      if (line.lineNumber) lineNumberCounts[line.lineNumber] = (lineNumberCounts[line.lineNumber] || 0) + 1;
     }
-  }
 
-  // Known UOMs for tenant
-  const validUoms = await prisma.uomMaster.findMany({
-    where: { tenantId: ctx.tenantId, isActive: true },
-    select: { id: true, code: true },
-  });
-  const validUomIds = new Set(validUoms.map(u => u.id));
-
-  // Run validation per line
-  for (const line of revision.lines) {
-    const isDuplicate = (lineNumCounts[line.lineNumber] || 0) > 1;
-    const isInvalidUom = !!line.uomId && !validUomIds.has(line.uomId);
-
-    const validation = validateBoqLine({
+    const validUoms = await prisma.uomMaster.findMany({
+      where: { tenantId: ctx.tenantId, isActive: true },
+      select: { id: true, code: true },
+    });
+    const validUomIds = new Set(validUoms.map((uom) => uom.id));
+    const validationInputs: BoqLineInput[] = revision.lines.map((line) => ({
       originalDescription: line.originalDescription,
       standardDescription: line.standardDescription ?? undefined,
       uomRaw: line.uomRaw ?? undefined,
@@ -52,125 +50,148 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ re
       quantity: line.quantity,
       categoryId: line.categoryId ?? undefined,
       lineNumber: line.lineNumber,
-      isDuplicate,
-      isInvalidUom,
-    });
-
-    await prisma.boqLine.update({
-      where: { id: line.id },
-      data: {
-        validationStatus: validation.status,
-        validationMessages: JSON.stringify(validation.messages),
+      isDuplicate: (lineNumberCounts[line.lineNumber] || 0) > 1,
+      isInvalidUom: Boolean(line.uomId) && !validUomIds.has(line.uomId || ''),
+    }));
+    const validations = validationInputs.map((input) => validateBoqLine(input));
+    const validCount = validations.filter((validation) => validation.status === 'VALID').length;
+    const errorCount = validations.filter((validation) => validation.status === 'ERROR').length;
+    const warningCount = validations.filter((validation) => validation.status === 'WARNING').length;
+    const issueSummary = summarizeIssues(validationInputs);
+    const nextUpdatedAt = new Date(Math.max(Date.now(), revision.updatedAt.getTime() + 1));
+    const lineUpdates = revision.lines.map((line, index) => ({
+      id: line.id,
+      validationStatus: validations[index].status,
+      validationMessages: JSON.stringify(validations[index].messages),
+      updatedAt: nextUpdatedAt.toISOString(),
+    }));
+    const description = interpolateUiString(
+      UI_STRINGS.appApiBoqRevisionIdValidateRoute.bOQRevisionRevisionCodeValidatedScoreQualityScoreErrorCountErrorsWarnCountWarnings,
+      { revisionCode: revision.revisionCode, qualityScore: issueSummary.qualityScore, errorCount, warnCount: warningCount },
+    );
+    const auditValue = JSON.stringify({ qualityScore: issueSummary.qualityScore, validCount, errorCount, warningCount, issues: issueSummary });
+    const results = await writeD1BatchAtomically([
+      {
+        sql: BOQ_VALIDATE_LINES_UPDATE_JSON_SQL,
+        values: [JSON.stringify(lineUpdates), ctx.tenantId, revisionId],
       },
-    });
-  }
+      {
+        sql: BOQ_VALIDATE_REVISION_UPDATE_SQL,
+        values: [lineUpdates.length, validCount, errorCount, warningCount, issueSummary.qualityScore, nextUpdatedAt,
+          revisionId, ctx.tenantId, revision.updatedAt, lineUpdates.length],
+      },
+      {
+        sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+        values: [crypto.randomUUID(), ctx.tenantId, ctx.userId, revision.boq.projectId, 'BOQ_REVISION', revisionId,
+          'VALIDATE', description, null, auditValue, null, null, nextUpdatedAt],
+      },
+    ]);
 
-  // Reload lines and compute summary
-  const refreshedLines = await prisma.boqLine.findMany({
-    where: { boqRevisionId: revisionId, isDeleted: false },
-  });
+    if (Number(results[0]?.meta?.changes ?? -1) !== lineUpdates.length
+      || Number(results[1]?.meta?.changes || 0) !== 1
+      || Number(results[2]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
 
-  const issueSummary = summarizeIssues(refreshedLines.map(l => ({
-    originalDescription: l.originalDescription,
-    standardDescription: l.standardDescription ?? undefined,
-    uomRaw: l.uomRaw ?? undefined,
-    uomId: l.uomId ?? undefined,
-    quantity: l.quantity,
-    categoryId: l.categoryId ?? undefined,
-    lineNumber: l.lineNumber,
-    isDuplicate: (lineNumCounts[l.lineNumber] || 0) > 1,
-    isInvalidUom: !!l.uomId && !validUomIds.has(l.uomId),
-  })));
-
-  const validCount = refreshedLines.filter(l => l.validationStatus === 'VALID').length;
-  const errorCount = refreshedLines.filter(l => l.validationStatus === 'ERROR').length;
-  const warnCount = refreshedLines.filter(l => l.validationStatus === 'WARNING').length;
-
-  await prisma.boqRevision.update({
-    where: { id: revisionId },
-    data: {
-      totalLines: refreshedLines.length,
+    return apiSuccess({
+      qualityScore: issueSummary.qualityScore,
+      totalLines: lineUpdates.length,
       validLines: validCount,
       errorLines: errorCount,
-      warningLines: warnCount,
-      qualityScore: issueSummary.qualityScore,
-    },
-  });
-
-  await createAuditLog({
-    tenantId: ctx.tenantId,
-    userId: ctx.userId,
-    projectId: revision.boq.projectId,
-    entityType: 'BOQ_REVISION',
-    entityId: revisionId,
-    action: 'VALIDATE',
-    description: interpolateUiString(UI_STRINGS.appApiBoqRevisionIdValidateRoute.bOQRevisionRevisionCodeValidatedScoreQualityScoreErrorCountErrorsWarnCountWarnings, { "revisionCode": revision.revisionCode, "qualityScore": issueSummary.qualityScore, "errorCount": errorCount, "warnCount": warnCount }),
-    newValue: { qualityScore: issueSummary.qualityScore, validCount, errorCount, warnCount, issues: issueSummary },
-  });
-
-  return apiSuccess({
-    qualityScore: issueSummary.qualityScore,
-    totalLines: refreshedLines.length,
-    validLines: validCount,
-    errorLines: errorCount,
-    warningLines: warnCount,
-    issues: issueSummary,
-  });
+      warningLines: warningCount,
+      issues: issueSummary,
+    });
+  } catch (error: unknown) {
+    try {
+      await writeStructuredLog('error', 'boq.validation_failed', {
+        operation: 'validate_boq_revision',
+        route: '/api/boq/[revisionId]/validate',
+        requestId: req.headers.get('x-request-id') || null,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        role: ctx.role,
+        boqRevisionId: revisionId,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+      });
+    } catch {
+      // Preserve the generic response if optional local log storage fails.
+    }
+    return apiError(UI_STRINGS.common.userMessages.failedToUpdateBoq, 500);
+  }
 }
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
+export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteContext) {
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
   const { revisionId } = await params;
+  const startedAt = Date.now();
 
-  let revision = await prisma.boqRevision.findFirst({
-    where: { id: revisionId, tenantId: ctx.tenantId },
-    include: {
-      lines: {
-        where: { isDeleted: false },
-        include: { category: true, subcategory: true, uom: true },
-        orderBy: [{ lineNumber: 'asc' }],
-      },
-      boq: { include: { project: true, costCentre: true } },
-    },
-  });
-
-  if (!revision) {
-    const boqRecord = await prisma.boq.findFirst({
+  try {
+    const revision = await prisma.boqRevision.findFirst({
       where: { id: revisionId, tenantId: ctx.tenantId },
       include: {
-        project: true,
-        costCentre: true,
-        revisions: {
-          orderBy: { revisionNumber: 'desc' },
-          take: 1,
-          include: {
-            lines: {
-              where: { isDeleted: false },
-              include: { category: true, subcategory: true, uom: true },
-              orderBy: [{ lineNumber: 'asc' }],
+        lines: {
+          where: { isDeleted: false },
+          include: { category: true, subcategory: true, uom: true },
+          take: MAX_BOQ_BATCH_LINES + 1,
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        },
+        boq: { include: { project: true, costCentre: true } },
+      },
+    });
+
+    let selectedRevision = revision;
+    if (!selectedRevision) {
+      const boqRecord = await prisma.boq.findFirst({
+        where: { id: revisionId, tenantId: ctx.tenantId },
+        include: {
+          project: true,
+          costCentre: true,
+          revisions: {
+            orderBy: [{ revisionNumber: 'desc' }, { id: 'desc' }],
+            take: 1,
+            include: {
+              lines: {
+                where: { isDeleted: false },
+                include: { category: true, subcategory: true, uom: true },
+                take: MAX_BOQ_BATCH_LINES + 1,
+                orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+              },
             },
           },
         },
-      },
-    });
-    if (boqRecord && boqRecord.revisions.length > 0) {
-      revision = {
-        ...boqRecord.revisions[0],
-        boq: boqRecord,
-      };
+      });
+      if (boqRecord?.revisions[0]) selectedRevision = { ...boqRecord.revisions[0], boq: boqRecord };
     }
+
+    if (!selectedRevision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+    if (selectedRevision.lines.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
+    return apiSuccess({
+      revision: selectedRevision,
+      lines: selectedRevision.lines,
+      qualityScore: selectedRevision.qualityScore,
+      totalLines: selectedRevision.totalLines || selectedRevision.lines.length,
+      validLines: selectedRevision.validLines,
+      warningLines: selectedRevision.warningLines,
+      errorLines: selectedRevision.errorLines,
+    });
+  } catch (error: unknown) {
+    try {
+      await writeStructuredLog('error', 'boq.validation_read_failed', {
+        operation: 'read_boq_validation',
+        route: '/api/boq/[revisionId]/validate',
+        requestId: req.headers.get('x-request-id') || null,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        role: ctx.role,
+        boqRevisionId: revisionId,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+      });
+    } catch {
+      // Preserve the generic response if optional local log storage fails.
+    }
+    return apiError(UI_STRINGS.common.userMessages.failedToUpdateBoq, 500);
   }
-
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
-
-  return apiSuccess({
-    revision,
-    lines: revision.lines,
-    qualityScore: revision.qualityScore,
-    totalLines: revision.totalLines || revision.lines.length,
-    validLines: revision.validLines,
-    warningLines: revision.warningLines,
-    errorLines: revision.errorLines,
-  });
 }

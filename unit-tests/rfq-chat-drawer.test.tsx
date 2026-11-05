@@ -56,6 +56,25 @@ describe('RFQ clarification drawer', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-2/messages');
   });
 
+  it('prepends older pages without changing the visible conversation order', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response({
+        messages: [{ id: 'm2', senderName: 'Vendor', senderRole: 'VENDOR', message: 'Newest reply', createdAt: '2026-10-28T11:20:00Z' }],
+        hasMore: true, nextCursor: '2026-10-28T10:15:00.000Z|m2',
+      }))
+      .mockResolvedValueOnce(response({
+        messages: [{ id: 'm1', senderName: 'Buyer', senderRole: 'BUYER', message: 'Older question', createdAt: '2026-10-28T10:15:00Z' }],
+        hasMore: false, nextCursor: null,
+      }));
+    render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-old" rfqNumber="RFQ-OLD" />);
+    expect(await screen.findByText('Newest reply')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Older question')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/procurement/rfqs/rfq-old/messages?cursor=2026-10-28T10%3A15%3A00.000Z%7Cm2');
+    const conversation = screen.getByText('Older question').closest('[style]')?.parentElement;
+    expect(conversation).toBeTruthy();
+  });
+
   it('shows API and network errors while loading history', async () => {
     fetchMock.mockResolvedValueOnce(response({ error: 'History is unavailable' }, false));
     const { rerender } = render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-3" rfqNumber="RFQ-003" />);

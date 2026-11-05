@@ -3,6 +3,9 @@ import { GET } from '../src/app/api/procurement/rfqs/[id]/compare/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '../src/lib/d1-batch.constants';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -10,7 +13,8 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: {
     rfq: { findFirst: jest.fn(), update: jest.fn() },
     ppoLine: { findMany: jest.fn() },
-    vendorRateCard: { findMany: jest.fn() },
+    vendorRateCard: { count: jest.fn() },
+    $queryRaw: jest.fn(),
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -20,11 +24,15 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const writeBatch = writeD1BatchAtomically as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1' };
 const params = (id = 'rfq-1') => ({ params: Promise.resolve({ id }) });
 const request = () => new NextRequest('http://localhost/api/procurement/rfqs/rfq-1/compare');
@@ -94,12 +102,15 @@ describe('RFQ quote comparison API', () => {
       { itemDescription: 'Panel', orderedUnitRate: 70, orderedAmount: 140, uom: 'EA', orderDate: new Date('2026-07-01'),
         ppo: { ppoNumber: 'PPO-1', vendor: { name: 'Legacy Vendor' } } },
     ]);
-    db.vendorRateCard.findMany.mockReset().mockResolvedValue([{
-      vendorId: 'v1', rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
-      validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendor: { id: 'v1', name: 'Vendor v1', code: 'V1' },
-      items: [{ description: ' copper cable ', rate: 85 }, { description: 'Panel', rate: 75 }],
-    }]);
+    db.vendorRateCard.count.mockReset().mockResolvedValue(1);
+    db.$queryRaw.mockReset().mockResolvedValue([
+      { description: ' copper cable ', rate: 85, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
+        validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendorId: 'v1', vendorName: 'Vendor v1' },
+      { description: 'Panel', rate: 75, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
+        validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendorId: 'v1', vendorName: 'Vendor v1' },
+    ]);
     audit.mockReset().mockResolvedValue(undefined);
+    writeBatch.mockReset().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -114,16 +125,21 @@ describe('RFQ quote comparison API', () => {
     db.rfq.findFirst.mockResolvedValueOnce(null);
     await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockRejectedValueOnce(new Error('comparison lookup failed'));
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'comparison lookup failed', status: 500 });
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'Failed to compare quotes', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('builds quote history, benchmark comparisons, negotiation rates, and tied package rankings', async () => {
     const result = await GET(request(), params());
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.negotiation_line_items_invalid', expect.objectContaining({
+      rfqId: 'rfq-1', invalidRoundCount: 1,
+    }));
+    expect(db.vendorRateCard.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', status: 'APPROVED' }) }));
+    expect(db.$queryRaw).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ ok: true, data: {
-      rfq: { id: 'rfq-1', status: 'RELEASED', project: { name: 'North Plant' } },
+      rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' } },
       vendors: [
         { vendorId: 'v1', vendorType: 'CLIENT_VENDOR', qualificationStatus: 'NOT_EVALUATED', quoteId: 'v1-new', quoteVersion: 2,
           completenessPercent: 100, revisions: [{ version: 1 }, { version: 2 }], rank: 1, rankLabel: 'L1' },
@@ -144,8 +160,12 @@ describe('RFQ quote comparison API', () => {
       summary: { packageTotal: 1160, benchmarkTotal: 1160, lowestQuoteTotal: 1200, lowestVendor: 'Vendor v1',
         savings: -40, isFavorable: false, hasApprovedRateCards: true, approvedRateCardsCount: 1 },
     } });
-    expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'COMPARISON' } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'QUOTE_COMPARED', entityId: 'rfq-1' }));
+    expect(db.rfq.update).not.toHaveBeenCalled();
+    expect(writeBatch).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ sql: expect.stringContaining('UPDATE "rfqs"'), values: expect.arrayContaining(['rfq-1', 'tenant-1', 'RELEASED']) }),
+      expect.objectContaining({ sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: expect.arrayContaining(['QUOTE_COMPARED', 'rfq-1']) }),
+    ]));
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('uses empty comparison fallbacks, skips closed RFQ transitions, and handles failures in dependent reads', async () => {
@@ -189,9 +209,10 @@ describe('RFQ quote comparison API', () => {
     } });
 
     db.ppoLine.findMany.mockRejectedValueOnce(new Error('history unavailable'));
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'history unavailable', status: 500 });
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ status: 'COMPARISON' }));
     audit.mockRejectedValueOnce(new Error('audit unavailable'));
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'audit unavailable', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

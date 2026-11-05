@@ -3,12 +3,14 @@ import { DELETE, GET, PUT } from '../src/app/api/procurement/rate-cards/[id]/rou
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    vendorRateCard: { findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    vendorRateCard: { findFirst: jest.fn(), update: jest.fn(), delete: jest.fn() },
     vendorRateCardItem: { update: jest.fn(), deleteMany: jest.fn() },
     rateCardApproval: { deleteMany: jest.fn() },
     notification: { create: jest.fn() },
@@ -21,11 +23,14 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const writeBatch = writeD1BatchAtomically as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', userName: 'Manager', userEmail: 'manager@example.test' };
 const params = (id = 'rc-1') => ({ params: Promise.resolve({ id }) });
 const request = (body: unknown) => new NextRequest('http://localhost/api/procurement/rate-cards/rc-1', {
@@ -46,12 +51,20 @@ describe('rate card detail API', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
-    db.vendorRateCard.findUnique.mockReset().mockResolvedValue(card());
+    db.vendorRateCard.findFirst.mockReset().mockResolvedValue(card());
     db.vendorRateCard.update.mockReset().mockImplementation(async ({ data }: any) => ({ ...card(), ...data }));
     db.vendorRateCard.delete.mockReset().mockResolvedValue({ id: 'rc-1' });
     db.vendorRateCardItem.update.mockReset().mockResolvedValue({});
     db.vendorRateCardItem.deleteMany.mockReset().mockResolvedValue({ count: 2 });
     db.rateCardApproval.deleteMany.mockReset().mockResolvedValue({ count: 1 });
+    writeBatch.mockReset().mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => statements.map((statement) => {
+      if (statement.sql.includes('DELETE FROM "vendor_rate_card_items"')) return { meta: { changes: 0 } };
+      if (statement.sql.includes('UPDATE "vendor_rate_card_items"')
+        || statement.sql.includes('INSERT INTO "vendor_rate_card_items"')) {
+        return { meta: { changes: JSON.parse(String(statement.values[0])).length } };
+      }
+      return { meta: { changes: 1 } };
+    }));
     db.notification.create.mockReset().mockResolvedValue({ id: 'notification-1' });
     audit.mockReset().mockResolvedValue(undefined);
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -59,18 +72,49 @@ describe('rate card detail API', () => {
 
   afterEach(() => consoleError.mockRestore());
 
+  it('saves buyer offer two drafts with a guarded D1 batch and preserves item metadata', async () => {
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [
+      { id: 'i1', comparisonRef: JSON.stringify({ buyerOffer1: 70, vendorQuote1: 90 }) },
+      { id: 'i2', comparisonRef: JSON.stringify({ legacyNote: 'preserve this context' }) },
+    ] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', remarks: 'Reviewing final rates', items: [
+      { id: 'i1', buyerOffer2: '80', remarks: 'Within target' }, { id: 'i2', buyerOffer2: 75 },
+    ] }), params())).resolves.toMatchObject({ ok: true, data: { rateCard: { status: 'ROUND_1_VENDOR_QUOTE' } } });
+
+    const draftBatch = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(draftBatch).toHaveLength(3);
+    expect(draftBatch[0].sql).toContain("'ROUND_1_VENDOR_QUOTE'");
+    expect(draftBatch[1].sql).toContain('UPDATE "vendor_rate_card_items"');
+    expect(draftBatch[2].sql).toContain('INSERT INTO "audit_logs"');
+    expect(JSON.parse(String(draftBatch[1].values[0]))).toEqual([
+      { id: 'i1', comparisonRef: JSON.stringify({ buyerOffer1: 70, vendorQuote1: 90, buyerOffer2: 80, remarks: 'Within target' }) },
+      { id: 'i2', comparisonRef: JSON.stringify({ legacyNote: 'preserve this context', buyerOffer2: 75 }) },
+    ]);
+    expect(db.vendorRateCardItem.update).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.update).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'DRAFT', items: [{ id: 'i1' }] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [{ id: 'i1', buyerOffer2: 80 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1' }] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [{ id: 'unknown', buyerOffer2: 80 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+  });
+
   it('returns enriched detail with parsed comparison metadata and safe defaults', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toBe(denied);
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED', notes: JSON.stringify({ agreement: { signature: 'signed.pdf' } }), items: [
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'APPROVED', notes: JSON.stringify({ agreement: { signature: 'signed.pdf' } }), items: [
       { id: 'i1', rate: 80, proposedRate: 90, historicalRate: 70, benchmarkRate: 100, minQuantity: 5,
         comparisonRef: JSON.stringify({ buyerOffer1: 75, vendorQuote1: 85, buyerOffer2: 78, vendorQuote2: 82,
           finalAgreedRate: 80, previousPpoRate: 65, referenceQty: 10, remarks: 'Matched' }) },
@@ -86,118 +130,163 @@ describe('rate card detail API', () => {
         { id: 'i3', finalAgreedRate: 20, referenceQty: 1, remarks: '' },
       ] },
     } });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'DRAFT', notes: '{bad json', items: [
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'DRAFT', notes: '{bad json', items: [
       { id: 'fallback-item', rate: 30, proposedRate: 0, comparisonRef: null },
     ] }));
     await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toMatchObject({ ok: true, data: {
       rateCard: { agreement: null, items: [{ id: 'fallback-item', buyerOffer1: 30, vendorQuote1: 0, finalAgreedRate: null, remarks: '' }] },
     } });
-    db.vendorRateCard.findUnique.mockRejectedValueOnce(new Error('read detail failed'));
-    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'read detail failed', status: 500 });
-    db.vendorRateCard.findUnique.mockRejectedValueOnce({});
-    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'Failed to fetch rate card', status: 500 });
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'rate_card.stored_metadata_invalid', expect.objectContaining({
+      rateCardId: 'rc-1', invalidFieldCount: 1, invalidFields: [{ recordId: 'i2', field: 'comparisonRef' }],
+    }));
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'rate_card.stored_metadata_invalid', expect.objectContaining({
+      rateCardId: 'rc-1', invalidFieldCount: 1, invalidFields: [{ recordId: 'rc-1', field: 'notes' }],
+    }));
+    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('read detail failed'));
+    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCard, status: 500 });
+    db.vendorRateCard.findFirst.mockRejectedValueOnce({});
+    await expect(GET(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCard, status: 500 });
   });
 
-  it('submits buyer offer two, skips unknown rows, clears signed evidence, and handles malformed prior notes', async () => {
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({
+  it('submits buyer offer two atomically, rejects unknown rows, and clears signed evidence', async () => {
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({
+      status: 'ROUND_1_VENDOR_QUOTE',
       notes: JSON.stringify({ agreement: { signature: 'old-signature', status: 'SIGNED' }, round2: { preserved: true } }),
-      items: [{ id: 'i1', comparisonRef: JSON.stringify({ existing: 'keep' }) }, { id: 'i2', comparisonRef: '{bad json' }],
+      items: [{ id: 'i1', comparisonRef: JSON.stringify({ existing: 'keep' }) }, { id: 'i2', comparisonRef: JSON.stringify({ legacyNote: 'keep' }) }],
     }));
     const result = await PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', remarks: 'Best and final', items: [
-      { id: 'i1', buyerOffer2: '80', remarks: 'Reduced' }, { id: 'i2', buyerOffer2: 70 }, { id: 'missing', buyerOffer2: 60 }, { buyerOffer2: 50 },
+      { id: 'i1', buyerOffer2: '80', remarks: 'Reduced' }, { id: 'i2', buyerOffer2: 70 },
     ] }), params());
     expect(result).toMatchObject({ ok: true, data: { message: 'Buyer RC Offer-2 successfully submitted to vendor!' } });
-    expect(db.vendorRateCardItem.update).toHaveBeenNthCalledWith(1, { where: { id: 'i1' }, data: { comparisonRef: JSON.stringify({ existing: 'keep', buyerOffer2: 80, remarks: 'Reduced' }) } });
-    expect(db.vendorRateCardItem.update).toHaveBeenNthCalledWith(2, { where: { id: 'i2' }, data: { comparisonRef: JSON.stringify({ buyerOffer2: 70 }) } });
-    const savedNotes = JSON.parse(db.vendorRateCard.update.mock.calls[0][0].data.notes);
+    const buyerOfferBatch = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(buyerOfferBatch).toHaveLength(4);
+    expect(buyerOfferBatch[0].sql).toContain("'ROUND_2_BUYER_OFFER'");
+    const itemUpdates = JSON.parse(String(buyerOfferBatch[1].values[0]));
+    expect(itemUpdates).toEqual([
+      { id: 'i1', comparisonRef: JSON.stringify({ existing: 'keep', buyerOffer2: 80, remarks: 'Reduced' }) },
+      { id: 'i2', comparisonRef: JSON.stringify({ legacyNote: 'keep', buyerOffer2: 70 }) },
+    ]);
+    expect(buyerOfferBatch[2].sql).toContain('INSERT INTO "audit_logs"');
+    expect(buyerOfferBatch[3].sql).toContain('notification_outbox');
+    const savedNotes = JSON.parse(String(buyerOfferBatch[0].values[0]));
     expect(savedNotes).toMatchObject({ currentRound: 2, agreement: { signature: null, status: 'DRAFT' },
       round2: { preserved: true, buyerOffer2Actor: 'Manager', buyerOffer2Remarks: 'Best and final' } });
-    expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ targetRole: UI_STRINGS.common.vENDOR, entityId: 'rc-1' }) });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'RATE_CARD_BUYER_OFFER_2_SUBMITTED' }));
+    expect(db.vendorRateCardItem.update).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.update).not.toHaveBeenCalled();
+    expect(db.notification.create).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ notes: '{bad json', items: [] }));
-    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2' }), params())).resolves.toMatchObject({ ok: true });
-    expect(JSON.parse(db.vendorRateCard.update.mock.calls[1][0].data.notes)).toMatchObject({ currentRound: 2 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1' }] }));
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: 'missing', buyerOffer2: 60 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', notes: '{bad json', items: [{ id: 'i1', comparisonRef: null }] }));
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: 'i1', buyerOffer2: 50 }] }), params()))
+      .resolves.toMatchObject({ ok: false, error: UI_STRINGS.common.userMessages.failedToUpdateRateCard, status: 500 });
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'rate_card.workflow_metadata_invalid', expect.objectContaining({
+      rateCardId: 'rc-1', field: 'notes', action: 'SUBMIT_BUYER_OFFER_2',
+    }));
   });
 
   it('accepts final vendor rates from the newest quote, prior quote, or existing rate', async () => {
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ terms: 'Accepted terms', items: [
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE', terms: 'Accepted terms', items: [
       { id: 'i2', rate: 50, proposedRate: 40, comparisonRef: JSON.stringify({ vendorQuote2: '35' }) },
       { id: 'i1', rate: 60, proposedRate: 45, comparisonRef: JSON.stringify({ vendorQuote1: 42 }) },
-      { id: 'i3', rate: 70, proposedRate: 55, comparisonRef: '{bad json' },
+      { id: 'i3', rate: 70, proposedRate: 55, comparisonRef: null },
     ] }));
     await expect(PUT(request({ action: 'ACCEPT_FINAL_VENDOR_OFFER', totalAgreedValue: 1000, remarks: 'Approved' }), params())).resolves.toMatchObject({
       ok: true, data: { message: expect.stringContaining('accepted successfully') },
     });
-    expect(db.vendorRateCardItem.update).toHaveBeenNthCalledWith(1, { where: { id: 'i2' }, data: { rate: 35,
-      comparisonRef: JSON.stringify({ vendorQuote2: '35', finalAgreedRate: 35 }) } });
-    expect(db.vendorRateCardItem.update).toHaveBeenNthCalledWith(2, { where: { id: 'i1' }, data: { rate: 42,
-      comparisonRef: JSON.stringify({ vendorQuote1: 42, finalAgreedRate: 42 }) } });
-    expect(db.vendorRateCardItem.update).toHaveBeenNthCalledWith(3, { where: { id: 'i3' }, data: { rate: 55,
-      comparisonRef: JSON.stringify({ finalAgreedRate: 55 }) } });
-    expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ targetRole: 'CATEGORY_MANAGER' }) });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'RATE_CARD_FINAL_VENDOR_OFFER_ACCEPTED' }));
+    const acceptBatch = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(acceptBatch).toHaveLength(4);
+    expect(acceptBatch[0].sql).toContain('FINAL_VENDOR_OFFER_ACCEPTED');
+    expect(JSON.parse(String(acceptBatch[1].values[0]))).toEqual([
+      { id: 'i2', rate: 35, comparisonRef: JSON.stringify({ vendorQuote2: '35', finalAgreedRate: 35 }) },
+      { id: 'i1', rate: 42, comparisonRef: JSON.stringify({ vendorQuote1: 42, finalAgreedRate: 42 }) },
+      { id: 'i3', rate: 55, comparisonRef: JSON.stringify({ finalAgreedRate: 55 }) },
+    ]);
+    expect(acceptBatch[2].values).toContain('RATE_CARD_FINAL_VENDOR_OFFER_ACCEPTED');
+    expect(acceptBatch[3].sql).toContain('notification_outbox');
+    expect(db.vendorRateCardItem.update).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.update).not.toHaveBeenCalled();
+    expect(db.notification.create).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('accepts valid category manager statuses, signs off vendor acceptance, and rejects invalid transitions', async () => {
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'DRAFT' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'DRAFT' }));
     await expect(PUT(request({ action: 'CATEGORY_MANAGER_ACCEPT' }), params())).resolves.toEqual({ ok: false, error: 'Cannot perform Category Manager Acceptance from status: DRAFT', status: 400 });
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE', notes: '{bad json' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE', notes: JSON.stringify({ priorNote: 'preserve' }) }));
     await expect(PUT(request({ action: 'CATEGORY_MANAGER_ACCEPT', agreement: { required: true, file: 'terms.pdf' }, remarks: 'Reviewed' }), params())).resolves.toMatchObject({
       ok: true, data: { message: expect.stringContaining('Vendor final acceptance is now required') },
     });
-    expect(JSON.parse(db.vendorRateCard.update.mock.calls[0][0].data.notes)).toMatchObject({
+    const acceptBatch = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(acceptBatch).toHaveLength(3);
+    expect(acceptBatch[0].sql).toContain('CATEGORY_MANAGER_ACCEPTED');
+    expect(JSON.parse(String(acceptBatch[0].values[0]))).toMatchObject({
       agreement: { required: true, file: 'terms.pdf' }, categoryManagerAccepted: { actor: 'Manager', remarks: 'Reviewed', hasAgreement: true },
     });
+    expect(acceptBatch[1].values).toContain('RATE_CARD_CATEGORY_MANAGER_ACCEPTED');
+    expect(acceptBatch[2].sql).toContain('notification_outbox');
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'CATEGORY_MANAGER_ACCEPTED' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'CATEGORY_MANAGER_ACCEPTED' }));
     await expect(PUT(request({ action: 'CATEGORY_MANAGER_SIGNOFF' }), params())).resolves.toMatchObject({ ok: false, error: expect.stringContaining('requires prior Vendor Acceptance') });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'VENDOR_ACCEPTED', notes: null }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'VENDOR_ACCEPTED', notes: null }));
     await expect(PUT(request({ action: 'CATEGORY_MANAGER_SIGNOFF' }), params())).resolves.toMatchObject({ ok: true });
-    expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      status: 'PENDING_PROJECT_APPROVAL', approvalLevel: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, submittedBy: 'Manager', submittedAt: expect.any(Date),
-    }) }));
-    expect(db.notification.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ targetRole: 'PROJECT_APPROVER' }) });
+    const signoffBatch = writeBatch.mock.calls[1][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(signoffBatch).toHaveLength(3);
+    expect(signoffBatch[0].sql).toContain('PENDING_PROJECT_APPROVAL');
+    expect(signoffBatch[0].values).toEqual(expect.arrayContaining(['Manager', 'tenant-1', 'rc-1']));
+    expect(signoffBatch[1].values).toContain('RATE_CARD_CM_SIGNED_OFF');
+    expect(signoffBatch[2].sql).toContain('notification_outbox');
+    expect(db.notification.create).not.toHaveBeenCalled();
   });
 
-  it('updates editable rate cards and recreates item defaults only when items are supplied', async () => {
-    const updated = { ...card(), title: 'Updated schedule', status: 'UNDER_REVIEW', version: 7 };
-    db.vendorRateCard.update.mockResolvedValueOnce(updated);
+  it('updates editable rate cards atomically and retains IDs for existing items', async () => {
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ items: [
+      { id: 'keep-id', createdAt: new Date('2026-01-01') },
+    ] }));
     await expect(PUT(request({ title: 'Updated schedule', category: 'Power', subcategory: null, scope: 'Supply & install',
       location: 'South', version: 'v7', validFrom: '2026-02-01', validTo: '2026-10-01', terms: 'COD', notes: 'Buyer note',
-      justification: 'Urgent', comparisonNotes: 'Checked', status: 'UNDER_REVIEW', items: [
-        { description: 'Cable', rate: '50', proposedRate: '45', historicalRate: '40', benchmarkRate: '60', minQuantity: 2,
+      justification: 'Urgent', comparisonNotes: 'Checked', status: 'DRAFT', items: [
+        { id: 'keep-id', description: 'Cable', rate: '50', proposedRate: '45', historicalRate: '40', benchmarkRate: '60', minQuantity: 2,
           maxQuantity: 10, itemCode: 'CBL', specification: '4 core', category: '', subcategory: '', uom: '', comparisonRef: '{}' },
         { description: 'Panel', rate: 0 },
-      ] }), params())).resolves.toMatchObject({ ok: true, data: { rateCard: updated } });
-    expect(db.vendorRateCardItem.deleteMany).toHaveBeenCalledWith({ where: { rateCardId: 'rc-1' } });
-    expect(db.vendorRateCard.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      title: 'Updated schedule', category: 'Power', version: 7, status: 'UNDER_REVIEW',
-      items: { create: [
-        expect.objectContaining({ itemCode: 'CBL', uom: 'Nos', rate: 50, proposedRate: 45, historicalRate: 40, benchmarkRate: 60,
-          minQuantity: 2, maxQuantity: 10, location: 'South', isActive: true }),
-        expect.objectContaining({ rate: 0, proposedRate: 0, historicalRate: null, benchmarkRate: null, minQuantity: 1, maxQuantity: null }),
-      ] },
-    }) }));
+      ] }), params())).resolves.toMatchObject({ ok: true, data: { rateCard: { title: 'Updated schedule', status: 'DRAFT' } } });
+    const detailsBatch = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(detailsBatch).toHaveLength(4);
+    expect(detailsBatch[0].sql).toContain('updatedAt" IS ?');
+    expect(detailsBatch[0].values).toContain('DRAFT');
+    expect(detailsBatch[1].sql).toContain('DELETE FROM "vendor_rate_card_items"');
+    expect(detailsBatch[2].sql).toContain('ON CONFLICT ("id") DO UPDATE');
+    const rows = JSON.parse(String(detailsBatch[2].values[0]));
+    expect(rows[0]).toMatchObject({ id: 'keep-id', itemCode: 'CBL', uom: 'Nos', rate: 50, proposedRate: 45,
+      historicalRate: 40, benchmarkRate: 60, minQuantity: 2, maxQuantity: 10, location: 'South', isActive: true });
+    expect(rows[1]).toMatchObject({ itemCode: null, rate: 0, proposedRate: 0, historicalRate: null,
+      benchmarkRate: null, minQuantity: 1, maxQuantity: null });
+    expect(detailsBatch[3].sql).toContain('INSERT INTO "audit_logs"');
+    expect(db.vendorRateCardItem.deleteMany).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.update).not.toHaveBeenCalled();
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'RETURNED_FOR_CORRECTION' }));
-    db.vendorRateCard.update.mockResolvedValueOnce({ ...card(), title: 'Cable rates', version: 1 });
-    await expect(PUT(request({ title: '', version: 0, validFrom: '', terms: undefined }), params())).resolves.toMatchObject({ ok: true });
-    expect(db.vendorRateCardItem.deleteMany).toHaveBeenCalledTimes(1);
-    expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      title: 'Cable rates', version: 1, validFrom: new Date('2026-01-01'),
-    }) }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'RETURNED_FOR_CORRECTION' }));
+    await expect(PUT(request({ title: '', validFrom: '', terms: undefined }), params())).resolves.toMatchObject({ ok: true });
+    const unchangedBatch = writeBatch.mock.calls[1][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(unchangedBatch[0].values).toContain('Cable rates');
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'NEGOTIATION' }));
-    db.vendorRateCard.update.mockResolvedValueOnce({ ...card(), version: 5 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'NEGOTIATION' }));
     await expect(PUT(request({ version: 5, items: [{ description: 'No category', rate: '', proposedRate: undefined }] }), params())).resolves.toMatchObject({ ok: true });
-    expect(db.vendorRateCard.update).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      version: 5, items: { create: [expect.objectContaining({ category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'Wire', rate: 0, proposedRate: 0 })] },
-    }) }));
+    const addItemBatch = writeBatch.mock.calls[2][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(JSON.parse(String(addItemBatch[2].values[0]))[0]).toMatchObject({
+      category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, subcategory: 'Wire', rate: 0, proposedRate: 0,
+    });
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'APPROVED' }));
     await expect(PUT(request({ title: 'blocked' }), params())).resolves.toEqual({ ok: false, error: 'Rate Card cannot be edited in status: APPROVED', status: 400 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card());
+    await expect(PUT(request({ status: 'APPROVED' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
   });
 
   it('deletes draft cards only and maps PUT/DELETE failures to API errors', async () => {
@@ -206,24 +295,27 @@ describe('rate card detail API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toBe(denied);
 
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'APPROVED' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'APPROVED' }));
     await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, status: 400 });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card());
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card());
     await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: true, data: { message: UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardDeletedSuccessfully }, status: 200 });
-    expect(db.vendorRateCardItem.deleteMany).toHaveBeenCalledWith({ where: { rateCardId: 'rc-1' } });
-    expect(db.rateCardApproval.deleteMany).toHaveBeenCalledWith({ where: { rateCardId: 'rc-1' } });
+    const deleteBatch = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(deleteBatch).toHaveLength(2);
+    expect(deleteBatch[0].sql).toContain('RATE_CARD_DRAFT_DELETED');
+    expect(deleteBatch[1].sql).toContain('DELETE FROM "vendor_rate_cards"');
+    expect(deleteBatch[0].values).toContain('tenant-1');
 
-    db.vendorRateCard.findUnique.mockRejectedValueOnce(new Error('delete failure'));
-    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: 'delete failure', status: 500 });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE' }));
-    db.vendorRateCard.update.mockRejectedValueOnce(new Error('update failure'));
-    await expect(PUT(request({ action: 'CATEGORY_MANAGER_ACCEPT' }), params())).resolves.toEqual({ ok: false, error: 'update failure', status: 500 });
-    const badJson = { json: jest.fn().mockRejectedValue(new Error('bad request')) } as unknown as NextRequest;
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card());
-    await expect(PUT(badJson, params())).resolves.toEqual({ ok: false, error: 'bad request', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(3);
+    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('delete failure'));
+    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToDeleteRateCard, status: 500 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE' }));
+    writeBatch.mockRejectedValueOnce(new Error('update failure'));
+    await expect(PUT(request({ action: 'CATEGORY_MANAGER_ACCEPT' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToUpdateRateCard, status: 500 });
+    const badJson = { json: jest.fn().mockRejectedValue(new Error('bad request')), headers: new Headers() } as unknown as NextRequest;
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card());
+    await expect(PUT(badJson, params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToUpdateRateCard, status: 500 });
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   it('rejects unauthorized and inaccessible PUT requests before reading their bodies', async () => {
@@ -231,9 +323,9 @@ describe('rate card detail API', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(PUT(request({}), params())).resolves.toBe(denied);
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(null);
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
-    db.vendorRateCard.findUnique.mockResolvedValueOnce(card({ tenantId: 'other-tenant' }));
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
   });
 });

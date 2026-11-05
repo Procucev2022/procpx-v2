@@ -31,6 +31,11 @@ export default function MyPrsPage() {
   const toast = useToast();
   const [prs, setPrs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -38,21 +43,38 @@ export default function MyPrsPage() {
   const [chatPr, setChatPr] = useState<any | null>(null);
 
   useEffect(() => {
-    loadPrs();
-  }, [statusFilter]);
+    void loadPrs(1, false);
+  }, [statusFilter, search]);
 
-  const loadPrs = async () => {
-    setLoading(true);
+  const loadPrs = async (requestedPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch(`/api/pr${statusFilter ? `?status=${statusFilter}` : ''}`);
+      const params = new URLSearchParams({ page: String(requestedPage), pageSize: '50' });
+      if (statusFilter) params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(`/api/pr?${params.toString()}`);
       if (res.ok) {
-        const data = await res.json();
-        setPrs(data);
+        const payload = await res.json();
+        const data = Array.isArray(payload) ? payload : payload.data;
+        if (Array.isArray(data)) {
+          const allRows = append ? [...prs, ...data] : data;
+          const fallbackStatusCounts = allRows.reduce<Record<string, number>>((counts, pr) => {
+            counts[pr.status] = (counts[pr.status] || 0) + 1;
+            return counts;
+          }, {});
+          setPrs((previous) => append ? [...previous, ...data] : data);
+          setPage(payload.page ?? requestedPage);
+          setTotalPages(payload.totalPages ?? 1);
+          setTotalCount(payload.total ?? data.length);
+          setStatusCounts(payload.statusCounts ?? fallbackStatusCounts);
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -86,12 +108,9 @@ export default function MyPrsPage() {
   });
 
   // Calculate stats
-  const totalCount = prs.length;
-  const releasedCount = prs.filter(p => p.status === 'PR_RELEASED_TO_PROCUREMENT').length;
-  const pendingCount = prs.filter(p => p.status === 'PR_PENDING_PROJECT_APPROVAL').length;
-  const draftOrReturnedCount = prs.filter(
-    p => p.status === 'PR_DRAFT' || p.status === 'PR_RETURNED_FOR_CORRECTION'
-  ).length;
+  const releasedCount = statusCounts.PR_RELEASED_TO_PROCUREMENT || 0;
+  const pendingCount = statusCounts.PR_PENDING_PROJECT_APPROVAL || 0;
+  const draftOrReturnedCount = (statusCounts.PR_DRAFT || 0) + (statusCounts.PR_RETURNED_FOR_CORRECTION || 0);
 
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
@@ -161,7 +180,7 @@ export default function MyPrsPage() {
             className="form-control"
             placeholder={UI_STRINGS.appAppPrPage.searchPRNumberTitleProjectOrCostCentre}
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             style={{ paddingLeft: 38, height: 40, width: '100%' }}
           />
         </div>
@@ -169,7 +188,7 @@ export default function MyPrsPage() {
         <select
           className="form-control"
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
           style={{ height: 40, width: 220 }}
         >
           <option value="">{UI_STRINGS.common.allStatuses}</option>
@@ -292,6 +311,15 @@ export default function MyPrsPage() {
           </table>
         </div>
       </div>
+
+      {page < totalPages && (
+        <div className="flex justify-center py-4">
+          <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => void loadPrs(page + 1, true)}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+          <span className="sr-only">{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: page, value2: totalPages })}</span>
+        </div>
+      )}
 
       {/* CHAT / COMMUNICATION DRAWER */}
       {chatPr && (

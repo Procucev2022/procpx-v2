@@ -46,21 +46,21 @@ describe('login page', () => {
     expect((submit as HTMLButtonElement).style.background).toBe('rgb(30, 64, 175)');
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.categoryManager) }));
-    expect(email).toHaveValue('category.manager@procucev-demo.local');
-    expect(password).toHaveValue(UI_STRINGS.appLoginPage.demo1234);
+    expect(email).toHaveValue('category.manager@test.procpx.local');
+    expect(password).toHaveValue(UI_STRINGS.appLoginPage.testFixturePassword);
     expect(container.textContent).toContain('Selected: Category Manager');
     fireEvent.change(email, { target: { value: 'changed@example.com' } });
     expect(container.textContent).not.toContain('Selected: Category Manager');
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.procurementUser) }));
-    expect(email).toHaveValue('procurement.user@procucev-demo.local');
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPage.vendorApexInfra) }));
-    expect(email).toHaveValue('vendor.apex@apex-infra.com');
+    expect(email).toHaveValue('procurement.user@test.procpx.local');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.testVendorOne) }));
+    expect(email).toHaveValue('vendor.one@test.procpx.local');
 
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPage.vendorBluePeak) }));
-    expect(email).toHaveValue('bluepeak.engineering@vendor.procpx.local');
-    expect(password).toHaveValue('welcome');
-    expect(container.textContent).toContain('Selected: Vendor: BluePeak');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.testVendorTwo) }));
+    expect(email).toHaveValue('vendor.two@test.procpx.local');
+    expect(password).toHaveValue(UI_STRINGS.appLoginPage.testFixturePassword);
+    expect(container.textContent).toContain('Selected: Test Vendor Two');
 
     const forgot = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPage.forgotPassword) });
     fireEvent.mouseOver(forgot);
@@ -81,16 +81,16 @@ describe('login page', () => {
     fireEvent.mouseOver(buyer);
     fireEvent.mouseOut(buyer);
     fireEvent.click(buyer);
-    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername))).toHaveValue('project.approver@procucev-demo.local');
-    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.common.password))).toHaveValue(UI_STRINGS.appLoginPage.demo1234);
+    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername))).toHaveValue('project.approver@test.procpx.local');
+    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.common.password))).toHaveValue(UI_STRINGS.appLoginPage.testFixturePassword);
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPage.allAccounts) }));
-    const vendor = within(screen.getByRole('dialog')).getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.apexInfrastructure) });
+    const vendor = within(screen.getByRole('dialog')).getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.testVendorOne) });
     fireEvent.mouseOver(vendor);
     fireEvent.mouseOut(vendor);
     fireEvent.click(vendor);
-    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername))).toHaveValue('vendor.apex@apex-infra.com');
-    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.common.password))).toHaveValue(UI_STRINGS.appLoginPage.demo1234);
+    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername))).toHaveValue('vendor.one@test.procpx.local');
+    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.common.password))).toHaveValue(UI_STRINGS.appLoginPage.testFixturePassword);
 
     const explore = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPage.exploreAll) });
     fireEvent.mouseOver(explore);
@@ -100,7 +100,24 @@ describe('login page', () => {
     fireEvent.mouseOver(tenant);
     fireEvent.mouseOut(tenant);
     fireEvent.click(tenant);
-    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername))).toHaveValue('hospitality.admin@procucev-demo.local');
+    expect(screen.getByLabelText(uiStringPattern(UI_STRINGS.appLoginPage.workEmailOrTestVendorUsername))).toHaveValue('hospitality.admin@test.procpx.local');
+  });
+
+  it('hides local fixture account shortcuts and an open fixture dialog in production', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const { rerender } = render(<LoginPage />);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appLoginPage.allAccounts) }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    try {
+      Reflect.set(process.env, 'NODE_ENV', 'production');
+      rerender(<LoginPage />);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.queryByText(uiStringPattern(UI_STRINGS.appLoginPage.quickTestPersonas))).not.toBeInTheDocument();
+    } finally {
+      if (originalNodeEnv === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV');
+      else Reflect.set(process.env, 'NODE_ENV', originalNodeEnv);
+    }
   });
 
   it('supports password assistance dialog close, cancel, and backdrop behavior', () => {

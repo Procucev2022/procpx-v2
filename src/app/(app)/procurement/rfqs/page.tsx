@@ -49,17 +49,23 @@ function RfqsListContent() {
 
   const [rfqs, setRfqs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRfqs, setTotalRfqs] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState(filterQuery);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetchRfqs();
+    void fetchRfqs(1, false);
   }, [activeTab, search]);
 
-  const fetchRfqs = async () => {
-    setLoading(true);
+  const fetchRfqs = async (requestedPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      let url = `/api/procurement/rfqs?search=${encodeURIComponent(search)}`;
+      let url = `/api/procurement/rfqs?search=${encodeURIComponent(search)}&page=${requestedPage}&pageSize=50`;
       if (activeTab === 'active') {
         url += '&status=active';
       } else if (activeTab !== 'all' && activeTab !== 'rerfq') {
@@ -72,12 +78,23 @@ function RfqsListContent() {
         if (activeTab === 'rerfq') {
           filtered = filtered.filter((r: any) => r.isReRfq || r.title.includes('Re-RFQ'));
         }
-        setRfqs(filtered);
+        const allRows = append ? [...rfqs, ...filtered] : filtered;
+        const fallbackStatusCounts = allRows.reduce((counts: Record<string, number>, rfq: { status?: string }) => {
+          const rowStatus = rfq.status || 'UNKNOWN';
+          counts[rowStatus] = (counts[rowStatus] || 0) + 1;
+          return counts;
+        }, {} as Record<string, number>);
+        setRfqs((previous) => append ? [...previous, ...filtered] : filtered);
+        setPage(data.page ?? requestedPage);
+        setTotalPages(data.totalPages ?? 1);
+        setTotalRfqs(data.total ?? allRows.length);
+        setStatusCounts(data.statusCounts ?? fallbackStatusCounts);
       }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -105,28 +122,28 @@ function RfqsListContent() {
         <SummaryCardGrid columns={4}>
           <SummaryCard
             label={UI_STRINGS.appAppProcurementRfqsPage.totalRFQs}
-            value={rfqs.length}
+            value={activeTab === 'rerfq' ? rfqs.length : totalRfqs}
             secondary={UI_STRINGS.appAppProcurementRfqsPage.allSourcingPackages}
             icon={<FileText size={16} />}
             accent="default"
           />
           <SummaryCard
             label={UI_STRINGS.appAppProcurementRfqsPage.inMarketResponse}
-            value={rfqs.filter(r => r.status === 'RELEASED' || r.status === 'VENDOR_RESPONSE_OPEN' || r.status === 'AWAITING_QUOTES').length}
+            value={(statusCounts.RELEASED || 0) + (statusCounts.VENDOR_RESPONSE_OPEN || 0) + (statusCounts.AWAITING_QUOTES || 0)}
             secondary={UI_STRINGS.appAppProcurementRfqsPage.openForVendorQuotes}
             icon={<ShoppingBag size={16} />}
             accent="blue"
           />
           <SummaryCard
             label={UI_STRINGS.appAppProcurementRfqsPage.comparisonNegotiation}
-            value={rfqs.filter(r => r.status === 'COMPARISON' || r.status === 'NEGOTIATION').length}
+            value={(statusCounts.COMPARISON || 0) + (statusCounts.NEGOTIATION || 0)}
             secondary={UI_STRINGS.appAppProcurementRfqsPage.commercialEvaluations}
             icon={<TrendingUp size={16} />}
             accent="amber"
           />
           <SummaryCard
             label={UI_STRINGS.appAppProcurementRfqsPage.awardedPPO}
-            value={rfqs.filter(r => r.status === 'AWARDED' || r.status === 'AWARD_APPROVED' || r.status === 'PPO_ISSUED' || r.status === 'FINAL_RATE_LOCKED').length}
+            value={(statusCounts.AWARDED || 0) + (statusCounts.AWARD_APPROVED || 0) + (statusCounts.PPO_ISSUED || 0) + (statusCounts.FINAL_RATE_LOCKED || 0)}
             secondary={UI_STRINGS.appAppProcurementRfqsPage.finalisedCommercialAwards}
             icon={<CheckCircle2 size={16} />}
             accent="emerald"
@@ -172,7 +189,7 @@ function RfqsListContent() {
 
       {/* Enterprise Data Table: Exactly 14 Columns in Specified Order */}
       <Card
-        title={interpolateUiString(UI_STRINGS.appAppProcurementRfqsPage.rFQSourcingRegisterLength, { "length": rfqs.length })}
+        title={interpolateUiString(UI_STRINGS.appAppProcurementRfqsPage.rFQSourcingRegisterLength, { "length": totalRfqs })}
         subtitle={UI_STRINGS.appAppProcurementRfqsPage.persistedSourcingPackagesCompetitiveQuoteEvaluationsRateLockingAndCommercialAwards}
         noPadding
       >
@@ -349,6 +366,14 @@ function RfqsListContent() {
           </div>
         )}
       </Card>
+      {page < totalPages && (
+        <div className="flex justify-center py-4">
+          <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => void fetchRfqs(page + 1, true)}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+          <span className="sr-only">{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: page, value2: totalPages })}</span>
+        </div>
+      )}
     </div>
   );
 }

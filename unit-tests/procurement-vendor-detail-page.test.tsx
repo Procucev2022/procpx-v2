@@ -137,7 +137,28 @@ function setupFetch() {
     }
     if (url === '/api/procurement/vendors/vendor-1/evaluate-ai') return reply(aiBody, aiOk);
     if (url === '/api/procurement/vendors/vendor-1/evaluation') return reply(evaluationOk ? {} : { error: 'Evaluation could not be saved' }, evaluationOk);
-    if (url === '/api/procurement/vendors/vendor-1/ppo-ratings') return reply(ratingOk ? {} : { error: 'Rating could not be saved' }, ratingOk);
+    if (url.startsWith('/api/procurement/vendors/vendor-1/ppo-ratings') && init?.method === 'POST') return reply(ratingOk ? {} : { error: 'Rating could not be saved' }, ratingOk);
+    if (url.startsWith('/api/procurement/vendors/vendor-1/ppo-ratings')) {
+      const profileData = profileBody?.data || profileBody || {};
+      const requestedPage = Number(new URL(url, 'http://localhost').searchParams.get('page')) || 1;
+      if (profileData.ratingPages?.[requestedPage]) return reply(profileData.ratingPages[requestedPage]);
+      const ratings = profileData.vendor?.ppoRatings || [];
+      return reply({
+        ratings,
+        summary: profileData.performanceSummary || null,
+        pagination: { page: 1, pageSize: ratings.length, total: ratings.length, hasMore: false },
+      });
+    }
+    if (url.startsWith('/api/procurement/vendors/vendor-1/eligible-ppos')) {
+      const profileData = profileBody?.data || profileBody || {};
+      const requestedPage = Number(new URL(url, 'http://localhost').searchParams.get('page')) || 1;
+      if (profileData.eligiblePposPages?.[requestedPage]) return reply(profileData.eligiblePposPages[requestedPage]);
+      const eligiblePpos = profileData.eligiblePposToRate || [];
+      return reply({
+        eligiblePpos,
+        pagination: { page: 1, pageSize: eligiblePpos.length, total: eligiblePpos.length, hasMore: false },
+      });
+    }
     if (url === '/api/approvals/vendor-ratings') return reply(decisionOk ? {} : { error: 'Decision could not be saved' }, decisionOk);
     if (url === '/api/procurement/vendors/vendor-1' && init?.method === 'PUT') return reply(updateOk ? {} : { error: 'Update failed' }, updateOk);
     if (url === '/api/procurement/vendors/vendor-1') return reply(profileBody, profileOk);
@@ -654,6 +675,42 @@ describe('procurement vendor profile', () => {
     renderProfile('performance');
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.aggregatedPerformanceScorecard))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.noOrdersRated))).toBeInTheDocument();
+  });
+
+  it('appends rating history and eligible PPO pages without replacing loaded rows', async () => {
+    const summary = {
+      ppoRatingsCount: 2,
+      averagePpoRating: 4.4,
+      avgQuality: 4.6,
+      avgDelivery: 4.2,
+      avgCommercial: 4.1,
+      avgResponsiveness: 4.7,
+      avgDocumentation: 4.3,
+      ppoCount: 2,
+      completedPpoCount: 2,
+    };
+    profileBody.performanceSummary = summary;
+    profileBody.ratingPages = {
+      1: { ratings: [rating('page-one', 'APPROVED')], summary, pagination: { page: 1, pageSize: 1, total: 2, hasMore: true } },
+      2: { ratings: [rating('page-two', 'APPROVED')], summary, pagination: { page: 2, pageSize: 1, total: 2, hasMore: false } },
+    };
+    profileBody.eligiblePposPages = {
+      1: { eligiblePpos: [{ id: 'eligible-one', ppoNumber: 'PPO-ELIGIBLE-1', title: 'First order', totalValue: 1000 }], pagination: { page: 1, pageSize: 1, total: 2, hasMore: true } },
+      2: { eligiblePpos: [{ id: 'eligible-two', ppoNumber: 'PPO-ELIGIBLE-2', title: 'Second order', totalValue: 2000 }], pagination: { page: 2, pageSize: 1, total: 2, hasMore: false } },
+    };
+    profileBody.eligiblePposToRate = profileBody.eligiblePposPages[1].eligiblePpos;
+    setupFetch();
+    renderProfile('performance');
+
+    expect(await screen.findByText('PPO-page-one')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.loadMoreRatings) }));
+    expect(await screen.findByText('PPO-page-two')).toBeInTheDocument();
+    expect(screen.getByText(/Showing 2 of 2 ratings/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder) }));
+    expect(await screen.findByRole('option', { name: /PPO-ELIGIBLE-1/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.loadMoreEligiblePpos) }));
+    expect(await screen.findByRole('option', { name: /PPO-ELIGIBLE-2/ })).toBeInTheDocument();
   });
 });
 

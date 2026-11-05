@@ -112,8 +112,9 @@ describe('vendor purchase orders page', () => {
     fireEvent.change(search, { target: { value: 'does not exist' } });
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.noOrdersMatchYourSearchQuery))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
+    const callsBeforeRefresh = mockFetch.mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(callsBeforeRefresh + 1));
   });
 
   it('shows API and network errors when loading and renders the empty register', async () => {
@@ -145,7 +146,23 @@ describe('vendor purchase orders page', () => {
     const post = mockFetch.mock.calls.find(([url, init]) => init?.method === 'POST');
     expect(JSON.parse(post![1].body)).toEqual({ acceptedBy: 'Sam Vendor', vendorComments: 'Start on Monday' });
     await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.formalAcceptanceOfPPO))).not.toBeInTheDocument());
-    expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/ppos');
+    expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/ppos?page=1&pageSize=50&search=');
+  });
+
+  it('loads vendor-owned line details only when expanded and appends bounded register pages', async () => {
+    mockFetch
+      .mockResolvedValueOnce(response({ ppos: [ppo('005', { lineCount: 1 })], total: 2, hasMore: true }))
+      .mockResolvedValueOnce(response({ lines: [{ id: 'line-5', itemDescription: 'Copper busbar', quantity: 4, uom: 'M', unitRate: 20, gstPercent: 18, totalAmount: 94.4 }] }))
+      .mockResolvedValueOnce(response({ ppos: [ppo('006')], total: 2, hasMore: false }));
+    render(<VendorPposPage />);
+    const firstRowTitle = uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.toggleLineItems);
+    const firstOrder = await screen.findByText('PPO-005');
+    fireEvent.click(within(firstOrder.closest('tr')!).getByTitle(firstRowTitle));
+    expect(await screen.findByText('Copper busbar')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenNthCalledWith(2, '/api/vendor-portal/ppos?ppoId=005');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('PPO-006')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenNthCalledWith(3, '/api/vendor-portal/ppos?page=2&pageSize=50&search=');
   });
 
   it('reports acceptance and issue errors, validates issue remarks, and submits a fulfillment issue', async () => {

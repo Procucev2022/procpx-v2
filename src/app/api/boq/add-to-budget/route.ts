@@ -1,42 +1,52 @@
-// src/app/api/boq/add-to-budget/route.ts - Add BOQ to Project Cost Centre Budget
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
-
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  BUDGET_AGGREGATE_PENDING_UPSERT_SQL,
+  BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+  BUDGET_CONTRIBUTION_BOQ_UPDATE_AFTER_AUDIT_SQL,
+  BUDGET_CONTRIBUTION_CREATE_UNDER_APPROVAL_SQL,
+  BUDGET_CONTRIBUTION_RESUBMIT_SQL,
+  BUDGET_CONTRIBUTION_REVISION_UPDATE_AFTER_AUDIT_SQL,
+  BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL,
+  BUDGET_TRANSACTION_INSERT_AFTER_AUDIT_SQL,
+  MAX_D1_BATCH_STATEMENTS,
+} from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import type { BudgetCategoryTotal } from '@app-types/app/api/boq/add-to-budget.types';
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_CREATE');
   if (!isApiContext(ctx)) return ctx;
 
+  const startedAt = Date.now();
+  let requestedRevisionId: string | undefined;
   try {
     const body = await req.json();
-    const boqRevisionId = body.boqRevisionId || body.revisionId;
-    const { boqId, costCentreId, projectId, autoSubmit } = body;
+    const boqRevisionId = typeof body?.boqRevisionId === 'string'
+      ? body.boqRevisionId
+      : typeof body?.revisionId === 'string' ? body.revisionId : undefined;
+    requestedRevisionId = boqRevisionId;
+    const boqId = typeof body?.boqId === 'string' ? body.boqId : undefined;
+    const requestedCostCentreId = typeof body?.costCentreId === 'string' ? body.costCentreId : undefined;
+    const requestedProjectId = typeof body?.projectId === 'string' ? body.projectId : undefined;
 
-    if (!boqRevisionId && !boqId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
-    }
+    if (!boqRevisionId && !boqId) return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
 
-    // Resolve revision
-    let revision = null;
+    let revision: any = null;
     if (boqRevisionId) {
       revision = await prisma.boqRevision.findFirst({
         where: { id: boqRevisionId, tenantId: ctx.tenantId },
         include: {
-          lines: {
-            where: { isDeleted: false },
-            include: { category: true, subcategory: true, uom: true },
-          },
-          boq: {
-            include: { project: true, costCentre: true },
-          },
+          lines: { where: { isDeleted: false }, include: { category: true, subcategory: true, uom: true } },
+          boq: { include: { project: true, costCentre: true } },
         },
       });
     }
-
     if (!revision && boqId) {
       const boqRecord = await prisma.boq.findFirst({
         where: { id: boqId, tenantId: ctx.tenantId },
@@ -44,267 +54,176 @@ export async function POST(req: NextRequest) {
           project: true,
           costCentre: true,
           revisions: {
-            orderBy: { revisionNumber: 'desc' },
-            take: 1,
-            include: {
-              lines: {
-                where: { isDeleted: false },
-                include: { category: true, subcategory: true, uom: true },
-              },
-            },
+            orderBy: { revisionNumber: 'desc' }, take: 1,
+            include: { lines: { where: { isDeleted: false }, include: { category: true, subcategory: true, uom: true } } },
           },
         },
       });
-      if (boqRecord && boqRecord.revisions.length > 0) {
-        revision = {
-          ...boqRecord.revisions[0],
-          boq: boqRecord,
-        };
-      }
+      if (boqRecord?.revisions.length) revision = { ...boqRecord.revisions[0], boq: boqRecord };
     }
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
 
-    if (!revision) {
-      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
-    }
-
-    const targetProjectId = projectId || revision.boq.projectId;
-    const targetCostCentreId = costCentreId || revision.costCentreId || revision.boq.costCentreId;
-
-    if (!targetCostCentreId) {
-      return apiError(UI_STRINGS.appApiBoqAddToBudgetRoute.aValidCostCentreIsRequiredToAllocateBudget, 400);
-    }
+    const targetProjectId = requestedProjectId || revision.boq.projectId;
+    const targetCostCentreId = requestedCostCentreId || revision.costCentreId || revision.boq.costCentreId;
+    if (!targetCostCentreId) return apiError(UI_STRINGS.appApiBoqAddToBudgetRoute.aValidCostCentreIsRequiredToAllocateBudget, 400);
 
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: targetCostCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
-    if (!costCentre) {
-      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
-    }
+    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
 
-    // Section 8: Commercial Budget Rule - block if any line has pending/blank/invalid quantity
-    const missingQtyLines = revision.lines.filter(l => l.quantity === null || l.quantity === undefined || l.quantity <= 0);
+    const missingQtyLines = revision.lines.filter((line: { quantity?: number | null }) =>
+      line.quantity === null || line.quantity === undefined || !Number.isFinite(line.quantity) || line.quantity <= 0,
+    );
     if (missingQtyLines.length > 0) {
-      return apiError(
-        interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.lengthBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget, { "length": missingQtyLines.length, "value2": missingQtyLines.length > 1 ? 's' : '' }),
-        400
-      );
+      return apiError(interpolateUiString(
+        UI_STRINGS.appApiBoqAddToBudgetRoute.lengthBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget,
+        { length: missingQtyLines.length, value2: missingQtyLines.length > 1 ? 's' : '' },
+      ), 400);
     }
+    if (revision.lines.length === 0) return apiError(UI_STRINGS.common.budgetNeedsAtLeastOneLine, 400);
 
-    // Compute line costs and category totals
     let totalEstimated = 0;
-    const categoryTotals = new Map<string, { amount: number; qty: number; lines: any[] }>();
-
-    for (const l of revision.lines) {
-      const unitRate = l.aiUnitCost || (l as any).benchmarkRate || 100;
-      const qty = l.quantity as number;
-      const lineCost = l.aiTotalCost || Math.round(unitRate * qty * 100) / 100;
+    const categoryTotals = new Map<string, BudgetCategoryTotal>();
+    for (const line of revision.lines) {
+      const rate = line.aiUnitCost || line.benchmarkRate || 100;
+      const quantity = line.quantity as number;
+      const lineCost = line.aiTotalCost || Math.round(rate * quantity * 100) / 100;
+      if (!Number.isFinite(lineCost) || lineCost < 0) return apiError(UI_STRINGS.common.userMessages.failedToAddBoqToBudget, 400);
       totalEstimated += lineCost;
-
-      const catName = l.category?.name || 'General';
-      const existing = categoryTotals.get(catName) || { amount: 0, qty: 0, lines: [] };
+      const categoryName = line.category?.name || UI_STRINGS.common.general;
+      const existing = categoryTotals.get(categoryName) || { amount: 0, quantity: 0, firstLineId: line.id || null };
       existing.amount += lineCost;
-      existing.qty += qty;
-      existing.lines.push(l);
-      categoryTotals.set(catName, existing);
+      existing.quantity += quantity;
+      categoryTotals.set(categoryName, existing);
     }
 
-    const initialStatus = 'UNDER_APPROVAL';
-
-    // 1. Create or update Budget Contribution with duplicate prevention
     const existingContribution = await prisma.budgetContribution.findFirst({
-      where: {
-        tenantId: ctx.tenantId,
-        boqRevisionId: revision.id,
-      },
+      where: { tenantId: ctx.tenantId, boqRevisionId: revision.id },
     });
-
-    let contribution;
-    let createdTransactions = [];
-    let firstTxCode = '';
-
-    if (existingContribution) {
-      // Prevent duplicate contribution if already Under Approval
-      if (existingContribution.status === 'UNDER_APPROVAL' || existingContribution.status === 'PENDING_PROJECT_APPROVAL') {
-        const existingTxs = await prisma.budgetTransaction.findMany({
-          where: { contributionId: existingContribution.id },
-          orderBy: { createdAt: 'asc' },
-        });
-        return apiSuccess({
-          success: true,
-          alreadySubmitted: true,
-          contributionId: existingContribution.id,
-          transactionCode: existingTxs[0]?.transactionCode || `BTX-${existingContribution.id.substring(0, 8)}`,
-          totalAmount: existingContribution.totalEstimatedValue,
-          status: 'UNDER_APPROVAL',
-          costCentre: {
-            id: costCentre.id,
-            code: costCentre.code,
-            name: costCentre.name,
-          },
-          transactionsCount: existingTxs.length,
-          message: interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeBudgetContributionIsAlreadyRecordedWithStatusUnderApproval, { "boqCode": revision.boq.boqCode }),
-        }, 200);
-      }
-
-      if (existingContribution.status === 'APPROVED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeHasAlreadyBeenApprovedInBudgetForCostCentreCode, { "boqCode": revision.boq.boqCode, "code": costCentre.code }), 400);
-      }
-
-      // If previously REJECTED or DRAFT, allow re-submission as Under Approval
-      contribution = await prisma.budgetContribution.update({
-        where: { id: existingContribution.id },
-        data: {
-          costCentreId: targetCostCentreId,
-          totalEstimatedValue: totalEstimated,
-          acceptedEstimatedValue: totalEstimated,
-          status: initialStatus,
-          submittedAt: new Date(),
-          submittedBy: ctx.userId,
-          rejectionReason: null,
-        },
-      });
-
-      // Remove previous transactions to replace with fresh ones
-      await prisma.budgetTransaction.deleteMany({
-        where: { contributionId: contribution.id },
-      });
-    } else {
-      contribution = await prisma.budgetContribution.create({
-        data: {
-          tenantId: ctx.tenantId,
-          projectId: targetProjectId,
-          costCentreId: targetCostCentreId,
-          boqId: revision.boqId,
-          boqRevisionId: revision.id,
-          totalEstimatedValue: totalEstimated,
-          acceptedEstimatedValue: totalEstimated,
-          status: initialStatus,
-          submittedAt: new Date(),
-          submittedBy: ctx.userId,
-          createdBy: ctx.userId,
-        },
-      });
-    }
-
-    // 2. Create Category-wise Budget Transactions with line-item traceability
-    const existingTxCodes = await prisma.budgetTransaction.findMany({
-      where: { tenantId: ctx.tenantId },
-      select: { transactionCode: true },
-    });
-    const codeSet = new Set(existingTxCodes.map(t => t.transactionCode));
-    let txCounter = existingTxCodes.length + 1;
-
-    for (const [catName, catData] of categoryTotals.entries()) {
-      while (codeSet.has(`BTX-${String(txCounter).padStart(6, '0')}`)) {
-        txCounter++;
-      }
-      const txCode = `BTX-${String(txCounter++).padStart(6, '0')}`;
-      codeSet.add(txCode);
-      if (!firstTxCode) firstTxCode = txCode;
-
-      const firstLineId = catData.lines[0]?.id || null;
-
-      const tx = await prisma.budgetTransaction.create({
-        data: {
-          tenantId: ctx.tenantId,
-          transactionCode: txCode,
-          projectId: targetProjectId,
-          costCentreId: targetCostCentreId,
-          boqId: revision.boqId,
-          boqRevisionId: revision.id,
-          boqLineId: firstLineId,
-          contributionId: contribution.id,
-          category: catName,
-          amount: Math.round(catData.amount * 100) / 100,
-          quantity: catData.qty,
-          rate: catData.qty > 0 ? Math.round((catData.amount / catData.qty) * 100) / 100 : null,
-          status: initialStatus,
-          reference: `BOQ ${revision.boq.boqCode} ${revision.revisionCode} - ${catName}`,
-          createdBy: ctx.userId,
-        },
-      });
-      createdTransactions.push(tx);
-    }
-
-    // 3. Update BOQ Revision & BOQ
-    await prisma.boqRevision.update({
-      where: { id: revision.id },
-      data: {
-        budgetStatus: 'BUDGET_UNDER_APPROVAL',
-      },
-    });
-
-    await prisma.boq.update({
-      where: { id: revision.boqId },
-      data: {
-        costCentreId: targetCostCentreId,
-        purpose: 'BUDGET',
-      },
-    });
-
-    // 4. Update Cost Centre Budget pending amount (do NOT include in approvedAmount before approval)
-    const existingBudget = await prisma.budget.findFirst({
-      where: { costCentreId: targetCostCentreId, tenantId: ctx.tenantId },
-    });
-    if (existingBudget) {
-      await prisma.budget.update({
-        where: { id: existingBudget.id },
-        data: {
-          pendingAmount: existingBudget.pendingAmount + totalEstimated,
-        },
-      });
-    } else {
-      await prisma.budget.create({
-        data: {
-          tenantId: ctx.tenantId,
-          projectId: targetProjectId,
-          costCentreId: targetCostCentreId,
-          totalAmount: totalEstimated,
-          approvedAmount: 0,
-          pendingAmount: totalEstimated,
-          status: 'UNDER_APPROVAL',
-          createdBy: ctx.userId,
-        },
-      });
-    }
-
-    // 5. Audit Log
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: targetProjectId,
-        entityType: 'BUDGET_CONTRIBUTION',
-        entityId: contribution.id,
-        action: 'BUDGET_CONTRIBUTION_CREATED',
-        description: interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeRevisionCodeAllocatedToCostCentreCodeWithStatusUnderApprovalValueToLocaleString, { "boqCode": revision.boq.boqCode, "revisionCode": revision.revisionCode, "code": costCentre.code, "toLocaleString": totalEstimated.toLocaleString(I18N_CONFIG.defaultLocale) }),
-        newValue: JSON.stringify({
-          contributionId: contribution.id,
-          boqCode: revision.boq.boqCode,
-          revisionCode: revision.revisionCode,
-          totalEstimated,
-          transactions: createdTransactions.length,
-          status: initialStatus,
+    if (existingContribution && ['UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL', 'PROJECT_APPROVED'].includes(existingContribution.status)) {
+      const transactionWhere = { tenantId: ctx.tenantId, contributionId: existingContribution.id };
+      const [firstTransaction, transactionsCount] = await Promise.all([
+        prisma.budgetTransaction.findFirst({
+          where: transactionWhere,
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { transactionCode: true },
         }),
-      },
+        prisma.budgetTransaction.count({ where: transactionWhere }),
+      ]);
+      return apiSuccess({
+        success: true,
+        alreadySubmitted: true,
+        contributionId: existingContribution.id,
+        transactionCode: firstTransaction?.transactionCode || `BTX-${existingContribution.id.substring(0, 8)}`,
+        totalAmount: existingContribution.totalEstimatedValue,
+        status: existingContribution.status,
+        costCentre: { id: costCentre.id, code: costCentre.code, name: costCentre.name },
+        transactionsCount,
+        message: interpolateUiString(UI_STRINGS.common.budgetContributionAlreadyInStatus, { status: existingContribution.status }),
+      }, 200);
+    }
+    if (existingContribution?.status === 'APPROVED') {
+      return apiError(interpolateUiString(
+        UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeHasAlreadyBeenApprovedInBudgetForCostCentreCode,
+        { boqCode: revision.boq.boqCode, code: costCentre.code },
+      ), 400);
+    }
+    if (existingContribution && !['DRAFT', 'REJECTED'].includes(existingContribution.status)) {
+      return apiError(interpolateUiString(UI_STRINGS.common.budgetContributionAlreadyInStatus, { status: existingContribution.status }), 409);
+    }
+
+    const statementOverhead = existingContribution ? 7 : 6;
+    if (categoryTotals.size + statementOverhead > MAX_D1_BATCH_STATEMENTS) {
+      return apiError(UI_STRINGS.common.budgetContributionHasTooManyCategories, 400);
+    }
+
+    const now = new Date();
+    const auditId = crypto.randomUUID();
+    const contributionId = existingContribution?.id || crypto.randomUUID();
+    const contributionStatus = existingContribution?.status || 'DRAFT';
+    const action = existingContribution ? 'BUDGET_CONTRIBUTION_RESUBMITTED' : 'BUDGET_CONTRIBUTION_CREATED';
+    const description = interpolateUiString(
+      UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeRevisionCodeAllocatedToCostCentreCodeWithStatusUnderApprovalValueToLocaleString,
+      { boqCode: revision.boq.boqCode, revisionCode: revision.revisionCode, code: costCentre.code,
+        toLocaleString: totalEstimated.toLocaleString(I18N_CONFIG.defaultLocale) },
+    );
+    const batch = existingContribution
+      ? [{
+        sql: BUDGET_CONTRIBUTION_RESUBMIT_SQL,
+        values: [targetProjectId, targetCostCentreId, totalEstimated, totalEstimated, now, ctx.userId, now,
+          contributionId, ctx.tenantId],
+      }]
+      : [{
+        sql: BUDGET_CONTRIBUTION_CREATE_UNDER_APPROVAL_SQL,
+        values: [contributionId, ctx.tenantId, targetProjectId, targetCostCentreId, revision.boqId, revision.id,
+          totalEstimated, totalEstimated, now, ctx.userId, now, now, ctx.userId, ctx.tenantId, revision.id],
+      }];
+    const auditOldValue = existingContribution ? JSON.stringify({ status: contributionStatus }) : null;
+    const auditNewValue = JSON.stringify({ contributionId, boqCode: revision.boq.boqCode,
+      revisionCode: revision.revisionCode, totalEstimated, transactionCount: categoryTotals.size, status: 'UNDER_APPROVAL' });
+    batch.push({
+      sql: BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+      values: [auditId, ctx.tenantId, ctx.userId, targetProjectId, 'BUDGET_CONTRIBUTION', contributionId,
+        action, description, auditOldValue, auditNewValue, null, null, now],
     });
+    if (existingContribution) {
+      batch.push({ sql: BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL, values: [ctx.tenantId, contributionId, auditId, ctx.tenantId] });
+    }
+    const transactionStart = batch.length;
+    for (const [categoryName, category] of categoryTotals.entries()) {
+      const lineRate = category.quantity > 0 ? Math.round((category.amount / category.quantity) * 100) / 100 : null;
+      batch.push({
+        sql: BUDGET_TRANSACTION_INSERT_AFTER_AUDIT_SQL,
+        values: [crypto.randomUUID(), ctx.tenantId, ctx.tenantId, targetProjectId, targetCostCentreId, revision.boqId,
+          revision.id, category.firstLineId, contributionId, categoryName, Math.round(category.amount * 100) / 100,
+          category.quantity, lineRate, `BOQ ${revision.boq.boqCode} ${revision.revisionCode} - ${categoryName}`,
+          ctx.userId, now, now, auditId, ctx.tenantId],
+      });
+    }
+    batch.push({
+      sql: BUDGET_CONTRIBUTION_REVISION_UPDATE_AFTER_AUDIT_SQL,
+      values: [targetCostCentreId, now, revision.id, ctx.tenantId, auditId, ctx.tenantId],
+    });
+    batch.push({
+      sql: BUDGET_CONTRIBUTION_BOQ_UPDATE_AFTER_AUDIT_SQL,
+      values: [targetCostCentreId, now, revision.boqId, ctx.tenantId, auditId, ctx.tenantId],
+    });
+    batch.push({
+      sql: BUDGET_AGGREGATE_PENDING_UPSERT_SQL,
+      values: [crypto.randomUUID(), ctx.tenantId, targetProjectId, targetCostCentreId, totalEstimated, totalEstimated,
+        now, now, ctx.userId, auditId, ctx.tenantId],
+    });
+
+    if (!isD1BatchWithinLimits(batch)) {
+      return apiError(UI_STRINGS.common.budgetContributionHasTooManyCategories, 400);
+    }
+
+    const results = await writeD1BatchAtomically(batch);
+    if (Number(results[0]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.budgetContributionChangedPleaseRefresh, 409);
+    }
+    const firstTransactionCode = results[transactionStart]?.results?.[0]?.transactionCode;
 
     return apiSuccess({
       success: true,
-      contributionId: contribution.id,
-      transactionCode: firstTxCode || `BTX-${contribution.id.substring(0, 8)}`,
+      contributionId,
+      transactionCode: typeof firstTransactionCode === 'string' ? firstTransactionCode : `BTX-${contributionId.substring(0, 8)}`,
       totalAmount: totalEstimated,
-      status: initialStatus,
-      costCentre: {
-        id: costCentre.id,
-        code: costCentre.code,
-        name: costCentre.name,
-      },
-      transactionsCount: createdTransactions.length,
-      message: interpolateUiString(UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeSuccessfullyAllocatedToBudgetForCostCentreCodeWithStatusUnderApproval, { "boqCode": revision.boq.boqCode, "code": costCentre.code }),
+      status: 'UNDER_APPROVAL',
+      costCentre: { id: costCentre.id, code: costCentre.code, name: costCentre.name },
+      transactionsCount: categoryTotals.size,
+      message: interpolateUiString(
+        UI_STRINGS.appApiBoqAddToBudgetRoute.bOQBoqCodeSuccessfullyAllocatedToBudgetForCostCentreCodeWithStatusUnderApproval,
+        { boqCode: revision.boq.boqCode, code: costCentre.code },
+      ),
     }, 201);
-  } catch (err: any) {
-    console.error('Error adding BOQ to budget:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddBoqToBudget }), 500);
+  } catch (error) {
+    await writeStructuredLog('error', 'budget_contribution.create_failed', {
+      operation: 'allocate_boq_to_budget', route: '/api/boq/add-to-budget', requestId: req.headers.get('x-request-id'),
+      tenantId: ctx.tenantId, userId: ctx.userId, boqRevisionId: requestedRevisionId, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToAddBoqToBudget, 500);
   }
 }

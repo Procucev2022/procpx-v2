@@ -53,6 +53,7 @@ const categories = [
   { category: 'Other', approvedBudget: 1, pendingBudget: 0, ratePerSqFt: 0, actual: 0, balance: 1, status: 'ON_HOLD' },
 ];
 const mainBudget = {
+  costCentrePagination: { page: 1, pageSize: 50, total: 2, hasMore: false },
   costCentres: [
     {
       id: 'cc1', code: 'CC-01', name: 'Civil Works', areaSqFt: 1000,
@@ -69,6 +70,7 @@ const mainBudget = {
   ],
 };
 const secondProjectBudget = {
+  costCentrePagination: { page: 1, pageSize: 50, total: 1, hasMore: false },
   costCentres: [{ id: 'cc3', code: 'CC-03', name: 'Utilities', areaSqFt: 500, totalBudget: 20000, approvedBudget: 18000, pendingBudget: 2000, actual: 7000, categories: [], contributions: [] }],
 };
 
@@ -78,7 +80,8 @@ function setupFetch() {
     if (url === '/api/projects') return Promise.resolve(response(projectsResponse));
     if (url === '/api/auth/me') return Promise.resolve(response(roleResponse));
     if (url.startsWith('/api/budgets?projectId=')) {
-      const projectId = url.split('=')[1];
+      const params = new URL(url, 'http://localhost').searchParams;
+      const projectId = params.get('projectId') || '';
       return Promise.resolve(response(budgetByProject[projectId] ?? mainBudget));
     }
     if (url === '/api/budgets/approve') return Promise.resolve(response(approveResponse.body, approveResponse.ok));
@@ -202,7 +205,41 @@ describe('project budget workspace', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.noCategoryBudgetAllocated))).toBeInTheDocument();
     expect(window.location.search).toContain('projectId=p2');
     expect(window.location.search).not.toContain('costCentreId');
-    expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=p2');
+    expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=p2&page=1&pageSize=50');
+  });
+
+  it('loads additional cost centres without replacing the current selection', async () => {
+    const firstPage = {
+      ...mainBudget,
+      costCentres: [mainBudget.costCentres[0]],
+      costCentrePagination: { page: 1, pageSize: 1, total: 2, hasMore: true },
+    };
+    const secondPage = {
+      costCentres: [{ id: 'cc2', code: 'CC-02', name: 'Procurement', areaSqFt: 0, totalBudget: 0, approvedBudget: 0, pendingBudget: 0, actual: 0, categories: [], contributions: [] }],
+      costCentrePagination: { page: 2, pageSize: 1, total: 2, hasMore: false },
+    };
+    budgetByProject.p1 = firstPage;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/budgets?projectId=p1&page=2')) return Promise.resolve(response(secondPage));
+      if (url.startsWith('/api/budgets?projectId=p1')) return Promise.resolve(response(firstPage));
+      if (url === '/api/projects') return Promise.resolve(response(projectsResponse));
+      if (url === '/api/auth/me') return Promise.resolve(response(roleResponse));
+      return Promise.resolve(response({}));
+    });
+
+    render(<ProjectBudgetPage />);
+    await screen.findByRole('option', { name: /CC-01/ });
+    const loadMore = await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres, '', false),
+    });
+    fireEvent.click(loadMore);
+
+    await screen.findByRole('option', { name: /CC-02/ });
+    expect(screen.getAllByRole('combobox')[1]).toHaveValue('cc1');
+    expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=p1&page=2&pageSize=1');
+    expect(screen.queryByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres, '', false),
+    })).not.toBeInTheDocument();
   });
 
   it('renders empty project and budget error states and handles failed requests', async () => {

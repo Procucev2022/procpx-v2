@@ -21,6 +21,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { PROJECT_DOCUMENT_ACCEPT_ATTRIBUTE, PROJECT_DOCUMENT_CATEGORY_VALUES, PROJECT_DOCUMENT_MAX_BYTES } from '@/lib/project-document.constants';
+import type { ProjectDetailState, ProjectDocumentListItem } from '@app-types/app/(app)/projects/[id]/page.types';
 
 
 function QualityScore({ score }: { score?: number | null }) {
@@ -35,17 +37,117 @@ function QualityScore({ score }: { score?: number | null }) {
   );
 }
 
+function getProjectDocumentCategoryLabel(category: string): string {
+  switch (category) {
+    case 'ORIGINAL_BOQ': return UI_STRINGS.appApiProjectsIdDocumentsRoute.categoryOriginalBoq;
+    case 'DRAWING': return UI_STRINGS.appApiProjectsIdDocumentsRoute.categoryDrawing;
+    case 'SPECIFICATION': return UI_STRINGS.appApiProjectsIdDocumentsRoute.categorySpecification;
+    default: return UI_STRINGS.appApiProjectsIdDocumentsRoute.categoryOther;
+  }
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
+  const loading = loadedProjectId !== id;
   const [activeTab, setActiveTab] = useState('overview');
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [documentsError, setDocumentsError] = useState('');
+  const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null);
+  const [documentCategory, setDocumentCategory] = useState<string>('SPECIFICATION');
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   useEffect(() => {
+    let active = true;
     fetch(`/api/projects/${id}`)
-      .then(r => r.json())
-      .then(d => { setProject(d); setLoading(false); });
+      .then(async (r) => {
+        const result = await r.json();
+        if (!r.ok || result?.error) {
+          console.error(JSON.stringify({ event: 'project.detail_fetch_failed', projectId: id, status: r.status }));
+          return null;
+        }
+        return result;
+      })
+      .then(d => {
+        if (active) {
+          setProject(d);
+          setDocumentsPage(1);
+          setDocumentsError('');
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProject(null);
+          console.error(JSON.stringify({ event: 'project.detail_fetch_failed', projectId: id }));
+        }
+      })
+      .finally(() => { if (active) setLoadedProjectId(id); });
+    return () => { active = false; };
   }, [id]);
+
+  const loadMoreDocuments = async () => {
+    if (loadingDocuments || !project) return;
+    setLoadingDocuments(true);
+    setDocumentsError('');
+    const nextPage = documentsPage + 1;
+    try {
+      const response = await fetch(`/api/projects/${id}/documents?page=${nextPage}`);
+      const result = await response.json();
+      if (!response.ok || result?.error || !Array.isArray(result?.documents)) {
+        setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
+        console.error(JSON.stringify({ event: 'project.documents_page_fetch_failed', projectId: id, page: nextPage, status: response.status }));
+        return;
+      }
+      setProject((current: ProjectDetailState) => ({
+        ...current,
+        documents: [
+          ...(current.documents || []),
+          ...result.documents.filter((document: ProjectDocumentListItem) => !(current.documents || []).some((loaded) => loaded.id === document.id)),
+        ],
+        _count: { ...current._count, documents: result.total ?? current._count?.documents },
+      }));
+      setDocumentsPage(nextPage);
+    } catch {
+      setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
+      console.error(JSON.stringify({ event: 'project.documents_page_fetch_failed', projectId: id, page: nextPage }));
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const uploadProjectDocument = async () => {
+    if (!selectedDocumentFile || uploadingDocument) return;
+    setUploadingDocument(true);
+    setDocumentsError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedDocumentFile);
+      formData.append('category', documentCategory);
+      const response = await fetch(`/api/projects/${id}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok || result?.error || !result?.id) {
+        setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
+        console.error(JSON.stringify({ event: 'project.document_upload_failed', projectId: id, status: response.status }));
+        return;
+      }
+      setProject((current: ProjectDetailState) => ({
+        ...current,
+        documents: [result as ProjectDocumentListItem, ...(current.documents || []).filter((document) => document.id !== result.id)],
+        _count: { ...current._count, documents: (current._count?.documents || current.documents?.length || 0) + 1 },
+      }));
+      setSelectedDocumentFile(null);
+    } catch {
+      setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
+      console.error(JSON.stringify({ event: 'project.document_upload_failed', projectId: id }));
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
 
   if (loading) return (
     <div className="py-20 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
@@ -217,6 +319,11 @@ export default function ProjectDetailPage() {
             {latestBoq?.revisions?.length > 0 && (
               <div className="card">
                 <div className="card-header"><span className="card-title">{UI_STRINGS.appAppProjectsIdPage.bOQRevisions}</span></div>
+                {(latestBoq._count?.revisions || 0) > latestBoq.revisions.length && (
+                  <p className="px-4 pt-3 text-xs text-slate-500">
+                    {interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingRevisionsOfTotal, { loaded: latestBoq.revisions.length, total: latestBoq._count.revisions })}
+                  </p>
+                )}
                 <div className="table-wrapper">
                   <table className="data-table">
                     <thead><tr><th>{UI_STRINGS.common.rev}</th><th>{UI_STRINGS.common.status}</th><th>{UI_STRINGS.common.lines3}</th><th>{UI_STRINGS.common.score}</th><th></th></tr></thead>
@@ -267,6 +374,11 @@ export default function ProjectDetailPage() {
       {activeTab === 'team' && (
         <div className="card">
           <div className="card-header"><span className="card-title">{UI_STRINGS.appAppProjectsIdPage.projectTeam}</span></div>
+          {(project._count?.team || 0) > (project.team?.length || 0) && (
+            <p className="px-4 pt-3 text-xs text-slate-500">
+              {interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingProjectTeamOfTotal, { loaded: project.team.length, total: project._count.team })}
+            </p>
+          )}
           {!project.team?.length ? (
             <div className="empty-state">
               <div className="empty-state-icon">
@@ -300,23 +412,36 @@ export default function ProjectDetailPage() {
         <div className="card">
           <div className="card-header flex justify-between items-center">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <FileText size={18} />{UI_STRINGS.appAppProjectsIdPage.projectDocumentRepository}{project.documents?.length || 0}{UI_STRINGS.common.copyc7zu6c}</span>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => {
-                const name = prompt(UI_STRINGS.appAppProjectsIdPage.enterDocumentName);
-                if (!name) return;
-                const category = prompt(UI_STRINGS.appAppProjectsIdPage.categoryORIGINALBOQDRAWINGSPECIFICATIONOTHER, 'SPECIFICATION') || 'OTHER';
-                fetch(`/api/projects/${id}/documents`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ name, category, fileSize: 102400, fileType: 'application/pdf' }),
-                }).then(() => {
-                  fetch(`/api/projects/${id}`).then(r => r.json()).then(d => setProject(d));
-                });
-              }}
-            >{UI_STRINGS.appAppProjectsIdPage.uploadDocument}</button>
+              <FileText size={18} />{UI_STRINGS.appAppProjectsIdPage.projectDocumentRepository}{project._count?.documents ?? project.documents?.length ?? 0}{UI_STRINGS.common.copyc7zu6c}</span>
           </div>
+          <div className="px-4 pt-4 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-700">
+              {UI_STRINGS.appAppProjectsIdPage.chooseDocumentFile}
+              <input
+                type="file"
+                accept={PROJECT_DOCUMENT_ACCEPT_ATTRIBUTE}
+                onChange={(event) => setSelectedDocumentFile(event.currentTarget.files?.[0] || null)}
+                disabled={uploadingDocument}
+                aria-label={UI_STRINGS.appAppProjectsIdPage.chooseDocumentFile}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-700">
+              {UI_STRINGS.appAppProjectsIdPage.documentCategory}
+              <select value={documentCategory} onChange={(event) => setDocumentCategory(event.currentTarget.value)} disabled={uploadingDocument}>
+                {PROJECT_DOCUMENT_CATEGORY_VALUES.map((category) => <option key={category} value={category}>{getProjectDocumentCategoryLabel(category)}</option>)}
+              </select>
+            </label>
+            <button className="btn btn-sm btn-primary" onClick={() => void uploadProjectDocument()} disabled={!selectedDocumentFile || uploadingDocument}>
+              {uploadingDocument ? UI_STRINGS.appAppProjectsIdPage.uploadingDocument : UI_STRINGS.appAppProjectsIdPage.uploadDocument}
+            </button>
+            <span className="text-xs text-slate-500">{interpolateUiString(UI_STRINGS.appAppProjectsIdPage.supportedFileTypesAndMaxSize, { maxMb: PROJECT_DOCUMENT_MAX_BYTES / (1024 * 1024) })}</span>
+          </div>
+          {(project._count?.documents || 0) > 0 && (
+            <p className="px-4 pt-3 text-xs text-slate-500">
+              {interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingDocumentsOfTotal, { loaded: project.documents?.length || 0, total: project._count.documents })}
+            </p>
+          )}
+          {documentsError && <p className="px-4 pt-3 text-sm text-rose-700" role="alert">{documentsError}</p>}
           {!project.documents?.length ? (
             <div className="empty-state">
               <div className="empty-state-icon">
@@ -359,13 +484,18 @@ export default function ProjectDetailPage() {
                       </td>
                       <td className="text-muted">{doc.uploadedBy?.slice(0, 8) || UI_STRINGS.common.system}</td>
                       <td className="text-muted">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
-                      <td>
-                        <span className="btn btn-sm btn-ghost" style={{ cursor: 'pointer' }} onClick={() => alert(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.documentFileStoredAtFilePath, { "filePath": doc.filePath }))}>{UI_STRINGS.appAppProjectsIdPage.viewPath}</span>
-                      </td>
+                      <td><a className="btn btn-sm btn-ghost" href={`/api/projects/${id}/documents/${doc.id}`} download>{UI_STRINGS.appAppProjectsIdPage.downloadDocument}</a></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {(project.documents?.length || 0) < (project._count?.documents || 0) && (
+            <div className="p-4 text-center">
+              <button type="button" className="btn btn-secondary" onClick={() => void loadMoreDocuments()} disabled={loadingDocuments}>
+                {loadingDocuments ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
             </div>
           )}
         </div>

@@ -43,6 +43,7 @@ model Tenant {
   actualCosts         ActualCostTransaction[]
   rateCards           VendorRateCard[]
   notifications       Notification[]
+  notificationOutbox  NotificationOutbox[]
 
   @@map("tenants")
 }
@@ -73,6 +74,7 @@ model User {
   approvedRevs  BoqRevision[] @relation("RevisionApprovedBy")
 
   @@unique([tenantId, email])
+  @@index([tenantId, vendorId, role, status, id])
   @@map("users")
 }
 
@@ -140,6 +142,7 @@ model ProjectTeam {
   user        User     @relation(fields: [userId], references: [id])
 
   @@unique([projectId, userId])
+  @@index([userId, active, projectId], map: "project_teams_user_active_project_idx")
   @@map("project_teams")
 }
 
@@ -297,6 +300,8 @@ model BoqLine {
   ppoLines            PpoLine[]
   actualCosts         ActualCostTransaction[]
 
+  @@unique([boqRevisionId, lineNumber])
+  @@index([tenantId, boqRevisionId, isDeleted, categoryId, aiUnitCost])
   @@map("boq_lines")
 }
 
@@ -339,7 +344,9 @@ model Category {
   linesAsCategory     BoqLine[] @relation("LineCategory")
   linesAsSubcategory  BoqLine[] @relation("LineSubcategory")
 
+  // Migrations also add root/child partial unique indexes because parentId is nullable in D1.
   @@unique([tenantId, name, parentId])
+  @@unique([tenantId, code])
   @@map("categories")
 }
 
@@ -365,6 +372,7 @@ model AuditLog {
   user        User?    @relation(fields: [userId], references: [id])
   project     Project? @relation(fields: [projectId], references: [id])
 
+  @@index([tenantId, createdAt, id], map: "audit_logs_tenant_created_idx")
   @@map("audit_logs")
 }
 
@@ -515,6 +523,7 @@ model RfqLine {
   ppoLines        PpoLine[]
   actualCosts     ActualCostTransaction[]
 
+  @@unique([rfqId, lineNumber])
   @@map("rfq_lines")
 }
 
@@ -564,6 +573,7 @@ model Quote {
   lines               QuoteLine[]
 
   @@unique([rfqId, vendorId, quoteVersion])
+  @@index([tenantId, quoteNumber])
   @@map("quotes")
 }
 
@@ -581,6 +591,7 @@ model QuoteLine {
   quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   rfqLine         RfqLine  @relation(fields: [rfqLineId], references: [id], onDelete: Cascade)
 
+  @@unique([quoteId, rfqLineId])
   @@map("quote_lines")
 }
 
@@ -602,6 +613,7 @@ model Negotiation {
   rfq                  Rfq                @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   rounds               NegotiationRound[]
 
+  @@unique([tenantId, rfqId])
   @@map("negotiations")
 }
 
@@ -633,6 +645,7 @@ model NegotiationRound {
   negotiation         Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
   vendor              Vendor      @relation(fields: [vendorId], references: [id])
 
+  @@unique([negotiationId, vendorId, roundNumber])
   @@map("negotiation_rounds")
 }
 
@@ -747,6 +760,8 @@ model AuctionBid {
   vendor        Vendor       @relation(fields: [vendorId], references: [id])
   auctionItem   AuctionItem? @relation(fields: [auctionItemId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId, auctionId, timestamp, id])
+  @@index([tenantId, auctionId, vendorId, timestamp, id])
   @@map("auction_bids")
 }
 
@@ -779,6 +794,7 @@ model AwardRecommendation {
   recommendedVendor     Vendor    @relation(fields: [recommendedVendorId], references: [id])
   ppos                  Ppo[]
 
+  // Migrations enforce one pending recommendation per RFQ while retaining award history.
   @@map("award_recommendations")
 }
 
@@ -830,7 +846,10 @@ model Ppo {
   actualCosts           ActualCostTransaction[]
   vendorRating          PpoVendorRating?
 
+  @@unique([awardRecommendationId])
   @@unique([tenantId, ppoNumber])
+  @@index([tenantId, vendorId, createdAt], map: "ppos_tenant_vendor_created_idx")
+  // Migration-managed partial index prevents duplicate active RFQ/vendor PPOs while allowing cancelled history.
   @@map("ppos")
 }
 
@@ -906,6 +925,8 @@ model ActualCostTransaction {
   source               String   // PO_COMPLETION, PPO_COMPLETION, GRN, INVOICE, MANUAL_ADJUSTMENT, ERP_ACTUAL
   status               String   @default("APPROVED") // DRAFT, SUBMITTED, VERIFIED, APPROVED, REJECTED
   completionReference  String?  // Reference/Invoice/GRN Number
+  completionRequestId String?  // Idempotency key shared by one PPO completion request
+  completionFingerprint String? // Hash of the normalized request payload for safe replay
   externalReference    String?  // ERP integration ref
   erpDocumentNumber    String?
   erpDate              DateTime?
@@ -928,6 +949,8 @@ model ActualCostTransaction {
   vendor               Vendor?  @relation(fields: [vendorId], references: [id])
 
   @@unique([tenantId, transactionCode])
+  @@index([tenantId, completionRequestId])
+    @@index([tenantId, projectId, costCentreId, status, category])
   @@map("actual_cost_transactions")
 }
 
@@ -1014,6 +1037,7 @@ model Budget {
   project         Project  @relation(fields: [projectId], references: [id])
   costCentre      CostCentre? @relation(fields: [costCentreId], references: [id])
 
+  @@unique([tenantId, costCentreId])
   @@map("budgets")
 }
 
@@ -1048,6 +1072,8 @@ model BudgetContribution {
   transactions           BudgetTransaction[]
   approvals              BudgetApproval[]
 
+  @@unique([tenantId, boqRevisionId])
+    @@index([tenantId, projectId, costCentreId, status])
   @@map("budget_contributions")
 }
 
@@ -1084,6 +1110,9 @@ model BudgetTransaction {
   contribution           BudgetContribution? @relation(fields: [contributionId], references: [id])
 
   @@unique([tenantId, transactionCode])
+  @@unique([reversedTransactionId])
+    @@index([tenantId, projectId, costCentreId, status, category])
+    @@index([tenantId, budgetDate, id])
   @@map("budget_transactions")
 }
 
@@ -1172,6 +1201,7 @@ model PRLine {
   ppoLines         PpoLine[]
   actualCosts      ActualCostTransaction[]
 
+  @@unique([prId, lineNumber])
   @@map("pr_lines")
 }
 
@@ -1257,6 +1287,8 @@ model PpoVendorRating {
   ppo                        Ppo       @relation(fields: [ppoId], references: [id])
 
   @@map("ppo_vendor_ratings")
+  @@index([tenantId, status, vendorId], map: "ppo_vendor_ratings_tenant_status_vendor_idx")
+  @@index([vendorId, status], map: "ppo_vendor_ratings_vendor_status_idx")
 }
 
 // ============================================================
@@ -1302,6 +1334,7 @@ model VendorRateCard {
   ppos              Ppo[]
 
   @@unique([tenantId, rateCardNumber])
+  @@index([tenantId, status, validFrom, validTo], map: "vendor_rate_cards_tenant_status_validity_idx")
   @@map("vendor_rate_cards")
 }
 
@@ -1330,6 +1363,7 @@ model VendorRateCardItem {
 
   rateCard          VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId, isActive, rateCardId], map: "vendor_rate_card_items_tenant_active_card_idx")
   @@map("vendor_rate_card_items")
 }
 
@@ -1358,6 +1392,7 @@ model Notification {
   tenantId     String
   userId       String?   // Target user ID or null for role broadcast
   targetRole   String?   // Target role: e.g. PROCUREMENT_USER, FINANCE_USER, PROJECT_APPROVER
+  vendorId     String?   // Vendor-scoped notification visible to mapped portal users
   title        String
   message      String
   type         String    @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
@@ -1372,6 +1407,27 @@ model Notification {
   tenant       Tenant    @relation(fields: [tenantId], references: [id])
 
   @@map("notifications")
+}
+
+model NotificationOutbox {
+  id            String   @id
+  tenantId      String
+  payload       String
+  status        String   @default("PENDING")
+  attemptCount  Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedAt      DateTime?
+  lockToken     String?
+  deliveredAt   DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt, lockedAt, createdAt], map: "notification_outbox_dispatch_idx")
+  @@index([tenantId, createdAt], map: "notification_outbox_tenant_created_idx")
+  @@map("notification_outbox")
 }
 
 model RfqMessage {
@@ -1389,6 +1445,8 @@ model RfqMessage {
 
   rfq          Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId, rfqId, createdAt, id])
+  @@index([tenantId, rfqId, vendorId, createdAt, id])
   @@map("rfq_messages")
 }
 

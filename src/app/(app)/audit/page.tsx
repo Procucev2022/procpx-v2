@@ -1,7 +1,7 @@
 'use client';
 // app/(app)/audit/page.tsx - Audit Trail Viewer
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Eye, ShieldCheck, Activity, Layers, Filter } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
@@ -21,6 +21,43 @@ export default function AuditTrailPage() {
   const [entityType, setEntityType] = useState('');
   const [action, setAction] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
+  const [diffValues, setDiffValues] = useState<{ oldValue: string | null; newValue: string | null } | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState(false);
+  const diffRequestId = useRef(0);
+
+  const inspectDiff = useCallback(async (log: AuditLogItem) => {
+    const requestId = ++diffRequestId.current;
+    setSelectedLog(log);
+    setDiffValues(null);
+    setDiffError(false);
+    setDiffLoading(true);
+    try {
+      const response = await fetch(`/api/audit/${encodeURIComponent(log.id)}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(UI_STRINGS.appAppAuditPage.failedToLoadAuditDiff);
+      const details = json.data?.data ?? json.data;
+      if (!details || typeof details !== 'object') throw new Error(UI_STRINGS.appAppAuditPage.failedToLoadAuditDiff);
+      if (requestId === diffRequestId.current) {
+        setDiffValues({ oldValue: details.oldValue ?? null, newValue: details.newValue ?? null });
+      }
+    } catch (error) {
+      if (requestId === diffRequestId.current) {
+        setDiffError(true);
+        console.error('audit.diff_detail_load_failed', error);
+      }
+    } finally {
+      if (requestId === diffRequestId.current) setDiffLoading(false);
+    }
+  }, []);
+
+  const closeDiff = useCallback(() => {
+    diffRequestId.current += 1;
+    setSelectedLog(null);
+    setDiffValues(null);
+    setDiffError(false);
+    setDiffLoading(false);
+  }, []);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -163,7 +200,7 @@ export default function AuditTrailPage() {
               ) : (
                 logs.map(log => {
                   const style = ACTION_COLORS[log.action] || { bg: '#f1f5f9', text: UI_STRINGS.common.copy5npjv8, border: '#e2e8f0' };
-                  const hasDiff = !!(log.oldValue || log.newValue || log.oldValues || log.newValues);
+                  const hasDiff = Boolean(log.hasDiff ?? (log.oldValue || log.newValue || log.oldValues || log.newValues));
                   return (
                     <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9', height: 52 }}>
                       <td style={{ padding: '0 16px', fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
@@ -199,7 +236,7 @@ export default function AuditTrailPage() {
                       <td style={{ padding: '0 16px', textAlign: 'right' }}>
                         {hasDiff ? (
                           <button
-                            onClick={() => setSelectedLog(log)}
+                            onClick={() => void inspectDiff(log)}
                             className="btn btn-secondary btn-sm"
                             style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                           >
@@ -270,14 +307,17 @@ export default function AuditTrailPage() {
               <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppAuditPage.auditEventStateDiff}{selectedLog.action}{UI_STRINGS.common.on}{selectedLog.entityType}
               </h3>
               <button
-                onClick={() => setSelectedLog(null)}
+                onClick={closeDiff}
                 style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}
               >{UI_STRINGS.common.copymriixi}</button>
             </div>
 
             <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>{UI_STRINGS.appAppAuditPage.recordedOn}{new Date(selectedLog.createdAt).toLocaleString()}{UI_STRINGS.common.by}{selectedLog.user?.name || selectedLog.user?.email || UI_STRINGS.common.system}{UI_STRINGS.appAppAuditPage.entityID}{selectedLog.entityId}{UI_STRINGS.common.copyc7zu6c}</div>
 
-            {(selectedLog.oldValue || selectedLog.oldValues) && (
+            {diffLoading && <div role="status" style={{ padding: 16, color: '#64748b' }}>{UI_STRINGS.appAppAuditPage.loadingAuditDiff}</div>}
+            {diffError && <div role="alert" style={{ padding: 16, color: '#b91c1c' }}>{UI_STRINGS.appAppAuditPage.failedToLoadAuditDiff}</div>}
+
+            {!diffLoading && !diffError && (diffValues?.oldValue) && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 6, textTransform: 'uppercase' }}>{UI_STRINGS.appAppAuditPage.previousStateOldValue}</div>
                 <pre style={{
@@ -289,12 +329,12 @@ export default function AuditTrailPage() {
                   overflowX: 'auto',
                   border: '1px solid #e2e8f0',
                 }}>
-                  {JSON.stringify(parseJson(selectedLog.oldValue || selectedLog.oldValues), null, 2)}
+                  {JSON.stringify(parseJson(diffValues.oldValue), null, 2)}
                 </pre>
               </div>
             )}
 
-            {(selectedLog.newValue || selectedLog.newValues) && (
+            {!diffLoading && !diffError && (diffValues?.newValue) && (
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', marginBottom: 6, textTransform: 'uppercase' }}>{UI_STRINGS.appAppAuditPage.newStateNewValue}</div>
                 <pre style={{
@@ -306,14 +346,14 @@ export default function AuditTrailPage() {
                   overflowX: 'auto',
                   border: '1px solid #e2e8f0',
                 }}>
-                  {JSON.stringify(parseJson(selectedLog.newValue || selectedLog.newValues), null, 2)}
+                  {JSON.stringify(parseJson(diffValues.newValue), null, 2)}
                 </pre>
               </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                onClick={() => setSelectedLog(null)}
+                onClick={closeDiff}
                 className="btn btn-secondary"
                 style={{ padding: '8px 16px' }}
               >{UI_STRINGS.common.close}</button>

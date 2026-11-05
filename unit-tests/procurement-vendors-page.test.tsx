@@ -18,6 +18,7 @@ jest.mock('../src/components/ui/Toast', () => ({ useToast: () => mockToast }));
 const originalFetch = global.fetch;
 const mockFetch = jest.fn();
 let vendors: any[];
+let nextPageVendors: Array<Record<string, unknown>>;
 let vendorListUnavailable: boolean;
 let omitVendorList: boolean;
 let createVendorOk: boolean;
@@ -40,7 +41,18 @@ function configureFetch() {
     if (init?.method === 'POST') return Promise.resolve(reply({}));
     if (vendorListUnavailable) return Promise.reject(new Error('Directory unavailable'));
     if (omitVendorList) return Promise.resolve(reply({ counts }));
-    return Promise.resolve(reply({ vendors, counts }));
+    const page = Number(new URL(String(url), 'http://localhost').searchParams.get('page') || '1');
+    const pageVendors = page === 1 ? vendors : nextPageVendors;
+    return Promise.resolve(reply({
+      vendors: pageVendors,
+      counts,
+      pagination: {
+        page,
+        pageSize: 50,
+        hasMore: page === 1 && nextPageVendors.length > 0,
+        total: vendors.length + nextPageVendors.length,
+      },
+    }));
   });
   global.fetch = mockFetch as typeof fetch;
 }
@@ -72,6 +84,7 @@ describe('vendor management workspace', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     vendors = vendorRows();
+    nextPageVendors = [];
     vendorListUnavailable = false;
     omitVendorList = false;
     createVendorOk = true;
@@ -100,6 +113,24 @@ describe('vendor management workspace', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?vendorType=CLIENT_VENDOR&qualificationStatus=QUALIFIED&category=Electrical&search=alpha'));
     fireEvent.click(screen.getByRole('button', { name: 'Procucev Network Vendors (1)' }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('vendorType=PROCUCEV_VENDOR')));
+  });
+
+  it('loads the next bounded directory page and avoids appending duplicate vendors', async () => {
+    nextPageVendors = [
+      vendorRows()[1],
+      { ...vendorRows()[0], id: 'v4', code: 'VND-4', name: 'Delta Systems' },
+    ];
+    renderVendors();
+    expect(await screen.findByText('Alpha Infra')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementVendorsPage.loadedVendorCountOfTotal, {
+      loaded: 3,
+      total: 5,
+    })))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.loadMoreVendors) }));
+    expect(await screen.findByText('Delta Systems')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Beta Network' })).toHaveLength(1);
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?page=2');
   });
 
   it('validates both onboarding steps, saves a draft, and completes vendor registration', async () => {

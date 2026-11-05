@@ -72,10 +72,12 @@ const ppos = [
 
 const rateCards = [{ id: 'rc-1', rateCardNumber: 'RC-1', version: 2, title: 'Electrical annual rates', scope: '', category: 'Electrical', validFrom: '2026-01-01', validTo: '2026-12-31', items: [{ id: 'i1' }], status: 'ACTIVE' }];
 const dashboard = { counts: { newRfqs: 1, quotesDueSoon: 2, quotesSubmitted: 3, negotiationsAwaitingVendor: 4, finalOffersAwaitingBuyer: 5, quotesAcceptedPpoAwaited: 6, pposAwaitingAcceptance: 7, acceptedPpos: 8 }, rfqRegister: rfqRows, ppos, rateCards };
+const detailedRfq = { ...rfqRows[0], id: 'rfq-101', rfqNumber: 'RFQ-101', lines: [{ id: 'line-1', description: 'Cable' }], negotiations: [{ id: 'neg-1', rounds: [{ id: 'round-1' }] }] };
 
 function configureFetch(body: unknown = dashboard, ok = true) {
   mockFetch.mockImplementation((url: string) => {
     if (url === dashboardUrl) return Promise.resolve(response(body, ok));
+    if (url === '/api/procurement/rfqs/rfq-101') return Promise.resolve(response({ rfq: detailedRfq }));
     return Promise.resolve(response({}));
   });
   global.fetch = mockFetch as typeof fetch;
@@ -139,11 +141,56 @@ describe('vendor sourcing dashboard', () => {
     fireEvent.click(document.querySelector('.modal-close')!);
 
     fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.openCommercialNegotiationWorkspace))[0]);
+    await screen.findByTestId('vendor-negotiation');
     expect(screen.getByTestId('vendor-negotiation')).toHaveAttribute('data-vendor', 'vendor-1');
     fireEvent.click(screen.getByRole('button', { name: 'Offer Success' }));
     await screen.findByTestId('vendor-negotiation');
     fireEvent.click(screen.getByRole('button', { name: 'Return to Sourcing' }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline))).toBeInTheDocument();
+  });
+
+  it('loads the next page for each dashboard section and opens negotiation with full RFQ detail', async () => {
+    const paginatedDashboard = {
+      ...dashboard,
+      pagination: {
+        rfqs: { page: 1, pageSize: 25, total: 26, hasMore: true },
+        ppos: { page: 1, pageSize: 25, total: 26, hasMore: true },
+        rateCards: { page: 1, pageSize: 25, total: 26, hasMore: true },
+      },
+    };
+    configureFetch(paginatedDashboard);
+    mockFetch.mockImplementation((url: string) => {
+      if (url === dashboardUrl) return Promise.resolve(response(paginatedDashboard));
+      if (url === `${dashboardUrl}?section=rfqs&rfqPage=2&pageSize=25`) {
+        return Promise.resolve(response({ rfqRegister: [{ ...rfqRows[0], id: 'rfq-109', rfqNumber: 'RFQ-109' }], pagination: { rfqs: { page: 2, pageSize: 25, total: 26, hasMore: false } } }));
+      }
+      if (url === `${dashboardUrl}?section=ppos&ppoPage=2&pageSize=25`) {
+        return Promise.resolve(response({ ppos: [{ ...ppos[0], id: 'ppo-105', ppoNumber: 'PPO-105' }], pagination: { ppos: { page: 2, pageSize: 25, total: 26, hasMore: false } } }));
+      }
+      if (url === `${dashboardUrl}?section=rateCards&rateCardPage=2&pageSize=25`) {
+        return Promise.resolve(response({ rateCards: [{ ...rateCards[0], id: 'rc-2', rateCardNumber: 'RC-2' }], pagination: { rateCards: { page: 2, pageSize: 25, total: 26, hasMore: false } } }));
+      }
+      if (url === '/api/procurement/rfqs/rfq-101') return Promise.resolve(response({ rfq: detailedRfq }));
+      return Promise.resolve(response({}));
+    });
+
+    render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
+    await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline));
+    const loadMoreButtons = screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) });
+    expect(loadMoreButtons).toHaveLength(3);
+    fireEvent.click(loadMoreButtons[0]);
+    fireEvent.click(loadMoreButtons[1]);
+    fireEvent.click(loadMoreButtons[2]);
+    expect(await screen.findByText('RFQ-109')).toBeInTheDocument();
+    expect(await screen.findByText('PPO-105')).toBeInTheDocument();
+    expect(await screen.findByText('RC-2 (v2)')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(`${dashboardUrl}?section=rfqs&rfqPage=2&pageSize=25`);
+    expect(mockFetch).toHaveBeenCalledWith(`${dashboardUrl}?section=ppos&ppoPage=2&pageSize=25`);
+    expect(mockFetch).toHaveBeenCalledWith(`${dashboardUrl}?section=rateCards&rateCardPage=2&pageSize=25`);
+
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.openCommercialNegotiationWorkspace))[0]);
+    expect(await screen.findByTestId('vendor-negotiation')).toHaveTextContent('RFQ-101');
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-101');
   });
 
   it('accepts a PPO and raises a clarification issue with persisted form details', async () => {

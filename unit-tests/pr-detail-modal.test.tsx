@@ -52,13 +52,14 @@ describe('purchase request detail modal', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('loads canonical demo line items and keeps the create RFQ action available', async () => {
+  it('loads demo-looking identifiers from the API and does not invent line items or RFQ actions', async () => {
     render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'PR-DEMO-001', isExample: true, prNumber: 'PR-DEMO-001', requestedValue: 480000, projectName: 'Kundanahalli Fitout' }} />);
-    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).toBeInTheDocument();
-    expect(screen.getByText('Modular Workstations & Storage')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.noIndividualLineRecordsMappedCommercialBaselineAmountAppliesToWholePackage))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).not.toBeInTheDocument();
+    expect(screen.queryByText('Modular Workstations & Storage')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).toHaveAttribute('href', '/procurement/rfqs/new?prId=PR-DEMO-001');
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).not.toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/pr/PR-DEMO-001');
   });
 
   it('uses preloaded specification rows, summary fields, RFQ history, and revision links', () => {
@@ -90,7 +91,7 @@ describe('purchase request detail modal', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('hydrates incomplete line data and applies line-level fallbacks', async () => {
+  it('hydrates incomplete line data without fabricating missing master data', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: { totalEstimatedValue: 9000, lines: [
       { id: 'fetched-1', lineNumber: 0, boqLine: { itemCode: 'BOQ-ITM', standardDescription: 'Valve', specification: 'Steel valve', uom: { code: 'EA' }, aiUnitCost: 300, aiTotalCost: 600 }, quantity: 2 },
       { id: 'fetched-2', itemDescription: 'Fastener', category: '', quantity: null, uom: '', estimatedRate: 0, estimatedValue: 0 },
@@ -105,23 +106,23 @@ describe('purchase request detail modal', () => {
     expect(screen.getByText(/600/)).toBeInTheDocument();
     expect(screen.getAllByText('Mechanical').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Fastener').length).toBeGreaterThan(0);
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.nOS))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-fetch');
     expect((await screen.findAllByText(/9,000/)).length).toBeGreaterThan(0);
   });
 
-  it('uses sparse API line fallbacks and supports legacy revision links', async () => {
+  it('uses explicit unavailable values for sparse API lines and supports legacy revision links', async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { lines: [
         { quantity: 4, estimatedRate: 50, boqLine: { itemCode: 'ALT-1', uomRaw: 'BOX' } },
       ] } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: {} }) });
-    const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-sparse', prNumber: 'PR-SPARSE', revisionId: 'legacy-rev' }} />);
-    expect((await screen.findAllByText('Line Item')).length).toBeGreaterThan(0);
-    expect(screen.getByText('ALT-1')).toBeInTheDocument();
+    const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-sparse', prNumber: 'PR-SPARSE', revisionId: 'legacy-rev', status: 'PR_APPROVED' }} />);
+    expect(await screen.findByText('ALT-1')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(screen.getByText('BOX')).toBeInTheDocument();
     expect(screen.getByText(/200/)).toBeInTheDocument();
-    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.general))).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.viewBOQRevision) })).toHaveAttribute('href', '/boq/legacy-rev');
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).toHaveAttribute('href', '/procurement/rfqs/new?prId=pr-sparse');
 
@@ -131,7 +132,7 @@ describe('purchase request detail modal', () => {
 
   it('falls back to the original PR when API responses or network calls fail', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
-    const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-http-failure', prNumber: 'PR-HTTP', currentStage: 'Awaiting RFQ', costCentre: 'CC-X', itemCount: 4 }} />);
+    const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-http-failure', prNumber: 'PR-HTTP', status: 'PR_APPROVED', currentStage: 'Awaiting RFQ', costCentre: 'CC-X', itemCount: 4 }} />);
     expect(await screen.findByRole('dialog', { name: /PR-HTTP/ })).toBeInTheDocument();
     expect(screen.getByText('CC-X')).toBeInTheDocument();
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.noIndividualLineRecordsMappedCommercialBaselineAmountAppliesToWholePackage))).toBeInTheDocument();
@@ -143,24 +144,20 @@ describe('purchase request detail modal', () => {
     expect(screen.getByText('Negotiation')).toBeInTheDocument();
   });
 
-  it('skips fetch for demo identifiers, absent identifiers, and keeps fallback metadata', async () => {
+  it('fetches demo-prefixed identifiers and shows explicit unavailable metadata', async () => {
     const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'demo-record', prNumber: 'PR-DEMO-2', totalLines: 2, costCentre: null }} />);
     expect(screen.getByRole('dialog', { name: /PR-DEMO-2/ })).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.general))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.civilInterior))).toBeInTheDocument();
-    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.project)).length).toBeGreaterThan(0);
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.r0))).toBeInTheDocument();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect((await screen.findAllByText(uiStringPattern(UI_STRINGS.common.notAvailable))).length).toBeGreaterThan(0);
+    expect(mockFetch).toHaveBeenCalledWith('/api/pr/demo-record');
 
     rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ prId: 'PR-DEMO-9', estimatedValue: 0, boqCode: 'BOQ-9', project: { name: 'West Site' }, categories: [] }} />);
     expect(screen.getByText('West Site')).toBeInTheDocument();
     expect(screen.getByText('BOQ-9')).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.procurementCommercialPackage))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.immediateRequirement))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsPrDetailModal.taxonomy))).not.toHaveTextContent(uiStringPattern(UI_STRINGS.common.civilInterior));
     rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ prNumber: 'PR-NO-ID', title: 'No identifier record' }} />);
     expect(screen.getByRole('dialog', { name: /PR-NO-ID/ })).toBeInTheDocument();
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('opens and closes through the modal action', async () => {

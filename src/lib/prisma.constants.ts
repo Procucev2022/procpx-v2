@@ -1,12 +1,10 @@
-export const D1_ENVIRONMENT_VARIABLES = {
-  accountId: 'CLOUDFLARE_ACCOUNT_ID',
-  apiToken: 'CLOUDFLARE_API_TOKEN',
-  databaseId: 'CLOUDFLARE_DATABASE_ID',
-} as const;
+export const D1_PROVIDER_REQUIRED_MESSAGE =
+  'Set DATABASE_PROVIDER=d1 and use the local Wrangler binding for development. Prisma SQLite is schema-generation-only; there is no application SQLite fallback.';
 
-export const D1_ADAPTER_TOKEN_KEY = 'CLOUDFLARE_D1_TOKEN';
-
-export const D1_MISSING_CONFIGURATION_MESSAGE =
-  'Cloudflare D1 is not configured. Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, and CLOUDFLARE_DATABASE_ID before using database-backed features.';
+export const D1_BINDING_REQUIRED_MESSAGE =
+  'The Cloudflare runtime did not provide the required D1 binding named DB.';
 
 export const PRISMA_CLIENT_PROXY_TAG = 'PrismaClient';
+
+export const D1_PRISMA_TRANSACTION_UNSUPPORTED =
+  'The Prisma D1 adapter ignores transaction boundaries. Use a native D1 batch for atomic multi-write workflows.';

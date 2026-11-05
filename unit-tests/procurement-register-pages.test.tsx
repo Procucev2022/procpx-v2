@@ -128,7 +128,7 @@ describe('procurement register pages', () => {
       UI_STRINGS.appAppProcurementRfqsIdPage.pPOApprovedSuccessfullyByFinance, 'RFQ-001', UI_STRINGS.common.userMessages.readyForPpoIssuance,
     ));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/awards');
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/awards?page=1&pageSize=50');
     activeView.unmount();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ awards: [{ ...award, status: 'APPROVED' }] }) });
@@ -181,6 +181,54 @@ describe('procurement register pages', () => {
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.noAwardRecommendationsYet))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('loads later quote, negotiation, and award pages without dropping earlier records', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 1, quotes: [{
+        id: 'quote-first', quoteNumber: 'QT-FIRST', vendor: { name: 'Acme' }, rfqId: 'rfq-1', rfq: { rfqNumber: 'RFQ-001' },
+        quoteVersion: 1, totalBaseAmount: 10, taxAmount: 0, totalQuoteAmount: 10, createdAt: '2025-01-01T00:00:00Z',
+      }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 2, quotes: [{
+        id: 'quote-second', quoteNumber: 'QT-SECOND', vendor: { name: 'Beta' }, rfqId: 'rfq-2', rfq: { rfqNumber: 'RFQ-002' },
+        quoteVersion: 1, totalBaseAmount: 20, taxAmount: 0, totalQuoteAmount: 20, createdAt: '2025-01-02T00:00:00Z',
+      }] }) });
+    const quotesView = render(<QuotesHubPage />);
+    expect(await screen.findByText('QT-FIRST')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText('QT-SECOND')).toBeInTheDocument();
+    expect(screen.getByText('QT-FIRST')).toBeInTheDocument();
+    quotesView.unmount();
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 1, statusCounts: { ACTIVE: 51 }, negotiations: [{
+        id: 'neg-first', rfqId: 'rfq-1', rfq: { rfqNumber: 'RFQ-001', project: { name: 'Store' } },
+        currentRound: 1, _count: { rounds: 1 }, status: 'ACTIVE', updatedAt: '2025-02-01T00:00:00Z',
+      }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 2, statusCounts: { ACTIVE: 51 }, negotiations: [{
+        id: 'neg-second', rfqId: 'rfq-2', rfq: { rfqNumber: 'RFQ-002', project: { name: 'Office' } },
+        currentRound: 2, _count: { rounds: 2 }, status: 'ACTIVE', updatedAt: '2025-02-02T00:00:00Z',
+      }] }) });
+    const negotiationsView = render(<NegotiationsHubPage />);
+    expect(await screen.findByText('RFQ-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText('RFQ-002')).toBeInTheDocument();
+    expect(screen.getByText('RFQ-001')).toBeInTheDocument();
+    negotiationsView.unmount();
+
+    const award = {
+      id: 'award-first', rfqId: 'rfq-1', rfq: { rfqNumber: 'RFQ-001', project: { name: 'Store' } },
+      recommendedVendor: { name: 'Acme' }, finalNegotiatedAmount: 1000, benchmarkAmount: 1200,
+      savingsPercent: 16.7, totalSavingsAmount: 200, status: 'APPROVED', createdAt: '2025-03-01T00:00:00Z',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 1, awards: [award] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 2, awards: [{ ...award, id: 'award-second', rfqId: 'rfq-2', rfq: { rfqNumber: 'RFQ-002', project: { name: 'Office' } } }] }) });
+    render(<AwardsDeskPage />);
+    expect(await screen.findByText('RFQ-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText('RFQ-002')).toBeInTheDocument();
+    expect(screen.getByText('RFQ-001')).toBeInTheDocument();
   });
 
   it('filters and paginates projects, resolves role variants, and displays project detail fallbacks', async () => {

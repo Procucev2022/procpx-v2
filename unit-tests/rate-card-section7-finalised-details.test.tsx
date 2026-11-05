@@ -38,38 +38,31 @@ describe('rate card Section 7 finalised details', () => {
     jest.useRealTimers();
   });
 
-  it('shows the baseline information, agreement preview, exported workbook, and all detail tabs', () => {
+  it('shows no invented baseline, agreement, item, or approval data when no record is supplied', () => {
     render(<Section7FinalisedDetails />);
 
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copy1fc1rd5))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appLoginPageConstants.ramakrishnaInteriors, '', true))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.vendorCode2, '', false))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copy83fqgv))).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewExecutedAgreement, '', true) })[0]);
-    expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close agreement' }));
-    expect(screen.queryByRole('dialog', { name: 'Agreement preview' })).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appLoginPageConstants.ramakrishnaInteriors, '', true))).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewExecutedAgreement, '', true) })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadRateCard) }));
     expect(xlsx.utils.json_to_sheet).toHaveBeenCalledTimes(2);
     expect(xlsx.utils.book_append_sheet).toHaveBeenCalledTimes(2);
-    expect(xlsx.writeFile).toHaveBeenCalledWith(expect.any(Object), 'proCPX_Finalised_Rate_Card_RC-2026-0006.xlsx');
+    expect(xlsx.utils.json_to_sheet.mock.calls[0][0]).toEqual([]);
+    expect(xlsx.writeFile).toHaveBeenCalledWith(expect.any(Object), `proCPX_Finalised_Rate_Card_${UI_STRINGS.common.notAvailable}.xlsx`);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadedExcel))).toBeInTheDocument();
     act(() => jest.advanceTimersByTime(4000));
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadedExcel))).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.finalAgreedRatesSchedule))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.gypsumFalseCeiling))).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.multiRoundCommercialNegotiationAuditTrail))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.governanceSignOffTimelineApprovalsChain))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.allMilestonesCompleted))).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.rateCardInfo) }));
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.previewViewExecutedAgreement) }));
-    expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toBeInTheDocument();
+    expect(screen.queryByText('10 Oct 2026, 11:30 AM')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.allMilestonesCompleted))).not.toBeInTheDocument();
   });
 
   it('maps stored rate card items, notes, agreement and completed approvals into the details', () => {
@@ -118,7 +111,7 @@ describe('rate card Section 7 finalised details', () => {
     const exportedItem = xlsx.utils.json_to_sheet.mock.calls[0][0][0];
     expect(exportedItem).toMatchObject({
       'Item Code': 'ST-001', 'Item Description': 'Stored item', 'Quantity': 7,
-      'Category': 'Stored Category', 'Sub-category': 'General',
+      'Category': 'Stored Category', 'Sub-category': UI_STRINGS.common.notAvailable,
     });
     const exportedRateKey = Object.keys(exportedItem).find((key) => key.startsWith('Agreed Unit Rate'));
     expect(exportedRateKey).toBeDefined();
@@ -126,7 +119,7 @@ describe('rate card Section 7 finalised details', () => {
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
     expect(screen.getAllByText('Stored item')).toHaveLength(2);
-    expect(screen.getByText('SQFT')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(document.body).toHaveTextContent(/\b8\b/);
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
@@ -158,8 +151,7 @@ describe('rate card Section 7 finalised details', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.savings))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.inProgress))).toBeInTheDocument();
-    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.pending))).toHaveLength(2);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.notAvailable))).toBeInTheDocument();
 
     cleanup();
     const empty = render(<Section7FinalisedDetails rateCard={{ rateCardNumber: 'RC-EMPTY', status: 'DRAFT', items: [], notes: null }} items={[]} agreement={{ required: false, type: 'NONE' }} />);

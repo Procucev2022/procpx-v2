@@ -49,6 +49,7 @@ import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLookupOption } from '@app-types/app/api/cost-centres.types';
 
 
 
@@ -64,7 +65,11 @@ export default function BoqStudioPage() {
 
   // Core Data
   const [projects, setProjects] = useState<any[]>([]);
-  const [costCentres, setCostCentres] = useState<any[]>([]);
+  const [costCentres, setCostCentres] = useState<CostCentreLookupOption[]>([]);
+  const [costCentreSearch, setCostCentreSearch] = useState('');
+  const [costCentrePage, setCostCentrePage] = useState(1);
+  const [costCentreTotal, setCostCentreTotal] = useState(0);
+  const [costCentreHasMore, setCostCentreHasMore] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState(paramProjectId);
   const [selectedCostCentreId, setSelectedCostCentreId] = useState(paramCostCentreId);
 
@@ -215,6 +220,7 @@ export default function BoqStudioPage() {
 
   // Workspace Ref for smooth auto-scroll
   const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const costCentreRequestSequence = useRef(0);
 
   // -------------------------------------------------------------
   // INITIAL DATA LOADING & URL REFRESH RESTORATION (Section 22)
@@ -344,22 +350,42 @@ export default function BoqStudioPage() {
     }
   };
 
-  const loadCostCentres = async (pId: string) => {
+  const loadCostCentres = async (pId: string, search = '', page = 1, append = false, exactId = '') => {
+    const sequence = ++costCentreRequestSequence.current;
     try {
-      const res = await fetch(`/api/cost-centres?projectId=${pId}`);
+      const query = new URLSearchParams({ projectId: pId, page: String(page), pageSize: '100' });
+      if (search.trim()) query.set('search', search.trim());
+      if (exactId) query.set('costCentreId', exactId);
+      const res = await fetch(`/api/cost-centres?${query.toString()}`);
       if (res.ok) {
-        const data = await res.json();
-        setCostCentres(data);
-        if (data.length > 0 && !setupCostCentre) {
+        const data = await res.json() as CostCentreLookupApiResponse;
+        if (sequence !== costCentreRequestSequence.current) return;
+        const payload: CostCentreLookupPayload = data.data ?? data;
+        const rows = Array.isArray(payload) ? payload : payload.costCentres ?? [];
+        const pagination = Array.isArray(payload) ? undefined : payload.pagination;
+        setCostCentres((current) => {
+          const existing = !append && !exactId
+            ? current.find((item) => item.id === setupCostCentre && item.projectId === pId)
+            : undefined;
+          const base = append || exactId ? current : existing ? [existing] : [];
+          const ids = new Set(base.map((item) => item.id));
+          return [...base, ...rows.filter((item) => !ids.has(item.id))];
+        });
+        if (!exactId) {
+          setCostCentrePage(page);
+          setCostCentreTotal(pagination?.total ?? rows.length);
+          setCostCentreHasMore(Boolean(pagination?.hasMore));
+        }
+        if (rows.length > 0 && !setupCostCentre && !search && !exactId) {
           // If cc45 exists, prefer it
-          const cc45 = data.find((c: any) => c.code?.toLowerCase().includes('cc45') || c.name?.toLowerCase().includes('cc45'));
-          const defaultCc = cc45 ? cc45.id : data[0].id;
+          const cc45 = rows.find((c) => c.code?.toLowerCase().includes('cc45') || c.name?.toLowerCase().includes('cc45'));
+          const defaultCc = cc45 ? cc45.id : rows[0].id;
           setSetupCostCentre(defaultCc);
           setSelectedCostCentreId(defaultCc);
         }
       }
     } catch (e) {
-      console.error(e);
+      if (sequence === costCentreRequestSequence.current) console.error(e);
     }
   };
 
@@ -400,6 +426,9 @@ export default function BoqStudioPage() {
           setSelectedCostCentreId(boqData.costCentreId || '');
           setSetupProject(boqData.projectId);
           setSetupCostCentre(boqData.costCentreId || '');
+          if (boqData.costCentreId) {
+            void loadCostCentres(boqData.projectId, '', 1, true, boqData.costCentreId);
+          }
           setSetupTitle(boqData.title || '');
           setUserEditedTitle(true); // Preserve existing title in saved records
           setSetupDescription(boqData.description || '');
@@ -884,7 +913,7 @@ export default function BoqStudioPage() {
           costCentreId: ccId,
           drawingNumber: extractedDrawingData.drawingNumber || drawingNumber,
           fileName: extractedDrawingData.fileName,
-          savedFilePath: extractedDrawingData.savedFilePath,
+          savedDocumentId: extractedDrawingData.documentId,
           fileSize: extractedDrawingData.fileSize,
           title: computedTitle,
           description: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupDescription.trim() || `Extracted from architectural drawing ${extractedDrawingData.drawingNumber}` }),
@@ -1601,6 +1630,30 @@ export default function BoqStudioPage() {
                 <option key={cc.id} value={cc.id}>{cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}</option>
               ))}
             </select>
+            <div className="flex gap-2 mt-2">
+              <input
+                type="search"
+                className="select-field"
+                value={costCentreSearch}
+                onChange={e => setCostCentreSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void loadCostCentres(setupProject, costCentreSearch, 1); } }}
+                placeholder={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
+                aria-label={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
+                style={{ minWidth: 0, flex: 1 }}
+              />
+              <button type="button" className="btn btn-secondary" aria-label={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
+                onClick={() => void loadCostCentres(setupProject, costCentreSearch, 1)}><Search size={16} /></button>
+            </div>
+            {costCentreTotal > costCentres.length && (
+              <p className="text-xs text-slate-500 mt-1">
+                {interpolateUiString(UI_STRINGS.appAppCostCentresPage.showingCostCentreCountOfTotal, { loaded: costCentres.length, total: costCentreTotal })}
+              </p>
+            )}
+            {costCentreHasMore && (
+              <button type="button" className="text-sm text-blue-600 underline mt-1" onClick={() => void loadCostCentres(setupProject, costCentreSearch, costCentrePage + 1, true)}>
+                {UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres}
+              </button>
+            )}
           </div>
 
           {/* Category Selection directly under Project & Target Parameters (Requirement 1) */}

@@ -50,6 +50,9 @@ const primaryPr = {
   requestedDate: '2026-10-20', hasEnquiry: true, categories: ['Electrical', 'Power'],
   boq: { boqCode: 'BOQ-01' }, boqRevision: { revisionCode: 'R2' },
   project: { name: 'North Plant', projectCode: 'NP-1' }, costCentre: { code: 'CC-01', name: 'Electrical' },
+};
+const primaryPrDetail = {
+  ...primaryPr,
   lines: [
     { id: 'line-1', lineNumber: 3, itemDescription: 'Cable tray', specification: 'Hot dip galvanized', category: 'Electrical', quantity: 10, uom: 'M', estimatedRate: 400, estimatedValue: 4000 },
     { id: 'line-2', itemDescription: 'Grounding strip', boqLine: { specification: 'Copper strip' }, category: 'Power', quantity: 5, uom: 'M', estimatedRate: 150 },
@@ -57,9 +60,7 @@ const primaryPr = {
 };
 const sparsePr = {
   id: 'pr-2', prNumber: 'PR-002', title: 'General package', requestedBy: 'Mira', createdAt: '2026-10-21',
-  categories: [], hasEnquiry: false, totalEstimatedValue: 0, lines: [
-    { id: 'line-3', itemDescription: 'Other item', quantity: 2, estimatedRate: 25 },
-  ],
+  categories: [], hasEnquiry: false, totalEstimatedValue: 0, totalLines: 1,
 };
 
 function response(body: any, ok = true) {
@@ -68,7 +69,9 @@ function response(body: any, ok = true) {
 
 function setupFetch() {
   mockFetch.mockImplementation((url: string) => {
-    if (url === '/api/approvals?type=PR') return Promise.resolve(response(queueBody, queueOk));
+    if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response(queueBody, queueOk));
+    if (url === '/api/pr/pr-1') return Promise.resolve(response(primaryPrDetail));
+    if (url === '/api/pr/pr-2') return Promise.resolve(response({ ...sparsePr, lines: [{ id: 'line-3', itemDescription: 'Other item', quantity: 2, estimatedRate: 25 }] }));
     if (url === '/api/pr/pr-1/approve' || url === '/api/pr/pr-2/approve') return Promise.resolve(response(approveResult.body, approveResult.ok));
     if (url.endsWith('/revert')) return Promise.resolve(response(revertResult.body, revertResult.ok));
     if (url.endsWith('/reject')) return Promise.resolve(response(rejectResult.body, rejectResult.ok));
@@ -107,9 +110,9 @@ describe('BOQ and PR approval workspace', () => {
     fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"BOQ"})) }));
     expect(screen.getByText('BOQ Details: PR-001')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.sourceBOQ)).parentElement).toHaveTextContent('BOQ-01 (R2)');
-    expect(screen.getByText('Cable tray')).toBeInTheDocument();
-    expect(screen.getByText('Hot dip galvanized')).toBeInTheDocument();
-    expect(screen.getByText('Copper strip')).toBeInTheDocument();
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    expect(await screen.findByText('Hot dip galvanized')).toBeInTheDocument();
+    expect(await screen.findByText('Copper strip')).toBeInTheDocument();
     expect(screen.getByText(/4,000/)).toBeInTheDocument();
     expect(screen.getByText(/750/)).toBeInTheDocument();
 
@@ -117,7 +120,7 @@ describe('BOQ and PR approval workspace', () => {
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');
     expect(screen.getByTestId('approval-chat')).toHaveTextContent('PR-001');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Queue' }));
-    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=PR');
+    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=PR&page=1&pageSize=25');
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
     expect(screen.queryByTestId('approval-chat')).not.toBeInTheDocument();
 
@@ -132,7 +135,7 @@ describe('BOQ and PR approval workspace', () => {
     fireEvent.click(within(screen.getByRole('row', { name: /PR-002/ })).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"BOQ"})) }));
     expect(screen.getByText('BOQ Details: PR-002')).toBeInTheDocument();
     expect(screen.getByText('(R0)')).toBeInTheDocument();
-    expect(screen.getAllByText('Other item').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Other item')).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/50/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Chat","toLocaleString":"with Requester"})) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'false');
@@ -258,5 +261,20 @@ describe('BOQ and PR approval workspace', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsBoqPrPage.noBOQsAwaitingProjectApproverDecision))).toBeInTheDocument();
     consoleError.mockRestore();
+  });
+
+  it('loads additional PR approval queue pages without replacing the first page', async () => {
+    const secondPagePr = { ...sparsePr, id: 'pr-4', prNumber: 'PR-004', title: 'Mechanical package' };
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('page=1')) return Promise.resolve(response({ prQueue: [primaryPr], pagination: { page: 1, queues: { pr: { total: 2, totalPages: 2 } } }, totals: { prPendingAmount: 25100 } }));
+      if (url.includes('page=2')) return Promise.resolve(response({ prQueue: [secondPagePr], pagination: { page: 2, queues: { pr: { total: 2, totalPages: 2 } } }, totals: { prPendingAmount: 25100 } }));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    expect(await screen.findByRole('row', { name: /PR-001/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByRole('row', { name: /PR-004/ })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /PR-001/ })).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=PR&page=2&pageSize=25');
   });
 });

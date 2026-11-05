@@ -1,17 +1,20 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
-import { createAuditLog } from '../src/lib/audit';
-import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '../src/lib/notifications';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { GET, POST } from '../src/app/api/procurement/quotes/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { QUOTE_AUDIT_INSERT_AFTER_INSERT_SQL, QUOTE_INSERT_WITH_NEXT_VERSION_SQL, QUOTE_LINE_INSERT_SQL, RFQ_MARK_RESPONSE_OPEN_SQL, RFQ_VENDOR_SUBMITTED_UPSERT_SQL } from '../src/lib/d1-batch.constants';
+import { NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL } from '../src/lib/notification-outbox.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    quote: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
-    rfq: { findFirst: jest.fn(), update: jest.fn() },
-    rfqVendor: { findFirst: jest.fn(), upsert: jest.fn() },
+    quote: { findMany: jest.fn(), count: jest.fn() },
+    rfq: { findFirst: jest.fn() },
+    rfqVendor: { findFirst: jest.fn() },
     vendor: { findFirst: jest.fn() },
   },
 }));
@@ -20,17 +23,27 @@ jest.mock('../src/lib/api-utils', () => ({
   isApiContext: jest.fn(),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
+  getListPageWindow: (params: URLSearchParams) => {
+    const rawPage = Number(params.get('page'));
+    const rawSize = Number(params.get('pageSize'));
+    const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 1_000_000) : 1;
+    const pageSize = Number.isSafeInteger(rawSize) && rawSize > 0 ? Math.min(rawSize, 100) : 50;
+    return { page, pageSize, skip: (page - 1) * pageSize };
+  },
 }));
-jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
-jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn() }));
+jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn(), dispatchPreparedWorkflowNotification: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue({}) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const errorResponse = apiError as jest.Mock;
 const successResponse = apiSuccess as jest.Mock;
-const audit = createAuditLog as jest.Mock;
 const notify = notifyNextResponsibleParty as jest.Mock;
+const dispatchPrepared = dispatchPreparedWorkflowNotification as jest.Mock;
+const batch = writeD1BatchAtomically as jest.Mock;
+const log = writeStructuredLog as jest.Mock;
 const context = {
   tenantId: 'tenant-1', userId: 'user-1', userName: 'Buyer One', userEmail: 'buyer@example.test', role: 'BUYER',
 };
@@ -44,6 +57,8 @@ const quoteBody = (overrides: Record<string, unknown> = {}) => ({
 
 describe('procurement quote routes', () => {
   let consoleError: jest.SpyInstance;
+  let persistedQuoteVersion: number;
+  let persistedQuoteNumber: string;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -52,42 +67,60 @@ describe('procurement quote routes', () => {
     errorResponse.mockImplementation((error: string, status = 400) => ({ ok: false, error, status }));
     successResponse.mockImplementation((data: unknown, status = 200) => ({ ok: true, data, status }));
     db.quote.findMany.mockResolvedValue([]);
-    db.quote.count.mockResolvedValue(2);
-    db.quote.create.mockResolvedValue({ id: 'quote-1', quoteNumber: 'QTE-2026-000003' });
+    db.quote.count.mockResolvedValue(1);
+    persistedQuoteVersion = 1;
+    persistedQuoteNumber = 'QTE-2026-000003';
+    batch.mockImplementation(async (statements: Array<{ values: unknown[] }>) => statements.map((_, index) => ({
+      ...(index === 0 ? { results: [{
+        id: statements[0].values[0],
+        tenantId: 'tenant-1',
+        rfqId: 'rfq-1',
+        vendorId: 'vendor-1',
+        quoteNumber: persistedQuoteNumber,
+        quoteVersion: persistedQuoteVersion,
+        status: persistedQuoteVersion > 1 ? 'REVISED' : 'SUBMITTED',
+      }] } : {}),
+      meta: { changes: 1 },
+    })));
     db.rfq.findFirst.mockResolvedValue({
       id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'RELEASED',
       lines: [{ id: 'line-1', quantity: 4 }, { id: 'line-2', quantity: 2 }],
     });
-    db.rfq.update.mockResolvedValue({});
     db.rfqVendor.findFirst.mockResolvedValue({ id: 'invite-1' });
-    db.rfqVendor.upsert.mockResolvedValue({});
     db.vendor.findFirst.mockResolvedValue({ id: 'vendor-1', name: 'Supplier One' });
-    audit.mockResolvedValue(undefined);
-    notify.mockResolvedValue(undefined);
+    notify.mockImplementation(async (input: Record<string, unknown>, options: { prepareOnly?: boolean } = {}) => options.prepareOnly
+      ? { tenantId: input.tenantId, title: String(input.event), message: String(input.event),
+        targetRole: 'PROCUREMENT_USER', entityType: 'QUOTE', entityId: input.entityId, recordNumber: input.recordNumber }
+      : undefined);
+    log.mockResolvedValue({});
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => consoleError.mockRestore());
 
-  it('lists tenant quotes with optional RFQ and vendor filters', async () => {
+  it('lists bounded tenant quote summaries with optional RFQ and vendor filters', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(GET(getRequest())).resolves.toBe(denied);
 
     db.quote.findMany.mockResolvedValueOnce([{ id: 'quote-1' }]);
-    await expect(GET(getRequest('?rfqId=rfq-1&vendorId=vendor-1'))).resolves.toEqual({
-      ok: true, data: { quotes: [{ id: 'quote-1' }], total: 1 }, status: 200,
+    db.quote.count.mockResolvedValueOnce(11);
+    await expect(GET(getRequest('?rfqId=rfq-1&vendorId=vendor-1&page=2&pageSize=5'))).resolves.toEqual({
+      ok: true, data: { quotes: [{ id: 'quote-1' }], total: 11, page: 2, pageSize: 5, totalPages: 3 }, status: 200,
     });
     expect(db.quote.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1' },
-      orderBy: [{ createdAt: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: 5, take: 5,
+      include: expect.objectContaining({ lines: { include: { rfqLine: true } } }),
     }));
     await GET(getRequest());
-    expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1' } }));
+    expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1' }, skip: 0, take: 50, include: expect.not.objectContaining({ lines: expect.anything() }),
+    }));
 
     db.quote.findMany.mockRejectedValueOnce(new Error('quote query failed'));
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'quote query failed', status: 500 });
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchQuotes, status: 500 });
     db.quote.findMany.mockRejectedValueOnce({});
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Failed to fetch quotes', status: 500 });
   });
@@ -123,52 +156,90 @@ describe('procurement quote routes', () => {
     await expect(POST(postRequest(quoteBody()))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied, status: 404 });
   });
 
-  it('creates a first quote, calculates line amounts, and advances a released RFQ', async () => {
+  it('creates a first quote and advances a released RFQ in one atomic batch', async () => {
     await expect(POST(postRequest(quoteBody({
       lines: [
         { rfqLineId: 'line-1', unitRate: '10', taxPercent: 5, discountPercent: 10, remarks: 'Best rate' },
-        { rfqLineId: 'missing-line', unitRate: 0, taxPercent: 0, discountPercent: 0 },
+        { rfqLineId: 'line-2', unitRate: 0, taxPercent: 0, discountPercent: 0 },
       ],
       commercialTerms: 'Net 30', paymentTermsOffered: '30 days', validUntil: '2026-12-31', deliveryLeadTimeDays: '14',
-    })))).resolves.toMatchObject({ ok: true, status: 201, data: { quote: { id: 'quote-1' }, message: 'Quote v1 submitted successfully' } });
+    })))).resolves.toMatchObject({ ok: true, status: 201, data: { quote: { quoteNumber: 'QTE-2026-000003', quoteVersion: 1 }, message: 'Quote v1 submitted successfully' } });
 
-    expect(db.quote.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        quoteNumber: expect.stringMatching(/^QTE-\d{4}-000003$/), quoteVersion: 1, status: UI_STRINGS.common.sUBMITTED,
-        totalBaseAmount: 40, discountAmount: 4, taxAmount: 1.8, totalQuoteAmount: 37.8,
-        commercialTerms: 'Net 30', paymentTermsOffered: '30 days', deliveryLeadTimeDays: 14,
-        validUntil: new Date('2026-12-31'), submittedBy: 'user-1',
-        lines: { create: [
-          expect.objectContaining({ rfqLineId: 'line-1', unitRate: 10, taxPercent: 5, discountPercent: 10, lineTotal: 37.8, remarks: 'Best rate' }),
-          expect.objectContaining({ rfqLineId: 'missing-line', unitRate: 0, lineTotal: 0, remarks: null }),
-        ] },
-      }),
-    }));
-    expect(db.rfqVendor.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { rfqId_vendorId: { rfqId: 'rfq-1', vendorId: 'vendor-1' } },
-      update: { submissionStatus: UI_STRINGS.common.sUBMITTED, invitationStatus: UI_STRINGS.common.sUBMITTED },
-    }));
-    expect(db.rfq.update).toHaveBeenCalledWith({ where: { id: 'rfq-1' }, data: { status: 'VENDOR_RESPONSE_OPEN' } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'QUOTE_SUBMITTED', entityType: 'QUOTE', entityId: 'quote-1' }));
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'QUOTE_SUBMITTED', recordNumber: 'RFQ-001' }));
+    const statements = batch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(statements.map(({ sql }) => sql)).toEqual([
+      QUOTE_INSERT_WITH_NEXT_VERSION_SQL,
+      QUOTE_LINE_INSERT_SQL,
+      QUOTE_LINE_INSERT_SQL,
+      RFQ_VENDOR_SUBMITTED_UPSERT_SQL,
+      RFQ_MARK_RESPONSE_OPEN_SQL,
+      QUOTE_AUDIT_INSERT_AFTER_INSERT_SQL,
+      NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL,
+    ]);
+    expect(statements[0].values).toHaveLength(QUOTE_INSERT_WITH_NEXT_VERSION_SQL.split('?').length - 1);
+    expect(statements[0].values).toEqual(expect.arrayContaining([40, 1.8, 4, 37.8, 'Net 30', '30 days', 14, 'user-1']));
+    expect(statements[1].values).toEqual([expect.any(String), 'tenant-1', expect.any(String), 'line-1', 10, 5, 10, 37.8, 'Best rate']);
+    expect(statements[2].values).toEqual([expect.any(String), 'tenant-1', expect.any(String), 'line-2', 0, 0, 0, 0, null]);
+    expect(String(statements[5].values[4])).toContain('__QUOTE_NUMBER__');
+    expect(String(statements[5].values[4])).toContain('__QUOTE_VERSION__');
+    expect(JSON.parse(String(statements[5].values[5]))).toEqual(expect.objectContaining({ quoteNumber: '__QUOTE_NUMBER__', version: '__QUOTE_VERSION__' }));
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'QUOTE_SUBMITTED', recordNumber: 'RFQ-001' }), { prepareOnly: true });
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED', recordNumber: 'RFQ-001' }), { prepareOnly: true });
+    expect(dispatchPrepared).toHaveBeenCalledWith(expect.any(String), expect.any(Date), expect.objectContaining({ entityId: expect.any(String) }));
   });
 
   it('creates revised quotes without reopening an RFQ and maps malformed requests or database errors', async () => {
+    persistedQuoteVersion = 3;
     db.rfq.findFirst.mockResolvedValueOnce({
-      id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'NEGOTIATION', lines: [],
+      id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'NEGOTIATION', lines: [{ id: 'line-x', quantity: 1 }],
     });
-    db.quote.findMany.mockResolvedValueOnce([{ quoteVersion: 2 }]);
     await expect(POST(postRequest(quoteBody({ lines: [{ rfqLineId: 'line-x', unitRate: '25' }], status: 'REVISED' })))).resolves.toMatchObject({
       ok: true, status: 201, data: { message: 'Quote v3 submitted successfully' },
     });
-    expect(db.quote.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ quoteVersion: 3, totalBaseAmount: 25 }) }));
-    expect(db.rfq.update).not.toHaveBeenCalled();
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'QUOTE_REVISED' }));
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED' }));
+    expect(batch.mock.calls[0][0]).toHaveLength(5);
+    expect(batch.mock.calls[0][0][3].sql).toBe(QUOTE_AUDIT_INSERT_AFTER_INSERT_SQL);
+    expect(batch.mock.calls[0][0][4].sql).toBe(NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL);
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED' }), { prepareOnly: true });
 
     const malformed = { headers: new Headers({ 'content-type': 'application/json' }), json: jest.fn().mockRejectedValue(new Error('invalid quote body')) } as unknown as NextRequest;
-    await expect(POST(malformed)).resolves.toEqual({ ok: false, error: 'invalid quote body', status: 500 });
+    await expect(POST(malformed)).resolves.toEqual({ ok: false, error: 'Failed to submit quote', status: 500 });
+    expect(log).toHaveBeenCalledWith('error', 'procurement.quote_submission_failed', expect.objectContaining({ operation: 'submit_quote', route: '/api/procurement/quotes' }));
     const generic = { headers: new Headers({ 'content-type': 'application/json' }), json: jest.fn().mockRejectedValue({}) } as unknown as NextRequest;
     await expect(POST(generic)).resolves.toEqual({ ok: false, error: 'Failed to submit quote', status: 500 });
+  });
+
+  it('rejects cross-RFQ, duplicate, and invalid price inputs before writing', async () => {
+    await expect(POST(postRequest(quoteBody({ lines: [{ rfqLineId: 'other-rfq-line', unitRate: 10 }] })))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiVendorPortalRfqsIdRoute.lineItemsMustReferenceEachRFQLineExactlyOnce,
+    });
+    await expect(POST(postRequest(quoteBody({ lines: [
+      { rfqLineId: 'line-1', unitRate: 10 }, { rfqLineId: 'line-1', unitRate: 12 },
+    ] })))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest(quoteBody({ lines: [{ rfqLineId: 'line-1', unitRate: 10, taxPercent: 101 }] })))).resolves.toMatchObject({
+      ok: false, status: 400,
+      error: UI_STRINGS.appApiProcurementQuotesRoute.linePricingValuesMustBeFiniteWithNonNegativeRatesAndTaxAndDiscountUpToOneHundredPercent,
+    });
+    expect(batch).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid optional terms and date inputs before persisting a quote', async () => {
+    await expect(POST(postRequest(quoteBody({ commercialTerms: 12 })))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest(quoteBody({ paymentTermsOffered: [] })))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest(quoteBody({ deliveryLeadTimeDays: -1 })))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest(quoteBody({ validUntil: 'not-a-date' })))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest(quoteBody({ lines: [{ rfqLineId: 'line-1', unitRate: Number.MAX_VALUE }] })))).resolves.toMatchObject({
+      ok: false, status: 400,
+    });
+    expect(batch).not.toHaveBeenCalled();
+  });
+
+  it('logs D1 batch failures and returns a stable response', async () => {
+    batch.mockRejectedValueOnce(new Error('D1 is temporarily unavailable'));
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
+      ok: false, error: 'Failed to submit quote', status: 500,
+    });
+    expect(log).toHaveBeenCalledWith('error', 'procurement.quote_submission_failed', expect.objectContaining({
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1',
+      error: expect.objectContaining({ message: 'D1 is temporarily unavailable' }),
+    }));
   });
 });

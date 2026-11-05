@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/approvals/rate-cards/page.tsx
 // Two-Level Rate Card Approval Queue (Level 1: Project Approver -> Level 2: Finance Approver)
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Tag,
@@ -29,16 +29,24 @@ import Section6ApproverView from '@/components/rate-cards/Section6ApproverView';
 import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedDetails';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { DEFAULT_RATE_CARD_LIST_PAGE_SIZE } from '@/app/api/procurement/rate-cards/route.constants';
+import type { RateCardPageRecord } from '@app-types/app/(app)/procurement/rate-cards/page.types';
 
 
 export default function RateCardApprovalsPage() {
   const [rateCards, setRateCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreRateCards, setLoadingMoreRateCards] = useState(false);
+  const rateCardPageRef = useRef(1);
+  const [hasMoreRateCards, setHasMoreRateCards] = useState(false);
+  const [rateCardSummary, setRateCardSummary] = useState({ level1Pending: 0, level2Pending: 0 });
   const [activeQueueTab, setActiveQueueTab] = useState<'ALL_PENDING' | 'LEVEL_1' | 'LEVEL_2' | 'CONCLUDED'>('ALL_PENDING');
 
   // Review Modal state
   const [selectedCard, setSelectedCard] = useState<any | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [approvalDetailsLoading, setApprovalDetailsLoading] = useState(false);
+  const reviewRequestSequence = useRef(0);
 
   // Return & Reject modals
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -55,7 +63,6 @@ export default function RateCardApprovalsPage() {
   const [userRole, setUserRole] = useState<'PROJECT_APPROVER' | 'FINANCE_APPROVER'>('PROJECT_APPROVER');
 
   useEffect(() => {
-    fetchRateCards();
     fetch('/api/auth/me')
       .then((r) => r.json())
       .then((res) => {
@@ -67,26 +74,67 @@ export default function RateCardApprovalsPage() {
       .catch(() => {});
   }, []);
 
-  const fetchRateCards = async () => {
-    setLoading(true);
+  const fetchRateCards = useCallback(async (append = false) => {
+    const page = append ? rateCardPageRef.current + 1 : 1;
+    if (append) setLoadingMoreRateCards(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/procurement/rate-cards');
+      const query = new URLSearchParams({ page: String(page), pageSize: String(DEFAULT_RATE_CARD_LIST_PAGE_SIZE), queue: activeQueueTab });
+      const res = await fetch(`/api/procurement/rate-cards?${query.toString()}`);
       const data = await res.json();
-      if (data.rateCards) {
-        setRateCards(data.rateCards);
-      }
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.common.userMessages.failedToFetchRateCards);
+      const incoming: RateCardPageRecord[] = Array.isArray(data.rateCards) ? data.rateCards : [];
+      setRateCards((current) => {
+        if (!append) return incoming;
+        const byId = new Map(current.map((rateCard) => [rateCard.id, rateCard]));
+        incoming.forEach((rateCard) => byId.set(rateCard.id, rateCard));
+        return Array.from(byId.values());
+      });
+      rateCardPageRef.current = page;
+      setHasMoreRateCards(Boolean(data.hasMore));
+      if (data.summary) setRateCardSummary(data.summary);
     } catch (err) {
       console.error('Error fetching rate cards:', err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMoreRateCards(false);
+      else setLoading(false);
     }
-  };
+  }, [activeQueueTab]);
 
-  const handleOpenReview = (rc: any) => {
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (active) void fetchRateCards();
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [fetchRateCards]);
+
+  const handleOpenReview = async (rc: any) => {
+    const sequence = ++reviewRequestSequence.current;
     setSelectedCard(rc);
     setShowReviewModal(true);
+    setApprovalDetailsLoading(true);
     setActionReason('');
     setMessageText('');
+    try {
+      const response = await fetch(`/api/procurement/rate-cards/${rc.id}`);
+      const data = await response.json();
+      if (!response.ok || !data.rateCard) throw new Error(data.error || UI_STRINGS.common.userMessages.failedToFetchRateCard);
+      if (sequence === reviewRequestSequence.current) setSelectedCard(data.rateCard);
+    } catch (error) {
+      if (sequence === reviewRequestSequence.current) {
+        setShowReviewModal(false);
+        setMsg({
+          text: error instanceof Error ? error.message : UI_STRINGS.common.userMessages.failedToFetchRateCard,
+          type: 'error',
+        });
+      }
+    } finally {
+      if (sequence === reviewRequestSequence.current) setApprovalDetailsLoading(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -208,8 +256,8 @@ export default function RateCardApprovalsPage() {
     return true;
   });
 
-  const level1Count = rateCards.filter((rc) => rc.status === 'PENDING_PROJECT_APPROVAL').length;
-  const level2Count = rateCards.filter((rc) => rc.status === 'PENDING_FINANCE_APPROVAL').length;
+  const level1Count = rateCardSummary.level1Pending;
+  const level2Count = rateCardSummary.level2Pending;
   const totalPending = level1Count + level2Count;
 
   return (
@@ -485,6 +533,16 @@ export default function RateCardApprovalsPage() {
             </tbody>
           </table>
         </div>
+        {hasMoreRateCards && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 12, borderTop: '1px solid #e2e8f0' }}>
+            <button
+              type="button"
+              onClick={() => { void fetchRateCards(true); }}
+              disabled={loadingMoreRateCards}
+              className="btn btn-secondary btn-sm"
+            >{loadingMoreRateCards ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}</button>
+          </div>
+        )}
       </Card>
 
       {/* ============================================================ */}
@@ -495,6 +553,7 @@ export default function RateCardApprovalsPage() {
           <div
             className="modal-content"
             style={{
+              position: 'relative',
               background: '#ffffff',
               borderRadius: 8,
               width: '100%',
@@ -505,6 +564,11 @@ export default function RateCardApprovalsPage() {
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             }}
           >
+            {approvalDetailsLoading && (
+              <div role="status" style={{ position: 'absolute', inset: '58px 0 0', zIndex: 5, background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
+                {UI_STRINGS.common.loading}
+              </div>
+            )}
             {/* Modal Header */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
               <div>
@@ -527,7 +591,7 @@ export default function RateCardApprovalsPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowReviewModal(false)}
+                onClick={() => { reviewRequestSequence.current += 1; setShowReviewModal(false); setApprovalDetailsLoading(false); }}
                 style={{ background: 'none', border: 'none', fontSize: 20, color: '#64748b', cursor: 'pointer' }}
               >{UI_STRINGS.common.copy4i33ao}</button>
             </div>

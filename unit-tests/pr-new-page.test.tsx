@@ -69,7 +69,7 @@ describe('new procurement request page', () => {
     expect(await screen.findByRole('option', { name: /CC-1/ })).toBeInTheDocument();
     expect(await screen.findByRole('option', { name: /BOQ-1/ })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/projects');
-    expect(fetchMock).toHaveBeenCalledWith('/api/cost-centres?projectId=project-1');
+    expect(fetchMock).toHaveBeenCalledWith('/api/cost-centres?projectId=project-1&page=1&pageSize=100');
     expect(fetchMock).toHaveBeenCalledWith('/api/boq?projectId=project-1');
 
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppPrNewPage.eGElectricalCivilFitoutProcurement)), { target: { value: '  New electrical package  ' } });
@@ -107,6 +107,33 @@ describe('new procurement request page', () => {
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject))).toBeInTheDocument();
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createABOQInStudio) })).toHaveAttribute('href', '/boq/studio?projectId=project-3');
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.createProcurementRequest) })).toBeDisabled();
+  });
+
+  it('pages and searches project cost centres without loading the full project collection', async () => {
+    const laterCentre = { id: 'cc-2', code: 'CC-2', name: 'Operations' };
+    const searchedCentre = { id: 'cc-3', code: 'CC-3', name: 'Warehouse' };
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
+      if (url.startsWith('/api/cost-centres?')) {
+        const query = new URL(`http://localhost${url}`).searchParams;
+        if (query.get('search')) return Promise.resolve(response({ costCentres: [searchedCentre], pagination: { page: 1, total: 1, hasMore: false } }));
+        if (query.get('page') === '2') return Promise.resolve(response({ costCentres: [laterCentre], pagination: { page: 2, total: 101, hasMore: false } }));
+        return Promise.resolve(response({ costCentres: [costCentres[0]], pagination: { page: 1, total: 101, hasMore: true } }));
+      }
+      if (url.startsWith('/api/boq?')) return Promise.resolve(response({ data: boqs }));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    render(<CreatePrPage />);
+    expect(await screen.findByRole('option', { name: /CC-1/ })).toBeInTheDocument();
+    expect(await screen.findByText(/Showing 1 of 101 cost centres/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) }));
+    expect(await screen.findByRole('option', { name: /CC-2/ })).toBeInTheDocument();
+
+    const searchLabel = uiStringPattern(UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation);
+    fireEvent.change(screen.getByPlaceholderText(searchLabel), { target: { value: 'Warehouse' } });
+    fireEvent.click(screen.getByRole('button', { name: searchLabel }));
+    expect(await screen.findByRole('option', { name: /CC-3/ })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('search=Warehouse'));
   });
 
   it('shows an error when the form is submitted without project or BOQ selections', async () => {

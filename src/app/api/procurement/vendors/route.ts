@@ -6,6 +6,12 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { getListPageWindow } from '@/lib/api-utils';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { VENDOR_DIRECTORY_MAX_SEARCH_LENGTH } from './route.constants';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL, VENDOR_INSERT_NEXT_CODE_SQL } from '@/lib/d1-batch.constants';
+import type { Prisma } from '@prisma/client';
 
 
 export async function GET(req: NextRequest) {
@@ -19,13 +25,15 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get('category');
   const region = searchParams.get('region');
   const status = searchParams.get('status');
-  const search = searchParams.get('search') || '';
+  const search = (searchParams.get('search') || '').trim().slice(0, VENDOR_DIRECTORY_MAX_SEARCH_LENGTH);
+  const pageWindow = getListPageWindow(searchParams);
+  const pageSize = pageWindow.pageSize;
 
   try {
     // Tenant Isolation:
     // Client Vendors belong exclusively to this tenant.
     // Procucev Vendors are sourced through the shared vendor network and accessible to eligible clients.
-    const where: any = {
+    const where: Prisma.VendorWhereInput = {
       OR: [
         { tenantId: ctx.tenantId },
         { vendorType: 'PROCUCEV_VENDOR' },
@@ -57,7 +65,7 @@ export async function GET(req: NextRequest) {
       where.status = status;
     }
 
-    const andConditions: any[] = [];
+    const andConditions: Prisma.VendorWhereInput[] = [];
 
     if (region && region !== 'ALL') {
       andConditions.push({
@@ -88,38 +96,74 @@ export async function GET(req: NextRequest) {
       where.AND = andConditions;
     }
 
-    const vendors = await prisma.vendor.findMany({
-      where,
-      include: {
-        _count: {
-          select: {
-            ppos: true,
-            evaluations: true,
-            ppoRatings: true,
-          },
-        },
-        ppoRatings: {
-          where: { status: 'APPROVED' },
-          select: {
-            overallScore: true,
-            qualityScore: true,
-            deliveryScore: true,
-            commercialComplianceScore: true,
-          },
-        },
-      },
-      orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
-    });
+    const vendorScopeWhere: Prisma.VendorWhereInput = {
+      OR: [
+        { tenantId: ctx.tenantId },
+        { vendorType: 'PROCUCEV_VENDOR' },
+      ],
+    };
 
-    // Compute vendor performance metrics and counts
+    const [vendorRows, total, groupedCounts] = await Promise.all([
+      prisma.vendor.findMany({
+        where,
+        skip: pageWindow.skip,
+        take: pageSize + 1,
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          contactPerson: true,
+          phone: true,
+          city: true,
+          state: true,
+          categories: true,
+          vendorType: true,
+          onboardingStatus: true,
+          qualificationStatus: true,
+          qualificationScore: true,
+          gstin: true,
+          operatingLocation: true,
+          updatedAt: true,
+        },
+        orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }, { id: 'desc' }],
+      }),
+      prisma.vendor.count({ where }),
+      prisma.vendor.groupBy({
+        by: ['vendorType', 'qualificationStatus'],
+        where: vendorScopeWhere,
+        _count: { _all: true },
+      }),
+    ]);
+    const hasMore = vendorRows.length > pageSize;
+    const vendors = hasMore ? vendorRows.slice(0, pageSize) : vendorRows;
+    const pageVendorIds = vendors.map((vendor) => vendor.id);
+    const approvedRatingAggregates = pageVendorIds.length > 0
+      ? await prisma.ppoVendorRating.groupBy({
+          by: ['vendorId'],
+          where: {
+            tenantId: ctx.tenantId,
+            status: 'APPROVED',
+            vendorId: { in: pageVendorIds },
+          },
+          _count: { _all: true },
+          _avg: { overallScore: true },
+        })
+      : [];
+    const ratingSummaryByVendor = new Map(approvedRatingAggregates.map((rating) => [
+      rating.vendorId,
+      {
+        count: Number(rating._count._all || 0),
+        average: rating._avg.overallScore,
+      },
+    ]));
+
+    // Keep only bounded rating summaries in memory; the rating history remains in D1.
     const enrichedVendors = vendors.map(v => {
-      const ratings = v.ppoRatings || [];
-      const ppoRatingsCount = ratings.length;
-      let averagePpoRating: number | null = null;
-      if (ppoRatingsCount > 0) {
-        const sum = ratings.reduce((acc, r) => acc + r.overallScore, 0);
-        averagePpoRating = Math.round((sum / ppoRatingsCount) * 10) / 10;
-      }
+      const ratingSummary = ratingSummaryByVendor.get(v.id);
+      const ppoRatingsCount = ratingSummary?.count || 0;
+      const averagePpoRating = ratingSummary?.average == null
+        ? null
+        : Math.round(ratingSummary.average * 10) / 10;
 
       let parsedCategories: string[] = [];
       if (Array.isArray(v.categories)) {
@@ -142,34 +186,50 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Aggregate counts for directory tabs
-    const allTenantVendors = await prisma.vendor.findMany({
-      where: {
-        OR: [
-          { tenantId: ctx.tenantId },
-          { vendorType: 'PROCUCEV_VENDOR' },
-        ],
-      },
-      select: {
-        id: true,
-        vendorType: true,
-        qualificationStatus: true,
-      },
+    const counts = groupedCounts.reduce((summary, group) => {
+      const count = Number(group._count._all || 0);
+      summary.total += count;
+      if (group.vendorType === 'PROCUCEV_VENDOR') summary.procucevVendorsCount += count;
+      else summary.clientVendorsCount += count;
+      if (group.qualificationStatus === 'QUALIFIED') summary.qualifiedCount += count;
+      if (group.qualificationStatus === 'PENDING_REVIEW' || group.qualificationStatus === 'EVALUATION_IN_PROGRESS') {
+        summary.pendingReviewCount += count;
+      }
+      if (group.qualificationStatus === 'NOT_EVALUATED' || !group.qualificationStatus) summary.notEvaluatedCount += count;
+      return summary;
+    }, {
+      total: 0,
+      clientVendorsCount: 0,
+      procucevVendorsCount: 0,
+      qualifiedCount: 0,
+      pendingReviewCount: 0,
+      notEvaluatedCount: 0,
     });
 
-    const counts = {
-      total: allTenantVendors.length,
-      clientVendorsCount: allTenantVendors.filter(v => v.vendorType !== 'PROCUCEV_VENDOR').length,
-      procucevVendorsCount: allTenantVendors.filter(v => v.vendorType === 'PROCUCEV_VENDOR').length,
-      qualifiedCount: allTenantVendors.filter(v => v.qualificationStatus === 'QUALIFIED').length,
-      pendingReviewCount: allTenantVendors.filter(v => v.qualificationStatus === 'PENDING_REVIEW' || v.qualificationStatus === 'EVALUATION_IN_PROGRESS').length,
-      notEvaluatedCount: allTenantVendors.filter(v => v.qualificationStatus === 'NOT_EVALUATED' || !v.qualificationStatus).length,
-    };
-
-    return apiSuccess({ vendors: enrichedVendors, counts, total: enrichedVendors.length });
-  } catch (error: any) {
-    console.error('Error fetching vendors:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendors }), 500);
+    return apiSuccess({
+      vendors: enrichedVendors,
+      counts,
+      total,
+      pagination: { page: pageWindow.page, pageSize, hasMore },
+    });
+  } catch (error) {
+    await writeStructuredLog('error', 'vendor.directory_read_failed', {
+      operation: 'list_vendors',
+      route: '/api/procurement/vendors',
+      requestId: req.headers.get('x-request-id') || null,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      role: ctx.role,
+      page: pageWindow.page,
+      pageSize,
+      searchLength: search.length,
+      vendorType,
+      qualificationStatus,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 400) }
+        : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchVendors, 500);
   }
 }
 
@@ -177,6 +237,7 @@ export async function POST(req: NextRequest) {
   const ctx = await requireAuth('VENDOR_MANAGE');
   if (!isApiContext(ctx)) return ctx;
 
+  let vendorId: string | null = null;
   try {
     const body = await req.json();
     const {
@@ -203,6 +264,7 @@ export async function POST(req: NextRequest) {
       certifications,
       isDraft = false,
     } = body;
+    vendorId = typeof body.id === 'string' ? body.id : null;
 
     // Validate Step 1 Mandatory Fields
     if (!name || name.trim() === '') {
@@ -275,6 +337,7 @@ export async function POST(req: NextRequest) {
           onboardingStatus,
         },
       });
+      vendorId = updated.id;
 
       await createAuditLog({
         tenantId: ctx.tenantId,
@@ -293,80 +356,87 @@ export async function POST(req: NextRequest) {
       return apiSuccess({ vendor: updated, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardingUpdatedSuccessfully, { "code": updated.code }) }, 200);
     }
 
-    // Generate unique Vendor Code (VND-XXXX) with collision check
-    const existingCodes = await prisma.vendor.findMany({
-      where: { tenantId: ctx.tenantId, code: { startsWith: 'VND-' } },
-      select: { code: true },
-    });
-    let maxVndNum = 0;
-    for (const v of existingCodes) {
-      if (v.code) {
-        const match = v.code.match(/^VND-(\d+)$/);
-        if (match) {
-          const n = parseInt(match[1], 10);
-          if (!isNaN(n) && n > maxVndNum) maxVndNum = n;
-        }
+    // Allocate the next code, create the vendor, and write its audit event in
+    // one D1 batch. This avoids a tenant-wide code scan and the race between a
+    // separate code check, insert, and audit write.
+    vendorId = crypto.randomUUID();
+    const createdAt = new Date();
+    const descriptionTemplate = interpolateUiString(
+      UI_STRINGS.appApiProcurementVendorsRoute.vendorNameCodeOnboardedAsValue3StatusOnboardingStatus,
+      {
+        name: '__D1_VENDOR_NAME__',
+        code: '__D1_VENDOR_CODE__',
+        value3: '__D1_VENDOR_TYPE__',
+        onboardingStatus: '__D1_VENDOR_ONBOARDING_STATUS__',
+      },
+    );
+    const batchResults = await writeD1BatchAtomically([
+      {
+        sql: VENDOR_INSERT_NEXT_CODE_SQL,
+        values: [
+          ctx.tenantId, vendorId, ctx.tenantId, name.trim(), vendorType, contactPerson.trim(), email ? email.trim() : null,
+          phone ? phone.trim() : null, category.trim(), operatingLocation ? operatingLocation.trim() : `${city || ''}, ${state || ''}`.trim(),
+          city ? city.trim() : (operatingLocation ? operatingLocation.split(',')[0].trim() : null), state ? state.trim() : null,
+          country || 'India', legalStructure || null, gstin ? gstin.trim().toUpperCase() : null,
+          pan ? pan.trim().toUpperCase() : null, website ? website.trim() : null, address ? address.trim() : null,
+          experienceYears ? Number(experienceYears) : 3, turnoverCrores ? Number(turnoverCrores) : null,
+          capabilities ? (typeof capabilities === 'string' ? capabilities : JSON.stringify(capabilities)) : null,
+          serviceCoverage ? (typeof serviceCoverage === 'string' ? serviceCoverage : JSON.stringify(serviceCoverage)) : null,
+          clientReferences ? (typeof clientReferences === 'string' ? clientReferences : JSON.stringify(clientReferences)) : null,
+          certifications ? (typeof certifications === 'string' ? certifications : JSON.stringify(certifications)) : null,
+          onboardingStatus, 'NOT_EVALUATED', 'COMPLIANT', 'PENDING', 'ACTIVE', createdAt, createdAt, ctx.tenantId,
+        ],
+      },
+      {
+        sql: VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL,
+        values: [vendorId, ctx.tenantId, crypto.randomUUID(), ctx.tenantId, ctx.userId, descriptionTemplate, createdAt],
+      },
+    ]);
+    const insertedVendor = batchResults[0]?.results?.[0] as { id?: string; code?: string; name?: string } | undefined;
+    if (Number(batchResults[0]?.meta?.changes || 0) !== 1 || Number(batchResults[1]?.meta?.changes || 0) !== 1
+      || insertedVendor?.id !== vendorId || !insertedVendor.code) {
+      throw new Error(UI_STRINGS.appApiProcurementVendorsRoute.vendorAndAuditWriteDidNotCommitAsExpected);
+    }
+
+    // Prisma gives the API its normal typed row shape. If the follow-up read is
+    // temporarily unavailable, use the row returned by the committed insert
+    // so the client does not retry a vendor that was already created.
+    let vendor: typeof insertedVendor = insertedVendor;
+    try {
+      const persistedVendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
+      if (persistedVendor) vendor = persistedVendor;
+    } catch (readError) {
+      try {
+        await writeStructuredLog('warn', 'vendor.created_read_fallback', {
+          operation: 'read_created_vendor',
+          route: '/api/procurement/vendors',
+          requestId: req.headers.get('x-request-id') || null,
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          vendorId,
+          error: readError instanceof Error
+            ? { name: readError.name, message: readError.message.slice(0, 300) }
+            : { type: typeof readError },
+        });
+      } catch {
+        // The D1 commit succeeded; a logging sink failure must not prompt the client to retry it.
       }
     }
-    let nextVndNum = maxVndNum + 1;
-    let code = `VND-${String(nextVndNum).padStart(4, '0')}`;
-    while (await prisma.vendor.findFirst({ where: { tenantId: ctx.tenantId, code }, select: { id: true } })) {
-      nextVndNum++;
-      code = `VND-${String(nextVndNum).padStart(4, '0')}`;
-    }
 
-    const vendor = await prisma.vendor.create({
-      data: {
-        tenantId: ctx.tenantId,
-        code,
-        name: name.trim(),
-        vendorType,
-        contactPerson: contactPerson.trim(),
-        email: email ? email.trim() : `contact@${code.toLowerCase()}.in`,
-        phone: phone ? phone.trim() : null,
-        categories: category.trim(),
-        operatingLocation: operatingLocation ? operatingLocation.trim() : `${city || ''}, ${state || ''}`.trim(),
-        city: city ? city.trim() : (operatingLocation ? operatingLocation.split(',')[0].trim() : null),
-        state: state ? state.trim() : null,
-        country: country || 'India',
-        legalStructure: legalStructure || null,
-        gstin: gstin ? gstin.trim().toUpperCase() : null,
-        pan: pan ? pan.trim().toUpperCase() : null,
-        website: website ? website.trim() : null,
-        address: address ? address.trim() : null,
-        experienceYears: experienceYears ? Number(experienceYears) : 3,
-        turnoverCrores: turnoverCrores ? Number(turnoverCrores) : null,
-        capabilities: capabilities ? (typeof capabilities === 'string' ? capabilities : JSON.stringify(capabilities)) : null,
-        serviceCoverage: serviceCoverage ? (typeof serviceCoverage === 'string' ? serviceCoverage : JSON.stringify(serviceCoverage)) : null,
-        clientReferences: clientReferences ? (typeof clientReferences === 'string' ? clientReferences : JSON.stringify(clientReferences)) : null,
-        certifications: certifications || null,
-        onboardingStatus,
-        qualificationStatus: 'NOT_EVALUATED',
-        complianceStatus: 'COMPLIANT',
-        empanelmentStatus: 'PENDING',
-        status: 'ACTIVE',
-      },
-    });
-
-    await createAuditLog({
+    return apiSuccess({ vendor, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardedSuccessfully, { "code": insertedVendor.code }) }, 201);
+  } catch (error) {
+    await writeStructuredLog('error', 'vendor.onboarding_failed', {
+      operation: 'create_or_update_vendor',
+      route: '/api/procurement/vendors',
+      requestId: req.headers.get('x-request-id') || null,
       tenantId: ctx.tenantId,
       userId: ctx.userId,
-      entityType: 'VENDOR',
-      entityId: vendor.id,
-      action: 'VENDOR_CREATED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameCodeOnboardedAsValue3StatusOnboardingStatus, { "name": vendor.name, "code": vendor.code, "value3": vendor.vendorType === 'CLIENT_VENDOR' ? 'Client Vendor' : 'Procucev Vendor', "onboardingStatus": onboardingStatus }),
-      newValue: {
-        name: vendor.name,
-        code: vendor.code,
-        vendorType: vendor.vendorType,
-        onboardingStatus: vendor.onboardingStatus,
-        qualificationStatus: vendor.qualificationStatus,
-      },
+      role: ctx.role,
+      vendorId,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 400) }
+        : { type: typeof error },
     });
-
-    return apiSuccess({ vendor, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardedSuccessfully, { "code": vendor.code }) }, 201);
-  } catch (error: any) {
-    console.error('Error creating vendor:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToOnboardVendor }), 500);
+    return apiError(UI_STRINGS.common.userMessages.failedToOnboardVendor, 500);
   }
 }

@@ -29,7 +29,7 @@ const cardOne = {
     { id: 'i2', description: 'Control Panel', uom: 'EA', rate: 100, benchmarkRate: 0, historicalRate: 0 },
     { description: 'Cable Tray', uom: 'MTR', rate: 90, benchmarkRate: 100, historicalRate: 0 },
   ], terms: 'Net 45', justification: 'Volume discount',
-  approvals: [{ id: 'a1', action: 'CLARIFICATION_MESSAGE', approverName: 'Finance Reviewer', remarks: 'Confirm lead time', timestamp: '2026-04-02T10:00:00Z' }],
+  approvals: [{ id: 'a1', action: 'CLARIFICATION_MESSAGE', approverName: 'Finance Reviewer', remarks: UI_STRINGS.common.notAvailable, timestamp: '2026-04-02T10:00:00Z' }],
 };
 const cardTwo = {
   id: 'rc-2', rateCardNumber: 'RC-2', version: 0, vendor: {}, category: 'Civil', status: 'PENDING_FINANCE_APPROVAL',
@@ -49,9 +49,15 @@ const reply = (body: unknown, ok = true) => ({ ok, json: async () => body });
 function setupFetch(overrides: Record<string, (url: string, init?: RequestInit) => any> = {}) {
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
     if (url === '/api/auth/me') return Promise.resolve(reply({ user: { role: 'FINANCE_HEAD' } }));
-    if (url === '/api/procurement/rate-cards') return Promise.resolve(reply({ rateCards: rows }));
+    if (url === '/api/procurement/rate-cards' || url.startsWith('/api/procurement/rate-cards?')) return Promise.resolve(reply({ rateCards: rows.map((row) => {
+      return Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'approvals'));
+    }), summary: { level1Pending: 1, level2Pending: 1 } }));
     const handler = Object.entries(overrides).find(([path]) => url === path || url.startsWith(path))?.[1];
     if (handler) return Promise.resolve(handler(url, init));
+    if (/^\/api\/procurement\/rate-cards\/rc-[^/]+$/.test(url)) {
+      const card = rows.find((row) => row.id === url.split('/').at(-1));
+      return Promise.resolve(reply({ rateCard: card }));
+    }
     if (url.endsWith('/message')) return Promise.resolve(reply({ approvalEntry: { id: 'a2', action: 'CLARIFICATION_MESSAGE', approverName: 'Finance Reviewer', remarks: 'Posted message', timestamp: '2026-04-03T10:00:00Z' } }));
     return Promise.resolve(reply({ message: 'Saved' }));
   });
@@ -98,24 +104,26 @@ describe('rate card approvals queue', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRejectedWithRemarks))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApproverQueueLevel1Count) }));
-    expect(screen.getByText('RC-1')).toBeInTheDocument();
+    expect(await screen.findByText('RC-1')).toBeInTheDocument();
     expect(screen.queryByText('RC-2')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApproverQueueLevel2Count) }));
-    expect(screen.getByText('RC-2')).toBeInTheDocument();
+    expect(await screen.findByText('RC-2')).toBeInTheDocument();
     expect(screen.queryByText('RC-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.historyConcluded) }));
-    expect(screen.getByText('RC-3')).toBeInTheDocument();
+    expect(await screen.findByText('RC-3')).toBeInTheDocument();
     expect(screen.queryByText('RC-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.allPendingTotalPending) }));
+    expect(await screen.findByText('RC-1')).toBeInTheDocument();
 
     openReview('RC-1');
     expect(document.querySelector('.modal-content')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.notAvailable))).toBeInTheDocument();
     expect(screen.getByText(/Signed by Vendor Signatory/)).toBeInTheDocument();
     expect(screen.getByText('Copper Cable')).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.standardSpecificationCompliant))).toHaveLength(2);
     expect(screen.getByText('Net 45')).toBeInTheDocument();
     expect(screen.getByText('Volume discount')).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1))).toBeInTheDocument();
+    expect(screen.getAllByText(UI_STRINGS.common.copy4s9bsz).length).toBeGreaterThan(0);
 
     const messageInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks));
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.postMessage) })).toBeDisabled();

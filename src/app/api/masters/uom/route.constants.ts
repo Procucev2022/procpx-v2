@@ -1,0 +1,1 @@
+export const MAX_ACTIVE_UOM_RESULTS = 500;

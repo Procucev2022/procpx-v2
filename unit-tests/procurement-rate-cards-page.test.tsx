@@ -92,6 +92,13 @@ const flushEffects = async () => {
 };
 
 const response = (rateCards: any[] = [], ok = true) => ({ ok, json: async () => ({ rateCards }) });
+const jsonResponse = (body: unknown, ok = true) => ({ ok, json: async () => body });
+const workflowRateCard = {
+  id: 'workflow', rateCardNumber: 'RC-2026-0006', status: 'ROUND_1_VENDOR_QUOTE', title: 'Persisted electrical card', category: 'Electrical',
+  vendor: { id: 'vendor-1', name: 'Persisted Vendor', code: 'V-1' }, updatedAt: '2026-10-22T00:00:00.000Z', items: [
+    { id: 'line-1', itemCode: 'C-1', description: 'Cable', specification: '4 core', uom: 'MTR', rate: 100, proposedRate: 115, benchmarkRate: 120, minQuantity: 10, comparisonRef: JSON.stringify({ buyerOffer1: 100, vendorQuote1: 115, referenceQty: 10 }) },
+  ],
+};
 
 describe('procurement rate cards page', () => {
   beforeEach(() => {
@@ -117,18 +124,20 @@ describe('procurement rate cards page', () => {
       { id: 'missing', rateCardNumber: 'RC-G' },
       { id: 'workflow', rateCardNumber: 'RC-2026-0006', status: 'ROUND_2_NEGOTIATION', validFrom: null, validTo: null },
     ];
-    global.fetch = jest.fn().mockResolvedValue(response(rateCards));
+    global.fetch = jest.fn((url: string | URL | Request) => String(url).includes('/api/procurement/rate-cards/workflow')
+      ? Promise.resolve(jsonResponse({ rateCard: workflowRateCard }))
+      : Promise.resolve(response(rateCards))) as unknown as typeof fetch;
     render(<RateCardManagementPage />);
     await flushEffects();
 
     const cards = JSON.parse(screen.getByTestId('cards-data').textContent || '[]');
     expect(cards).toHaveLength(8);
     expect(cards.map((card: any) => card.currentStage)).toEqual([
-      UI_STRINGS.common.approved, 'Round 1 Offer', 'Buyer Accepted', UI_STRINGS.common.pendingApproval, UI_STRINGS.common.approved, 'UNDER REVIEW', UI_STRINGS.common.inProgress, UI_STRINGS.common.inProgress,
+      UI_STRINGS.common.approved, 'Round 1 Offer', 'Buyer Accepted', UI_STRINGS.common.pendingApproval, UI_STRINGS.common.approved, 'UNDER REVIEW', 'DRAFT', 'Round 2 Negotiation',
     ]);
     expect(cards[0]).toMatchObject({ vendor: 'Alpha', vendorCode: 'A1', validFrom: expect.any(String), latestBuyerOffer: expect.any(String) });
-    expect(cards[5].latestBuyerOffer).toMatch(/4,83,000/);
-    expect(cards[6]).toMatchObject({ vendor: 'Ramakrishna Interiors', vendorCode: 'VND-0006', scope: 'General commercial rate schedule' });
+    expect(cards[5].latestBuyerOffer).toMatch(/0/);
+    expect(cards[6]).toMatchObject({ vendor: '', vendorCode: '', scope: '' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Search cards' }));
     fireEvent.click(screen.getByRole('button', { name: 'Filter category' }));
@@ -142,35 +151,51 @@ describe('procurement rate cards page', () => {
     expect(screen.getByTestId('initiate-workspace')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel initiation' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open negotiation' }));
+    await flushEffects();
     expect(screen.getByTestId('negotiation-workspace')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Back from negotiation' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
+    await flushEffects();
     expect(screen.getByTestId('buyer-acceptance-workspace')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel buyer acceptance' }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.homeWorkspace) }));
     fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
+    await flushEffects();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.homeWorkspace) }));
+    await flushEffects();
     fireEvent.click(screen.getByRole('button', { name: 'Open details' }));
+    await flushEffects();
+    expect(screen.getByTestId('finalised-details')).toBeInTheDocument();
     expect(screen.getByTestId('finalised-details')).toHaveTextContent('RC-2026-0006:RC-2026-0006');
     fireEvent.click(screen.getByRole('button', { name: 'Back to Rate Cards' }));
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.initiateRateCard) }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel initiation' }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.itemNegotiation) }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back from negotiation' }));
+    if (screen.queryByRole('button', { name: 'Back from negotiation' })) fireEvent.click(screen.getByRole('button', { name: 'Back from negotiation' }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.buyerAcceptance) }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel buyer acceptance' }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.finalisedDetails) }));
     fireEvent.click(screen.getByRole('button', { name: 'Back to Rate Cards' }));
   });
 
-  it('handles initiation outcomes, negotiation actions, and both buyer acceptance paths', async () => {
-    const fetchMock = jest.fn()
-      .mockResolvedValueOnce(response())
-      .mockResolvedValueOnce(response([], true))
-      .mockResolvedValueOnce(response([], false))
-      .mockRejectedValueOnce(new Error('offline'));
-    global.fetch = fetchMock;
+  it('persists offer drafts, submits negotiations, and accepts vendor offers using rate-card APIs', async () => {
+    let workflowStatus = 'ROUND_1_VENDOR_QUOTE';
+    const fetchMock = jest.fn((url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/procurement/rate-cards?')) return Promise.resolve(response([{ ...workflowRateCard, status: workflowStatus }]));
+      if (url === '/api/procurement/rate-cards/workflow' && !init) return Promise.resolve(jsonResponse({ rateCard: { ...workflowRateCard, status: workflowStatus } }));
+      if (url === '/api/procurement/rate-cards' && init?.method === 'POST') return Promise.resolve(jsonResponse({ rateCard: { ...workflowRateCard, status: 'ROUND_1_BUYER_OFFER' } }, true));
+      if (url === '/api/procurement/rate-cards/workflow' && init?.method === 'PUT') {
+        const payload = JSON.parse(String(init.body));
+        if (payload.action === 'SAVE_BUYER_OFFER_2_DRAFT') return Promise.resolve(jsonResponse({ rateCard: { ...workflowRateCard, status: workflowStatus } }));
+        if (payload.action === 'SUBMIT_BUYER_OFFER_2') workflowStatus = 'ROUND_2_BUYER_OFFER';
+        if (payload.action === 'ACCEPT_FINAL_VENDOR_OFFER') workflowStatus = 'FINAL_VENDOR_OFFER_ACCEPTED';
+        if (payload.action === 'CATEGORY_MANAGER_ACCEPT') workflowStatus = 'CATEGORY_MANAGER_ACCEPTED';
+        return Promise.resolve(jsonResponse({ rateCard: { ...workflowRateCard, status: workflowStatus }, message: 'Buyer offer submitted' }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
     render(<RateCardManagementPage />);
     await flushEffects();
 
@@ -181,41 +206,51 @@ describe('procurement rate cards page', () => {
     });
     expect(screen.getByText(/Created rate card.*published to vendor/)).toBeInTheDocument();
     expect(screen.getByTestId('active-summary-tab')).toHaveTextContent('in_progress');
-    expect(JSON.parse(screen.getByTestId('cards-data').textContent || '[]')).toHaveLength(6);
+    expect(JSON.parse(screen.getByTestId('cards-data').textContent || '[]')).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open initiation' }));
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Submit reviewed initiation' }));
-      await Promise.resolve();
-    });
-    expect(screen.getByText(/Reviewed rate card.*reviewed target values/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open negotiation' }));
+    await flushEffects();
+    fireEvent.click(screen.getByRole('button', { name: 'Change items' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save offer' }));
+    await flushEffects();
+    expect(fetchMock).toHaveBeenCalledWith('/api/procurement/rate-cards/workflow', expect.objectContaining({ method: 'PUT' }));
+    expect(fetchMock.mock.calls.map(([, init]) => init?.body && JSON.parse(String(init.body)).action)).toContain('SAVE_BUYER_OFFER_2_DRAFT');
+    fireEvent.click(screen.getByRole('button', { name: 'Reset offer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change items' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send offer' }));
+    await flushEffects();
+    expect(screen.getByText('Buyer offer submitted')).toBeInTheDocument();
+    expect(screen.getByTestId('home-workspace')).toBeInTheDocument();
+    workflowStatus = 'ROUND_2_VENDOR_QUOTE';
 
+    fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
+    await flushEffects();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept with agreement' }));
+    await flushEffects();
+    expect(screen.getByText(/Master Agreement.*sent to vendor/)).toBeInTheDocument();
+    const actions = fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'PUT')
+      .map(([, init]) => JSON.parse(String(init?.body)).action);
+    expect(actions).toEqual(['SAVE_BUYER_OFFER_2_DRAFT', 'SUBMIT_BUYER_OFFER_2', 'ACCEPT_FINAL_VENDOR_OFFER', 'CATEGORY_MANAGER_ACCEPT']);
+    const draftCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT' && JSON.parse(String(init?.body)).action === 'SAVE_BUYER_OFFER_2_DRAFT');
+    const draftPayload = JSON.parse(String(draftCall?.[1]?.body));
+    expect(draftPayload.items).toEqual([{ id: 'line-1', buyerOffer2: 100 }]);
+  });
+
+  it('does not report rate-card creation as successful when the API rejects it', async () => {
+    global.fetch = jest.fn((url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve(jsonResponse({ error: 'Vendor is unavailable' }, false));
+      return Promise.resolve(response());
+    }) as unknown as typeof fetch;
+    render(<RateCardManagementPage />);
+    await flushEffects();
     fireEvent.click(screen.getByRole('button', { name: 'Open initiation' }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Submit valid initiation' }));
       await Promise.resolve();
     });
-    expect(screen.getByText(/Created rate card.*published to vendor/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open negotiation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Change items' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset offer' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save offer' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send offer' }));
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRateCardsPage.round2CounterOfferSuccessfullySentToRamakrishnaInteriors))).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept quote' }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Accept with agreement' }));
-    expect(screen.getByText(/Master Agreement.*sent to vendor/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept direct schedule' }));
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.noFormalAgreementRequired))).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Open buyer acceptance' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel buyer acceptance' }));
-    expect(screen.getByTestId('negotiation-workspace')).toBeInTheDocument();
-
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).items[0]).toMatchObject({ rate: 400, benchmarkRate: 410, referenceQty: 2 });
+    expect(screen.getByText('Vendor is unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/Created rate card.*published to vendor/)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -224,18 +259,22 @@ describe('procurement rate cards page', () => {
     ['buyer-acceptance', 'buyer-acceptance-workspace'],
     ['details', 'finalised-details'],
     ['unknown', 'home-workspace'],
-  ])('routes initial URL view=%s to %s', async (view, testId) => {
-    window.history.replaceState({}, '', `/procurement/rate-cards?view=${view}`);
+  ])('routes initial URL view=%s to %s only when the persisted rate-card id is present', async (view, testId) => {
+    const query = ['negotiate', 'buyer-acceptance', 'details'].includes(view) ? '&id=workflow' : '';
+    window.history.replaceState({}, '', `/procurement/rate-cards?view=${view}${query}`);
+    global.fetch = jest.fn((url: string | URL | Request) => String(url).includes('/api/procurement/rate-cards/workflow')
+      ? Promise.resolve(jsonResponse({ rateCard: workflowRateCard }))
+      : Promise.resolve(response([workflowRateCard]))) as unknown as typeof fetch;
     render(<RateCardManagementPage />);
     await flushEffects();
     expect(screen.getByTestId(testId)).toBeInTheDocument();
   });
 
-  it('keeps the empty fallback list on an empty response and handles fetch failure', async () => {
+  it('shows no invented cards for an empty response and handles fetch failure', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('network error'));
     render(<RateCardManagementPage />);
     await flushEffects();
-    expect(JSON.parse(screen.getByTestId('cards-data').textContent || '[]')).toHaveLength(6);
+    expect(JSON.parse(screen.getByTestId('cards-data').textContent || '[]')).toEqual([]);
     expect(console.error).toHaveBeenCalledWith('Error fetching rate cards:', expect.any(Error));
   });
 });

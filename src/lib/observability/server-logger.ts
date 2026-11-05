@@ -25,7 +25,7 @@ export function isFileLoggingEnabled(environment = process.env): boolean {
 }
 
 export function getLogDirectory(environment = process.env): string {
-  return path.resolve(/*turbopackIgnore: true*/ environment.APP_LOG_DIR || path.join(process.cwd(), LOG_DIRECTORY_NAME));
+  return path.resolve(environment.APP_LOG_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), LOG_DIRECTORY_NAME));
 }
 
 function getRetentionDays(environment = process.env): number {
@@ -133,7 +133,13 @@ export async function writeStructuredLog(
 ): Promise<LogRecord> {
   const record = createLogRecord(level, message, context, source, environment);
   const line = `${JSON.stringify(record)}\n`;
-  (level === 'error' ? process.stderr : process.stdout).write(line);
+  if (isCloudflareWorker()) {
+    const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
+    const logger = originalConsoleMethods[method] || console[method].bind(console);
+    logger(line.trimEnd());
+  } else {
+    (level === 'error' ? process.stderr : process.stdout).write(line);
+  }
 
   if (isFileLoggingEnabled(environment)) {
     await initializeLogging(environment);

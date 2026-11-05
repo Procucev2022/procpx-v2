@@ -1,0 +1,3 @@
+export const RFQ_MESSAGE_PAGE_SIZE = 50;
+export const RFQ_MESSAGE_MAX_PAGE_SIZE = 100;
+export const RFQ_MESSAGE_CURSOR_SEPARATOR = '|';

@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { uiStringPattern } from '@/lib/i18n';
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -17,9 +17,7 @@ jest.mock('next/navigation', () => ({ useParams: jest.fn() }));
 const fetchMock = jest.fn();
 const useParamsMock = useParams as jest.Mock;
 const originalFetch = global.fetch;
-const originalPrompt = window.prompt;
-const originalAlert = window.alert;
-const response = (body: unknown) => ({ json: jest.fn().mockResolvedValue(body) });
+const response = (body: unknown, ok = true) => ({ ok, json: jest.fn().mockResolvedValue(body) });
 
 describe('project detail workspace', () => {
   beforeEach(() => {
@@ -32,8 +30,6 @@ describe('project detail workspace', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
-    Object.defineProperty(window, 'prompt', { configurable: true, value: originalPrompt });
-    Object.defineProperty(window, 'alert', { configurable: true, value: originalAlert });
   });
 
   it('shows loading and then the access-denied message for a missing project', async () => {
@@ -92,22 +88,19 @@ describe('project detail workspace', () => {
     expect(screen.getByText('PROJECT_MANAGER')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByText('Project Document Repository (3)')).toBeInTheDocument();
-    expect(screen.getByText('Original BOQ')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appApiProjectsIdDocumentsRoute.categoryOriginalBoq))).toHaveLength(2);
     expect(screen.getByText('2 KB')).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.system))).toHaveLength(2);
     expect(screen.getByText('Site plan').closest('tr')).toHaveTextContent('DRAWING');
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.notes)).closest('tr')).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.oTHER));
-    const alertMock = jest.fn();
-    Object.defineProperty(window, 'alert', { configurable: true, value: alertMock });
-    fireEvent.click(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.viewPath))[0]);
-    expect(alertMock).toHaveBeenCalledWith('Document file stored at: documents/original.pdf');
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.downloadDocument) })[0]).toHaveAttribute('href', '/api/projects/project-1/documents/doc-1');
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
     expect(screen.getByText('Project details changed')).toBeInTheDocument();
     expect(screen.getByText('reviewer@example.test')).toBeInTheDocument();
     expect(screen.getByText('No user attached')).toBeInTheDocument();
   });
 
-  it('shows empty BOQ, team, document and audit states and handles upload cancellation', async () => {
+  it('shows empty BOQ, team, document and audit states without submitting an empty upload', async () => {
     const project = {
       id: 'project-1', name: 'Minimal Project', projectCode: 'MIN-1', sector: 'Civil', status: 'PLANNING',
       createdAt: '2026-10-01', boqs: [], team: [], documents: [], auditLogs: [],
@@ -123,35 +116,32 @@ describe('project detail workspace', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noTeamMembersAssigned))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noDocumentsUploadedYet))).toBeInTheDocument();
-    const promptMock = jest.fn().mockReturnValueOnce(null);
-    Object.defineProperty(window, 'prompt', { configurable: true, value: promptMock });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
-    expect(promptMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) })).toBeDisabled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noActivityYet))).toBeInTheDocument();
   });
 
-  it('uploads a named document, defaults an empty category, and refreshes project data', async () => {
+  it('uploads a selected file and displays the returned document without a synthetic refresh', async () => {
     const base = { id: 'project-1', name: 'Document Project', projectCode: 'DOC-1', sector: 'Retail', status: 'ACTIVE', createdAt: '2026-10-01', boqs: [], documents: [], team: [], auditLogs: [] };
     fetchMock
       .mockResolvedValueOnce(response(base))
-      .mockResolvedValueOnce(response({ ok: true }))
-      .mockResolvedValueOnce(response({ ...base, documents: [{ id: 'doc', name: 'Plan.pdf', category: 'OTHER', fileType: 'application/pdf', fileSize: 102400, uploadedBy: 'user-1', uploadedAt: '2026-10-29', filePath: 'docs/plan.pdf' }] }));
-    const promptMock = jest.fn().mockReturnValueOnce(' Plan.pdf ').mockReturnValueOnce('');
-    Object.defineProperty(window, 'prompt', { configurable: true, value: promptMock });
+      .mockResolvedValueOnce(response({ id: 'doc', projectId: 'project-1', name: 'Plan.pdf', category: 'SPECIFICATION', fileType: 'application/pdf', fileSize: 3, uploadedBy: 'user-1', uploadedAt: '2026-10-29' }));
     render(<ProjectDetailPage />);
     await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noBOQYet));
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noDocumentsUploadedYet))).toBeInTheDocument();
+    const file = new File(['pdf'], 'Plan.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.chooseDocumentFile)), { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/projects/project-1/documents', expect.objectContaining({
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: ' Plan.pdf ', category: UI_STRINGS.appAppProjectsIdPage.oTHER, fileSize: 102400, fileType: 'application/pdf' }),
+      method: 'POST', body: expect.any(FormData),
     }));
     expect(await screen.findByText('Project Document Repository (1)')).toBeInTheDocument();
     expect(screen.getByText('Plan.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.downloadDocument) })).toHaveAttribute('href', '/api/projects/project-1/documents/doc');
   });
 
   it('uses a BOQ ID when a project has no revisions and renders nullable project values', async () => {
@@ -168,5 +158,30 @@ describe('project detail workspace', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.noBOQUploadedYet))).toBeInTheDocument();
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.sqFt))).not.toBeInTheDocument();
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.projectOwner))).not.toBeInTheDocument();
+  });
+
+  it('loads the next document page and reports a failed page read', async () => {
+    const project = {
+      id: 'project-1', name: 'Paged Project', projectCode: 'PAGE-1', sector: 'Retail', status: 'ACTIVE', createdAt: '2026-10-01',
+      boqs: [], team: [], _count: { documents: 2 }, documents: [
+        { id: 'doc-1', name: 'First.pdf', category: 'SPECIFICATION', fileType: 'application/pdf', uploadedAt: '2026-10-01' },
+      ], auditLogs: [],
+    };
+    fetchMock
+      .mockResolvedValueOnce(response(project))
+      .mockResolvedValueOnce(response({ documents: [
+        { id: 'doc-2', name: 'Second.pdf', category: 'DRAWING', fileType: 'application/pdf', uploadedAt: '2026-10-02' },
+      ], total: 3, page: 2, pageSize: 50, hasMore: true }));
+    render(<ProjectDetailPage />);
+    await screen.findByText('Paged Project');
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingDocumentsOfTotal, { loaded: 1, total: 2 })))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Second.pdf')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/projects/project-1/documents?page=2');
+
+    fetchMock.mockResolvedValueOnce(response({ documents: [], total: 3 }, false));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProjects);
   });
 });

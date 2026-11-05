@@ -1,16 +1,41 @@
 // src/app/api/boq/standard-library/route.ts - Standard BOQ Library API
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
+import {
+  DEFAULT_STANDARD_BOQ_PAGE_SIZE,
+  MAX_STANDARD_BOQ_ITEM_CODE_LENGTH,
+  MAX_STANDARD_BOQ_ITEM_COST_DRIVERS_LENGTH,
+  MAX_STANDARD_BOQ_ITEM_DESCRIPTION_LENGTH,
+  MAX_STANDARD_BOQ_ITEM_NAME_LENGTH,
+  MAX_STANDARD_BOQ_ITEM_SPECIFICATION_LENGTH,
+  MAX_STANDARD_BOQ_IMPORT_ITEMS,
+  MAX_STANDARD_BOQ_PAGE_SIZE,
+  STANDARD_BOQ_EXISTING_CODE_LOOKUP_CHUNK_SIZE,
+  STANDARD_BOQ_AUDIT_INSERT_SQL,
+  STANDARD_BOQ_ITEM_INSERT_SQL,
+} from './route.constants';
 
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('STANDARD_BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
 
   const { searchParams } = new URL(req.url);
+  const { page } = getListPageWindow(searchParams);
+  const requestedPageSize = Number(searchParams.get('pageSize'));
+  const pageSize = Number.isSafeInteger(requestedPageSize) && requestedPageSize > 0
+    ? Math.min(requestedPageSize, MAX_STANDARD_BOQ_PAGE_SIZE)
+    : DEFAULT_STANDARD_BOQ_PAGE_SIZE;
+  const skip = (page - 1) * pageSize;
   const sector = searchParams.get('sector') || '';
   const projectType = searchParams.get('projectType') || '';
   const category = searchParams.get('category') || '';
@@ -35,12 +60,27 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const items = await prisma.standardBoqItem.findMany({
-    where,
-    orderBy: [{ category: 'asc' }, { itemCode: 'asc' }],
-  });
-
-  return apiSuccess(items);
+  const startedAt = Date.now();
+  try {
+    const [items, total] = await Promise.all([
+      prisma.standardBoqItem.findMany({
+        where,
+        orderBy: [{ category: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
+        skip,
+        take: pageSize,
+      }),
+      prisma.standardBoqItem.count({ where }),
+    ]);
+    return apiSuccess({ items, total, page, pageSize, hasMore: skip + items.length < total });
+  } catch (error) {
+    await writeStructuredLog('error', 'standard_boq.library_read_failed', {
+      operation: 'list_standard_boq_items', route: '/api/boq/standard-library',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      page, pageSize, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.appApiBoqStandardLibraryRoute.failedToFetchStandardBOQItems, 500);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -48,7 +88,8 @@ export async function POST(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   try {
-    const body = await req.json();
+    const body: unknown = await req.json();
+    if (!isRecord(body) && !Array.isArray(body)) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
 
     // Determine whether body is single item or array of items
     let rawItems: any[] = [];
@@ -56,19 +97,24 @@ export async function POST(req: NextRequest) {
       rawItems = body;
     } else if (Array.isArray(body.items)) {
       // Inherit group-level sector, projectType, category if provided on parent object
-      rawItems = body.items.map((it: any) => ({
-        sector: it.sector || body.sector || 'RETAIL',
-        projectType: it.projectType || body.projectType || 'Store Fitout',
-        category: it.category || body.category,
-        subcategory: it.subcategory || body.subcategory || 'General',
-        ...it,
-      }));
+      rawItems = body.items.map((item: unknown) => isRecord(item) ? ({
+        sector: item.sector || body.sector || 'RETAIL',
+        projectType: item.projectType || body.projectType || 'Store Fitout',
+        category: item.category || body.category,
+        subcategory: item.subcategory || body.subcategory || 'General',
+        ...item,
+      }) : item);
     } else {
       rawItems = [body];
     }
 
     if (rawItems.length === 0) {
       return apiError(UI_STRINGS.appApiBoqStandardLibraryRoute.atLeastOneStandardBOQItemIsRequired, 400);
+    }
+    if (rawItems.length > MAX_STANDARD_BOQ_IMPORT_ITEMS) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.standardBoqImportExceedsMaximumItemCount, {
+        maxItems: MAX_STANDARD_BOQ_IMPORT_ITEMS,
+      }), 400);
     }
 
     // Validate all items before saving
@@ -85,10 +131,34 @@ export async function POST(req: NextRequest) {
       const it = rawItems[i];
       const itemNum = i + 1;
 
-      const itemCode = it.itemCode?.trim();
-      const standardDescription = it.standardDescription?.trim();
-      const category = it.category?.trim();
-      const uom = it.uom?.trim()?.toUpperCase();
+      if (!isRecord(it)) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      const itemCode = typeof it.itemCode === 'string' ? it.itemCode.trim() : '';
+      const standardDescription = typeof it.standardDescription === 'string' ? it.standardDescription.trim() : '';
+      const category = typeof it.category === 'string' ? it.category.trim() : '';
+      const uom = typeof it.uom === 'string' ? it.uom.trim().toUpperCase() : '';
+      const sector = typeof it.sector === 'string' ? it.sector.trim() || 'RETAIL' : 'RETAIL';
+      const projectType = typeof it.projectType === 'string' ? it.projectType.trim() || 'Store Fitout' : 'Store Fitout';
+      const subcategory = typeof it.subcategory === 'string' ? it.subcategory.trim() || 'General' : 'General';
+      const detailedSpecification = typeof it.detailedSpecification === 'string' ? it.detailedSpecification.trim() || standardDescription : standardDescription;
+      const brandMake = typeof it.brandMake === 'string' ? it.brandMake.trim() || null : null;
+      const benchmarkRate = it.benchmarkRate !== undefined && it.benchmarkRate !== null && it.benchmarkRate !== ''
+        ? Number(it.benchmarkRate)
+        : null;
+      const costDrivers = it.costDrivers ? (typeof it.costDrivers === 'string' ? it.costDrivers : JSON.stringify(it.costDrivers)) : null;
+
+      if (itemCode.length > MAX_STANDARD_BOQ_ITEM_CODE_LENGTH
+        || category.length > MAX_STANDARD_BOQ_ITEM_NAME_LENGTH
+        || uom.length > MAX_STANDARD_BOQ_ITEM_NAME_LENGTH
+        || sector.length > MAX_STANDARD_BOQ_ITEM_NAME_LENGTH
+        || projectType.length > MAX_STANDARD_BOQ_ITEM_NAME_LENGTH
+        || subcategory.length > MAX_STANDARD_BOQ_ITEM_NAME_LENGTH
+        || standardDescription.length > MAX_STANDARD_BOQ_ITEM_DESCRIPTION_LENGTH
+        || detailedSpecification.length > MAX_STANDARD_BOQ_ITEM_SPECIFICATION_LENGTH
+        || (brandMake && brandMake.length > MAX_STANDARD_BOQ_ITEM_NAME_LENGTH)
+        || (costDrivers && costDrivers.length > MAX_STANDARD_BOQ_ITEM_COST_DRIVERS_LENGTH)
+        || (benchmarkRate !== null && (!Number.isFinite(benchmarkRate) || benchmarkRate < 0))) {
+        return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      }
 
       if (!itemCode) {
         return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.lineItemNumItemCodeIsRequired, { "itemNum": itemNum }), 400);
@@ -115,59 +185,71 @@ export async function POST(req: NextRequest) {
       }
       seenCodes.add(itemCode.toLowerCase());
 
-      // Check duplicate in database
-      const existingInDb = await prisma.standardBoqItem.findFirst({
-        where: {
-          tenantId: ctx.tenantId,
-          itemCode: { equals: itemCode },
-        },
-      });
-
-      if (existingInDb) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.itemCodeItemCodeAlreadyExistsInTheCentralStandardBOQMaster, { "itemCode": itemCode }), 409);
-      }
-
       sanitizedItems.push({
         tenantId: ctx.tenantId,
         itemCode,
-        sector: it.sector?.trim() || 'RETAIL',
-        projectType: it.projectType?.trim() || 'Store Fitout',
+        sector,
+        projectType,
         category,
-        subcategory: it.subcategory?.trim() || 'General',
+        subcategory,
         standardDescription,
-        detailedSpecification: it.detailedSpecification?.trim() || standardDescription,
+        detailedSpecification,
         uom,
-        brandMake: it.brandMake?.trim() || null,
-        benchmarkRate: it.benchmarkRate ? parseFloat(it.benchmarkRate) : null,
-        costDrivers: it.costDrivers ? (typeof it.costDrivers === 'string' ? it.costDrivers : JSON.stringify(it.costDrivers)) : null,
+        brandMake,
+        benchmarkRate,
+        costDrivers,
         isActive: true,
       });
     }
 
-    // Save items to central Standard BOQ Master
-    const createdItems: any[] = [];
-    for (const itemData of sanitizedItems) {
-      const created = await prisma.standardBoqItem.create({
-        data: itemData,
-      });
-      createdItems.push(created);
+    const existingItems: Array<{ itemCode: string }> = [];
+    for (let offset = 0; offset < sanitizedItems.length; offset += STANDARD_BOQ_EXISTING_CODE_LOOKUP_CHUNK_SIZE) {
+      const codeChunk = sanitizedItems.slice(offset, offset + STANDARD_BOQ_EXISTING_CODE_LOOKUP_CHUNK_SIZE);
+      existingItems.push(...await prisma.standardBoqItem.findMany({
+        where: { tenantId: ctx.tenantId, itemCode: { in: codeChunk.map((item) => item.itemCode) } },
+        select: { itemCode: true },
+      }));
+    }
+    const existingCodes = new Set(existingItems.map((item) => item.itemCode.toLowerCase()));
+    const conflictingCode = sanitizedItems.find((item) => existingCodes.has(item.itemCode.toLowerCase()));
+    if (conflictingCode) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.itemCodeItemCodeAlreadyExistsInTheCentralStandardBOQMaster, {
+        itemCode: conflictingCode.itemCode,
+      }), 409);
     }
 
-    // Audit log
-    try {
-      await prisma.auditLog.create({
-        data: {
-          tenantId: ctx.tenantId,
-          userId: ctx.userId,
-          entityType: 'BOQ' as any,
-          entityId: createdItems[0]?.id || 'STANDARD_BOQ',
-          action: 'CREATE',
-          description: interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.createdLengthStandardBOQLineItemsInCentralStandardBOQMasterSectorSectorCategoryCategory, { "length": createdItems.length, "sector": sanitizedItems[0]?.sector, "category": sanitizedItems[0]?.category }),
-          newValue: JSON.stringify({ count: createdItems.length, codes: sanitizedItems.map(s => s.itemCode) }),
-        },
-      });
-    } catch {
-      // Non-fatal
+    const createdAt = new Date();
+    const createdItems = sanitizedItems.map((item) => ({
+      ...item,
+      id: crypto.randomUUID(),
+      benchmarkEligibility: true,
+      aiRefinementEligibility: true,
+      createdAt,
+      updatedAt: createdAt,
+    }));
+    const auditDescription = interpolateUiString(UI_STRINGS.appApiBoqStandardLibraryRoute.createdLengthStandardBOQLineItemsInCentralStandardBOQMasterSectorSectorCategoryCategory, {
+      length: createdItems.length,
+      sector: sanitizedItems[0]?.sector,
+      category: sanitizedItems[0]?.category,
+    });
+    const statements: D1BatchInputStatement[] = createdItems.map((item) => ({
+      sql: STANDARD_BOQ_ITEM_INSERT_SQL,
+      values: [
+        item.id, item.tenantId, item.itemCode, item.sector, item.projectType, item.category,
+        item.subcategory, item.standardDescription, item.detailedSpecification, item.uom,
+        item.brandMake, item.benchmarkRate, item.costDrivers, createdAt, createdAt,
+      ],
+    }));
+    statements.push({
+      sql: STANDARD_BOQ_AUDIT_INSERT_SQL,
+      values: [
+        crypto.randomUUID(), ctx.tenantId, ctx.userId, createdItems[0].id, auditDescription,
+        JSON.stringify({ count: createdItems.length, codes: sanitizedItems.map((item) => item.itemCode) }), createdAt,
+      ],
+    });
+    const results = await writeD1BatchAtomically(statements);
+    if (results.length !== statements.length || results.some((result) => Number(result.meta?.changes || 0) !== 1)) {
+      throw new Error(UI_STRINGS.common.userMessages.failedToAddStandardBoqItems);
     }
 
     return apiSuccess(
@@ -178,7 +260,14 @@ export async function POST(req: NextRequest) {
       },
       201
     );
-  } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToAddStandardBoqItems }), 500);
+  } catch (error: unknown) {
+    const isUniqueConflict = error instanceof Error && /unique constraint|unique failed|P2002/i.test(error.message);
+    await writeStructuredLog(isUniqueConflict ? 'warn' : 'error', 'standard_boq.bulk_create_failed', {
+      operation: 'create_standard_boq_items', route: '/api/boq/standard-library',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    if (isUniqueConflict) return apiError(UI_STRINGS.appApiBoqStandardLibraryRoute.duplicateStandardBoqCodesFoundBeforeSaving, 409);
+    return apiError(UI_STRINGS.common.userMessages.failedToAddStandardBoqItems, 500);
   }
 }

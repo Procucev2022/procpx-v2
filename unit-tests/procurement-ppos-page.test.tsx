@@ -139,6 +139,23 @@ describe('procurement PPO performance register', () => {
     expect(screen.getByText('PPO-001')).toBeInTheDocument();
   });
 
+  it('appends later PPO pages without losing loaded orders', async () => {
+    const secondPagePpo = order('later');
+    fetchMock.mockImplementation((url: string) => {
+      const pageTwo = url.includes('page=2');
+      return Promise.resolve(apiReply({
+        ppos: pageTwo ? [secondPagePpo] : [allOrders[1]], currentUserRole: 'PROCUREMENT_USER', isProcurementUser: true,
+        total: 51, page: pageTwo ? 2 : 1, pageSize: 50, totalPages: 2,
+      }));
+    });
+    render(<PposDeskPage />);
+    expect(await screen.findByText('PPO-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('PPO-later')).toBeInTheDocument();
+    expect(screen.getByText('PPO-001')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/procurement/ppos?page=2&pageSize=50');
+  });
+
   it('opens new and returned ratings, validates submission, saves a draft, and submits feedback', async () => {
     render(<PposDeskPage />);
     await screen.findByText('PPO-001');

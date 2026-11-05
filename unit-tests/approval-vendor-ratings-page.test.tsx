@@ -143,6 +143,27 @@ describe('vendor performance approval desk', () => {
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.decisionAuditTrail))).not.toBeInTheDocument();
   });
 
+  it('loads later vendor rating pages without replacing already visible records', async () => {
+    const counts = { pendingCount: 2, approvedCount: 0, returnedCount: 0, totalCount: 2, totalEvaluatedValue: 0 };
+    queueResponse = {
+      ok: true,
+      body: { data: { ratings: [rating('page-one', 'SUBMITTED')], counts, pagination: { page: 1, pageSize: 50, hasMore: true } } },
+    };
+    render(<VendorRatingsApprovalsPage />);
+    expect(await screen.findByText('PPO-page-one')).toBeInTheDocument();
+
+    queueResponse = {
+      ok: true,
+      body: { data: { ratings: [rating('page-two', 'SUBMITTED')], counts, pagination: { page: 2, pageSize: 50, hasMore: false } } },
+    };
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+
+    expect(await screen.findByText('PPO-page-two')).toBeInTheDocument();
+    expect(screen.getByText('PPO-page-one')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenLastCalledWith('/api/approvals/vendor-ratings?page=2&pageSize=50');
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
+  });
+
   it('shows complete submitted assessment details and requires comments for return and rejection', async () => {
     render(<VendorRatingsApprovalsPage />);
     await screen.findByText('PPO-submitted');
@@ -226,7 +247,7 @@ describe('vendor performance approval desk', () => {
 
     queueResponse = { ok: true, body: {} };
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
-    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/approvals/vendor-ratings'));
+    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/approvals/vendor-ratings?page=1&pageSize=50'));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.pendingApproval, "", false) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppApprovalsVendorRatingsPage.thereAreCurrentlyNoVendorPerformanceRatingsAwaitingProjectApproverReview))).toBeInTheDocument();
     queueResponse = { ok: true, body: { ratings: [], counts: { pendingCount: 0, approvedCount: 0, returnedCount: 0, totalCount: 0, totalEvaluatedValue: 0 } } };

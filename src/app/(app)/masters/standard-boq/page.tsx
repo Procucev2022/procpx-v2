@@ -27,7 +27,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import type { StandardItem } from "@app-types/app/(app)/masters/standard-boq/page.types";
-import { COMMON_UOMS, SECTORS } from "./page.constants";
+import { COMMON_UOMS, SECTORS, STANDARD_BOQ_LIST_PAGE_SIZE } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -37,7 +37,13 @@ export default function StandardBoqCreationPage() {
   const [items, setItems] = useState<StandardItem[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreItems, setLoadingMoreItems] = useState(false);
+  const [totalItemCount, setTotalItemCount] = useState(0);
+  const [hasMoreItems, setHasMoreItems] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const itemPage = useRef(1);
+  const itemRequestSequence = useRef(0);
+  const loadedItemFilters = useRef('');
 
   // Filters
   const [sectorFilter, setSectorFilter] = useState('');
@@ -127,23 +133,49 @@ export default function StandardBoqCreationPage() {
     }
   };
 
-  const loadStandardItems = async () => {
-    setLoading(true);
+  const loadStandardItems = async (append = false) => {
+    const filters = JSON.stringify([sectorFilter, categoryFilter, search.trim()]);
+    const shouldAppend = append && loadedItemFilters.current === filters;
+    const page = shouldAppend ? itemPage.current + 1 : 1;
+    const requestSequence = ++itemRequestSequence.current;
+    if (shouldAppend) setLoadingMoreItems(true);
+    else setLoading(true);
     try {
       const q = new URLSearchParams();
       if (sectorFilter && sectorFilter !== 'ALL') q.set('sector', sectorFilter);
       if (categoryFilter && categoryFilter !== 'ALL') q.set('category', categoryFilter);
-      if (search) q.set('search', search);
+      if (search.trim()) q.set('search', search.trim());
+      q.set('page', String(page));
+      q.set('pageSize', String(STANDARD_BOQ_LIST_PAGE_SIZE));
 
       const res = await fetch(`/api/boq/standard-library?${q.toString()}`);
-      if (res.ok) {
-        const d = await res.json();
-        setItems(d.data || d || []);
+      if (!res.ok) throw new Error(UI_STRINGS.appAppMastersStandardBoqPage.failedToLoadStandardBOQItems);
+      const d = await res.json();
+      if (requestSequence !== itemRequestSequence.current) return;
+      const payload = d?.data ?? d;
+      const result = Array.isArray(payload)
+        ? { items: payload, total: payload.length, hasMore: false, page: 1 }
+        : payload;
+      const incoming = Array.isArray(result.items) ? result.items : [];
+      setItems((current) => {
+        if (!shouldAppend) return incoming;
+        const byId = new Map(current.map((item) => [item.id, item]));
+        incoming.forEach((item: StandardItem) => byId.set(item.id, item));
+        return Array.from(byId.values());
+      });
+      setTotalItemCount(Number(result.total) || incoming.length);
+      setHasMoreItems(Boolean(result.hasMore));
+      itemPage.current = Number(result.page) || page;
+      loadedItemFilters.current = filters;
+    } catch {
+      if (requestSequence === itemRequestSequence.current) {
+        setNotification({ type: 'error', message: UI_STRINGS.appAppMastersStandardBoqPage.failedToLoadStandardBOQItems });
       }
-    } catch (e: any) {
-      setNotification({ type: 'error', message: UI_STRINGS.appAppMastersStandardBoqPage.failedToLoadStandardBOQItems });
     } finally {
-      setLoading(false);
+      if (requestSequence === itemRequestSequence.current) {
+        if (shouldAppend) setLoadingMoreItems(false);
+        else setLoading(false);
+      }
     }
   };
 
@@ -604,7 +636,7 @@ export default function StandardBoqCreationPage() {
       <SummaryCardGrid columns={3}>
         <SummaryCard
           label={UI_STRINGS.appAppMastersStandardBoqPage.totalStandardBOQItems}
-          value={items.length}
+          value={totalItemCount}
           secondary={UI_STRINGS.appAppMastersStandardBoqPage.availableInDownloadStandardBOQ}
           accent="default"
         />
@@ -669,7 +701,7 @@ export default function StandardBoqCreationPage() {
           <button
             type="button"
             className="btn btn-outline"
-            onClick={loadStandardItems}
+            onClick={() => { void loadStandardItems(); }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 38 }}
           >
             <RefreshCw size={13} />{UI_STRINGS.common.refresh}</button>
@@ -746,6 +778,13 @@ export default function StandardBoqCreationPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {!loading && hasMoreItems && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 12, borderTop: '1px solid #e2e8f0' }}>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={loadingMoreItems} onClick={() => { void loadStandardItems(true); }}>
+              {loadingMoreItems ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+            </button>
           </div>
         )}
       </div>

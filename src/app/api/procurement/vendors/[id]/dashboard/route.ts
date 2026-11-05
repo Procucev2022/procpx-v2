@@ -4,8 +4,10 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { hasPermission } from '@/lib/permissions';
+import { getD1BatchDatabase, runD1BatchAtomically } from '@/lib/d1-batch';
+import { VENDOR_DASHBOARD_COUNTS_SQL, DEFAULT_VENDOR_DASHBOARD_PAGE_SIZE, MAX_VENDOR_DASHBOARD_PAGE_SIZE } from './route.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
 
 
 export async function GET(
@@ -16,6 +18,24 @@ export async function GET(
   if (!isApiContext(ctx)) return ctx;
 
   const { id: vendorId } = await params;
+  const startedAt = Date.now();
+  const searchParams = new URL(req.url).searchParams;
+  const requestedSection = searchParams.get('section');
+  if (requestedSection && !['rfqs', 'ppos', 'rateCards'].includes(requestedSection)) {
+    return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  }
+  const section = requestedSection as 'rfqs' | 'ppos' | 'rateCards' | null;
+  const pageSizeValue = Number(searchParams.get('pageSize'));
+  const pageSize = Number.isSafeInteger(pageSizeValue) && pageSizeValue > 0
+    ? Math.min(pageSizeValue, MAX_VENDOR_DASHBOARD_PAGE_SIZE)
+    : DEFAULT_VENDOR_DASHBOARD_PAGE_SIZE;
+  const readPage = (key: string) => {
+    const value = Number(searchParams.get(key));
+    return Number.isSafeInteger(value) && value > 0 ? Math.min(value, 10_000) : 1;
+  };
+  const rfqPage = readPage('rfqPage');
+  const ppoPage = readPage('ppoPage');
+  const rateCardPage = readPage('rateCardPage');
 
   // Authorization & strict cross-vendor isolation
   if (ctx.role === 'VENDOR') {
@@ -31,96 +51,87 @@ export async function GET(
   try {
     const vendor = await prisma.vendor.findFirst({
       where: { id: vendorId, tenantId: ctx.tenantId },
+      select: { id: true, tenantId: true, code: true, name: true, email: true, phone: true, categories: true, status: true },
     });
 
     if (!vendor) {
       return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
     }
 
-    // 1. Fetch all RFQs where vendor is invited
-    const rfqs = await prisma.rfq.findMany({
-      where: {
-        tenantId: ctx.tenantId,
-        invitedVendors: {
-          some: { vendorId: vendor.id },
-        },
-      },
+    const rfqWhere = { tenantId: ctx.tenantId, invitedVendors: { some: { tenantId: ctx.tenantId, vendorId: vendor.id } } };
+    const ppoWhere = { vendorId: vendor.id, tenantId: ctx.tenantId };
+    const rateCardWhere = { vendorId: vendor.id, tenantId: ctx.tenantId };
+    const rfqsPromise = section && section !== 'rfqs' ? Promise.resolve([]) : prisma.rfq.findMany({
+      where: rfqWhere,
       include: {
         tenant: { select: { id: true, name: true } },
         project: { select: { id: true, name: true, projectCode: true } },
-        boqRevision: {
-          include: {
-            boq: { select: { id: true, title: true, boqCode: true } },
-          },
-        },
-        lines: true,
-        invitedVendors: {
-          where: { vendorId: vendor.id },
-        },
+        boqRevision: { select: { boq: { select: { id: true, title: true, boqCode: true } } } },
+        _count: { select: { lines: true } },
+        lines: { select: { id: true, lineNumber: true, category: true }, orderBy: { lineNumber: 'asc' }, take: 1 },
+        invitedVendors: { where: { tenantId: ctx.tenantId, vendorId: vendor.id }, take: 1 },
         quotes: {
-          where: { vendorId: vendor.id },
-          orderBy: { quoteVersion: 'desc' },
-          include: { lines: true },
+          where: { tenantId: ctx.tenantId, vendorId: vendor.id },
+          orderBy: [{ quoteVersion: 'desc' }, { id: 'desc' }], take: 1,
+          select: { id: true, status: true, totalQuoteAmount: true, submittedAt: true, updatedAt: true },
         },
         negotiations: {
-          include: {
-            rounds: {
-              where: { vendorId: vendor.id },
-              orderBy: { roundNumber: 'desc' },
-            },
-          },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 1,
+          include: { rounds: {
+            where: { tenantId: ctx.tenantId, vendorId: vendor.id },
+            orderBy: [{ roundNumber: 'desc' }, { id: 'desc' }], take: 1,
+          } },
         },
         ppos: {
-          where: { vendorId: vendor.id },
-          include: { lines: true },
-          orderBy: { createdAt: 'desc' },
+          where: { tenantId: ctx.tenantId, vendorId: vendor.id },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1,
+          select: { id: true, status: true, vendorStatus: true, totalValue: true, createdAt: true, updatedAt: true },
         },
         messages: {
-          where: {
-            OR: [{ vendorId: vendor.id }, { vendorId: null }],
-          },
-          orderBy: { createdAt: 'desc' },
+          where: { tenantId: ctx.tenantId, OR: [{ vendorId: vendor.id }, { vendorId: null }] },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { createdAt: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (rfqPage - 1) * pageSize, take: pageSize,
     });
-
-    // 2. Fetch all PPOs issued to this vendor
-    const ppos = await prisma.ppo.findMany({
-      where: { vendorId: vendor.id, tenantId: ctx.tenantId },
+    const rfqCountPromise = section && section !== 'rfqs' ? Promise.resolve(0) : prisma.rfq.count({ where: rfqWhere });
+    const pposPromise = section && section !== 'ppos' ? Promise.resolve([]) : prisma.ppo.findMany({
+      where: ppoWhere,
       include: {
         project: { select: { id: true, name: true, projectCode: true, location: true } },
-        rfq: {
-          select: {
-            id: true,
-            rfqNumber: true,
-            title: true,
-            packageName: true,
-            negotiations: {
-              include: {
-                rounds: {
-                  where: { vendorId: vendor.id },
-                  orderBy: { roundNumber: 'desc' },
-                  take: 1,
-                },
-              },
-            },
-          },
-        },
-        lines: true,
-        awardRecommendation: true,
+        rfq: { select: { id: true, rfqNumber: true, title: true, packageName: true, negotiations: {
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: 1,
+          include: { rounds: {
+            where: { tenantId: ctx.tenantId, vendorId: vendor.id },
+            orderBy: [{ roundNumber: 'desc' }, { id: 'desc' }], take: 1,
+          } },
+        } } },
+        lines: { orderBy: { lineNumber: 'asc' }, take: 140 },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (ppoPage - 1) * pageSize, take: pageSize,
     });
-
-    // 3. Fetch Rate Cards for this vendor
-    const rateCards = await prisma.vendorRateCard.findMany({
-      where: { vendorId: vendor.id, tenantId: ctx.tenantId },
-      include: {
-        items: true,
-      },
-      orderBy: { createdAt: 'desc' },
+    const ppoCountPromise = section && section !== 'ppos' ? Promise.resolve(0) : prisma.ppo.count({ where: ppoWhere });
+    const rateCardsPromise = section && section !== 'rateCards' ? Promise.resolve([]) : prisma.vendorRateCard.findMany({
+      where: rateCardWhere, include: { _count: { select: { items: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (rateCardPage - 1) * pageSize, take: pageSize,
     });
+    const rateCardCountPromise = section && section !== 'rateCards' ? Promise.resolve(0) : prisma.vendorRateCard.count({ where: rateCardWhere });
+    const countsPromise = section ? Promise.resolve(null) : runD1BatchAtomically(getD1BatchDatabase(), [{
+      sql: VENDOR_DASHBOARD_COUNTS_SQL,
+      values: [ctx.tenantId, vendor.id, new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), ctx.tenantId, vendor.id, ctx.tenantId, vendor.id],
+    }]);
+    const [rfqs, rfqTotal, ppos, ppoTotal, rateCards, rateCardTotal, countRows] = await Promise.all([
+      rfqsPromise, rfqCountPromise, pposPromise, ppoCountPromise,
+      rateCardsPromise, rateCardCountPromise, countsPromise,
+    ]);
+    const rfqIds = rfqs.map((rfq) => rfq.id);
+    const messageGroups = rfqIds.length > 0 ? await prisma.rfqMessage.groupBy({
+      by: ['rfqId'], where: {
+        tenantId: ctx.tenantId, rfqId: { in: rfqIds },
+        OR: [{ vendorId: vendor.id }, { vendorId: null }],
+      }, _count: { _all: true },
+    }) : [];
+    const messageCounts = new Map(messageGroups.map((group) => [group.rfqId, group._count._all]));
 
     // 4. Transform RFQ register with consistent persisted dates and statuses
     const rfqRegister = rfqs.map((r) => {
@@ -271,7 +282,7 @@ export async function GET(
         projectPackage: `${r.project?.name || 'Project'} / ${r.packageName || 'Main Package'}`,
         rfqReference: r.rfqNumber,
         category: r.lines[0]?.category || r.boqRevision?.boq?.title || 'General Works',
-        itemCount: r.lines.length,
+        itemCount: r._count?.lines ?? r.lines.length,
         permittedCommercial: {
           latestQuoteTotal: latestQuote?.totalQuoteAmount || null,
           counterOfferAmount: latestRound?.counterOfferAmount || null,
@@ -285,7 +296,7 @@ export async function GET(
         nextAction,
         nextResponsibleParty,
         availableActions,
-        unreadMessagesCount: messages.length,
+        unreadMessagesCount: messageCounts.get(r.id) || 0,
         lines: r.lines,
         quotes: r.quotes,
         negotiations: r.negotiations,
@@ -295,62 +306,27 @@ export async function GET(
       };
     });
 
-    // 5. Compute actionable summary counts strictly from persisted records
-    const now = new Date();
-    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-
-    const newRfqsCount = rfqRegister.filter(
-      (r) => r.quotationStatus === 'PENDING_SUBMISSION' || r.quotationStatus === 'NOT_SUBMITTED'
-    ).length;
-
-    const quotesDueSoonCount = rfqRegister.filter(
-      (r) =>
-        r.submissionDeadline &&
-        new Date(r.submissionDeadline) <= threeDaysFromNow &&
-        r.quotationStatus === 'PENDING_SUBMISSION'
-    ).length;
-
-    const quotesSubmittedCount = rfqRegister.filter(
-      (r) => r.latestQuote !== null
-    ).length;
-
-    const negotiationsAwaitingVendorCount = rfqRegister.filter(
-      (r) =>
-        r.nextResponsibleParty === 'VENDOR' &&
-        r.latestRound &&
-        r.latestRound.status === 'ROUND_ACTIVE' &&
-        !r.latestRound.revisedQuoteAmount
-    ).length;
-
-    const finalOffersAwaitingBuyerCount = rfqRegister.filter(
-      (r) =>
-        r.latestRound?.isFinalOffer &&
-        (!r.latestRound.buyerDecision || r.latestRound.buyerDecision === 'PENDING_BUYER_DECISION' || r.latestRound.buyerDecision === 'FINAL_ACCEPTANCE_PENDING')
-    ).length;
-
-    const quotesAcceptedPpoAwaitedCount = rfqRegister.filter(
-      (r) =>
-        r.latestRound?.buyerDecision === 'ACCEPTED' &&
-        !r.latestPpo
-    ).length;
-
-    const pposAwaitingAcceptanceCount = ppos.filter(
-      (p) => p.vendorStatus === 'PENDING_VENDOR_ACCEPTANCE' || (p.status === 'ISSUED' && !p.vendorAcceptedAt)
-    ).length;
-
-    const acceptedPposCount = ppos.filter(
-      (p) => p.vendorStatus === 'ACCEPTED_BY_VENDOR' || p.status === 'CONFIRMED'
-    ).length;
-
-    const counts = {
-      newRfqs: newRfqsCount,
-      quotesDueSoon: quotesDueSoonCount,
-      quotesSubmitted: quotesSubmittedCount,
-      negotiationsAwaitingVendor: negotiationsAwaitingVendorCount,
-      finalOffersAwaitingBuyer: finalOffersAwaitingBuyerCount,
-      quotesAcceptedPpoAwaited: quotesAcceptedPpoAwaitedCount,
-      pposAwaitingAcceptance: pposAwaitingAcceptanceCount,
-      acceptedPpos: acceptedPposCount,
+    const countsRow = countRows?.[0]?.results?.[0] as Record<string, number | string> | undefined;
+    if (!section && !countsRow) throw new Error(UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData);
+    const counts = countsRow ? {
+      newRfqs: Number(countsRow.newRfqs || 0),
+      quotesDueSoon: Number(countsRow.quotesDueSoon || 0),
+      quotesSubmitted: Number(countsRow.quotesSubmitted || 0),
+      negotiationsAwaitingVendor: Number(countsRow.negotiationsAwaitingVendor || 0),
+      finalOffersAwaitingBuyer: Number(countsRow.finalOffersAwaitingBuyer || 0),
+      quotesAcceptedPpoAwaited: Number(countsRow.quotesAcceptedPpoAwaited || 0),
+      pposAwaitingAcceptance: Number(countsRow.pposAwaitingAcceptance || 0),
+      acceptedPpos: Number(countsRow.acceptedPpos || 0),
+    } : undefined;
+    const pagination: Record<string, { page: number; pageSize: number; total: number; hasMore: boolean }> = {};
+    if (!section || section === 'rfqs') pagination.rfqs = {
+      page: rfqPage, pageSize, total: rfqTotal, hasMore: rfqPage * pageSize < rfqTotal,
+    };
+    if (!section || section === 'ppos') pagination.ppos = {
+      page: ppoPage, pageSize, total: ppoTotal, hasMore: ppoPage * pageSize < ppoTotal,
+    };
+    if (!section || section === 'rateCards') pagination.rateCards = {
+      page: rateCardPage, pageSize, total: rateCardTotal, hasMore: rateCardPage * pageSize < rateCardTotal,
     };
 
     return apiSuccess({
@@ -367,9 +343,15 @@ export async function GET(
       rfqRegister,
       ppos,
       rateCards,
+      pagination,
     });
-  } catch (error: any) {
-    console.error('Error fetching vendor dashboard data:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }), 500);
+  } catch (error) {
+    await writeStructuredLog('error', 'vendor.dashboard_read_failed', {
+      operation: 'read_vendor_dashboard', route: '/api/procurement/vendors/[id]/dashboard',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      vendorId, section, rfqPage, ppoPage, rateCardPage, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData, 500);
   }
 }

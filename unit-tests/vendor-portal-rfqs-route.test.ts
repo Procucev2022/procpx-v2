@@ -5,7 +5,7 @@ import { GET } from '../src/app/api/vendor-portal/rfqs/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
-jest.mock('../src/lib/prisma', () => ({ prisma: { rfq: { findMany: jest.fn() } } }));
+jest.mock('../src/lib/prisma', () => ({ prisma: { rfq: { findMany: jest.fn(), count: jest.fn() } } }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -14,12 +14,13 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 
 const findRfqs = prisma.rfq.findMany as jest.Mock;
+const countRfqs = prisma.rfq.count as jest.Mock;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const errorResponse = apiError as jest.Mock;
 const successResponse = apiSuccess as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', role: 'VENDOR', vendorId: 'vendor-1' };
-const request = () => new NextRequest('http://localhost/api/vendor-portal/rfqs');
+const request = (url = 'http://localhost/api/vendor-portal/rfqs') => new NextRequest(url);
 const instant = (day: number) => `2026-02-${String(day).padStart(2, '0')}T10:00:00.000Z`;
 
 const rfq = (overrides: Record<string, unknown> = {}) => ({
@@ -48,6 +49,7 @@ describe('vendor portal RFQ list', () => {
     errorResponse.mockImplementation((error: string, status = 400) => ({ ok: false, error, status }));
     successResponse.mockImplementation((data: unknown, status = 200) => ({ ok: true, data, status }));
     findRfqs.mockResolvedValue([]);
+    countRfqs.mockResolvedValue(0);
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -69,11 +71,12 @@ describe('vendor portal RFQ list', () => {
       ok: false, error: UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, status: 404,
     });
 
-    await expect(GET(request())).resolves.toEqual({ ok: true, data: { rfqs: [], total: 0 }, status: 200 });
+    await expect(GET(request())).resolves.toEqual({ ok: true, data: { rfqs: [], total: 0, page: 1, pageSize: 50, totalPages: 0, hasMore: false, nextCursor: null }, status: 200 });
     expect(findRfqs).toHaveBeenCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', invitedVendors: { some: { vendorId: 'vendor-1' } } },
-      orderBy: { createdAt: 'desc' },
+      skip: 0, take: 50, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     }));
+    expect(countRfqs).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', invitedVendors: { some: { vendorId: 'vendor-1' } } } });
   });
 
   it('enriches RFQs with quote, negotiation, decision, PPO, action, and activity summaries', async () => {
@@ -142,6 +145,7 @@ describe('vendor portal RFQ list', () => {
         messages: undefined,
       }),
     ]);
+    countRfqs.mockResolvedValueOnce(12);
 
     const result = await GET(request());
     expect(result).toMatchObject({ ok: true, data: { total: 12 } });
@@ -199,9 +203,32 @@ describe('vendor portal RFQ list', () => {
 
   it('maps database errors to specific and generic API errors', async () => {
     findRfqs.mockRejectedValueOnce(new Error('RFQ store offline'));
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'RFQ store offline', status: 500 });
+    await expect(GET(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqs, status: 500 });
     findRfqs.mockRejectedValueOnce({});
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'Failed to fetch RFQs', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    await expect(GET(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqs, status: 500 });
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it('bounds page size and returns deterministic pagination metadata for vendor search', async () => {
+    countRfqs.mockResolvedValueOnce(225);
+    await GET(request('http://localhost/api/vendor-portal/rfqs?page=2&pageSize=900&search=wire'));
+    expect(findRfqs).toHaveBeenCalledWith(expect.objectContaining({
+      skip: 100, take: 100,
+      where: expect.objectContaining({
+        tenantId: 'tenant-1', invitedVendors: { some: { vendorId: 'vendor-1' } },
+        OR: expect.arrayContaining([{ rfqNumber: { contains: 'wire' } }]),
+      }),
+    }));
+  });
+
+  it('uses a stable vendor-scoped cursor for subsequent pages', async () => {
+    findRfqs.mockResolvedValueOnce([rfq({ id: 'rfq-51', _count: { lines: 4 } })]);
+    countRfqs.mockResolvedValueOnce(51);
+    const result = await GET(request('http://localhost/api/vendor-portal/rfqs?pageSize=50&cursor=rfq-50')) as unknown as {
+      data: { hasMore: boolean; nextCursor: string | null; rfqs: Array<{ lineCount: number }> };
+    };
+    expect(findRfqs).toHaveBeenCalledWith(expect.objectContaining({ cursor: { id: 'rfq-50' }, skip: 1, take: 50 }));
+    expect(result.data).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(result.data.rfqs[0].lineCount).toBe(4);
   });
 });

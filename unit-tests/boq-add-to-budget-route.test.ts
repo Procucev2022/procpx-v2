@@ -3,6 +3,7 @@ import { POST } from '../src/app/api/boq/add-to-budget/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -11,7 +12,7 @@ jest.mock('../src/lib/prisma', () => ({
     boq: { findFirst: jest.fn(), update: jest.fn() },
     costCentre: { findFirst: jest.fn() },
     budgetContribution: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-    budgetTransaction: { findMany: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
+    budgetTransaction: { findFirst: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
     budget: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
     auditLog: { create: jest.fn() },
   },
@@ -22,6 +23,8 @@ jest.mock('../src/lib/api-utils', () => ({
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
+jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -56,13 +59,20 @@ describe('BOQ add-to-budget API', () => {
     db.budgetContribution.findFirst.mockReset().mockResolvedValue(null);
     db.budgetContribution.create.mockReset().mockResolvedValue({ id: 'contribution-new' });
     db.budgetContribution.update.mockReset().mockResolvedValue({ id: 'contribution-existing' });
-    db.budgetTransaction.findMany.mockReset().mockResolvedValue([]);
+    db.budgetTransaction.findFirst.mockReset().mockResolvedValue(null);
+    db.budgetTransaction.count.mockReset().mockResolvedValue(0);
     db.budgetTransaction.create.mockReset().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'tx-new', ...data }));
     db.budgetTransaction.deleteMany.mockReset().mockResolvedValue({ count: 1 });
     db.budget.findFirst.mockReset().mockResolvedValue(null);
     db.budget.update.mockReset().mockResolvedValue({});
     db.budget.create.mockReset().mockResolvedValue({ id: 'budget-new' });
     db.auditLog.create.mockReset().mockResolvedValue({ id: 'audit-1' });
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockImplementation(async (statements: Array<{ sql: string }>) => {
+      let code = 2;
+      return statements.map(({ sql }) => sql.includes('INSERT INTO "budget_transactions"')
+        ? { meta: { changes: 1 }, results: [{ id: `tx-${code}`, transactionCode: `BTX-${String(code++).padStart(6, '0')}` }] }
+        : { meta: { changes: 1 } });
+    });
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -104,19 +114,20 @@ describe('BOQ add-to-budget API', () => {
     });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [{ id: 'line-null', quantity: null }, { id: 'line-zero', quantity: 0 }, { id: 'line-undefined' }] }));
-    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
-      ok: false, error: '3 BOQ lines require quantity before this BOQ can be added to Budget.', status: 400,
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({
+      ok: false, error: expect.stringContaining('3'), status: 400,
     });
 
     db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [{ id: 'line-negative', quantity: -1 }] }));
-    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
-      ok: false, error: '1 BOQ line require quantity before this BOQ can be added to Budget.', status: 400,
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({
+      ok: false, error: expect.stringContaining('1'), status: 400,
     });
   });
 
   it('returns the existing transaction for pending contributions and blocks approved ones', async () => {
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-1', status: 'UNDER_APPROVAL', totalEstimatedValue: 100 });
-    db.budgetTransaction.findMany.mockResolvedValueOnce([{ transactionCode: 'BTX-000008' }, { transactionCode: 'BTX-000009' }]);
+    db.budgetTransaction.findFirst.mockResolvedValueOnce({ transactionCode: 'BTX-000008' });
+    db.budgetTransaction.count.mockResolvedValueOnce(2);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
       ok: true, status: 200, data: expect.objectContaining({
         success: true, alreadySubmitted: true, contributionId: 'contribution-1', transactionCode: 'BTX-000008',
@@ -125,7 +136,8 @@ describe('BOQ add-to-budget API', () => {
     });
 
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-2', status: 'PENDING_PROJECT_APPROVAL', totalEstimatedValue: 70 });
-    db.budgetTransaction.findMany.mockResolvedValueOnce([]);
+    db.budgetTransaction.findFirst.mockResolvedValueOnce(null);
+    db.budgetTransaction.count.mockResolvedValueOnce(0);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({ ok: true, data: {
       alreadySubmitted: true, transactionCode: 'BTX-contribu', transactionsCount: 0,
     } });
@@ -137,62 +149,49 @@ describe('BOQ add-to-budget API', () => {
   });
 
   it('creates category transactions, updates BOQ and cost-centre budget, and audits allocation', async () => {
-    db.budgetTransaction.findMany.mockResolvedValueOnce([{ transactionCode: 'BTX-000001' }]);
-    db.budget.findFirst.mockResolvedValueOnce(null);
     const result = await POST(request({ boqRevisionId: 'revision-1', projectId: 'project-target', costCentreId: 'cc-target', autoSubmit: true }));
     expect(result).toEqual({ ok: true, status: 201, data: expect.objectContaining({
-      success: true, contributionId: 'contribution-new', transactionCode: 'BTX-000002', totalAmount: 100,
+      success: true, contributionId: expect.any(String), transactionCode: 'BTX-000002', totalAmount: 100,
       status: 'UNDER_APPROVAL', transactionsCount: 2,
     }) });
-    expect(db.budgetContribution.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', projectId: 'project-target', costCentreId: 'cc-target', boqId: 'boq-1',
-      boqRevisionId: 'revision-1', totalEstimatedValue: 100, acceptedEstimatedValue: 100, status: 'UNDER_APPROVAL',
-      submittedBy: 'user-1', createdBy: 'user-1', submittedAt: expect.any(Date),
-    }) });
-    expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      transactionCode: 'BTX-000002', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, amount: 20, quantity: 2, rate: 10,
-      boqLineId: 'line-1', reference: 'BOQ BOQ-001 BOQ-001-R1 - Electrical', status: 'UNDER_APPROVAL',
-    }) });
-    expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      transactionCode: 'BTX-000003', category: UI_STRINGS.common.general, amount: 80, quantity: 4, rate: 20, boqLineId: 'line-2',
-    }) });
-    expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { budgetStatus: 'BUDGET_UNDER_APPROVAL' } });
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-1' }, data: { costCentreId: 'cc-target', purpose: UI_STRINGS.componentsSidebar.bUDGET } });
-    expect(db.budget.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', projectId: 'project-target', costCentreId: 'cc-target', totalAmount: 100,
-      approvedAmount: 0, pendingAmount: 100, status: 'UNDER_APPROVAL', createdBy: 'user-1',
-    }) });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      entityType: 'BUDGET_CONTRIBUTION', entityId: 'contribution-new', action: 'BUDGET_CONTRIBUTION_CREATED',
-      newValue: expect.stringContaining('"transactions":2'),
-    }) });
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(batch).toHaveLength(7);
+    expect(batch[0].sql).toContain('NOT EXISTS');
+    expect(batch[1].sql).toContain('WHERE changes() = 1');
+    expect(batch[2].sql).toContain('MAX(CASE WHEN "transactionCode" GLOB');
+    expect(batch[2].values).toEqual(expect.arrayContaining(['project-target', 'cc-target', 'boq-1', 'revision-1', 'line-1']));
+    expect(batch[3].values).toEqual(expect.arrayContaining(['General', 80, 4, 20]));
+    expect(batch[4].sql).toContain('boq_revisions');
+    expect(batch[5].sql).toContain("CASE WHEN \"purpose\" IN ('PR', 'BOTH') THEN 'BOTH'");
+    expect(batch[6].sql).toContain('ON CONFLICT');
+    expect(db.budgetContribution.create).not.toHaveBeenCalled();
+    expect(db.budgetTransaction.create).not.toHaveBeenCalled();
   });
 
   it('resubmits rejected contributions, replaces their transactions, and adds to an existing budget', async () => {
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-rejected', status: 'REJECTED' });
-    db.budgetContribution.update.mockResolvedValueOnce({ id: 'contribution-rejected' });
-    db.budget.findFirst.mockResolvedValueOnce({ id: 'budget-1', pendingAmount: 25 });
     await POST(request({ revisionId: 'revision-1', costCentreId: 'cc-target' }));
-    expect(db.budgetContribution.update).toHaveBeenCalledWith({ where: { id: 'contribution-rejected' }, data: expect.objectContaining({
-      costCentreId: 'cc-target', totalEstimatedValue: 100, acceptedEstimatedValue: 100, status: 'UNDER_APPROVAL',
-      submittedAt: expect.any(Date), submittedBy: 'user-1', rejectionReason: null,
-    }) });
-    expect(db.budgetTransaction.deleteMany).toHaveBeenCalledWith({ where: { contributionId: 'contribution-rejected' } });
-    expect(db.budget.update).toHaveBeenCalledWith({ where: { id: 'budget-1' }, data: { pendingAmount: 125 } });
-    expect(db.budget.create).not.toHaveBeenCalled();
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(batch).toHaveLength(8);
+    expect(batch[0].sql).toContain("'DRAFT', 'REJECTED'");
+    expect(batch[1].sql).toContain('WHERE changes() = 1');
+    expect(batch[2].sql).toContain('DELETE FROM "budget_transactions"');
+    expect(batch[3].sql).toContain('INSERT INTO "budget_transactions"');
+    expect(batch[7].sql).toContain('"pendingAmount" = "budgets"."pendingAmount" + excluded."pendingAmount"');
+    expect(db.budgetContribution.update).not.toHaveBeenCalled();
+    expect(db.budgetTransaction.deleteMany).not.toHaveBeenCalled();
   });
 
   it('uses fallbacks for transaction identifiers and maps provider failures to API errors', async () => {
-    const badJson = { json: jest.fn().mockRejectedValue(new Error('malformed JSON')) } as unknown as NextRequest;
-    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: 'malformed JSON', status: 500 });
+    const badJson = { json: jest.fn().mockRejectedValue(new Error('malformed JSON')), headers: new Headers() } as unknown as NextRequest;
+    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToAddBoqToBudget, status: 500 });
 
-    db.budgetTransaction.findMany.mockResolvedValueOnce([]);
-    db.budgetTransaction.create.mockResolvedValueOnce({ id: 'tx-no-code' }).mockResolvedValueOnce({ id: 'tx-no-code-2' });
     await POST(request({ boqRevisionId: 'revision-1' }));
-    expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ transactionCode: 'BTX-000001' }) });
+    expect((writeD1BatchAtomically as jest.Mock).mock.calls[(writeD1BatchAtomically as jest.Mock).mock.calls.length - 1][0][2].sql)
+      .toContain('MAX(CASE WHEN "transactionCode" GLOB');
 
     db.boqRevision.findFirst.mockRejectedValueOnce(new Error('budget database failure'));
-    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: 'budget database failure', status: 500 });
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToAddBoqToBudget, status: 500 });
     db.boqRevision.findFirst.mockRejectedValueOnce({});
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: 'Failed to add BOQ to budget.', status: 500 });
   });

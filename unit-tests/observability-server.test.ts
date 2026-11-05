@@ -66,6 +66,23 @@ describe('server structured logging', () => {
     }
   });
 
+  it('sends structured records through the original console in Cloudflare Workers', async () => {
+    const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { userAgent: 'Cloudflare-Workers' },
+    });
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await writeStructuredLog('info', 'worker.fixture', { recordId: 'fx-1' }, 'application', { NODE_ENV: 'production' });
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('"message":"worker.fixture"'));
+    } finally {
+      log.mockRestore();
+      if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+      else delete (globalThis as { navigator?: Navigator }).navigator;
+    }
+  });
+
   it('creates sanitized named snapshots and skips file output when disabled', async () => {
     const snapshot = await writeDebugSnapshot('../Payment Error', { token: 'hidden', checkpoint: 2 });
     expect(snapshot).toContain('payment-error.json');

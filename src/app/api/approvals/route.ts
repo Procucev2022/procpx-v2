@@ -1,7 +1,23 @@
 // src/app/api/approvals/route.ts - Dual Approvals Queues API (Budget Approval & PR / BOQ Approval)
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiSuccess, getListPageWindow } from '@/lib/api-utils';
+
+async function getContributionCategories(tenantId: string, contributionIds: string[]) {
+  const categoriesByContribution = new Map<string, string[]>();
+  if (contributionIds.length === 0) return categoriesByContribution;
+  const groups = await prisma.budgetTransaction.groupBy({
+    by: ['contributionId', 'category'],
+    where: { tenantId, contributionId: { in: contributionIds } },
+  });
+  for (const { contributionId, category } of groups) {
+    if (!contributionId || !category) continue;
+    const categories = categoriesByContribution.get(contributionId) || [];
+    if (!categories.includes(category)) categories.push(category);
+    categoriesByContribution.set(contributionId, categories);
+  }
+  return categoriesByContribution;
+}
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -9,6 +25,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const type = searchParams.get('type') || 'ALL'; // BUDGET, PR, FINANCE, ALL
+  const { page, pageSize, skip } = getListPageWindow(searchParams);
 
   const isFinanceRole = ctx.role === 'FINANCE_USER' || ctx.role === 'FINANCE_APPROVER';
   const isProjectApproverRole = ctx.role === 'PROJECT_APPROVER';
@@ -26,26 +43,31 @@ export async function GET(req: NextRequest) {
     },
   };
 
-  // Fetch users for resolving sender/submitter identities
-  const users = await prisma.user.findMany({
-    where: { tenantId: ctx.tenantId },
-    select: { id: true, name: true, role: true, email: true },
-  });
   const userMap = new Map<string, { name: string; role: string; email: string }>();
-  for (const u of users) {
-    userMap.set(u.id, { name: u.name, role: u.role, email: u.email });
-    userMap.set(u.email, { name: u.name, role: u.role, email: u.email });
-  }
-
-  // Fetch Cost Centre budgets for financial impact calculations
-  const ccBudgets = await prisma.budget.findMany({
-    where: { tenantId: ctx.tenantId },
-    select: { costCentreId: true, approvedAmount: true, pendingAmount: true, totalAmount: true },
-  });
   const budgetMap = new Map<string, { approvedAmount: number; pendingAmount: number; totalAmount: number }>();
-  for (const b of ccBudgets) {
-    if (b.costCentreId) budgetMap.set(b.costCentreId, b);
-  }
+  const addQueueUsers = async (userIds: Array<string | null | undefined>) => {
+    const ids = Array.from(new Set(userIds.filter((value): value is string => Boolean(value))));
+    if (ids.length === 0) return;
+    const users = await prisma.user.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: ids } },
+      select: { id: true, name: true, role: true, email: true },
+    });
+    for (const user of users) {
+      userMap.set(user.id, { name: user.name, role: user.role, email: user.email });
+      userMap.set(user.email, { name: user.name, role: user.role, email: user.email });
+    }
+  };
+  const addQueueBudgets = async (costCentreIds: Array<string | null | undefined>) => {
+    const ids = Array.from(new Set(costCentreIds.filter((value): value is string => Boolean(value))));
+    if (ids.length === 0) return;
+    const budgets = await prisma.budget.findMany({
+      where: { tenantId: ctx.tenantId, costCentreId: { in: ids } },
+      select: { costCentreId: true, approvedAmount: true, pendingAmount: true, totalAmount: true },
+    });
+    for (const budget of budgets) {
+      if (budget.costCentreId) budgetMap.set(budget.costCentreId, budget);
+    }
+  };
 
   // 1. Budget Approval Queue (Project Approver only - not visible to Finance Approver)
   if (!isFinanceRole && (type === 'ALL' || type === 'BUDGET')) {
@@ -54,36 +76,22 @@ export async function GET(req: NextRequest) {
         tenantId: ctx.tenantId,
         status: { in: ['UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL'] },
       },
-      orderBy: { submittedAt: 'desc' },
+      orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take: pageSize,
       include: {
         project: { select: { id: true, projectCode: true, name: true } },
         costCentre: { select: { id: true, code: true, name: true, areaSqFt: true } },
         boq: { select: { id: true, boqCode: true, title: true, description: true } },
-        boqRevision: {
-          select: {
-            id: true,
-            revisionNumber: true,
-            revisionCode: true,
-            lines: {
-              select: {
-                id: true,
-                lineNumber: true,
-                itemCode: true,
-                standardDescription: true,
-                originalDescription: true,
-                quantity: true,
-                uomRaw: true,
-                aiUnitCost: true,
-                aiTotalCost: true,
-                category: { select: { id: true, name: true } },
-              },
-            },
-          },
-        },
-        transactions: true,
-        approvals: { orderBy: { timestamp: 'desc' } },
+        boqRevision: { select: { id: true, revisionNumber: true, revisionCode: true } },
+        approvals: { orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], take: 1 },
       },
     });
+    const [categoriesByContribution] = await Promise.all([
+      getContributionCategories(ctx.tenantId, rawBudgetQueue.map(({ id }) => id)),
+      addQueueUsers(rawBudgetQueue.flatMap((item) => [item.submittedBy, item.createdBy])),
+      addQueueBudgets(rawBudgetQueue.map((item) => item.costCentreId)),
+    ]);
 
     results.budgetQueue = rawBudgetQueue.map(item => {
       const ccBudget = budgetMap.get(item.costCentreId) || { approvedAmount: 0, pendingAmount: 0, totalAmount: 0 };
@@ -91,8 +99,7 @@ export async function GET(req: NextRequest) {
       const proposed = item.totalEstimatedValue || 0;
       const projected = currentApproved + proposed;
 
-      // Extract unique categories from transactions or lines
-      const categories = Array.from(new Set(item.transactions.map(t => t.category).filter(Boolean)));
+      const categories = categoriesByContribution.get(item.id) || [];
       const submitterInfo = userMap.get(item.submittedBy || '') || userMap.get(item.createdBy);
 
       return {
@@ -119,27 +126,41 @@ export async function GET(req: NextRequest) {
         tenantId: ctx.tenantId,
         status: 'PR_PENDING_PROJECT_APPROVAL',
       },
-      orderBy: { requestedDate: 'desc' },
+      orderBy: [{ requestedDate: 'desc' }, { id: 'desc' }],
+      skip,
+      take: pageSize,
       include: {
         project: { select: { id: true, projectCode: true, name: true } },
         costCentre: { select: { id: true, code: true, name: true, areaSqFt: true } },
         boq: { select: { id: true, boqCode: true, title: true, description: true, category: true } },
         boqRevision: { select: { id: true, revisionNumber: true, revisionCode: true } },
-        lines: {
-          include: {
-            boqLine: true,
-          },
-        },
-        approvals: { orderBy: { timestamp: 'desc' } },
+        approvals: { orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], take: 1 },
+        _count: { select: { lines: true, rfqs: true } },
       },
     });
+    const [prLineCategoryGroups] = await Promise.all([
+      rawPrQueue.length > 0 ? prisma.pRLine.groupBy({
+        by: ['prId', 'category'],
+        where: { tenantId: ctx.tenantId, prId: { in: rawPrQueue.map(({ id }) => id) } },
+      }) : Promise.resolve([]),
+      addQueueUsers(rawPrQueue.map((item) => item.requestedBy)),
+    ]);
+    const categoriesByPr = new Map<string, string[]>();
+    for (const group of prLineCategoryGroups) {
+      if (!group.category) continue;
+      const categories = categoriesByPr.get(group.prId) || [];
+      if (!categories.includes(group.category)) categories.push(group.category);
+      categoriesByPr.set(group.prId, categories);
+    }
 
     results.prQueue = rawPrQueue.map(item => {
       const requesterInfo = userMap.get(item.requestedBy);
-      const categories = Array.from(new Set(item.lines.map(l => l.category).filter(Boolean)));
+      const categories = categoriesByPr.get(item.id) || [];
 
       return {
         ...item,
+        totalLines: item._count.lines,
+        totalRfqs: item._count.rfqs,
         requesterName: requesterInfo?.name || item.requestedBy,
         requesterEmail: requesterInfo?.email || '',
         categories: categories.length > 0 ? categories : (item.boq?.category ? [item.boq.category] : ['Standard']),
@@ -156,36 +177,26 @@ export async function GET(req: NextRequest) {
         tenantId: ctx.tenantId,
         status: { in: ['PENDING_FINANCE_APPROVAL', 'PROJECT_APPROVED'] },
       },
-      orderBy: { projectApprovedAt: 'desc' },
+      orderBy: [{ projectApprovedAt: 'desc' }, { id: 'desc' }],
+      skip,
+      take: pageSize,
       include: {
         project: { select: { id: true, projectCode: true, name: true } },
         costCentre: { select: { id: true, code: true, name: true, areaSqFt: true } },
         boq: { select: { id: true, boqCode: true, title: true, description: true } },
-        boqRevision: {
-          select: {
-            id: true,
-            revisionNumber: true,
-            revisionCode: true,
-            lines: {
-              select: {
-                id: true,
-                lineNumber: true,
-                itemCode: true,
-                standardDescription: true,
-                originalDescription: true,
-                quantity: true,
-                uomRaw: true,
-                aiUnitCost: true,
-                aiTotalCost: true,
-                category: { select: { id: true, name: true } },
-              },
-            },
-          },
+        boqRevision: { select: { id: true, revisionNumber: true, revisionCode: true } },
+        approvals: {
+          where: { approvalLevel: 'PROJECT_APPROVER' },
+          orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+          take: 1,
         },
-        transactions: true,
-        approvals: { orderBy: { timestamp: 'desc' } },
       },
     });
+    const [categoriesByContribution] = await Promise.all([
+      getContributionCategories(ctx.tenantId, rawFinanceQueue.map(({ id }) => id)),
+      addQueueUsers(rawFinanceQueue.flatMap((item) => [item.submittedBy, item.createdBy, item.projectApprovedBy])),
+      addQueueBudgets(rawFinanceQueue.map((item) => item.costCentreId)),
+    ]);
 
     results.financeQueue = rawFinanceQueue.map(item => {
       const ccBudget = budgetMap.get(item.costCentreId) || { approvedAmount: 0, pendingAmount: 0, totalAmount: 0 };
@@ -193,13 +204,14 @@ export async function GET(req: NextRequest) {
       const proposed = item.acceptedEstimatedValue || item.totalEstimatedValue || 0;
       const projected = currentApproved + proposed;
 
-      const categories = Array.from(new Set(item.transactions.map(t => t.category).filter(Boolean)));
+      const categories = categoriesByContribution.get(item.id) || [];
       const submitterInfo = userMap.get(item.submittedBy || '') || userMap.get(item.createdBy);
       const projectApproverInfo = userMap.get(item.projectApprovedBy || '');
-      const projectApprovalRecord = item.approvals?.find(a => a.approvalLevel === 'PROJECT_APPROVER' && a.status === 'APPROVED');
+      const projectApprovalRecord = item.approvals?.find(a => a.status === 'APPROVED');
 
       return {
         ...item,
+        amount: item.acceptedEstimatedValue || item.totalEstimatedValue || 0,
         submitterName: submitterInfo?.name || item.submittedBy || 'Project User',
         submitterEmail: submitterInfo?.email || '',
         projectApproverName: projectApproverInfo?.name || item.projectApprovedBy || 'Project Approver',
@@ -222,13 +234,29 @@ export async function GET(req: NextRequest) {
   }
 
   // Counts for KPI cards
-  const [bPending, prPending, fPending, bApproved, bRejected, prRejected] = await Promise.all([
+  const [bPending, prPending, fPending, bApproved, bRejected, prRejected, budgetPendingAggregate, prPendingAggregate, financeAcceptedAggregate, financeFallbackAggregate] = await Promise.all([
     prisma.budgetContribution.count({ where: { tenantId: ctx.tenantId, status: { in: ['UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL'] } } }),
     prisma.procurementRequest.count({ where: { tenantId: ctx.tenantId, status: 'PR_PENDING_PROJECT_APPROVAL' } }),
     prisma.budgetContribution.count({ where: { tenantId: ctx.tenantId, status: { in: ['PENDING_FINANCE_APPROVAL', 'PROJECT_APPROVED'] } } }),
     prisma.budgetContribution.count({ where: { tenantId: ctx.tenantId, status: 'APPROVED' } }),
     prisma.budgetContribution.count({ where: { tenantId: ctx.tenantId, status: 'REJECTED' } }),
     prisma.procurementRequest.count({ where: { tenantId: ctx.tenantId, status: 'PR_REJECTED' } }),
+    prisma.budgetContribution.aggregate({
+      where: { tenantId: ctx.tenantId, status: { in: ['UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL'] } },
+      _sum: { totalEstimatedValue: true },
+    }),
+    prisma.procurementRequest.aggregate({
+      where: { tenantId: ctx.tenantId, status: 'PR_PENDING_PROJECT_APPROVAL' },
+      _sum: { totalEstimatedValue: true },
+    }),
+    prisma.budgetContribution.aggregate({
+      where: { tenantId: ctx.tenantId, status: { in: ['PENDING_FINANCE_APPROVAL', 'PROJECT_APPROVED'] }, acceptedEstimatedValue: { gt: 0 } },
+      _sum: { acceptedEstimatedValue: true },
+    }),
+    prisma.budgetContribution.aggregate({
+      where: { tenantId: ctx.tenantId, status: { in: ['PENDING_FINANCE_APPROVAL', 'PROJECT_APPROVED'] }, acceptedEstimatedValue: 0 },
+      _sum: { totalEstimatedValue: true },
+    }),
   ]);
 
   results.counts = {
@@ -237,6 +265,22 @@ export async function GET(req: NextRequest) {
     financePending: fPending,
     approvedBudgets: bApproved,
     rejectedTotal: bRejected + prRejected,
+  };
+
+  results.pagination = {
+    page,
+    pageSize,
+    queues: {
+      budget: { total: bPending, totalPages: Math.ceil(bPending / pageSize) },
+      pr: { total: prPending, totalPages: Math.ceil(prPending / pageSize) },
+      finance: { total: fPending, totalPages: Math.ceil(fPending / pageSize) },
+    },
+  };
+  results.totals = {
+    budgetPendingAmount: Number(budgetPendingAggregate._sum.totalEstimatedValue || 0),
+    prPendingAmount: Number(prPendingAggregate._sum.totalEstimatedValue || 0),
+    financePendingAmount: Number(financeAcceptedAggregate._sum?.acceptedEstimatedValue || 0)
+      + Number(financeFallbackAggregate._sum?.totalEstimatedValue || 0),
   };
 
   return apiSuccess(results);

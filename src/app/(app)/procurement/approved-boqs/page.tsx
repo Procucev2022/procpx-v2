@@ -1,39 +1,85 @@
 'use client';
 // app/(app)/procurement/approved-boqs/page.tsx
 // Sourcing Queue: Approved Commercial Baselines ready for RFQ Packaging
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { FileText, Plus, ShieldCheck, ClipboardCheck } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
-import StatusBadge from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { ApprovedBoqListResponse, ApprovedBoqSummary } from '@app-types/app/api/procurement/approved-boqs.types';
 
 
 export default function ApprovedBoqsPage() {
   const [loading, setLoading] = useState(true);
-  const [approvedBoqs, setApprovedBoqs] = useState<any[]>([]);
+  const [approvedBoqs, setApprovedBoqs] = useState<ApprovedBoqSummary[]>([]);
   const [search, setSearch] = useState('');
-  const [selectedBoq, setSelectedBoq] = useState<any>(null);
+  const [selectedBoq, setSelectedBoq] = useState<ApprovedBoqSummary | null>(null);
+  const [scopeLoading, setScopeLoading] = useState(false);
+  const [scopeLoadFailed, setScopeLoadFailed] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const requestVersionRef = useRef(0);
+  const scopeRequestVersionRef = useRef(0);
 
   useEffect(() => {
     fetchApprovedBoqs();
   }, [search]);
 
-  const fetchApprovedBoqs = async () => {
-    setLoading(true);
+  const fetchApprovedBoqs = async (options: { page?: number; append?: boolean; search?: string } = {}) => {
+    const requestedPage = options.page || 1;
+    const append = Boolean(options.append);
+    const requestVersion = append ? null : ++requestVersionRef.current;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch(`/api/procurement/approved-boqs?search=${encodeURIComponent(search)}`);
-      const data = await res.json();
-      if (data.approvedBoqs) {
-        setApprovedBoqs(data.approvedBoqs);
-      }
+      const query = new URLSearchParams({ search: options.search ?? search, page: String(requestedPage), pageSize: '25' });
+      const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
+      if (requestVersion !== null && requestVersion !== requestVersionRef.current) return;
+      const data = await res.json() as ApprovedBoqListResponse;
+      const pageBoqs = data.approvedBoqs || [];
+      setApprovedBoqs((current) => append ? [...current, ...pageBoqs] : pageBoqs);
+      setTotal(typeof data.total === 'number' && Number.isFinite(data.total) ? data.total : pageBoqs.length);
+      setPage(requestedPage);
+      setHasMore(Boolean(data.hasMore));
     } catch (err) {
+      if (requestVersion !== null && requestVersion !== requestVersionRef.current) return;
       console.error(err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else if (requestVersion === requestVersionRef.current) setLoading(false);
+    }
+  };
+
+  const inspectScope = async (boq: ApprovedBoqSummary) => {
+    if (selectedBoq?.id === boq.id) {
+      scopeRequestVersionRef.current += 1;
+      setSelectedBoq(null);
+      setScopeLoading(false);
+      setScopeLoadFailed(false);
+      return;
+    }
+
+    const requestVersion = ++scopeRequestVersionRef.current;
+    setSelectedBoq(boq);
+    setScopeLoading(true);
+    setScopeLoadFailed(false);
+    try {
+      const query = new URLSearchParams({ revisionId: boq.id, pageSize: '1' });
+      const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      const data = await res.json() as ApprovedBoqListResponse;
+      const detailedBoq = data.approvedBoqs?.find((item) => item.id === boq.id);
+      if (!detailedBoq || !Array.isArray(detailedBoq.lines)) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      if (requestVersion === scopeRequestVersionRef.current) setSelectedBoq(detailedBoq);
+    } catch {
+      if (requestVersion === scopeRequestVersionRef.current) setScopeLoadFailed(true);
+    } finally {
+      if (requestVersion === scopeRequestVersionRef.current) setScopeLoading(false);
     }
   };
 
@@ -91,7 +137,7 @@ export default function ApprovedBoqsPage() {
 
       {/* Table Card */}
       <Card
-        title={interpolateUiString(UI_STRINGS.appAppProcurementApprovedBoqsPage.commercialBaselinesAvailableLength, { "length": approvedBoqs.length })}
+        title={interpolateUiString(UI_STRINGS.appAppProcurementApprovedBoqsPage.commercialBaselinesAvailableLength, { "length": total })}
         subtitle={UI_STRINGS.appAppProcurementApprovedBoqsPage.approvedByProjectApproverAndReleasedToProcurement}
         noPadding
       >
@@ -148,7 +194,7 @@ export default function ApprovedBoqsPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {boq.categories.map((c: any, idx: number) => (
+                        {boq.categories.map((c, idx) => (
                           <span key={idx} className="badge badge-draft" style={{ fontSize: 11 }}>
                             {c.category}{UI_STRINGS.common.copy1b3t0c5}{c.lineCount}{UI_STRINGS.common.copyc7zu6c}</span>
                         ))}
@@ -170,7 +216,7 @@ export default function ApprovedBoqsPage() {
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                         <button
                           type="button"
-                          onClick={() => setSelectedBoq(selectedBoq?.id === boq.id ? null : boq)}
+                          onClick={() => void inspectScope(boq)}
                           className="btn btn-secondary btn-sm"
                         >
                           {selectedBoq?.id === boq.id ? UI_STRINGS.appAppProcurementApprovedBoqsPage.hideScope : UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope}
@@ -189,6 +235,14 @@ export default function ApprovedBoqsPage() {
         )}
       </Card>
 
+      {hasMore && !loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => fetchApprovedBoqs({ page: page + 1, append: true, search })}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+        </div>
+      )}
+
       {/* Scope Inspection Drawer/Panel */}
       {selectedBoq && (
         <div style={{ marginTop: 24 }}>
@@ -203,6 +257,11 @@ export default function ApprovedBoqsPage() {
             }
             noPadding
           >
+            {scopeLoading ? (
+              <div style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>{UI_STRINGS.common.loading}</div>
+            ) : scopeLoadFailed ? (
+              <div role="alert" style={{ padding: 24, color: '#b91c1c' }}>{UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs}</div>
+            ) : (
             <div className="table-wrapper" style={{ maxHeight: 420, overflowY: 'auto' }}>
               <table className="table">
                 <thead>
@@ -217,7 +276,7 @@ export default function ApprovedBoqsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedBoq.lines.map((l: any) => (
+                  {selectedBoq.lines?.map((l) => (
                     <tr key={l.id}>
                       <td className="font-mono text-muted">{l.lineNumber}</td>
                       <td style={{ fontWeight: 600, color: '#0f172a' }}>{l.description}</td>
@@ -236,6 +295,7 @@ export default function ApprovedBoqsPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </Card>
         </div>
       )}

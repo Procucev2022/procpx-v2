@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/finance/budget-approvals/page.tsx - Finance Approver Budget Approvals Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Landmark,
@@ -33,9 +33,17 @@ import { interpolateUiString } from "@/lib/i18n";
 export default function FinanceBudgetApprovalsPage() {
   const toast = useToast();
   const [queue, setQueue] = useState<any[]>([]);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [totalProposedValue, setTotalProposedValue] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedContrib, setSelectedContrib] = useState<any | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const reviewRequestSequence = useRef(0);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -51,19 +59,55 @@ export default function FinanceBudgetApprovalsPage() {
     loadQueue();
   }, []);
 
-  const loadQueue = async () => {
-    setLoading(true);
+  const loadQueue = async (nextPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/approvals?type=FINANCE');
+      const res = await fetch(`/api/approvals?type=FINANCE&page=${nextPage}&pageSize=25`);
       if (res.ok) {
         const data = await res.json();
-        setQueue(data.financeQueue || []);
+        const items = data.financeQueue || [];
+        setQueue((current) => append ? [...current, ...items] : items);
+        setQueueTotal(Number(data.pagination?.queues?.finance?.total ?? items.length));
+        setTotalProposedValue(Number(data.totals?.financePendingAmount ?? items.reduce((sum: number, item: { amount?: number | null }) => sum + Number(item.amount || 0), 0)));
+        setPage(Number(data.pagination?.page ?? nextPage));
+        setTotalPages(Number(data.pagination?.queues?.finance?.totalPages ?? 1));
       }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  const loadContributionReview = async <T extends { id: string },>(contribution: T) => {
+    const sequence = ++reviewRequestSequence.current;
+    setSelectedContrib(contribution);
+    setReviewModalOpen(true);
+    setReviewLoading(true);
+    setReviewError('');
+    try {
+      const response = await fetch(`/api/budgets/${contribution.id}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || UI_STRINGS.appAppBudgetPage.failedToLoadProjectBudgetData);
+      if (sequence !== reviewRequestSequence.current) return;
+      const detail = body.data ?? body;
+      setSelectedContrib({ ...contribution, ...detail });
+    } catch (error) {
+      if (sequence === reviewRequestSequence.current) {
+        console.error('Failed to load budget contribution review details', error);
+        setReviewError(UI_STRINGS.appAppBudgetPage.failedToLoadProjectBudgetData);
+      }
+    } finally {
+      if (sequence === reviewRequestSequence.current) setReviewLoading(false);
+    }
+  };
+
+  const closeReview = () => {
+    reviewRequestSequence.current += 1;
+    setReviewModalOpen(false);
+    setReviewLoading(false);
   };
 
   const handleApprove = async (contribId: string) => {
@@ -79,9 +123,9 @@ export default function FinanceBudgetApprovalsPage() {
         const err = await res.json();
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.financeApprovalFailed }));
       }
-      toast.success(UI_STRINGS.common.budgetApprovedSuccessfully, selectedContrib?.category?.name, UI_STRINGS.common.userMessages.approvedByFinance);
+      toast.success(UI_STRINGS.common.budgetApprovedSuccessfully, selectedContrib?.category?.name || selectedContrib?.categories?.[0], UI_STRINGS.common.userMessages.approvedByFinance);
       setStatusMessage(UI_STRINGS.common.budgetApprovedSuccessfully);
-      setReviewModalOpen(false);
+      closeReview();
       loadQueue();
     } catch (err: any) {
       setActionError(err.message);
@@ -151,14 +195,14 @@ export default function FinanceBudgetApprovalsPage() {
         <SummaryCardGrid columns={3}>
           <SummaryCard
             label={UI_STRINGS.appAppFinanceBudgetApprovalsPage.pendingFinanceApprovals}
-            value={queue.length}
+            value={queueTotal}
             secondary={UI_STRINGS.appAppFinanceBudgetApprovalsPage.awaitingFinalSanction}
             icon={<Clock size={16} />}
             accent="amber"
           />
           <SummaryCard
             label={UI_STRINGS.appAppFinanceBudgetApprovalsPage.totalProposedCapex}
-            value={`₹ ${Math.round(queue.reduce((acc, q) => acc + (q.amount || 0), 0)).toLocaleString(I18N_CONFIG.defaultLocale)}`}
+            value={`₹ ${Math.round(totalProposedValue).toLocaleString(I18N_CONFIG.defaultLocale)}`}
             secondary={UI_STRINGS.appAppFinanceBudgetApprovalsPage.proposedBudgetValueInQueue}
             icon={<Landmark size={16} />}
             accent="blue"
@@ -271,10 +315,7 @@ export default function FinanceBudgetApprovalsPage() {
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11 }}
                         title={UI_STRINGS.appAppFinanceBudgetApprovalsPage.inspectBOQDetailsCategoryBreakdownAndFinancialImpact}
-                        onClick={() => {
-                          setSelectedContrib(item);
-                          setReviewModalOpen(true);
-                        }}
+                        onClick={() => { void loadContributionReview(item); }}
                       >
                         <Eye size={12} />{UI_STRINGS.appAppFinanceBudgetApprovalsPage.inspect}</button>
                       <button
@@ -321,6 +362,15 @@ export default function FinanceBudgetApprovalsPage() {
         </table>
       </div>
 
+      {page < totalPages && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '16px 0' }}>
+          <span style={{ color: '#64748b', fontSize: 12 }}>{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: String(page), value2: String(totalPages) })}</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={loadingMore} onClick={() => loadQueue(page + 1, true)}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+        </div>
+      )}
+
       {/* INSPECT & REVIEW MODAL */}
       {reviewModalOpen && selectedContrib && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -334,7 +384,7 @@ export default function FinanceBudgetApprovalsPage() {
                 <div style={{ fontSize: 12, color: '#64748b' }}>
                   {selectedContrib.project?.name}{UI_STRINGS.common.costCentre}{selectedContrib.costCentre?.code}{UI_STRINGS.common.copy1b3t0c5}{selectedContrib.costCentre?.name}{UI_STRINGS.common.copyc7zu6c}</div>
               </div>
-              <button type="button" onClick={() => setReviewModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+              <button type="button" onClick={closeReview} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={18} />
               </button>
             </div>
@@ -400,7 +450,11 @@ export default function FinanceBudgetApprovalsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(selectedContrib.boqRevision?.lines || []).map((line: any, idx: number) => (
+                  {reviewLoading ? (
+                    <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center' }}>{UI_STRINGS.common.loading}</td></tr>
+                  ) : reviewError ? (
+                    <tr><td colSpan={7} role="alert" style={{ padding: 20, textAlign: 'center' }}>{reviewError}</td></tr>
+                  ) : (selectedContrib.boqRevision?.lines || []).map((line: any, idx: number) => (
                     <tr key={line.id || idx} style={{ borderBottom: '1px solid #f1f5f9', height: 38 }}>
                       <td style={{ padding: '0 10px', color: '#64748b' }}>{line.lineNumber || idx + 1}</td>
                       <td style={{ padding: '0 10px', fontWeight: 600, color: '#0f172a' }}>
@@ -426,7 +480,7 @@ export default function FinanceBudgetApprovalsPage() {
                   className="btn btn-secondary btn-sm"
                   style={{ color: '#d97706', borderColor: '#fde68a', background: '#fffbeb' }}
                   onClick={() => {
-                    setReviewModalOpen(false);
+                    closeReview();
                     openEnquiry(selectedContrib);
                   }}
                 >
@@ -435,7 +489,7 @@ export default function FinanceBudgetApprovalsPage() {
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
-                    setReviewModalOpen(false);
+                    closeReview();
                     openChat(selectedContrib);
                   }}
                 >
@@ -446,14 +500,14 @@ export default function FinanceBudgetApprovalsPage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setReviewModalOpen(false)}
+                  onClick={closeReview}
                 >{UI_STRINGS.common.close}</button>
                 <button
                   type="button"
                   className="btn btn-secondary"
                   style={{ color: '#dc2626' }}
                   onClick={() => {
-                    setReviewModalOpen(false);
+                    closeReview();
                     setRejectModalOpen(true);
                   }}
                 >
@@ -463,7 +517,7 @@ export default function FinanceBudgetApprovalsPage() {
                   className="btn btn-primary"
                   style={{ background: '#047857', borderColor: '#047857' }}
                   onClick={() => handleApprove(selectedContrib.id)}
-                  disabled={processing}
+                  disabled={processing || reviewLoading || Boolean(reviewError)}
                 >
                   <CheckCircle2 size={14} />{UI_STRINGS.appAppFinanceBudgetApprovalsPage.sanctionBudget}</button>
               </div>

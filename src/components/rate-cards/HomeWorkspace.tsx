@@ -29,14 +29,18 @@ export default function HomeWorkspace({
   onNegotiateClick,
   onBuyerAcceptClick,
   onDetailsClick,
+  hasMoreData = false,
+  loadingMoreData = false,
+  onLoadMore,
+  serverSummary,
 }: HomeWorkspaceProps) {
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
   const pageSize = 5;
 
   // Counts for summary tabs
-  const finalisedCount = useMemo(() => cards.filter((c) => c.status === 'Active').length, [cards]);
-  const inProgressCount = useMemo(() => cards.filter((c) => c.status !== 'Active').length, [cards]);
+  const finalisedCount = useMemo(() => serverSummary?.finalised ?? cards.filter((c) => c.status === 'Active').length, [cards, serverSummary]);
+  const inProgressCount = useMemo(() => serverSummary?.inProgress ?? cards.filter((c) => c.status !== 'Active').length, [cards, serverSummary]);
 
   // Unique categories and vendors for filter dropdowns
   const availableCategories = useMemo(() => {
@@ -573,6 +577,14 @@ export default function HomeWorkspace({
                 aria-label={UI_STRINGS.componentsRateCardsHomeWorkspace.nextPage}
               >{UI_STRINGS.componentsRateCardsHomeWorkspace.gt}</button>
             </div>
+          )}
+          {hasMoreData && onLoadMore && (
+            <button
+              type="button"
+              onClick={onLoadMore}
+              disabled={loadingMoreData}
+              className="px-3 py-1.5 border border-slate-200 rounded-md text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-wait transition-colors cursor-pointer"
+            >{loadingMoreData ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}</button>
           )}
         </div>
       </div>

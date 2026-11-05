@@ -4,7 +4,7 @@ import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorRateCardsPage from '../src/app/(app)/vendor-portal/rate-cards/page';
 
 jest.mock('../src/components/VendorNegotiationWorkspace', () => ({
@@ -17,21 +17,8 @@ jest.mock('../src/components/ui/StatusBadge', () => ({
   default: ({ status }: any) => <span data-testid="status-badge">{status}</span>,
 }));
 
-jest.mock('../src/components/rate-cards/Section5VendorAcceptance', () => ({
-  __esModule: true,
-  default: ({ onAccept, onReject }: any) => <section data-testid="section-five">
-    <button onClick={() => onAccept('Signed terms', { signedBy: 'Vendor Rep', signatureEvidenceId: 'DSC-1' })}>Mock signed acceptance</button>
-    <button onClick={() => onAccept('Direct terms', null)}>Mock direct acceptance</button>
-    <button onClick={() => onReject('Not agreed')}>Mock rejection</button>
-  </section>,
-}));
-
-jest.mock('../src/components/rate-cards/Section7FinalisedDetails', () => ({
-  __esModule: true,
-  default: () => <section data-testid="section-seven">Finalised rate card details</section>,
-}));
-
 const flush = async () => act(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -78,17 +65,22 @@ describe('vendor portal rate cards page', () => {
     global.fetch = jest.fn().mockResolvedValue(response({ rateCards }));
   });
 
-  it('loads rate cards, edits and submits both quote rounds, handles agreement acceptance, search and refresh', async () => {
-    const fetchMock = jest.fn().mockImplementation((_url, init) => init?.method === 'POST'
-      ? Promise.resolve(response({ ok: true }))
-      : Promise.resolve(response({ rateCards })));
+  it('loads persisted cards, submits quote rounds and acceptance through the API, search and refresh', async () => {
+    const fetchMock = jest.fn().mockImplementation((requestUrl, init) => {
+      if (init?.method === 'POST') return Promise.resolve(response({ ok: true }));
+      const search = new URL(String(requestUrl), 'http://localhost').searchParams.get('search')?.toLowerCase() || '';
+      const filtered = search ? rateCards.filter((card) => `${card.rateCardNumber} ${card.category} ${card.scope || ''}`.toLowerCase().includes(search)) : rateCards;
+      return Promise.resolve(response({ rateCards: filtered, total: filtered.length, hasMore: false }));
+    });
     global.fetch = fetchMock;
     const { container } = render(<VendorRateCardsPage />);
     await flush();
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadingRateCards))).not.toBeInTheDocument());
 
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadingRateCards))).not.toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.vendorRateCardsCommercialNegotiation))).toBeInTheDocument();
-    expect(screen.getByTestId('section-seven')).toBeInTheDocument();
+    expect(screen.queryByTestId('section-five')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('section-seven')).not.toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.round1ResponseRequired))).toBeInTheDocument();
     expect(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[0]).toHaveValue(390);
     expect(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.provideCommercialOrDeliveryRemarks))).toBeInTheDocument();
@@ -130,18 +122,11 @@ describe('vendor portal rate cards page', () => {
     expect(screen.getByText(/formally accepted/)).toBeInTheDocument();
     expect(JSON.parse(fetchMock.mock.calls[5][1].body).action).toBe('VENDOR_ACCEPT');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mock signed acceptance' }));
-    expect(screen.getByText(/digitally signed by Vendor Rep/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mock direct acceptance' }));
-    expect(screen.getByText(/accepted by Vendor/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mock rejection' }));
-    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.rateCardRejectedWithRemarks, {"remarks":"Not agreed"})))).toBeInTheDocument();
-
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: 'electrical' } });
-    expect(screen.getByText('RC-ROUND-2')).toBeInTheDocument();
-    expect(screen.queryByText('RC-ROUND-1')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('RC-ROUND-2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('RC-ROUND-1')).not.toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: 'no match' } });
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.noRateCardsMatchYourSearch))).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.noRateCardsMatchYourSearch))).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await flush();
@@ -153,6 +138,7 @@ describe('vendor portal rate cards page', () => {
     global.fetch = jest.fn().mockResolvedValue(response({ rateCards: [] }));
     const { rerender } = render(<VendorRateCardsPage />);
     await flush();
+    await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadingRateCards))).not.toBeInTheDocument());
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.youDoNotHaveAnyRateCardsEstablishedAtThisTime))).toBeInTheDocument();
 
     global.fetch = jest.fn().mockResolvedValue(response({ rateCards: [{
@@ -192,12 +178,24 @@ describe('vendor portal rate cards page', () => {
     expect(screen.queryByText(/No rate cards/)).not.toBeInTheDocument();
 
     const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo));
-    fireEvent.change(search, { target: { value: 'RC-ROUND-1' } });
-    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[0], { target: { value: '395' } });
-    fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[1], { target: { value: '825' } });
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"Vendor RC Quote-1"})) }));
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
-    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.failedToSubmitQuoteRoundNumber, {"roundNumber":"1"})))).toBeInTheDocument();
+    jest.useFakeTimers();
+    try {
+      fireEvent.change(search, { target: { value: 'RC-ROUND-1' } });
+      fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[0], { target: { value: '395' } });
+      fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1))[1], { target: { value: '825' } });
+      fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Submit","toLocaleString":"Vendor RC Quote-1"})) }));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+      const submissionError = uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.failedToSubmitQuoteRoundNumber, {"roundNumber":"1"}));
+      expect(screen.getByText(submissionError)).toBeInTheDocument();
+
+      await act(async () => {
+        jest.advanceTimersByTime(250);
+        await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      });
+      expect(screen.getByText(submissionError)).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
 
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.searchCategoryRateCardNo)), { target: { value: '' } });
     global.fetch = jest.fn().mockImplementation((_url, init) => init?.method === 'POST'
@@ -214,6 +212,7 @@ describe('vendor portal rate cards page', () => {
     window.history.replaceState({}, '', '/vendor-portal/rate-cards?negotiate=rc-round-2');
     render(<VendorRateCardsPage />);
     await flush();
+    await waitFor(() => expect(screen.getByTestId('vendor-negotiation-workspace')).toBeInTheDocument());
     expect(screen.getByTestId('vendor-negotiation-workspace')).toBeInTheDocument();
     expect(screen.getByTestId('vendor-negotiation-workspace')).toHaveTextContent('RC-ROUND-2');
     fireEvent.click(screen.getByRole('button', { name: 'Reload after success' }));

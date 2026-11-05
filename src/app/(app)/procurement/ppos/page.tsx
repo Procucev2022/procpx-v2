@@ -78,6 +78,12 @@ export default function PposDeskPage() {
   const toast = useToast();
   const [ppos, setPpos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalPpos, setTotalPpos] = useState(0);
+  const [committedPpoValue, setCommittedPpoValue] = useState<number | null>(null);
+  const [ratingCounts, setRatingCounts] = useState<Record<string, number> | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
   const [isProcurementUser, setIsProcurementUser] = useState(false);
 
@@ -110,12 +116,20 @@ export default function PposDeskPage() {
     fetchPpos();
   }, []);
 
-  const fetchPpos = async () => {
-    setLoading(true);
+  const fetchPpos = async (requestedPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/procurement/ppos');
+      const res = await fetch(`/api/procurement/ppos?page=${requestedPage}&pageSize=50`);
       const data = await res.json();
-      if (data.ppos) setPpos(data.ppos);
+      if (data.ppos) {
+        setPpos((previous) => append ? [...previous, ...data.ppos] : data.ppos);
+        setPage(data.page ?? requestedPage);
+        setTotalPages(data.totalPages ?? 1);
+        setTotalPpos(data.total ?? data.ppos.length);
+        setCommittedPpoValue(typeof data.totalCommittedValue === 'number' ? data.totalCommittedValue : null);
+        setRatingCounts(data.ratingCounts && typeof data.ratingCounts === 'object' ? data.ratingCounts : null);
+      }
       if (data.currentUserRole) setCurrentUserRole(data.currentUserRole);
       if (typeof data.isProcurementUser === 'boolean') {
         setIsProcurementUser(data.isProcurementUser);
@@ -125,7 +139,8 @@ export default function PposDeskPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -248,25 +263,30 @@ export default function PposDeskPage() {
 
   // Metrics for Project User
   const metrics = useMemo(() => {
-    const total = ppos.length;
-    const unrated = ppos.filter((p) => !p.vendorRating);
-    const drafts = ppos.filter((p) => p.vendorRating?.status === 'DRAFT');
-    const returned = ppos.filter((p) => p.vendorRating?.status === 'RETURNED_FOR_CORRECTION');
-    const submitted = ppos.filter((p) => p.vendorRating?.status === 'SUBMITTED');
-    const approved = ppos.filter((p) => p.vendorRating?.status === 'APPROVED');
-    const needsAction = unrated.length + returned.length;
+    const total = totalPpos || ppos.length;
+    const counts = ratingCounts || ppos.reduce<Record<string, number>>((result, ppo) => {
+      const status = ppo.vendorRating?.status;
+      if (status) result[status] = (result[status] || 0) + 1;
+      return result;
+    }, {});
+    const ratedCount = Object.values(counts).reduce((sum, value) => sum + value, 0);
+    const unratedCount = Math.max(0, total - ratedCount);
+    const draftsCount = counts.DRAFT || 0;
+    const returnedCount = counts.RETURNED_FOR_CORRECTION || 0;
+    const submittedCount = counts.SUBMITTED || 0;
+    const approvedCount = counts.APPROVED || 0;
 
     return {
       total,
-      unratedCount: unrated.length,
-      draftsCount: drafts.length,
-      returnedCount: returned.length,
-      submittedCount: submitted.length,
-      approvedCount: approved.length,
-      needsActionCount: needsAction,
-      totalCommittedValue: Math.round(ppos.reduce((acc, p) => acc + (p.totalValue || p.totalAmount || 0), 0)),
+      unratedCount,
+      draftsCount,
+      returnedCount,
+      submittedCount,
+      approvedCount,
+      needsActionCount: unratedCount + returnedCount,
+      totalCommittedValue: Math.round(committedPpoValue ?? ppos.reduce((acc, p) => acc + (p.totalValue || p.totalAmount || 0), 0)),
     };
-  }, [ppos]);
+  }, [ppos, totalPpos, committedPpoValue, ratingCounts]);
 
   // Filtered List
   const filteredPpos = useMemo(() => {
@@ -710,6 +730,14 @@ export default function PposDeskPage() {
           </div>
         )}
       </Card>
+      {page < totalPages && (
+        <div className="flex justify-center py-4">
+          <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => void fetchPpos(page + 1, true)}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+          <span className="sr-only">{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: page, value2: totalPages })}</span>
+        </div>
+      )}
 
       {/* ── MODAL 1: RATE / EDIT COMPLETED PPO (PROJECT USER) ── */}
       {selectedPpoForRating && (

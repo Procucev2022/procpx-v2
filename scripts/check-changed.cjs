@@ -9,6 +9,7 @@ const dryRun = process.argv.includes('--dry-run');
 const codeExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const typeScriptExtensions = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const testFilePattern = /(^|\/)(unit-tests|__tests__)\/.*\.(test|spec)\.(cjs|js|jsx|mjs|ts|tsx)$/i;
+const MAX_COMMAND_ARGUMENT_CHARS = 6_000;
 const failures = [];
 
 function git(args) {
@@ -52,6 +53,26 @@ function npmRun(project, script, args = []) {
   return true;
 }
 
+function splitArgumentsByLength(args, maxLength) {
+  const batches = [];
+  let batch = [];
+  let batchLength = 0;
+
+  for (const arg of args) {
+    const argLength = String(arg).length + 1;
+    if (batch.length > 0 && batchLength + argLength > maxLength) {
+      batches.push(batch);
+      batch = [];
+      batchLength = 0;
+    }
+    batch.push(arg);
+    batchLength += argLength;
+  }
+
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
 try {
   const tracked = git(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--']);
   const untracked = git(['ls-files', '--others', '--exclude-standard']);
@@ -89,11 +110,23 @@ try {
       && codeExtensions.has(path.extname(file).toLowerCase())
       && !testFilePattern.test(file.split(path.sep).join('/')));
 
-    if (lintFiles.length) npmRun(project, 'lint', lintFiles);
+    for (const lintBatch of splitArgumentsByLength(lintFiles, MAX_COMMAND_ARGUMENT_CHARS)) {
+      npmRun(project, 'lint', lintBatch);
+    }
     if (typeScriptFiles.length) npmRun(project, 'typecheck');
     if (sourceFiles.length || testFiles.length) npmRun(project, 'check:i18n');
-    if (testFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--runTestsByPath', ...testFiles]);
-    if (sourceFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--findRelatedTests', ...sourceFiles, '--passWithNoTests']);
+    if (relativeFiles.some((file) => /^src[\\/]app[\\/]api[\\/]/.test(file)
+      || file === 'scripts/check-d1-mutation-boundaries.cjs'
+      || file === 'package.json')) npmRun(project, 'check:architecture');
+    const testInputFiles = [...new Set([...testFiles, ...sourceFiles])];
+    const testInputLength = testInputFiles.reduce((length, file) => length + file.length + 1, 0);
+    if (testInputLength > MAX_COMMAND_ARGUMENT_CHARS) {
+      process.stdout.write('Changed test/source paths exceed the shell argument limit; running the complete unit suite once.\n');
+      npmRun(project, 'test', ['--passWithNoTests']);
+    } else {
+      if (testFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--runTestsByPath', ...testFiles]);
+      if (sourceFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--findRelatedTests', ...sourceFiles, '--passWithNoTests']);
+    }
   }
 
   process.stdout.write(`\nFast changed-file plan: ${changedFiles.length} changed paths across ${projects.size} npm project(s).\n`);

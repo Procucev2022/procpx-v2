@@ -4,7 +4,10 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { hasPermission } from '@/lib/permissions';
-import { createAuditLog } from '@/lib/audit';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { RFQ_INVITATION_MARK_RELEASED_SQL, RFQ_TRANSITION_ALLOWED_FIELDS } from './route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -17,14 +20,27 @@ export async function GET(
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
+  const startedAt = Date.now();
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
       return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
     }
-    const isInvited = await prisma.rfqVendor.findFirst({
-      where: { rfqId: id, vendorId: ctx.vendorId, tenantId: ctx.tenantId },
-    });
+    let isInvited;
+    try {
+      isInvited = await prisma.rfqVendor.findFirst({
+        where: { rfqId: id, vendorId: ctx.vendorId, tenantId: ctx.tenantId },
+      });
+    } catch (error) {
+      await writeStructuredLog('error', 'procurement.rfq_invitation_check_failed', {
+        operation: 'check_rfq_vendor_invitation', route: `/api/procurement/rfqs/${id}`,
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        tenantId: ctx.tenantId, userId: ctx.userId, rfqId: id, vendorId: ctx.vendorId,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+      }, 'application');
+      return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqDetail, 500);
+    }
     if (!isInvited) {
       return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403);
     }
@@ -41,55 +57,59 @@ export async function GET(
         tenantId: ctx.tenantId,
       },
       include: {
-        project: true,
-        boqRevision: {
-          include: {
-            approvedBy: { select: { id: true, name: true, email: true } },
-            lines: {
-              include: {
-                category: true,
-                subcategory: true,
-                uom: true,
-              },
-            },
-          },
-        },
+        project: { select: { id: true, name: true } },
         lines: {
-          include: {
-            boqLine: {
-              include: {
-                category: true,
-                subcategory: true,
-                uom: true,
-              },
-            },
-            prLine: {
-              include: {
-                boqLine: {
-                  include: {
-                    category: true,
-                    subcategory: true,
-                    uom: true,
-                  },
-                },
-              },
-            },
+          select: {
+            id: true,
+            lineNumber: true,
+            description: true,
+            specification: true,
+            uom: true,
+            quantity: true,
+            benchmarkRate: true,
+            boqLineId: true,
           },
           orderBy: { lineNumber: 'asc' },
         },
         invitedVendors: {
           where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
-          include: {
-            vendor: true,
+          select: {
+            id: true,
+            vendorId: true,
+            invitedAt: true,
+            invitationStatus: true,
+            submissionStatus: true,
+            vendor: { select: { id: true, name: true, code: true } },
           },
         },
         quotes: {
           where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
-          include: {
-            vendor: true,
+          select: {
+            id: true,
+            vendorId: true,
+            quoteNumber: true,
+            quoteVersion: true,
+            status: true,
+            totalBaseAmount: true,
+            taxAmount: true,
+            discountAmount: true,
+            totalQuoteAmount: true,
+            commercialTerms: true,
+            paymentTermsOffered: true,
+            deliveryLeadTimeDays: true,
+            validUntil: true,
+            submittedAt: true,
+            createdAt: true,
+            vendor: { select: { id: true, name: true, code: true } },
             lines: {
-              include: {
-                rfqLine: true,
+              select: {
+                id: true,
+                rfqLineId: true,
+                unitRate: true,
+                taxPercent: true,
+                discountPercent: true,
+                lineTotal: true,
+                remarks: true,
               },
             },
           },
@@ -99,30 +119,62 @@ export async function GET(
           include: {
             rounds: {
               where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
-              include: {
-                vendor: true,
+              select: {
+                id: true,
+                vendorId: true,
+                roundNumber: true,
+                deadline: true,
+                targetPrice: true,
+                previousQuoteAmount: true,
+                counterOfferAmount: true,
+                revisedQuoteAmount: true,
+                savingsAmount: true,
+                savingsPercent: true,
+                status: true,
+                notes: true,
+                isFinalOffer: true,
+                buyerDecision: true,
+                buyerDecisionDate: true,
+                buyerDecisionRemarks: true,
+                nextResponsibleParty: true,
+                lineItemsJson: true,
+                submittedByVendor: true,
+                createdAt: true,
+                vendor: { select: { id: true, name: true, code: true } },
               },
               orderBy: { roundNumber: 'desc' },
             },
           },
         },
-        auctions: ctx.role === 'VENDOR' ? false : {
-          include: {
-            bids: {
-              include: { vendor: true },
-              orderBy: { timestamp: 'desc' },
-            },
-          },
-        },
         awards: ctx.role === 'VENDOR' ? false : {
-          include: {
-            recommendedVendor: true,
+          select: {
+            id: true,
+            recommendedVendorId: true,
+            originalQuoteAmount: true,
+            finalNegotiatedAmount: true,
+            benchmarkAmount: true,
+            totalSavingsAmount: true,
+            savingsPercent: true,
+            justification: true,
+            status: true,
+            submittedAt: true,
+            approvedAt: true,
+            approvalRemarks: true,
+            recommendedVendor: { select: { id: true, name: true, code: true } },
           },
         },
         ppos: {
           where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
-          include: {
-            vendor: true,
+          select: {
+            id: true,
+            vendorId: true,
+            ppoNumber: true,
+            title: true,
+            totalValue: true,
+            status: true,
+            issuedAt: true,
+            createdAt: true,
+            vendor: { select: { id: true, name: true, code: true } },
           },
         },
       },
@@ -134,8 +186,14 @@ export async function GET(
 
     return apiSuccess({ rfq });
   } catch (error: any) {
-    console.error('Error fetching RFQ detail:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500);
+    await writeStructuredLog('error', 'procurement.rfq_detail_read_failed', {
+      operation: 'read_rfq_detail', route: `/api/procurement/rfqs/${id}`,
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId, userId: ctx.userId, role: ctx.role, rfqId: id,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqDetail, 500);
   }
 }
 
@@ -143,9 +201,32 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startedAt = Date.now();
   const { id } = await params;
-  const body = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  }
   const { action, status, reason, ...updateFields } = body;
+  if ((action !== undefined && typeof action !== 'string')
+    || (status !== undefined && typeof status !== 'string')
+    || (reason !== undefined && typeof reason !== 'string')
+    || ['title', 'scopeOfWork', 'submissionDeadline', 'clarificationDeadline', 'deliveryRequirement', 'paymentTerms', 'taxTerms']
+      .some((field) => updateFields[field] !== undefined && typeof updateFields[field] !== 'string')) {
+    return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  }
+  for (const field of ['submissionDeadline', 'clarificationDeadline']) {
+    const value = updateFields[field];
+    if (typeof value === 'string' && !Number.isFinite(new Date(value).getTime())) {
+      return apiError(UI_STRINGS.common.invalidDate, 400);
+    }
+  }
 
   const requiredPerm = action === 'RELEASE' ? 'RFQ_RELEASE' : action === 'CANCEL' ? 'RFQ_CANCEL' : 'RFQ_EDIT';
   const ctx = await requireAuth(requiredPerm);
@@ -157,8 +238,13 @@ export async function PUT(
         id,
         tenantId: ctx.tenantId,
       },
-      include: {
-        invitedVendors: true,
+      select: {
+        id: true,
+        tenantId: true,
+        rfqNumber: true,
+        projectId: true,
+        status: true,
+        _count: { select: { invitedVendors: true } },
       },
     });
 
@@ -177,13 +263,7 @@ export async function PUT(
       updateData.status = 'RELEASED';
       updateData.releasedAt = new Date();
       auditAction = 'RFQ_RELEASED';
-      auditDesc = `RFQ ${existing.rfqNumber} released to ${existing.invitedVendors.length} vendors`;
-
-      // Update invited vendors status to INVITED
-      await prisma.rfqVendor.updateMany({
-        where: { rfqId: id },
-        data: { invitationStatus: 'INVITED' },
-      });
+      auditDesc = `RFQ ${existing.rfqNumber} released to ${existing._count.invitedVendors} vendors`;
     } else if (action === 'CANCEL' || status === 'CANCELLED') {
       if (!reason) {
         return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400);
@@ -200,33 +280,58 @@ export async function PUT(
     if (existing.status === 'DRAFT' || existing.status === 'UNDER_REVIEW') {
       if (updateFields.title) updateData.title = updateFields.title;
       if (updateFields.scopeOfWork) updateData.scopeOfWork = updateFields.scopeOfWork;
-      if (updateFields.submissionDeadline) updateData.submissionDeadline = new Date(updateFields.submissionDeadline);
-      if (updateFields.clarificationDeadline) updateData.clarificationDeadline = new Date(updateFields.clarificationDeadline);
+      if (updateFields.submissionDeadline) updateData.submissionDeadline = new Date(updateFields.submissionDeadline as string);
+      if (updateFields.clarificationDeadline) updateData.clarificationDeadline = new Date(updateFields.clarificationDeadline as string);
       if (updateFields.deliveryRequirement) updateData.deliveryRequirement = updateFields.deliveryRequirement;
       if (updateFields.paymentTerms) updateData.paymentTerms = updateFields.paymentTerms;
       if (updateFields.taxTerms) updateData.taxTerms = updateFields.taxTerms;
     }
 
-    const updated = await prisma.rfq.update({
-      where: { id },
-      data: updateData,
-    });
-
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: existing.projectId,
-      entityType: 'RFQ',
-      entityId: existing.id,
-      action: auditAction,
-      description: auditDesc,
-      oldValue: { status: existing.status },
-      newValue: { status: updated.status, reason },
-    });
+    const now = new Date();
+    const transitionEntries = Object.entries(updateData).filter(([key]) => (RFQ_TRANSITION_ALLOWED_FIELDS as readonly string[]).includes(key));
+    const transitionColumns = transitionEntries.map(([key]) => `"${key}"`);
+    const assignments = transitionColumns.map((column) => `${column} = ?`).concat('"updatedAt" = ?');
+    const updateSql = `UPDATE "rfqs" SET ${assignments.join(', ')}`;
+    const guardedUpdateSql = `${updateSql} WHERE "id" = ? AND "tenantId" = ? AND "status" IS ?`;
+    const batch = [
+      {
+        sql: guardedUpdateSql,
+        values: [...transitionEntries.map(([, value]) => value), now, id, ctx.tenantId, existing.status],
+      },
+      {
+        sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+        values: [
+          crypto.randomUUID(), ctx.tenantId, ctx.userId, existing.projectId, 'RFQ', existing.id,
+          auditAction, auditDesc, JSON.stringify({ status: existing.status }),
+          JSON.stringify({ status: updateData.status || existing.status, reason: reason ?? null }), null, null, now,
+        ],
+      },
+    ];
+    if (action === 'RELEASE' || status === 'RELEASED') {
+      batch.push({
+        sql: RFQ_INVITATION_MARK_RELEASED_SQL,
+        values: [id, ctx.tenantId, id, ctx.tenantId],
+      });
+    }
+    const results = await writeD1BatchAtomically(batch);
+    if (Number(results[0]?.meta?.changes || 0) !== 1 || Number(results[1]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
+    const updated = { ...existing, ...updateData, updatedAt: now };
 
     return apiSuccess({ rfq: updated, message: auditDesc });
   } catch (error: any) {
-    console.error('Error updating RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateRfq }), 500);
+    await writeStructuredLog('error', 'procurement.rfq_update_failed', {
+      operation: 'update_rfq',
+      route: `/api/procurement/rfqs/${id}`,
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      rfqId: id,
+      action: typeof action === 'string' ? action : undefined,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToUpdateRfq, 500);
   }
 }

@@ -1,287 +1,386 @@
-// src/app/api/boq/upload-template/route.ts - Method 1: Fixed Format Upload
 import { NextRequest } from 'next/server';
+import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createNextBoqRevision } from '@/lib/boq-revision-utils';
-import * as XLSX from 'xlsx';
-import { saveUpload } from '@/lib/storage';
+import { deleteUpload, saveUpload } from '@/lib/storage';
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
+  BOQ_INSERT_NEXT_CODE_SQL,
+  BOQ_LINE_DELETE_AFTER_AUDIT_SQL,
+  BOQ_LINE_INSERT_AFTER_AUDIT_SQL,
+  BOQ_REVISION_TOUCH_IF_CURRENT_SQL,
+  BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
+  BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL,
+  BOQ_TEMPLATE_UPDATE_METADATA_IF_CURRENT_SQL,
+  MAX_BOQ_BATCH_LINES,
+} from '@/lib/d1-batch.constants';
+import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
+import type { TemplateBoqException, TemplateBoqLine, TemplateValidationMessage } from '@app-types/app/api/boq/upload-template/route.types';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { BOQ_TEMPLATE_AUDIT_ACTION, BOQ_TEMPLATE_CREATE_NOTES, BOQ_TEMPLATE_SOURCE_TYPE } from './route.constants';
+
+class InvalidTemplateError extends Error {}
+
+function text(value: unknown): string {
+  return value === undefined || value === null ? '' : String(value).trim();
+}
+
+function changed(result: D1BatchResult | undefined): number {
+  return Number(result?.meta?.changes || 0);
+}
+
+function insertLineStatement(line: TemplateBoqLine, revisionId: string, tenantId: string, auditId: string, now: Date): D1BatchInputStatement {
+  return {
+    sql: BOQ_LINE_INSERT_AFTER_AUDIT_SQL,
+    values: [
+      crypto.randomUUID(), tenantId, revisionId, line.lineNumber, line.originalDescription, line.standardDescription,
+      line.specification, line.categoryId, null, line.uomId, line.uomRaw || null, line.quantity, line.location,
+      line.drawingReference, line.brand, null, null, null, line.remarks, line.itemCode, line.sourceSheet, line.sourceRow,
+      null, null, true, line.validationStatus, JSON.stringify(line.validationMessages), false, null, null, null, null,
+      null, null, null, null, null, null, null, null, null, null, null, now, now, auditId, tenantId, revisionId, tenantId,
+    ],
+  };
+}
+
+function parseTemplateRows(rows: Array<Record<string, unknown>>, sheetName: string, categories: Array<{ id: string; name: string }>, uoms: Array<{ id: string; code: string }>): {
+  lines: TemplateBoqLine[];
+  exceptions: TemplateBoqException[];
+  validCount: number;
+  warningCount: number;
+  errorCount: number;
+} {
+  const categoryByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category.id]));
+  const uomByCode = new Map(uoms.map((uom) => [uom.code.trim().toUpperCase(), uom.id]));
+  const exceptions: TemplateBoqException[] = [];
+  const lines: TemplateBoqLine[] = [];
+  const lineNumbers = new Set<string>();
+  let validCount = 0;
+  let warningCount = 0;
+  let errorCount = 0;
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const lineNumber = text(row['Line No'] || row['Line Number'] || row['S.No.'] || row['S.No'] || row.SNo || row['Sl No'] || row['#']) || String(index + 1);
+    if (lineNumbers.has(lineNumber)) throw new InvalidTemplateError(UI_STRINGS.common.invalidRequestBody);
+    lineNumbers.add(lineNumber);
+
+    const description = text(row['Item Description *'] || row['Item Description'] || row.Description || row.Item);
+    const specification = text(row['BOQ Description'] || row['Detailed Specification'] || row.Specification || row['Specification / Scope'] || row.Scope);
+    const categoryName = text(row['Category *'] || row.Category);
+    const uomRaw = text(row['UOM *'] || row.UOM || row.Unit);
+    const rawQuantity = row['Quantity *'] !== undefined ? row['Quantity *'] : row.Quantity !== undefined ? row.Quantity : row.Qty;
+    const cleanQuantity = text(rawQuantity).replace(/,/g, '');
+    const parsedQuantity = cleanQuantity === '' ? null : Number(cleanQuantity);
+    const messages: TemplateValidationMessage[] = [];
+    let status = 'VALID';
+    let quantity: number | null = null;
+
+    if (!description) {
+      messages.push({ level: 'ERROR', code: 'DESC_MISSING', message: UI_STRINGS.appApiBoqUploadTemplateRoute.itemDescriptionIsRequired });
+      status = 'ERROR';
+    }
+    if (cleanQuantity === '') {
+      status = 'QUANTITY_REQUIRED';
+      messages.push({ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: UI_STRINGS.appApiBoqUploadTemplateRoute.quantityIsRequiredBeforeBudgetingOrPR });
+    } else if (parsedQuantity === null || !Number.isFinite(parsedQuantity)) {
+      messages.push({ level: 'ERROR', code: 'QTY_INVALID', message: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.quantityCleanQtyStrMustBeNumeric, { cleanQtyStr: cleanQuantity }) });
+      status = 'ERROR';
+    } else if (parsedQuantity < 0) {
+      messages.push({ level: 'ERROR', code: 'QTY_NEGATIVE', message: UI_STRINGS.appApiBoqUploadTemplateRoute.quantityCannotBeNegative });
+      status = 'ERROR';
+    } else {
+      quantity = parsedQuantity;
+      if (parsedQuantity === 0) {
+        messages.push({ level: 'WARNING', code: 'QTY_ZERO', message: UI_STRINGS.appApiBoqUploadTemplateRoute.quantityMustBeGreaterThanZero });
+        if (status !== 'ERROR') status = 'WARNING';
+      }
+    }
+
+    const categoryId = categoryByName.get(categoryName.toLowerCase()) || null;
+    if (categoryName && !categoryId) {
+      messages.push({ level: 'WARNING', code: 'CAT_UNRECOGNIZED', message: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.categoryCatNameNotInStandardTaxonomy, { catName: categoryName }) });
+      if (status !== 'ERROR') status = 'WARNING';
+    }
+    const uomId = uomByCode.get(uomRaw.toUpperCase()) || null;
+    if (uomRaw && !uomId) {
+      messages.push({ level: 'WARNING', code: 'UOM_NON_STANDARD', message: interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.uOMUomRawMappedToRawText, { uomRaw }) });
+      if (status !== 'ERROR') status = 'WARNING';
+    }
+
+    if (status === 'VALID') validCount += 1;
+    else if (status === 'ERROR') {
+      errorCount += 1;
+      exceptions.push({ line: lineNumber, description: description || '(blank)', errors: messages });
+    } else warningCount += 1;
+
+    const label = description || UI_STRINGS.common.untitledItemFallback;
+    lines.push({
+      lineNumber,
+      itemCode: text(row['Item Code']) || null,
+      originalDescription: label,
+      standardDescription: label,
+      specification: specification || null,
+      categoryId,
+      uomId,
+      uomRaw: uomRaw || 'NOS',
+      quantity,
+      brand: text(row['Brand / Make'] || row.Brand || row.Make) || null,
+      location: text(row['Location / Area'] || row.Location || row.Area) || null,
+      remarks: text(row.Remarks || row.Remark) || null,
+      drawingReference: text(row['Drawing Reference'] || row['Drawing Ref']) || null,
+      sourceSheet: sheetName,
+      sourceRow: index + 2,
+      validationStatus: status,
+      validationMessages: messages,
+    });
+  }
+  return { lines, exceptions, validCount, warningCount, errorCount };
+}
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
   if (!isApiContext(ctx)) return ctx;
+  const startedAt = Date.now();
+  let targetBoqId: string | undefined;
+  let revisionId: string | undefined;
+  let projectIdForLog: string | undefined;
+  let uploadedPath: string | undefined;
+  let lineCount = 0;
+
+  const discardUnreferencedUpload = async () => {
+    if (!uploadedPath || !projectIdForLog) return;
+    try {
+      await deleteUpload(uploadedPath, [ctx.tenantId, projectIdForLog]);
+      uploadedPath = undefined;
+    } catch (cleanupError) {
+      await writeStructuredLog('error', 'boq.template_upload_cleanup_failed', {
+        operation: 'remove_unreferenced_upload', route: '/api/boq/upload-template',
+        requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+        projectId: projectIdForLog, boqId: targetBoqId, revisionId,
+        error: cleanupError instanceof Error ? { name: cleanupError.name, message: cleanupError.message.slice(0, 300) } : { type: typeof cleanupError },
+      });
+    }
+  };
 
   try {
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const projectId = formData.get('projectId') as string;
-    const costCentreId = formData.get('costCentreId') as string | null;
-    const boqId = formData.get('boqId') as string | null;
-    const title = formData.get('title') as string | null;
-    const description = formData.get('description') as string | null;
-    const purpose = formData.get('purpose') as string | null;
-    const categoryParam = formData.get('category') as string | null;
+    const file = formData.get('file');
+    const projectId = text(formData.get('projectId'));
+    projectIdForLog = projectId || undefined;
+    const requestedCostCentreId = text(formData.get('costCentreId')) || null;
+    const requestedBoqId = text(formData.get('boqId')) || null;
+    const titleInput = formData.get('title');
+    const descriptionInput = formData.get('description');
+    const purposeInput = text(formData.get('purpose'));
+    const categoryInput = text(formData.get('category'));
 
-    if (!file || !projectId) {
-      return apiError('Spreadsheet file and Project ID are required.', 400);
+    if (!(file instanceof File) || !projectId) {
+      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.spreadsheetFileAndProjectIDAreRequired, 400);
     }
+    const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenantId } });
+    if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, tenantId: ctx.tenantId },
-    });
-    if (!project) return apiError('Project not found.', 404);
-
-    // Read buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Save original uploaded file
-    const savedFilePath = await saveUpload([ctx.tenantId, projectId], `${Date.now()}_${file.name}`, buffer);
-
-    // Parse XLSX
+    const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames.find(s => s.toLowerCase().includes('data') || s.toLowerCase().includes('boq')) || workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-    if (!rows || rows.length === 0) {
-      return apiError('Uploaded spreadsheet is empty or has no recognizable rows.', 400);
+    const sheetName = workbook.SheetNames.find((name) => name.toLowerCase().includes('data') || name.toLowerCase().includes('boq')) || workbook.SheetNames[0];
+    const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+    const rows = sheet ? XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Array<Record<string, unknown>> : [];
+    if (rows.length === 0) {
+      return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.uploadedSpreadsheetIsEmptyOrHasNoRecognizableRows, 400);
     }
+    if (rows.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
 
-    // Check cost centres & categories for tenant
     const [allCostCentres, allCategories, allUoms] = await Promise.all([
       prisma.costCentre.findMany({ where: { projectId, tenantId: ctx.tenantId } }),
       prisma.category.findMany({ where: { tenantId: ctx.tenantId } }),
       prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId } }),
     ]);
-
-    const ccMapByCode = new Map(allCostCentres.map(c => [c.code.toUpperCase(), c]));
-    const catMapByName = new Map(allCategories.map(c => [c.name.toLowerCase(), c]));
-    const uomMapByCode = new Map(allUoms.map(u => [u.code.toUpperCase(), u]));
-
-    // Determine target Cost Centre
-    let targetCostCentreId = costCentreId;
-    if (!targetCostCentreId && allCostCentres.length > 0) {
-      const firstRowCcCode = (rows[0]['Cost Centre Code *'] || rows[0]['Cost Centre Code'] || rows[0]['Cost Centre'] || '').trim().toUpperCase();
-      if (firstRowCcCode && ccMapByCode.has(firstRowCcCode)) {
-        targetCostCentreId = ccMapByCode.get(firstRowCcCode)!.id;
-      } else {
-        targetCostCentreId = allCostCentres[0].id;
-      }
+    const ccByCode = new Map(allCostCentres.map((centre) => [centre.code.toUpperCase(), centre]));
+    let costCentreId = requestedCostCentreId;
+    if (!costCentreId && allCostCentres.length > 0) {
+      const rowCode = text(rows[0]['Cost Centre Code *'] || rows[0]['Cost Centre Code'] || rows[0]['Cost Centre']).toUpperCase();
+      costCentreId = (rowCode && ccByCode.get(rowCode)?.id) || allCostCentres[0].id;
     }
+    if (requestedCostCentreId && !allCostCentres.some((centre) => centre.id === requestedCostCentreId)) {
+      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+    }
+    const prepared = parseTemplateRows(rows, sheetName || '', allCategories, allUoms);
+    lineCount = prepared.lines.length;
 
-    let boq: any = null;
-    let boqRevision: any = null;
-
-    if (boqId) {
-      boq = await prisma.boq.findFirst({
-        where: { id: boqId, tenantId: ctx.tenantId },
+    let existingBoq: Record<string, unknown> | null = null;
+    let currentRevision: Record<string, unknown> | null = null;
+    if (requestedBoqId) {
+      existingBoq = await prisma.boq.findFirst({
+        where: { id: requestedBoqId, tenantId: ctx.tenantId, projectId },
         include: { revisions: { orderBy: { revisionNumber: 'desc' }, take: 1 } },
-      });
-      if (boq && boq.revisions.length > 0) {
-        const latest = boq.revisions[0];
-        if (latest.status === 'DRAFT') {
-          boqRevision = latest;
-          // Clear any existing lines in this draft revision so re-uploading replaces them cleanly
-          await prisma.boqLine.deleteMany({ where: { boqRevisionId: boqRevision.id } });
-        }
-      }
+      }) as Record<string, unknown> | null;
+      if (!existingBoq) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+      const revisions = existingBoq.revisions as Array<Record<string, unknown>> | undefined;
+      currentRevision = revisions?.[0] || null;
+      if (currentRevision?.status !== 'DRAFT') currentRevision = null;
     }
 
-    if (!boq) {
-      const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-      const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
-      const defaultTitle = categoryParam ? `${categoryParam} — ${project.name}` : `${project.name} BOQ`;
-      boq = await prisma.boq.create({
-        data: {
-          tenantId: ctx.tenantId,
-          projectId,
-          costCentreId: targetCostCentreId || null,
-          boqCode,
-          title: title?.trim() || defaultTitle,
-          description: description?.trim() || null,
-          category: categoryParam || null,
-          purpose: purpose || 'BUDGET',
-          status: 'DRAFT',
-          createdBy: ctx.userId,
-        },
+    const now = new Date();
+    let expectedRevisionUpdatedAt: Date | string | null = null;
+    let expectedRevisionStatus: string | null = null;
+    if (existingBoq && currentRevision) {
+      const priorUpdatedAt = currentRevision.updatedAt instanceof Date
+        ? currentRevision.updatedAt
+        : new Date(String(currentRevision.updatedAt || ''));
+      if (!Number.isFinite(priorUpdatedAt.getTime())) return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+      now.setTime(Math.max(now.getTime(), priorUpdatedAt.getTime() + 1));
+      expectedRevisionUpdatedAt = currentRevision.updatedAt as Date | string;
+      expectedRevisionStatus = String(currentRevision.status);
+    }
+
+    const isNewBoq = !existingBoq;
+    targetBoqId = existingBoq ? String(existingBoq.id) : crypto.randomUUID();
+    const requestedTitle = text(titleInput);
+    const descriptionProvided = descriptionInput !== null;
+    const requestedDescription = descriptionInput === null ? null : text(descriptionInput) || null;
+    const purpose = purposeInput || String(existingBoq?.purpose || 'BUDGET');
+    const category = categoryInput || String(existingBoq?.category || '');
+    const defaultTitle = category ? `${category} — ${project.name}` : `${project.name} BOQ`;
+    const boqTitle = requestedTitle || String(existingBoq?.title || defaultTitle);
+    const boqDescription = requestedDescription ?? (existingBoq?.description as string | null | undefined) ?? null;
+    const qualityScore = Math.max(0, Math.round(((prepared.validCount + prepared.warningCount * 0.5) / prepared.lines.length) * 100));
+
+    // Upload only after validation, so malformed/oversized workbooks do not leave storage artifacts.
+    uploadedPath = await saveUpload([ctx.tenantId, projectId], `${Date.now()}_${file.name}`, buffer);
+    const auditId = crypto.randomUUID();
+    const newRevisionId = currentRevision ? String(currentRevision.id) : crypto.randomUUID();
+    revisionId = newRevisionId;
+    const revisionStatus = currentRevision ? 'DRAFT' : null;
+    const revisionUpdatedAt = currentRevision ? now : expectedRevisionUpdatedAt;
+    const statements: D1BatchInputStatement[] = [];
+    let headerIndex: number | null = null;
+    let revisionInsertIndex: number | null = null;
+    let touchIndex: number | null = null;
+    let metadataIndex: number | null = null;
+
+    if (isNewBoq) {
+      headerIndex = statements.length;
+      statements.push({
+        sql: BOQ_INSERT_NEXT_CODE_SQL,
+        values: [targetBoqId, ctx.tenantId, projectId, costCentreId, boqTitle, boqDescription, category || null, null,
+          'DRAFT', purpose, ctx.userId, now, now],
       });
     } else {
-      boq = await prisma.boq.update({
-        where: { id: boq.id },
-        data: {
-          ...(title?.trim() ? { title: title.trim() } : {}),
-          ...(description !== null && description !== undefined ? { description: description.trim() || null } : {}),
-          ...(purpose ? { purpose } : {}),
-          ...(categoryParam ? { category: categoryParam } : {}),
-        },
+      if (currentRevision) {
+        touchIndex = statements.length;
+        statements.push({
+          sql: BOQ_REVISION_TOUCH_IF_CURRENT_SQL,
+          values: [now, newRevisionId, ctx.tenantId, expectedRevisionStatus, expectedRevisionUpdatedAt],
+        });
+      }
+      metadataIndex = statements.length;
+      statements.push({
+        sql: BOQ_TEMPLATE_UPDATE_METADATA_IF_CURRENT_SQL,
+        values: [
+          requestedTitle ? 1 : 0, requestedTitle || null,
+          descriptionProvided ? 1 : 0, requestedDescription,
+          purposeInput ? 1 : 0, purposeInput || null,
+          categoryInput ? 1 : 0, categoryInput || null,
+          0, null, now, targetBoqId, ctx.tenantId, projectId,
+          currentRevision ? newRevisionId : null, currentRevision ? newRevisionId : null,
+          ctx.tenantId, revisionStatus, revisionUpdatedAt,
+        ],
       });
     }
 
-    if (!boqRevision) {
-      boqRevision = await createNextBoqRevision({
-        tenantId: ctx.tenantId,
-        boqId: boq.id,
-        costCentreId: targetCostCentreId || null,
-        status: 'DRAFT',
-        preparationStatus: 'DRAFT',
-        budgetStatus: 'NOT_ADDED_TO_BUDGET',
-        prStatus: 'PR_NOT_CREATED',
-        sourceType: 'FIXED_TEMPLATE',
-        sourceFile: file.name,
-        sourceReference: sheetName,
-        originalFileName: file.name,
-        originalFilePath: savedFilePath,
-        originalFileSize: file.size,
-        notes: `Imported via Standard proCPX Template (${file.name})`,
-        createdById: ctx.userId,
-        uploadedAt: new Date(),
+    if (!currentRevision) {
+      revisionInsertIndex = statements.length;
+      statements.push({
+        sql: BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL,
+        values: [newRevisionId, ctx.tenantId, targetBoqId, costCentreId, 'DRAFT',
+          prepared.errorCount > 0 ? 'VALIDATION_REQUIRED' : 'DRAFT', 'NOT_ADDED_TO_BUDGET', 'PR_NOT_CREATED',
+          BOQ_TEMPLATE_SOURCE_TYPE, file.name, sheetName || null, null, file.name, uploadedPath, file.size,
+          `${BOQ_TEMPLATE_CREATE_NOTES} (${file.name})`, prepared.lines.length, prepared.validCount,
+          prepared.errorCount, prepared.warningCount, qualityScore, ctx.userId, now, now, now],
       });
     }
 
-    const parsedLines: any[] = [];
-    const exceptions: any[] = [];
-    let validCount = 0;
-    let errorCount = 0;
-    let warningCount = 0;
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const lineNum = String(row['Line No'] || row['Line Number'] || row['S.No.'] || row['S.No'] || row['SNo'] || row['Sl No'] || row['#'] || i + 1);
-      const desc = String(
-        row['Item Description *'] ||
-        row['Item Description'] ||
-        row['Description'] ||
-        row['Item'] ||
-        ''
-      ).trim();
-      const spec = String(row['BOQ Description'] || row['Detailed Specification'] || row['Specification'] || row['Specification / Scope'] || row['Scope'] || '').trim();
-      const catName = String(row['Category *'] || row['Category'] || '').trim();
-      const subName = String(row['Sub-category'] || row['Subcategory'] || '').trim();
-      const uomRaw = String(row['UOM *'] || row['UOM'] || row['Unit'] || '').trim();
-      const rawQty = row['Quantity *'] !== undefined ? row['Quantity *'] : (row['Quantity'] !== undefined ? row['Quantity'] : (row['Qty'] !== undefined ? row['Qty'] : ''));
-      const cleanQtyStr = String(rawQty).replace(/,/g, '').trim();
-      const parsedQty = parseFloat(cleanQtyStr);
-      const brand = String(row['Brand / Make'] || row['Brand'] || row['Make'] || '').trim();
-      const location = String(row['Location / Area'] || row['Location'] || row['Area'] || '').trim();
-      const remarks = String(row['Remarks'] || row['Remark'] || '').trim();
-      const drawingRef = String(row['Drawing Reference'] || row['Drawing Ref'] || '').trim();
-      const itemCode = String(row['Item Code'] || '').trim();
-
-      const validationMessages: any[] = [];
-      let status = 'VALID';
-
-      if (!desc) {
-        validationMessages.push({ level: 'ERROR', code: 'DESC_MISSING', message: 'Item Description is required.' });
-        status = 'ERROR';
-      }
-
-      let qty: number | null = null;
-      if (cleanQtyStr === '') {
-        // Section 13: If quantity is genuinely absent: Import the line as Quantity = NULL, Status = QUANTITY_REQUIRED
-        qty = null;
-        status = 'QUANTITY_REQUIRED';
-        validationMessages.push({ level: 'WARNING', code: 'QUANTITY_REQUIRED', message: 'Quantity is required before budgeting or PR.' });
-      } else if (isNaN(parsedQty)) {
-        validationMessages.push({ level: 'ERROR', code: 'QTY_INVALID', message: `Quantity "${cleanQtyStr}" must be numeric.` });
-        status = 'ERROR';
-      } else if (parsedQty === 0) {
-        qty = 0;
-        validationMessages.push({ level: 'WARNING', code: 'QTY_ZERO', message: 'Quantity must be greater than zero.' });
-        if (status !== 'ERROR') status = 'WARNING';
-      } else if (parsedQty < 0) {
-        validationMessages.push({ level: 'ERROR', code: 'QTY_NEGATIVE', message: 'Quantity cannot be negative.' });
-        status = 'ERROR';
-      } else {
-        qty = parsedQty;
-      }
-
-      // Check category match
-      const matchedCategory = catMapByName.get(catName.toLowerCase());
-      if (catName && !matchedCategory) {
-        validationMessages.push({ level: 'WARNING', code: 'CAT_UNRECOGNIZED', message: `Category "${catName}" not in standard taxonomy.` });
-        if (status !== 'ERROR') status = 'WARNING';
-      }
-
-      // Check UOM match
-      const matchedUom = uomMapByCode.get(uomRaw.toUpperCase());
-      if (uomRaw && !matchedUom) {
-        validationMessages.push({ level: 'WARNING', code: 'UOM_NON_STANDARD', message: `UOM "${uomRaw}" mapped to raw text.` });
-        if (status !== 'ERROR') status = 'WARNING';
-      }
-
-      if (status === 'VALID') validCount++;
-      else if (status === 'ERROR') {
-        errorCount++;
-        exceptions.push({ line: lineNum, description: desc || '(blank)', errors: validationMessages });
-      } else {
-        warningCount++;
-      }
-
-      const createdLine = await prisma.boqLine.create({
-        data: {
-          tenantId: ctx.tenantId,
-          boqRevisionId: boqRevision.id,
-          lineNumber: lineNum,
-          itemCode: itemCode || null,
-          originalDescription: desc || 'Untitled Item',
-          standardDescription: desc || 'Untitled Item',
-          specification: spec || null,
-          categoryId: matchedCategory?.id || null,
-          uomId: matchedUom?.id || null,
-          uomRaw: uomRaw || 'NOS',
-          quantity: qty,
-          brand: brand || null,
-          location: location || null,
-          remarks: remarks || null,
-          drawingReference: drawingRef || null,
-          validationStatus: status,
-          validationMessages: JSON.stringify(validationMessages),
-          benchmarkEligible: true,
-        },
-      });
-
-      parsedLines.push(createdLine);
-    }
-
-    // Update revision statistics
-    const qualityScore = Math.max(0, Math.round(((validCount + warningCount * 0.5) / rows.length) * 100));
-    await prisma.boqRevision.update({
-      where: { id: boqRevision.id },
-      data: {
-        totalLines: rows.length,
-        validLines: validCount,
-        warningLines: warningCount,
-        errorLines: errorCount,
-        qualityScore,
-        preparationStatus: errorCount > 0 ? 'VALIDATION_REQUIRED' : 'DRAFT',
-      },
+    const auditIndex = statements.length;
+    const auditDescription = interpolateUiString(UI_STRINGS.appApiBoqUploadTemplateRoute.templateBOQUploadedNameWithLengthLinesQualityScoreQualityScore, {
+      name: file.name, length: prepared.lines.length, qualityScore,
+    });
+    statements.push({
+      sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+      values: [auditId, ctx.tenantId, ctx.userId, projectId, 'BOQ', targetBoqId, BOQ_TEMPLATE_AUDIT_ACTION,
+        auditDescription, null, JSON.stringify({ totalLines: prepared.lines.length, validLines: prepared.validCount,
+          warningLines: prepared.warningCount, errorLines: prepared.errorCount, qualityScore }), null,
+        req.headers.get('user-agent'), now],
     });
 
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId,
-        entityType: 'BOQ',
-        entityId: boq.id,
-        action: 'BOQ_UPLOADED',
-        description: `Template BOQ uploaded: ${file.name} with ${rows.length} lines (Quality Score: ${qualityScore}%)`,
-      },
+    let deleteIndex: number | null = null;
+    if (currentRevision) {
+      deleteIndex = statements.length;
+      statements.push({ sql: BOQ_LINE_DELETE_AFTER_AUDIT_SQL, values: [newRevisionId, ctx.tenantId, auditId, ctx.tenantId] });
+    }
+    const lineStartIndex = statements.length;
+    for (const line of prepared.lines) statements.push(insertLineStatement(line, newRevisionId, ctx.tenantId, auditId, now));
+    const metricsIndex = statements.length;
+    statements.push({
+      sql: BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
+      values: [prepared.lines.length, prepared.validCount, prepared.errorCount, prepared.warningCount,
+        qualityScore, now, newRevisionId, ctx.tenantId, auditId, ctx.tenantId],
     });
+    statements.push({
+      sql: BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
+      values: [targetBoqId, ctx.tenantId, newRevisionId, ctx.tenantId, targetBoqId, auditId, ctx.tenantId,
+        targetBoqId, newRevisionId, ctx.tenantId, prepared.lines.length, newRevisionId, ctx.tenantId,
+        prepared.lines.length, prepared.validCount, prepared.errorCount, prepared.warningCount, qualityScore],
+    });
+
+    const results = await writeD1BatchAtomically(statements);
+    const header = headerIndex === null ? null : results[headerIndex]?.results?.[0];
+    const insertedRevision = revisionInsertIndex === null ? null : results[revisionInsertIndex]?.results?.[0];
+    const boqCode = String(header?.boqCode || existingBoq?.boqCode || '');
+    const revisionCode = String(insertedRevision?.revisionCode || currentRevision?.revisionCode || '');
+    const headerOk = headerIndex === null || changed(results[headerIndex]) === 1;
+    const touchOk = touchIndex === null || changed(results[touchIndex]) === 1;
+    const metadataOk = metadataIndex === null || changed(results[metadataIndex]) === 1;
+    const revisionOk = revisionInsertIndex === null || changed(results[revisionInsertIndex]) === 1;
+    const auditOk = changed(results[auditIndex]) === 1;
+    const linesOk = prepared.lines.every((_, index) => changed(results[lineStartIndex + index]) === 1);
+    const metricsOk = changed(results[metricsIndex]) === 1;
+    // A delete may legitimately affect zero rows when replacing an empty draft.
+    void deleteIndex;
+    if (!headerOk || !touchOk || !metadataOk || !revisionOk || !auditOk || !linesOk || !metricsOk || !boqCode || !revisionCode) {
+      await writeStructuredLog('error', 'boq.template_upload_batch_invariant_failed', {
+        operation: 'persist_template_boq', route: '/api/boq/upload-template', requestId: req.headers.get('x-request-id'),
+        tenantId: ctx.tenantId, userId: ctx.userId, projectId, boqId: targetBoqId, revisionId,
+        lineCount: prepared.lines.length, durationMs: Date.now() - startedAt,
+        invariant: { headerOk, touchOk, metadataOk, revisionOk, auditOk, linesOk, metricsOk, hasBoqCode: Boolean(boqCode), hasRevisionCode: Boolean(revisionCode) },
+      });
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
 
     return apiSuccess({
-      boqId: boq.id,
-      revisionId: boqRevision.id,
-      boqCode: boq.boqCode,
-      revisionCode: boqRevision.revisionCode,
-      totalLines: rows.length,
-      validLines: validCount,
-      warningLines: warningCount,
-      errorLines: errorCount,
+      boqId: targetBoqId,
+      revisionId: newRevisionId,
+      boqCode,
+      revisionCode,
+      totalLines: prepared.lines.length,
+      validLines: prepared.validCount,
+      warningLines: prepared.warningCount,
+      errorLines: prepared.errorCount,
       qualityScore,
-      exceptions,
-    }, 201);
-  } catch (err: any) {
-    return apiError(err.message || 'Template upload failed.', 500);
+      exceptions: prepared.exceptions,
+    }, isNewBoq ? 201 : 200);
+  } catch (error) {
+    await discardUnreferencedUpload();
+    if (error instanceof InvalidTemplateError) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    await writeStructuredLog('error', 'boq.template_upload_failed', {
+      operation: 'upload_template', route: '/api/boq/upload-template', requestId: req.headers.get('x-request-id'),
+      tenantId: ctx.tenantId, userId: ctx.userId, projectId: projectIdForLog, boqId: targetBoqId, revisionId,
+      lineCount, durationMs: Date.now() - startedAt, uploadStored: Boolean(uploadedPath),
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.appApiBoqUploadTemplateRoute.templateUploadFailed, 500);
   }
 }

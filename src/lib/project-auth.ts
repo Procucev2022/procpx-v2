@@ -1,6 +1,35 @@
 // src/lib/project-auth.ts
 // Project authorization and team-scope utilities for proCPX
 import { prisma } from './prisma';
+import type { Prisma } from '@prisma/client';
+
+/**
+ * Returns a project relation filter for project-scoped users, or null when
+ * the existing policy grants tenant-wide scope. Assignment IDs are never
+ * materialized into an application-side list.
+ */
+export async function getUserProjectAccessFilter(
+  userId: string,
+  role: string,
+  tenantId: string,
+): Promise<Prisma.ProjectWhereInput | null> {
+  if (role === 'SUPER_ADMIN' || role === 'CLIENT_ADMIN') return null;
+
+  const activeAssignment = await prisma.projectTeam.findFirst({
+    where: { userId, active: true, project: { tenantId } },
+    select: { id: true },
+  });
+
+  if (!activeAssignment) return null;
+
+  return {
+    OR: [
+      { team: { some: { userId, active: true } } },
+      { projectOwner: userId },
+      { createdBy: userId },
+    ],
+  };
+}
 
 /**
  * Checks if a user is authorised to access/act on a project.
@@ -13,67 +42,19 @@ import { prisma } from './prisma';
 export async function isUserAuthorizedForProject(
   userId: string,
   role: string,
-  projectId: string | null | undefined
+  projectId: string | null | undefined,
+  tenantId: string,
 ): Promise<boolean> {
   if (role === 'SUPER_ADMIN' || role === 'CLIENT_ADMIN') return true;
   if (!projectId) return true;
 
-  const assignments = await prisma.projectTeam.findMany({
-    where: { userId, active: true },
-    select: { projectId: true },
-  });
+  const projectAccessFilter = await getUserProjectAccessFilter(userId, role, tenantId);
+  if (!projectAccessFilter) return true;
 
-  if (assignments.length === 0) {
-    return true;
-  }
-
-  const allowedProjectIds = new Set(assignments.map((a) => a.projectId));
-  if (allowedProjectIds.has(projectId)) {
-    return true;
-  }
-
-  // Check if user is owner or creator of project
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { projectOwner: true, createdBy: true },
-  });
-
-  if (project && (project.projectOwner === userId || project.createdBy === userId)) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Returns the list of project IDs the user is authorized for,
- * or null if the user has tenant-wide scope.
- */
-export async function getUserAuthorizedProjectIds(
-  userId: string,
-  role: string
-): Promise<string[] | null> {
-  if (role === 'SUPER_ADMIN' || role === 'CLIENT_ADMIN') return null;
-
-  const assignments = await prisma.projectTeam.findMany({
-    where: { userId, active: true },
-    select: { projectId: true },
-  });
-
-  if (assignments.length === 0) {
-    return null;
-  }
-
-  const assignedIds = assignments.map((a) => a.projectId);
-
-  // Also include projects owned or created by user
-  const ownedProjects = await prisma.project.findMany({
-    where: {
-      OR: [{ projectOwner: userId }, { createdBy: userId }],
-    },
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenantId, ...projectAccessFilter },
     select: { id: true },
   });
 
-  const allIds = Array.from(new Set([...assignedIds, ...ownedProjects.map((p) => p.id)]));
-  return allIds;
+  return Boolean(project);
 }

@@ -1,19 +1,30 @@
 import type { Instrumentation } from 'next';
 import { safeRequestPath, sanitizeLogValue } from './lib/observability/shared';
 
+type RuntimeLogger = typeof import('./lib/observability/server-logger');
+
+function getRuntimeLogger(): RuntimeLogger {
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    // Next.js keeps runtime-specific instrumentation in separate bundles.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('./lib/observability/edge-logger') as RuntimeLogger;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('./lib/observability/server-logger') as RuntimeLogger;
+}
+
 export async function register(): Promise<void> {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-  const { initializeLogging, installConsoleCapture, writeStructuredLog } = await import('./lib/observability/server-logger');
+  const { initializeLogging, installConsoleCapture, writeStructuredLog } = getRuntimeLogger();
   await initializeLogging();
   installConsoleCapture();
   await writeStructuredLog('info', 'application.server_started', {
-    runtime: process.env.NEXT_RUNTIME,
+    runtime: process.env.NEXT_RUNTIME || 'unknown',
   }, 'next');
 }
 
 export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-  const { writeStructuredLog } = await import('./lib/observability/server-logger');
+  const { writeStructuredLog } = getRuntimeLogger();
   const errorValue = sanitizeLogValue(error);
   await writeStructuredLog('error', 'http.request_failed', {
     requestId: crypto.randomUUID(),
@@ -24,6 +35,7 @@ export const onRequestError: Instrumentation.onRequestError = async (error, requ
     routerKind: context.routerKind,
     renderSource: context.renderSource,
     revalidateReason: context.revalidateReason,
+    runtime: process.env.NEXT_RUNTIME || 'unknown',
     error: errorValue,
   }, 'next');
 };

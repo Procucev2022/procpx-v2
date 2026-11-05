@@ -2,7 +2,8 @@
 // app/(app)/procurement/auctions/[id]/page.tsx
 // Professional B2B Live Auction Room: Real-time countdown, rolling extensions, bid stream, and buyer controls
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useEffect, useState, use, useMemo } from 'react';
+import { DEFAULT_LIST_PAGE_SIZE } from '@/lib/api-utils.constants';
+import { useEffect, useState, use, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -31,6 +32,8 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { mergeAuctionBidPages } from '@/lib/auction-bids';
+import type { AuctionBidCursor, AuctionBidHistoryState, AuctionDetailSnapshot } from '@app-types/api/auction-detail.types';
 
 
 export default function LiveAuctionRoomPage({
@@ -48,6 +51,15 @@ export default function LiveAuctionRoomPage({
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(0);
   const [isObserver, setIsObserver] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [bidHistory, setBidHistory] = useState<AuctionBidHistoryState>({
+    auctionId: null,
+    initialized: false,
+    hasMore: false,
+    cursor: null,
+  });
+  const [loadingOlderBids, setLoadingOlderBids] = useState(false);
+  const requestGeneration = useRef(0);
+  const latestRefreshSequence = useRef(0);
 
   // Assisted bidding (for buyer placing bid on behalf of vendor)
   const [showAssistedBidModal, setShowAssistedBidModal] = useState(false);
@@ -59,7 +71,12 @@ export default function LiveAuctionRoomPage({
   const [roomTab, setRoomTab] = useState<'LEADERBOARD' | 'ITEMS' | 'VENDORS' | 'TERMS'>('LEADERBOARD');
 
   useEffect(() => {
-    fetchAuction();
+    const generation = ++requestGeneration.current;
+    latestRefreshSequence.current += 1;
+    void fetchAuction(false, undefined, generation, id);
+    return () => {
+      if (requestGeneration.current === generation) requestGeneration.current += 1;
+    };
   }, [id]);
 
   // Periodic polling according to configured refresh interval
@@ -87,24 +104,66 @@ export default function LiveAuctionRoomPage({
     return () => clearInterval(interval);
   }, [auction?.endTime, auction?.scheduledEndTime]);
 
-  const fetchAuction = async (silent = false) => {
+  const fetchAuction = async (
+    silent = false,
+    cursor?: AuctionBidCursor,
+    generation = requestGeneration.current,
+    requestedId = id,
+  ) => {
+    const refreshSequence = cursor ? null : ++latestRefreshSequence.current;
     if (!silent) setLoading(true);
     try {
-      const res = await fetch(`/api/procurement/auctions/${id}`);
+      const query = new URLSearchParams({ pageSize: String(DEFAULT_LIST_PAGE_SIZE) });
+      if (cursor) {
+        query.set('beforeId', cursor.beforeId);
+        query.set('beforeTimestamp', cursor.beforeTimestamp);
+      }
+      const res = await fetch(`/api/procurement/auctions/${requestedId}?${query.toString()}`);
       const data = await res.json();
+      if (generation !== requestGeneration.current || requestedId !== id
+        || (refreshSequence !== null && refreshSequence !== latestRefreshSequence.current)) return;
       if (!res.ok) throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToLoadAuction }));
       if (data.auction) {
-        setAuction(data.auction);
-        setIsObserver(data.isObserver || false);
+        setAuction((current: AuctionDetailSnapshot | null) => {
+          const sameAuction = current?.id === data.auction.id;
+          const baseAuction = cursor && sameAuction ? current : data.auction;
+          return {
+          ...baseAuction,
+          bids: mergeAuctionBidPages(data.auction.bids || [], current?.id === data.auction.id ? current?.bids || [] : []),
+          };
+        });
+        if (!cursor) setIsObserver(data.isObserver || false);
+      }
+      if (data.bidHistory) {
+        setBidHistory((current) => {
+          if (cursor && current.auctionId === id) {
+            return { auctionId: id, initialized: true, hasMore: Boolean(data.bidHistory.hasMore), cursor: data.bidHistory.nextCursor || null };
+          }
+          if (current.auctionId !== id || !current.initialized) {
+            return { auctionId: id, initialized: true, hasMore: Boolean(data.bidHistory.hasMore), cursor: data.bidHistory.nextCursor || null };
+          }
+          return current;
+        });
       }
       if (data.serverTime) {
         setServerTime(new Date(data.serverTime));
       }
     } catch (err: any) {
-      if (!silent) toast.error({ title: UI_STRINGS.common.error, message: err.message });
+      if (generation === requestGeneration.current && requestedId === id
+        && (refreshSequence === null || refreshSequence === latestRefreshSequence.current)
+        && (!silent || cursor)) toast.error({ title: UI_STRINGS.common.error, message: err.message });
     } finally {
-      if (!silent) setLoading(false);
+      if (generation === requestGeneration.current && requestedId === id) {
+        if (refreshSequence === null || refreshSequence === latestRefreshSequence.current) setLoading(false);
+        if (cursor) setLoadingOlderBids(false);
+      }
     }
+  };
+
+  const handleLoadOlderBids = () => {
+    if (!bidHistory.cursor || loadingOlderBids) return;
+    setLoadingOlderBids(true);
+    void fetchAuction(true, bidHistory.cursor, requestGeneration.current, id);
   };
 
   // Buyer live controls
@@ -189,7 +248,7 @@ export default function LiveAuctionRoomPage({
     return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  if (loading) {
+  if (loading || Boolean(auction && auction.id !== id)) {
     return (
       <div className="container" style={{ padding: '80px 32px', textAlign: 'center', color: '#64748b' }}>
         <div className="spinner" style={{ margin: '0 auto 16px' }} />{UI_STRINGS.appAppProcurementAuctionsIdPage.synchronisingLiveAuctionTelemetryAndServerClock}</div>
@@ -581,6 +640,13 @@ export default function LiveAuctionRoomPage({
                       })}
                     </tbody>
                   </table>
+                  {bidHistory.hasMore && bidHistory.cursor && (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={handleLoadOlderBids} disabled={loadingOlderBids}>
+                        {loadingOlderBids ? UI_STRINGS.appAppProcurementAuctionsIdPage.loadingOlderBids : UI_STRINGS.appAppProcurementAuctionsIdPage.loadOlderBids}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

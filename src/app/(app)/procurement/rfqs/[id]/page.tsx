@@ -55,6 +55,7 @@ import RfqChatDrawer from '@/components/RfqChatDrawer';
 import ProcurementCommercialWorkspace from '@/components/ProcurementCommercialWorkspace';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { RateCardMatchResponse } from '@app-types/app/(app)/procurement/rfqs/[id]/page.types';
 
 
 function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
@@ -97,8 +98,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Rate card comparison state
-  const [rateCardMatch, setRateCardMatch] = useState<any>(null);
+  const [rateCardMatch, setRateCardMatch] = useState<RateCardMatchResponse | null>(null);
   const [loadingRateCard, setLoadingRateCard] = useState(false);
+  const [loadingMoreRateCardMatches, setLoadingMoreRateCardMatches] = useState(false);
   const [showRateCardModal, setShowRateCardModal] = useState(false);
 
   // Filter to only quotations actually received from vendors
@@ -260,16 +262,36 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  const fetchRateCardMatch = async () => {
-    setLoadingRateCard(true);
+  const fetchRateCardMatch = async (page = 1, append = false) => {
+    if (append) setLoadingMoreRateCardMatches(true);
+    else setLoadingRateCard(true);
     try {
-      const res = await fetch(`/api/procurement/rate-cards/match?rfqId=${id}`);
+      const query = new URLSearchParams({ rfqId: id, page: String(page) });
+      const res = await fetch(`/api/procurement/rate-cards/match?${query.toString()}`);
       const data = await res.json();
-      setRateCardMatch(data);
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.common.userMessages.failedToMatchRateCards);
+      const responseData = data as RateCardMatchResponse;
+      setRateCardMatch((current) => {
+        if (!append || !current) return responseData;
+        const existing = new Set((current.matchedRateCards || []).map((card) => card.rateCardId));
+        return {
+          ...responseData,
+          matchedRateCards: [
+            ...(current.matchedRateCards || []),
+            ...(responseData.matchedRateCards || []).filter((card) => !existing.has(card.rateCardId)),
+          ],
+          eligibleCount: Number(current.eligibleCount || 0) + Number(responseData.eligibleCount || 0),
+        };
+      });
     } catch (err) {
       console.error('Failed to load rate card matches:', err);
+      setMsg({
+        text: err instanceof Error ? err.message : UI_STRINGS.common.userMessages.failedToMatchRateCards,
+        type: 'error',
+      });
     } finally {
-      setLoadingRateCard(false);
+      if (append) setLoadingMoreRateCardMatches(false);
+      else setLoadingRateCard(false);
     }
   };
 
@@ -2110,7 +2132,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ fontSize: 13, color: '#475569' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.comparePreNegotiatedCorporateRateCardsAgainstTheCurrentRFQRequirementsDirectPPOCreationIsOnlyPermittedWhenTheRateCardIsApprovedCurrentlyValidAndProvidesCompleteItemCoverage}</div>
 
-            {!rateCardMatch?.matchedRateCards?.length ? (
+            {loadingRateCard ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#64748b' }}>{UI_STRINGS.common.loading}</div>
+            ) : !rateCardMatch?.matchedRateCards?.length ? (
               <EmptyState
                 icon={<Tag size={36} color="#94a3b8" strokeWidth={1.5} />}
                 title={UI_STRINGS.appAppProcurementRfqsIdPage.noApplicableRateCards}
@@ -2154,7 +2178,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       <div>{UI_STRINGS.appAppProcurementRfqsIdPage.validity2}<strong>{rc.validFrom}{UI_STRINGS.appAppProcurementRfqsIdPage.to}{rc.validTo}</strong></div>
                       <div>{UI_STRINGS.appAppProcurementRfqsIdPage.itemCoverage}<strong>{rc.matchedItemsCount}{UI_STRINGS.common.copybo0mse}{rc.totalItemsCount}{UI_STRINGS.appAppProcurementRfqsIdPage.items}{rc.coveragePercent}{UI_STRINGS.common.copy1y4e1t7}</strong></div>
                       <div>{UI_STRINGS.appAppProcurementRfqsIdPage.vendorQualification}<strong>{rc.vendor?.qualificationStatus || UI_STRINGS.common.qUALIFIED}</strong></div>
-                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.performanceScore}<strong>{rc.vendor?.performanceScore || 88}{UI_STRINGS.appAppProcurementRfqsIdPage.copy1gy72o5}</strong></div>
+                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.performanceScore}<strong>{rc.vendor?.performanceScore ?? UI_STRINGS.common.notAvailable}{rc.vendor?.performanceScore === null || rc.vendor?.performanceScore === undefined ? '' : UI_STRINGS.appAppProcurementRfqsIdPage.copy1gy72o5}</strong></div>
                     </div>
 
                     {/* Block reasons if ineligible */}
@@ -2178,6 +2202,18 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            {rateCardMatch?.hasMore && (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={loadingMoreRateCardMatches}
+                  onClick={() => void fetchRateCardMatch(Number(rateCardMatch.page || 1) + 1, true)}
+                >
+                  {loadingMoreRateCardMatches ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
               </div>
             )}
           </div>

@@ -5,29 +5,97 @@ import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils
 import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PROJECT_VIEW');
   if (!isApiContext(ctx)) return ctx;
   const { id } = await params;
+  const startedAt = Date.now();
 
-  const project = await prisma.project.findFirst({
-    where: { id, tenantId: ctx.tenantId }, // tenant isolation
-    include: {
-      team: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
-      boqs: {
-        include: {
-          revisions: {
-            select: { id: true, revisionCode: true, status: true, totalLines: true, qualityScore: true, createdAt: true },
-            orderBy: { revisionNumber: 'desc' },
+  let project;
+  try {
+    project = await prisma.project.findFirst({
+      where: { id, tenantId: ctx.tenantId },
+      select: {
+        id: true,
+        projectCode: true,
+        name: true,
+        description: true,
+        sector: true,
+        projectType: true,
+        location: true,
+        address: true,
+        city: true,
+        state: true,
+        country: true,
+        areaSqFt: true,
+        costCentre: true,
+        projectOwner: true,
+        budget: true,
+        currency: true,
+        businessUnit: true,
+        status: true,
+        createdAt: true,
+        team: {
+          select: {
+            id: true,
+            projectRole: true,
+            assignedAt: true,
+            user: { select: { id: true, name: true, email: true, role: true } },
           },
+          orderBy: [{ assignedAt: 'desc' }, { id: 'desc' }],
+          take: 100,
         },
+        boqs: {
+          select: {
+            id: true,
+            boqCode: true,
+            status: true,
+            updatedAt: true,
+            revisions: {
+              select: { id: true, revisionCode: true, revisionNumber: true, status: true, totalLines: true, qualityScore: true, createdAt: true },
+              orderBy: [{ revisionNumber: 'desc' }, { id: 'desc' }],
+              take: 50,
+            },
+            _count: { select: { revisions: true } },
+          },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
+        documents: {
+          select: { id: true, name: true, fileType: true, fileSize: true, uploadedBy: true, uploadedAt: true, category: true },
+          orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+          take: 50,
+        },
+        auditLogs: {
+          select: {
+            id: true,
+            action: true,
+            description: true,
+            createdAt: true,
+            user: { select: { name: true, email: true } },
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 30,
+        },
+        _count: { select: { team: true, documents: true } },
       },
-      documents: true,
-      auditLogs: { orderBy: { createdAt: 'desc' }, take: 30, include: { user: { select: { name: true, email: true } } } },
-    },
-  });
+    });
+  } catch (error) {
+    await writeStructuredLog('error', 'project.detail_read_failed', {
+      operation: 'read_project_detail',
+      route: '/api/projects/[id]',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      projectId: id,
+      durationMs: Date.now() - startedAt,
+      error: { name: error instanceof Error ? error.name : 'UnknownError' },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchProjects, 500);
+  }
 
   if (!project) return apiError(UI_STRINGS.common.projectNotFound, 404);
   return apiSuccess(project);

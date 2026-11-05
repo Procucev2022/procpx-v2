@@ -7,6 +7,10 @@ import ApprovedBoqsPage from '../src/app/(app)/procurement/approved-boqs/page';
 import ApprovedPrsPage from '../src/app/(app)/procurement/approved-prs/page';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
+function stripBoqLines<T extends { lines?: unknown }>(boq: T): Omit<T, 'lines'> {
+  return Object.fromEntries(Object.entries(boq).filter(([key]) => key !== 'lines')) as Omit<T, 'lines'>;
+}
+
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -56,7 +60,11 @@ describe('approved BOQ and PR queues', () => {
       approvedRevisionCode: 'R1', approvedAt: null, approvedBy: 'Approver', categories: [], totalLines: 0,
       estimatedBenchmarkValue: 0, rfqCount: 0, lines: [],
     };
-    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ approvedBoqs: [boq, fallbackBoq] }) });
+    const summaryBoqs = [boq, fallbackBoq].map(stripBoqLines);
+    (global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => ({ approvedBoqs: String(input).includes('revisionId=') ? [boq, fallbackBoq] : summaryBoqs }),
+    }));
     render(<ApprovedBoqsPage />);
     expect(await screen.findByText('Store fitout')).toBeInTheDocument();
     expect(screen.getByText('Electrical (1)')).toBeInTheDocument();
@@ -67,18 +75,20 @@ describe('approved BOQ and PR queues', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) })[0]);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode))).toBeInTheDocument();
-    expect(screen.getByText('Cable installation')).toBeInTheDocument();
+    expect(await screen.findByText('Cable installation')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?revisionId=revision-1&pageSize=1');
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.packageIntoRFQ) })).toHaveAttribute('href', '/procurement/rfqs/new?revisionId=revision-1&projectId=project-1');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.hideScope) }));
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode))).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) })[1]);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode))).toBeInTheDocument();
+    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?revisionId=revision-2&pageSize=1'));
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ approvedBoqs: [] }) });
     render(<ApprovedBoqsPage />);
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.searchProjectNameProjectCodeOrRevision)), { target: { value: 'Office & Retail' } });
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?search=Office%20%26%20Retail'));
+    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?search=Office+%26+Retail&page=1&pageSize=25'));
     cleanup();
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -130,9 +140,10 @@ describe('approved BOQ and PR queues', () => {
     render(<ApprovedPrsPage />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedPrsPage.noApprovedProcurementRequestsFound))).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedPrsPage.searchByPRProjectCostCentre)), { target: { value: 'PR-00' } });
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-prs?search=PR-00'));
+    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-prs?search=PR-00&page=1&pageSize=50'));
+    const callsBeforeRefresh = (global.fetch as jest.Mock).mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(callsBeforeRefresh + 1));
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({}) });

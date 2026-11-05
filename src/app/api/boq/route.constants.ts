@@ -1,0 +1,4 @@
+export const BOQ_CREATE_AUDIT_ACTION = 'BOQ_CREATED';
+export const BOQ_INITIAL_REVISION_SOURCE_TYPE = 'NOT_YET_SELECTED';
+export const BOQ_DEFAULT_SECTOR = 'RETAIL';
+export const BOQ_DEFAULT_PROJECT_TYPE = 'Standard Fitout';

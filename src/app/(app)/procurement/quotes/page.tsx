@@ -13,22 +13,31 @@ import { interpolateUiString } from "@/lib/i18n";
 
 export default function QuotesHubPage() {
   const [quotes, setQuotes] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     fetchQuotes();
   }, []);
 
-  const fetchQuotes = async () => {
-    setLoading(true);
+  const fetchQuotes = async (nextPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/procurement/quotes');
+      const res = await fetch(`/api/procurement/quotes?page=${nextPage}&pageSize=50`);
       const data = await res.json();
-      if (data.quotes) setQuotes(data.quotes);
+      if (Array.isArray(data.quotes)) {
+        setQuotes((current) => append ? [...current, ...data.quotes] : data.quotes);
+        setTotal(Number(data.total ?? data.quotes.length));
+        setPage(Number(data.page ?? nextPage));
+      }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -48,7 +57,7 @@ export default function QuotesHubPage() {
       />
 
       <Card
-        title={interpolateUiString(UI_STRINGS.appAppProcurementQuotesPage.allSubmittedQuotationsLength, { "length": quotes.length })}
+        title={interpolateUiString(UI_STRINGS.appAppProcurementQuotesPage.allSubmittedQuotationsLength, { "length": total })}
         subtitle={UI_STRINGS.appAppProcurementQuotesPage.versionControlledQuotesReceivedAgainstApprovedBOQBaselines}
         noPadding
       >
@@ -68,6 +77,7 @@ export default function QuotesHubPage() {
             />
           </div>
         ) : (
+          <>
           <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
             <table className="table enterprise-table">
               <thead>
@@ -124,6 +134,14 @@ export default function QuotesHubPage() {
               </tbody>
             </table>
           </div>
+          {quotes.length < total && (
+            <div style={{ padding: 16, textAlign: 'center' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => fetchQuotes(page + 1, true)} disabled={loadingMore}>
+                {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
+            </div>
+          )}
+          </>
         )}
       </Card>
     </div>

@@ -1,0 +1,2 @@
+export const APPROVED_BOQ_MAX_PAGE_SIZE = 100;
+export const APPROVED_BOQ_MAX_SEARCH_LENGTH = 120;

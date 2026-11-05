@@ -2,21 +2,23 @@
 // Handles RFQ listing and RFQ creation from Approved BOQ
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
-import { notifyNextResponsibleParty } from '@/lib/notifications';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { createRfq } from './post';
+import { RFQ_REGISTER_VENDOR_PREVIEW_LIMIT } from './route.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('RFQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
+  const startedAt = Date.now();
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status');
   const projectId = searchParams.get('projectId');
   const search = searchParams.get('search') || '';
+  const { page, pageSize, skip } = getListPageWindow(searchParams);
 
   try {
     const where: any = {
@@ -47,9 +49,15 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const rfqs = await prisma.rfq.findMany({
-      where,
-      include: {
+    const [total, statusGroups, rfqs] = await Promise.all([
+      prisma.rfq.count({ where }),
+      prisma.rfq.groupBy({ by: ['status'], where, _count: { _all: true } }),
+      prisma.rfq.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: {
         project: {
           select: {
             id: true,
@@ -94,6 +102,7 @@ export async function GET(req: NextRequest) {
           },
         },
         invitedVendors: {
+          take: RFQ_REGISTER_VENDOR_PREVIEW_LIMIT,
           include: {
             vendor: {
               select: {
@@ -106,24 +115,10 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-        quotes: {
-          select: {
-            id: true,
-            quoteNumber: true,
-            quoteVersion: true,
-            vendorId: true,
-            totalQuoteAmount: true,
-            status: true,
-            submittedAt: true,
-          },
-        },
         negotiations: {
-          include: {
-            rounds: {
-              orderBy: { roundNumber: 'desc' },
-              take: 1,
-            },
-          },
+          select: { id: true, status: true, updatedAt: true },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          take: 1,
         },
         auctions: {
           select: {
@@ -133,11 +128,13 @@ export async function GET(req: NextRequest) {
             status: true,
             currentLowestBid: true,
           },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
         },
         awards: {
-          include: {
-            recommendedVendor: { select: { id: true, name: true } },
-          },
+          select: { id: true, status: true },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
         },
         ppos: {
           select: {
@@ -146,17 +143,36 @@ export async function GET(req: NextRequest) {
             status: true,
             totalValue: true,
           },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
         },
         _count: {
           select: {
             lines: true,
+            invitedVendors: true,
+            negotiations: true,
+            auctions: true,
+            awards: true,
+            ppos: true,
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        },
+      }),
+    ]);
 
-    const formatted = rfqs.map((rfq: any) => ({
+    const quoteGroups = rfqs.length > 0 ? await prisma.quote.groupBy({
+      by: ['rfqId'],
+      where: { tenantId: ctx.tenantId, rfqId: { in: rfqs.map(({ id }) => id) } },
+      _count: { _all: true },
+      _min: { totalQuoteAmount: true },
+    }) : [];
+    const quotesByRfqId = new Map(quoteGroups.map((group) => [group.rfqId, group]));
+
+    const formatted = rfqs.map((rfq: any) => {
+      const quoteGroup = quotesByRfqId.get(rfq.id);
+      const quotesCount = quoteGroup?._count?._all ?? rfq.quotes?.length ?? 0;
+      const invitedVendorsCount = rfq._count?.invitedVendors ?? rfq.invitedVendors?.length ?? 0;
+      return ({
       id: rfq.id,
       rfqNumber: rfq.rfqNumber,
       title: rfq.title,
@@ -175,7 +191,7 @@ export async function GET(req: NextRequest) {
       costCentre: rfq.pr?.costCentre ? `${rfq.pr.costCentre.code} - ${rfq.pr.costCentre.name}` : 'CC45 - Fitout',
       location: rfq.project?.location || rfq.project?.city || 'India',
       totalBoqValue: rfq.boqRevision?.boq?.totalBenchmarkAmount || rfq.estimatedBenchmarkValue || 0,
-      invitedVendorsCount: rfq.invitedVendors.length,
+      invitedVendorsCount,
       invitedVendors: rfq.invitedVendors?.map((iv: any) => ({
         id: iv.id,
         vendorId: iv.vendorId,
@@ -184,9 +200,9 @@ export async function GET(req: NextRequest) {
         submissionStatus: iv.submissionStatus,
         performanceScore: iv.vendor?.performanceScore,
       })) || [],
-      quotesCount: rfq.quotes?.length || 0,
-      hasQuotes: (rfq.quotes?.length || 0) > 0,
-      lowestQuoteAmount: (rfq.quotes?.length || 0) > 0 ? Math.min(...rfq.quotes.map((q: any) => q.totalQuoteAmount).filter(Boolean)) : null,
+      quotesCount,
+      hasQuotes: quotesCount > 0,
+      lowestQuoteAmount: quoteGroup?._min?.totalQuoteAmount ?? null,
       negotiations: rfq.negotiations,
       negotiation: rfq.negotiations[0] || null,
       auction: rfq.auctions[0] || null,
@@ -196,317 +212,30 @@ export async function GET(req: NextRequest) {
       ppo: rfq.ppos[0] || null,
       createdAt: rfq.createdAt,
       releasedAt: rfq.releasedAt,
-    }));
+      });
+    });
 
-    return apiSuccess({ rfqs: formatted, total: formatted.length });
-  } catch (error: any) {
-    console.error('Error fetching RFQs:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqs }), 500);
+    return apiSuccess({
+      rfqs: formatted,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      statusCounts: Object.fromEntries(statusGroups.map((group) => [group.status, group._count._all])),
+    });
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'procurement.rfq_register_read_failed', {
+      operation: 'list_rfqs', route: '/api/procurement/rfqs',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId, userId: ctx.userId, page, pageSize,
+      status: status || undefined, projectId: projectId || undefined, searchLength: search.length,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqs, 500);
   }
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await requireAuth('RFQ_CREATE');
-  if (!isApiContext(ctx)) return ctx;
-
-  try {
-    const body = await req.json();
-    const {
-      projectId,
-      boqRevisionId,
-      prId,
-      title,
-      scopeOfWork,
-      packageType = 'SELECTED_LINES',
-      packageName,
-      selectedLineIds = [],
-      categoryName,
-      submissionDeadline,
-      clarificationDeadline,
-      commercialValidityDays = 60,
-      deliveryRequirement,
-      paymentTerms,
-      taxTerms,
-      requiredDocuments = [],
-      technicalRequirements,
-      commercialRequirements,
-      vendorIds = [],
-      action = 'SAVE_DRAFT',
-    } = body;
-
-    let resolvedProjectId = projectId;
-    let resolvedBoqRevisionId = boqRevisionId;
-    let rfqLinesData: any[] = [];
-    let totalBenchmarkValue = 0;
-    let boqRevisionCode = 'R0';
-
-    // Path A: Creating RFQ directly from an Approved PR
-    if (prId) {
-      const pr = await prisma.procurementRequest.findFirst({
-        where: { id: prId, tenantId: ctx.tenantId },
-        include: {
-          project: true,
-          costCentre: true,
-          boqRevision: true,
-          lines: {
-            include: { boqLine: true },
-          },
-        },
-      });
-
-      if (!pr) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.procurementRequestNotFoundOrAccessDenied, 404);
-      }
-
-      if (!['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'].includes(pr.status)) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.cannotCreateRFQPRIsInStatusStatusSourcingIsOnlyPermittedForAPPROVEDOrRELEASEDPRs, { "status": pr.status }), 400);
-      }
-
-      // Check for duplicate active RFQ for this PR
-      const existingRfq = await prisma.rfq.findFirst({
-        where: {
-          tenantId: ctx.tenantId,
-          prId,
-          status: { not: 'CANCELLED' },
-        },
-      });
-
-      if (existingRfq) {
-        return apiError(
-          interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.anActiveRFQRfqNumberAlreadyExistsForThisApprovedPRDuplicateSourcingEventsAreBlocked, { "rfqNumber": existingRfq.rfqNumber }),
-          409
-        );
-      }
-
-      resolvedProjectId = pr.projectId;
-      resolvedBoqRevisionId = pr.boqRevisionId;
-      boqRevisionCode = pr.boqRevision?.revisionCode || 'R0';
-
-      // 1. Check for duplicate line IDs in selection
-      if (Array.isArray(selectedLineIds)) {
-        const uniqueSet = new Set(selectedLineIds);
-        if (uniqueSet.size !== selectedLineIds.length) {
-          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400);
-        }
-      }
-
-      // 2. Validate all selected line IDs belong strictly to this approved PR
-      const prLineIdMap = new Map(pr.lines.map((l) => [l.id, l]));
-      let targetPrLines = pr.lines;
-
-      if (selectedLineIds && selectedLineIds.length > 0) {
-        const foreignLineIds = selectedLineIds.filter((id: string) => !prLineIdMap.has(id));
-        if (foreignLineIds.length > 0) {
-          return apiError(
-            interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.invalidLineItemSelectionLineIDSJoinDoNotBelongToTheApprovedPRScopePrNumber, { "join": foreignLineIds.join(', '), "prNumber": pr.prNumber }),
-            400
-          );
-        }
-        targetPrLines = pr.lines.filter((l) => selectedLineIds.includes(l.id));
-      }
-
-      if (targetPrLines.length === 0) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneApprovedPRLineItemMustBeSelectedForRFQFromPrNumber, { "prNumber": pr.prNumber }), 400);
-      }
-
-      rfqLinesData = targetPrLines.map((l) => {
-        const benchmarkRate = (l.estimatedRate !== null && l.estimatedRate !== undefined && l.estimatedRate > 0)
-          ? l.estimatedRate
-          : (l.boqLine?.aiUnitCost || 100);
-        const qty = l.quantity || 1;
-        const benchmarkAmount = l.estimatedValue || qty * benchmarkRate;
-        totalBenchmarkValue += benchmarkAmount;
-
-        return {
-          tenantId: ctx.tenantId,
-          projectId: pr.projectId,
-          costCentreId: pr.costCentreId,
-          boqId: pr.boqId,
-          boqRevisionId: pr.boqRevisionId,
-          boqLineId: l.boqLineId || null,
-          prLineId: l.id,
-          lineNumber: l.lineNumber || 'L-1',
-          description: l.itemDescription,
-          specification: l.specification || l.boqLine?.specification || 'Standard technical specification',
-          category: l.category || 'General',
-          subcategory: l.subcategory || null,
-          uom: l.uom,
-          quantity: qty,
-          benchmarkRate,
-          benchmarkAmount,
-        };
-      });
-    } else {
-      // Path B: Creating RFQ directly from an Approved BOQ Revision
-      if (!resolvedProjectId || !resolvedBoqRevisionId || !title) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.projectApprovedBOQRevisionAndTitleAreRequired, 400);
-      }
-
-      const boqRevision = await prisma.boqRevision.findFirst({
-        where: {
-          id: resolvedBoqRevisionId,
-          tenantId: ctx.tenantId,
-          OR: [
-            { status: 'APPROVED' },
-            { prStatus: 'PR_RELEASED_TO_PROCUREMENT' },
-            { prStatus: 'PR_APPROVED' },
-            { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
-          ],
-        },
-        include: {
-          lines: {
-            where: { isDeleted: false },
-            include: { category: true, uom: true },
-          },
-        },
-      });
-
-      if (!boqRevision) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.approvedOrReleasedBOQRevisionNotFound, 404);
-      }
-
-      boqRevisionCode = boqRevision.revisionCode;
-      let targetBoqLines = boqRevision.lines;
-      const boqLineIdMap = new Map(boqRevision.lines.map((l) => [l.id, l]));
-
-      if (packageType === 'CATEGORY' && categoryName) {
-        targetBoqLines = targetBoqLines.filter(
-          (l) => (l.category?.name || 'General') === categoryName
-        );
-      } else if (selectedLineIds && selectedLineIds.length > 0) {
-        if (new Set(selectedLineIds).size !== selectedLineIds.length) {
-          return apiError(UI_STRINGS.appApiProcurementRfqsRoute.duplicateLineItemIDsFoundInRFQLineSelection, 400);
-        }
-        const foreignBoqLineIds = selectedLineIds.filter((id: string) => !boqLineIdMap.has(id));
-        if (foreignBoqLineIds.length > 0) {
-          return apiError(
-            interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.invalidLineItemSelectionLineIDSJoinDoNotBelongToTheSelectedBOQRevisionRevisionCode, { "join": foreignBoqLineIds.join(', '), "revisionCode": boqRevision.revisionCode }),
-            400
-          );
-        }
-        targetBoqLines = targetBoqLines.filter((l) => selectedLineIds.includes(l.id));
-      }
-
-      if (targetBoqLines.length === 0) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneBOQLineMustBeSelectedForTheRFQScope, 400);
-      }
-
-      rfqLinesData = targetBoqLines.map((l) => {
-        const benchmarkRate = (l as any).aiUnitCost || (l as any).benchmarkRate || 100;
-        const qty = l.quantity ?? 1;
-        const benchmarkAmount = qty * benchmarkRate;
-        totalBenchmarkValue += benchmarkAmount;
-
-        return {
-          tenantId: ctx.tenantId,
-          boqLineId: l.id,
-          lineNumber: l.lineNumber || l.itemCode || 'L-1',
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": l.standardDescription || l.originalDescription || 'Line item' }),
-          specification: l.specification || 'Commercial standard specification',
-          category: l.category?.name || 'General',
-          subcategory: (l as any).subcategoryId || '',
-          uom: l.uom?.code || l.uomRaw || 'NOS',
-          quantity: qty,
-          benchmarkRate,
-          benchmarkAmount,
-        };
-      });
-    }
-
-    // 4. Generate next RFQ Number
-    const count = await prisma.rfq.count({ where: { tenantId: ctx.tenantId } });
-    const rfqNumber = `RFQ-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
-
-    const isRelease = action === 'RELEASE_RFQ';
-    const initialStatus = isRelease ? 'RELEASED' : 'DRAFT';
-
-    // 5. Create RFQ and lines in database
-    const rfq = await prisma.rfq.create({
-      data: {
-        tenantId: ctx.tenantId,
-        projectId: resolvedProjectId,
-        boqRevisionId: resolvedBoqRevisionId,
-        prId: prId || null,
-        rfqNumber,
-        title,
-        scopeOfWork,
-        packageType,
-        packageName: packageName || `${packageType} Package`,
-        status: initialStatus,
-        submissionDeadline: submissionDeadline ? new Date(submissionDeadline) : null,
-        clarificationDeadline: clarificationDeadline ? new Date(clarificationDeadline) : null,
-        commercialValidityDays: Number(commercialValidityDays) || 60,
-        deliveryRequirement,
-        paymentTerms,
-        taxTerms,
-        requiredDocuments: JSON.stringify(requiredDocuments),
-        technicalRequirements,
-        commercialRequirements,
-        estimatedBenchmarkValue: totalBenchmarkValue,
-        totalLines: rfqLinesData.length,
-        createdById: ctx.userId,
-        releasedAt: isRelease ? new Date() : null,
-        lines: {
-          create: rfqLinesData,
-        },
-      },
-    });
-
-    // 6. Invite selected vendors if provided
-    if (vendorIds.length > 0) {
-      await prisma.rfqVendor.createMany({
-        data: vendorIds.map((vendorId: string) => ({
-          tenantId: ctx.tenantId,
-          rfqId: rfq.id,
-          vendorId,
-          invitationStatus: isRelease ? 'INVITED' : 'PENDING',
-          submissionStatus: 'PENDING',
-        })),
-      });
-    }
-
-    // 7. Audit log creation
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId,
-      entityType: 'RFQ',
-      entityId: rfq.id,
-      action: 'RFQ_CREATED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberCreatedWithLengthLinesFromApprovedBOQRevisionBoqRevisionCodeStatusInitialStatus, { "rfqNumber": rfqNumber, "length": rfqLinesData.length, "boqRevisionCode": boqRevisionCode, "initialStatus": initialStatus }),
-      newValue: {
-        rfqNumber,
-        title,
-        packageType,
-        totalLines: rfqLinesData.length,
-        benchmarkValue: totalBenchmarkValue,
-        status: initialStatus,
-      },
-    });
-
-    if (isRelease) {
-      await createAuditLog({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId,
-        entityType: 'RFQ',
-        entityId: rfq.id,
-        action: 'RFQ_RELEASED',
-        description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberReleasedToLengthInvitedVendors, { "rfqNumber": rfqNumber, "length": vendorIds.length }),
-      });
-
-      await notifyNextResponsibleParty({
-        tenantId: ctx.tenantId,
-        event: 'RFQ_RELEASED',
-        recordNumber: rfqNumber,
-        entityId: rfq.id,
-        actorName: ctx.userName,
-      });
-    }
-
-    return apiSuccess({ rfq, message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsRoute.rFQRfqNumberSuccessfullyCreated, { "rfqNumber": rfqNumber }) }, 201);
-  } catch (error: any) {
-    console.error('Error creating RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCreateRfq }), 500);
-  }
+  return createRfq(req);
 }

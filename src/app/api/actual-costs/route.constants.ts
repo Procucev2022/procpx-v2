@@ -1,0 +1,10 @@
+export const ACTUAL_COST_SOURCES = [
+  'PO_COMPLETION',
+  'PPO_COMPLETION',
+  'GRN',
+  'INVOICE',
+  'MANUAL_ADJUSTMENT',
+  'ERP_ACTUAL',
+] as const;
+
+export const ACTUAL_COST_STATUSES = ['DRAFT', 'SUBMITTED', 'VERIFIED', 'APPROVED', 'REJECTED'] as const;

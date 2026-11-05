@@ -1,9 +1,15 @@
 // app/api/procurement/rfqs/[id]/compare/route.ts
 // Comprehensive Line-Level and Package-Level Quote Comparison Matrix with AI Cost, Historical PPO, and Rate Card Baselines
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE_SQL } from './route.constants';
+import type { RfqCompareRateCardRow } from '@app-types/app/api/procurement/rfqs/compare.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -12,6 +18,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startedAt = Date.now();
   const ctx = await requireAuth('QUOTE_COMPARE');
   if (!isApiContext(ctx)) return ctx;
 
@@ -21,14 +28,32 @@ export async function GET(
     const rfq = await prisma.rfq.findFirst({
       where: { id, tenantId: ctx.tenantId },
       include: {
-        project: true,
+        project: { select: { id: true, name: true, projectCode: true } },
         boqRevision: {
-          include: {
+          select: {
+            id: true,
+            revisionCode: true,
             lines: {
-              include: {
-                category: true,
-                subcategory: true,
-                uom: true,
+              select: {
+                id: true,
+                lineNumber: true,
+                itemCode: true,
+                standardDescription: true,
+                originalDescription: true,
+                specification: true,
+                category: { select: { name: true } },
+                subcategory: { select: { name: true } },
+                uom: { select: { code: true } },
+                costSource: true,
+                costDate: true,
+                aiUnitCost: true,
+                location: true,
+                drawingReference: true,
+                brand: true,
+                model: true,
+                material: true,
+                grade: true,
+                remarks: true,
               },
             },
           },
@@ -39,25 +64,38 @@ export async function GET(
             prNumber: true,
             title: true,
             status: true,
-            costCentre: true,
+            costCentre: { select: { id: true, code: true, name: true } },
           },
         },
         lines: {
-          include: {
+          select: {
+            id: true,
+            lineNumber: true,
+            description: true,
+            specification: true,
+            category: true,
+            subcategory: true,
+            uom: true,
+            quantity: true,
+            benchmarkRate: true,
+            boqLineId: true,
             boqLine: {
-              include: {
-                category: true,
-                subcategory: true,
-                uom: true,
+              select: {
+                id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+                category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+                costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+                brand: true, model: true, material: true, grade: true, remarks: true,
               },
             },
             prLine: {
-              include: {
+              select: {
+                estimatedRate: true,
                 boqLine: {
-                  include: {
-                    category: true,
-                    subcategory: true,
-                    uom: true,
+                  select: {
+                    id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+                    category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+                    costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+                    brand: true, model: true, material: true, grade: true, remarks: true,
                   },
                 },
               },
@@ -65,26 +103,49 @@ export async function GET(
           },
           orderBy: { lineNumber: 'asc' },
         },
-        invitedVendors: {
-          include: { vendor: true },
-        },
         quotes: {
-          include: {
-            vendor: true,
-            lines: true,
+          select: {
+            id: true,
+            vendorId: true,
+            quoteNumber: true,
+            quoteVersion: true,
+            totalQuoteAmount: true,
+            submittedAt: true,
+            status: true,
+            commercialTerms: true,
+            paymentTermsOffered: true,
+            deliveryLeadTimeDays: true,
+            vendor: {
+              select: {
+                id: true, name: true, code: true, vendorType: true, qualificationStatus: true,
+                complianceStatus: true, performanceScore: true,
+              },
+            },
+            lines: { select: { id: true, rfqLineId: true, unitRate: true, lineTotal: true, discountPercent: true, taxPercent: true } },
           },
           orderBy: [{ quoteVersion: 'desc' }, { createdAt: 'desc' }],
         },
         negotiations: {
-          include: {
+          select: {
+            id: true,
+            status: true,
+            currentRound: true,
             rounds: {
-              include: { vendor: true },
+              select: {
+                vendorId: true, roundNumber: true, lineItemsJson: true, counterOfferAmount: true,
+                revisedQuoteAmount: true, status: true, nextResponsibleParty: true, buyerDecision: true,
+              },
               orderBy: { roundNumber: 'desc' },
             },
           },
         },
         awards: {
-          include: { recommendedVendor: true },
+          select: {
+            id: true, recommendedVendorId: true, originalQuoteAmount: true, finalNegotiatedAmount: true,
+            benchmarkAmount: true, totalSavingsAmount: true, savingsPercent: true, justification: true,
+            status: true, submittedAt: true, approvedAt: true, approvalRemarks: true,
+            recommendedVendor: { select: { id: true, name: true, code: true } },
+          },
         },
       },
     });
@@ -148,42 +209,55 @@ export async function GET(
 
     // 3. Fetch active approved rate cards in the tenant
     const now = new Date();
-    const approvedRateCards = await prisma.vendorRateCard.findMany({
-      where: {
-        tenantId: ctx.tenantId,
-        status: 'APPROVED',
-        validFrom: { lte: now },
-        validTo: { gte: now },
-      },
-      include: {
-        vendor: { select: { id: true, name: true, code: true } },
-        items: true,
-      },
-    });
+    const rateCardDescriptions = [...new Set(rfq.lines.map((line) => line.description.toLowerCase().trim()).filter(Boolean))];
+    const descriptionChunks: string[][] = [];
+    for (let offset = 0; offset < rateCardDescriptions.length; offset += RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE) {
+      descriptionChunks.push(rateCardDescriptions.slice(offset, offset + RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE));
+    }
+    const [approvedRateCardsCount, rateCardRowsByChunk] = await Promise.all([
+      prisma.vendorRateCard.count({
+        where: { tenantId: ctx.tenantId, status: 'APPROVED', validFrom: { lte: now }, validTo: { gte: now } },
+      }),
+      Promise.all(descriptionChunks.map((descriptions) => prisma.$queryRaw<RfqCompareRateCardRow[]>(Prisma.sql`
+        SELECT item."description" AS "description", item."rate" AS "rate",
+          card."rateCardNumber" AS "rateCardNumber", card."version" AS "version", card."status" AS "status",
+          card."validFrom" AS "validFrom", card."validTo" AS "validTo", card."vendorId" AS "vendorId",
+          vendor."name" AS "vendorName"
+        FROM "vendor_rate_card_items" item
+        INNER JOIN "vendor_rate_cards" card ON card."id" = item."rateCardId" AND card."tenantId" = item."tenantId"
+        INNER JOIN "vendors" vendor ON vendor."id" = card."vendorId" AND vendor."tenantId" = card."tenantId"
+        WHERE item."tenantId" = ${ctx.tenantId} AND item."isActive" = 1
+          AND card."status" = 'APPROVED' AND card."validFrom" <= ${now} AND card."validTo" >= ${now}
+          AND lower(trim(item."description")) IN (${Prisma.join(descriptions)})
+        ORDER BY card."vendorId" ASC, lower(trim(item."description")) ASC,
+          card."version" DESC, card."validFrom" DESC, card."updatedAt" DESC, card."id" DESC, item."id" ASC
+      `))),
+    ]);
+    const approvedRateCards = rateCardRowsByChunk.flat();
 
     const rateCardItemsMap = new Map<string, { rate: number; rateCardNumber: string; vendorName: string; validTo: string }>();
     const vendorRateCardMap = new Map<string, { rate: number; rateCardNumber: string; version: string; validity: string; status: string }>();
-    for (const rc of approvedRateCards) {
-      for (const item of rc.items) {
-        const key = item.description.toLowerCase().trim();
-        if (!rateCardItemsMap.has(key)) {
-          rateCardItemsMap.set(key, {
-            rate: item.rate,
-            rateCardNumber: rc.rateCardNumber,
-            vendorName: rc.vendor.name,
-            validTo: rc.validTo.toISOString().split('T')[0],
-          });
-        }
-        const vendorKey = `${rc.vendorId}___${key}`;
-        if (!vendorRateCardMap.has(vendorKey)) {
-          vendorRateCardMap.set(vendorKey, {
-            rate: item.rate,
-            rateCardNumber: rc.rateCardNumber,
-            version: `v${rc.version}.0`,
-            validity: `${rc.validFrom.toISOString().split('T')[0]} to ${rc.validTo.toISOString().split('T')[0]}`,
-            status: rc.status,
-          });
-        }
+    for (const item of approvedRateCards) {
+      const key = item.description.toLowerCase().trim();
+      const validFrom = new Date(item.validFrom);
+      const validTo = new Date(item.validTo);
+      if (!rateCardItemsMap.has(key)) {
+        rateCardItemsMap.set(key, {
+          rate: item.rate,
+          rateCardNumber: item.rateCardNumber,
+          vendorName: item.vendorName,
+          validTo: validTo.toISOString().split('T')[0],
+        });
+      }
+      const vendorKey = `${item.vendorId}___${key}`;
+      if (!vendorRateCardMap.has(vendorKey)) {
+        vendorRateCardMap.set(vendorKey, {
+          rate: item.rate,
+          rateCardNumber: item.rateCardNumber,
+          version: `v${item.version}.0`,
+          validity: `${validFrom.toISOString().split('T')[0]} to ${validTo.toISOString().split('T')[0]}`,
+          status: item.status,
+        });
       }
     }
 
@@ -231,6 +305,7 @@ export async function GET(
     // 5. Line-level comparison matrix
     let totalAiBenchmark = 0;
     const vendorTotals: Record<string, number> = {};
+    const invalidNegotiationRounds = new Set<string>();
     vendors.forEach((v) => (vendorTotals[v.vendorId] = 0));
 
     const lineComparison = rfq.lines.map((rfqLine) => {
@@ -282,8 +357,12 @@ export async function GET(
               if (matchItem?.counterRate !== undefined && matchItem?.counterRate !== null) {
                 ourOfferRate = Number(matchItem.counterRate);
               }
+            } else {
+              invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
             }
-          } catch {}
+          } catch {
+            invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
+          }
         }
         if (ourOfferRate === null && latestRound?.counterOfferAmount && q.totalQuoteAmount > 0) {
           ourOfferRate = Math.round(rate * (latestRound.counterOfferAmount / q.totalQuoteAmount));
@@ -308,8 +387,12 @@ export async function GET(
                 if (matchItem?.revisedRate !== undefined && matchItem?.revisedRate !== null) {
                   finalNegotiatedRate = Number(matchItem.revisedRate);
                 }
-              }
-            } catch {}
+            } else {
+              invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
+            }
+            } catch {
+              invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
+            }
           }
           if (finalNegotiatedRate === null && latestRound.revisedQuoteAmount && q.totalQuoteAmount > 0) {
             finalNegotiatedRate = Math.round(rate * (latestRound.revisedQuoteAmount / q.totalQuoteAmount));
@@ -450,31 +533,49 @@ export async function GET(
     // Check if active negotiation exists for this RFQ
     const activeNegotiation = rfq.negotiations.find((n) => n.status === 'ACTIVE') || rfq.negotiations[0] || null;
 
-    // Auto-transition RFQ to COMPARISON status if still open
+    const comparisonDescription = interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() });
+    let responseStatus = rfq.status;
     if (rfq.status === 'VENDOR_RESPONSE_OPEN' || rfq.status === 'RELEASED') {
-      await prisma.rfq.update({
-        where: { id },
-        data: { status: 'COMPARISON' },
+      const transitionedAt = new Date();
+      const results = await writeD1BatchAtomically([
+        { sql: RFQ_COMPARE_STATUS_UPDATE_SQL, values: [transitionedAt, id, ctx.tenantId, rfq.status] },
+        {
+          sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+          values: [crypto.randomUUID(), ctx.tenantId, ctx.userId, rfq.projectId, 'RFQ', rfq.id,
+            'QUOTE_COMPARED', comparisonDescription, JSON.stringify({ status: rfq.status }),
+            JSON.stringify({ status: 'COMPARISON', evaluatedQuotes: evaluatedQuotes.length }), null, null, transitionedAt],
+        },
+      ]);
+      if (Number(results[0]?.meta?.changes || 0) === 1 && Number(results[1]?.meta?.changes || 0) === 1) {
+        responseStatus = 'COMPARISON';
+      }
+    } else {
+      await createAuditLog({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        projectId: rfq.projectId,
+        entityType: 'RFQ',
+        entityId: rfq.id,
+        action: 'QUOTE_COMPARED',
+        description: comparisonDescription,
       });
     }
 
-    // Audit comparison action
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: rfq.projectId,
-      entityType: 'RFQ',
-      entityId: rfq.id,
-      action: 'QUOTE_COMPARED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() }),
-    });
+    if (invalidNegotiationRounds.size > 0) {
+      await writeStructuredLog('warn', 'procurement.negotiation_line_items_invalid', {
+        operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
+        requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+        rfqId: rfq.id, invalidRoundCount: invalidNegotiationRounds.size,
+        negotiationRoundIds: [...invalidNegotiationRounds].slice(0, 20),
+      });
+    }
 
     return apiSuccess({
       rfq: {
         id: rfq.id,
         rfqNumber: rfq.rfqNumber,
         title: rfq.title,
-        status: rfq.status,
+        status: responseStatus,
         project: rfq.project,
         boqRevision: rfq.boqRevision,
         pr: rfq.pr,
@@ -496,12 +597,18 @@ export async function GET(
         savings: totalSavings,
         savingsPercent: Math.round(savingsPercent * 100) / 100,
         isFavorable: totalSavings >= 0,
-        hasApprovedRateCards: approvedRateCards.length > 0,
-        approvedRateCardsCount: approvedRateCards.length,
+        hasApprovedRateCards: approvedRateCardsCount > 0,
+        approvedRateCardsCount,
       },
     });
   } catch (error: any) {
-    console.error('Error generating quote comparison:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCompareQuotes }), 500);
+    await writeStructuredLog('error', 'procurement.rfq_quote_comparison_failed', {
+      operation: 'compare_rfq_quotes', route: `/api/procurement/rfqs/${id}/compare`,
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId, userId: ctx.userId, rfqId: id,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
   }
 }
