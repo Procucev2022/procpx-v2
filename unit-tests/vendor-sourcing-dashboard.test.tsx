@@ -77,7 +77,7 @@ const detailedRfq = { ...rfqRows[0], id: 'rfq-101', rfqNumber: 'RFQ-101', lines:
 function configureFetch(body: unknown = dashboard, ok = true) {
   mockFetch.mockImplementation((url: string) => {
     if (url === dashboardUrl) return Promise.resolve(response(body, ok));
-    if (url === '/api/procurement/rfqs/rfq-101') return Promise.resolve(response({ rfq: detailedRfq }));
+    if (url === '/api/procurement/rfqs/rfq-101?includeNegotiationHistory=true') return Promise.resolve(response({ rfq: detailedRfq }));
     return Promise.resolve(response({}));
   });
   global.fetch = mockFetch as typeof fetch;
@@ -170,7 +170,7 @@ describe('vendor sourcing dashboard', () => {
       if (url === `${dashboardUrl}?section=rateCards&rateCardPage=2&pageSize=25`) {
         return Promise.resolve(response({ rateCards: [{ ...rateCards[0], id: 'rc-2', rateCardNumber: 'RC-2' }], pagination: { rateCards: { page: 2, pageSize: 25, total: 26, hasMore: false } } }));
       }
-      if (url === '/api/procurement/rfqs/rfq-101') return Promise.resolve(response({ rfq: detailedRfq }));
+      if (url === '/api/procurement/rfqs/rfq-101?includeNegotiationHistory=true') return Promise.resolve(response({ rfq: detailedRfq }));
       return Promise.resolve(response({}));
     });
 
@@ -190,7 +190,7 @@ describe('vendor sourcing dashboard', () => {
 
     fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.openCommercialNegotiationWorkspace))[0]);
     expect(await screen.findByTestId('vendor-negotiation')).toHaveTextContent('RFQ-101');
-    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-101');
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-101?includeNegotiationHistory=true');
   });
 
   it('accepts a PPO and raises a clarification issue with persisted form details', async () => {

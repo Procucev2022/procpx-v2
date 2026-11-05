@@ -1,7 +1,7 @@
 'use client';
 // app/(app)/procurement/rfqs/[id]/page.tsx
 // proCPX Consolidated Procurement Workspace: RFQ -> Negotiation -> Awarding -> PPO
-import { useEffect, useState, useMemo, use, Suspense } from 'react';
+import { useEffect, useState, useMemo, use, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { I18N_CONFIG } from '@/lib/i18n.constants';
@@ -91,6 +91,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [activeTab, setActiveTab] = useState<'quotes' | 'negotiation' | 'awarding'>(resolveTab(initialTabParam));
   const [viewingQuote, setViewingQuote] = useState<any | null>(null);
   const [rfq, setRfq] = useState<any>(null);
+  const negotiationHistoryRequestedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState<any>(null);
   const [loadingCompare, setLoadingCompare] = useState(false);
@@ -196,7 +197,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setLoadingRateCard(false);
       return;
     }
-    fetchRfq();
+    negotiationHistoryRequestedRef.current = activeTab !== 'quotes';
+    fetchRfq(activeTab !== 'quotes');
     fetchComparison();
     fetchRateCardMatch();
   }, [id, isDemoMode, searchParams]);
@@ -225,22 +227,40 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     });
   };
 
-  const fetchRfq = async () => {
-    setLoading(true);
+  const fetchRfq = async (
+    includeNegotiationHistory = negotiationHistoryRequestedRef.current,
+    showLoading = true,
+  ) => {
+    if (showLoading) setLoading(true);
     try {
-      const res = await fetch(`/api/procurement/rfqs/${id}`);
+      const historyQuery = includeNegotiationHistory ? '?includeNegotiationHistory=true' : '';
+      const res = await fetch(`/api/procurement/rfqs/${id}${historyQuery}`);
       const data = await res.json();
       if (data.rfq) {
+        if (includeNegotiationHistory) {
+          negotiationHistoryRequestedRef.current = true;
+        }
         setRfq(data.rfq);
         if (data.rfq.quotes?.length > 0 && !awardVendorId) {
           setAwardVendorId(data.rfq.quotes[0].vendorId);
           setQuoteVendorId(data.rfq.quotes[0].vendorId);
         }
+      } else if (includeNegotiationHistory) {
+        negotiationHistoryRequestedRef.current = false;
       }
     } catch (err) {
+      if (includeNegotiationHistory) negotiationHistoryRequestedRef.current = false;
       console.error('Failed to load RFQ:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  const changeActiveTab = (tab: 'quotes' | 'negotiation' | 'awarding') => {
+    setActiveTab(tab);
+    if (tab !== 'quotes' && !negotiationHistoryRequestedRef.current && !isDemoMode) {
+      negotiationHistoryRequestedRef.current = true;
+      void fetchRfq(true, false);
     }
   };
 
@@ -1053,7 +1073,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       <div className="tabs" style={{ marginBottom: 16, display: 'flex', gap: 8, borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
         <button
           type="button"
-          onClick={() => setActiveTab('quotes')}
+          onClick={() => changeActiveTab('quotes')}
           className={`tab-btn ${activeTab === 'quotes' ? 'active' : ''}`}
           style={{
             fontSize: 13,
@@ -1087,7 +1107,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
         <button
           type="button"
-          onClick={() => setActiveTab('negotiation')}
+          onClick={() => changeActiveTab('negotiation')}
           className={`tab-btn ${activeTab === 'negotiation' ? 'active' : ''}`}
           style={{
             fontSize: 13,
@@ -1123,7 +1143,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
         <button
           type="button"
-          onClick={() => setActiveTab('awarding')}
+          onClick={() => changeActiveTab('awarding')}
           className={`tab-btn ${activeTab === 'awarding' ? 'active' : ''}`}
           style={{
             fontSize: 13,
@@ -1228,7 +1248,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     <Plus size={13} />{UI_STRINGS.appAppProcurementRfqsIdPage.recordNewQuote}</button>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('negotiation')}
+                    onClick={() => changeActiveTab('negotiation')}
                     className="btn btn-secondary btn-sm"
                     style={{
                       background: '#ffffff',

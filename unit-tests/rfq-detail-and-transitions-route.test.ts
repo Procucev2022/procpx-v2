@@ -39,7 +39,9 @@ const audit = createAuditLog as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const buyer = { tenantId: 'tenant-1', userId: 'buyer-1', userName: 'Buyer', role: 'PROCUREMENT_MANAGER' };
 const params = { params: Promise.resolve({ id: 'rfq-1' }) };
-const getRequest = () => new NextRequest('http://localhost/api/procurement/rfqs/rfq-1');
+const getRequest = (includeNegotiationHistory = false) => new NextRequest(
+  `http://localhost/api/procurement/rfqs/rfq-1${includeNegotiationHistory ? '?includeNegotiationHistory=true' : ''}`,
+);
 const putRequest = (body: unknown) => new NextRequest('http://localhost/api/procurement/rfqs/rfq-1', {
   method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 });
@@ -102,7 +104,7 @@ describe('RFQ detail read permissions', () => {
         lineTotal: 52.5, lineRemarks: null,
       },
     ]);
-    await expect(getRfq(getRequest(), params)).resolves.toMatchObject({
+    await expect(getRfq(getRequest(true), params)).resolves.toMatchObject({
       ok: true,
       data: {
         rfq: {
@@ -141,6 +143,7 @@ describe('RFQ detail read permissions', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', auctions: [{ id: 'auction-1' }], awards: [{ id: 'award-1' }] });
     await getRfq(getRequest(), params);
     const includes = db.rfq.findFirst.mock.calls[0][0].include;
+    expect(includes.negotiations).toEqual({ select: { id: true, status: true, currentRound: true } });
     expect(includes).not.toHaveProperty('auctions');
     expect(includes.awards).toEqual({ select: expect.objectContaining({ recommendedVendor: { select: { id: true, name: true, code: true } } }) });
     expect(includes.ppos.select.vendor).toEqual({ select: { id: true, name: true, code: true } });
@@ -151,6 +154,14 @@ describe('RFQ detail read permissions', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
     db.$queryRaw.mockRejectedValueOnce(new Error('RFQ quote summary read failed'));
     await expect(getRfq(getRequest(), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqDetail, status: 500 });
+  });
+
+  it('loads complete negotiation history only when requested', async () => {
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', negotiations: [{ id: 'negotiation-1', rounds: [] }] });
+    await getRfq(getRequest(true), params);
+    const negotiations = db.rfq.findFirst.mock.calls[0][0].include.negotiations;
+    expect(negotiations).toHaveProperty('include.rounds.select.lineItemsJson', true);
+    expect(negotiations.include.rounds.orderBy).toEqual({ roundNumber: 'desc' });
   });
 
   it('normalizes nullable quote summary fields from D1', async () => {

@@ -23,6 +23,7 @@ export async function GET(
 
   const { id } = await params;
   const startedAt = Date.now();
+  const includeNegotiationHistory = new URL(req.url).searchParams.get('includeNegotiationHistory') === 'true';
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
@@ -84,37 +85,45 @@ export async function GET(
             vendor: { select: { id: true, name: true, code: true } },
           },
         },
-        negotiations: {
-          include: {
-            rounds: {
-              where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
-              select: {
-                id: true,
-                vendorId: true,
-                roundNumber: true,
-                deadline: true,
-                targetPrice: true,
-                previousQuoteAmount: true,
-                counterOfferAmount: true,
-                revisedQuoteAmount: true,
-                savingsAmount: true,
-                savingsPercent: true,
-                status: true,
-                notes: true,
-                isFinalOffer: true,
-                buyerDecision: true,
-                buyerDecisionDate: true,
-                buyerDecisionRemarks: true,
-                nextResponsibleParty: true,
-                lineItemsJson: true,
-                submittedByVendor: true,
-                createdAt: true,
-                vendor: { select: { id: true, name: true, code: true } },
+        negotiations: includeNegotiationHistory
+          ? {
+            include: {
+              rounds: {
+                where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
+                select: {
+                  id: true,
+                  vendorId: true,
+                  roundNumber: true,
+                  deadline: true,
+                  targetPrice: true,
+                  previousQuoteAmount: true,
+                  counterOfferAmount: true,
+                  revisedQuoteAmount: true,
+                  savingsAmount: true,
+                  savingsPercent: true,
+                  status: true,
+                  notes: true,
+                  isFinalOffer: true,
+                  buyerDecision: true,
+                  buyerDecisionDate: true,
+                  buyerDecisionRemarks: true,
+                  nextResponsibleParty: true,
+                  lineItemsJson: true,
+                  submittedByVendor: true,
+                  createdAt: true,
+                  vendor: { select: { id: true, name: true, code: true } },
+                },
+                orderBy: { roundNumber: 'desc' },
               },
-              orderBy: { roundNumber: 'desc' },
+            },
+          }
+          : {
+            select: {
+              id: true,
+              status: true,
+              currentRound: true,
             },
           },
-        },
         awards: ctx.role === 'VENDOR' ? false : {
           select: {
             id: true,

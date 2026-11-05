@@ -130,7 +130,7 @@ export default function VendorSourcingDashboard({
     if (openingNegotiationRfqId) return;
     setOpeningNegotiationRfqId(rfqSummary.id);
     try {
-      const res = await fetch(`/api/procurement/rfqs/${rfqSummary.id}`);
+      const res = await fetch(`/api/procurement/rfqs/${rfqSummary.id}?includeNegotiationHistory=true`);
       const data = await res.json();
       if (!res.ok || !data.rfq) {
         throw new Error(data.error || UI_STRINGS.common.userMessages.failedToFetchRfqDetail);

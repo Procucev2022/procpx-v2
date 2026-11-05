@@ -86,7 +86,7 @@ describe('RFQ detail lifecycle page', () => {
     mockSearchParams.mockReturnValue(paramsFor('tab=negotiations'));
     renderRfq('rfq-missing');
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rFQNotFoundOrAccessDenied))).toBeInTheDocument();
-    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing');
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing?includeNegotiationHistory=true');
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-missing/compare');
     expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rate-cards/match?rfqId=rfq-missing&page=1');
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.backToRFQsRegister, "", false) })).toHaveAttribute('href', '/procurement/rfqs');
@@ -98,6 +98,34 @@ describe('RFQ detail lifecycle page', () => {
       : { ok: true, json: async () => ({ rfq: null }) });
     renderRfq('rfq-vendor');
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/vendor-portal/rfqs/rfq-vendor'));
+  });
+
+  it('loads negotiation history only after opening a negotiation or award tab', async () => {
+    const rfq = {
+      id: 'rfq-history', rfqNumber: 'RFQ-HISTORY-1', title: 'History package', status: 'COMPARISON',
+      lines: [], invitedVendors: [], quotes: [], negotiations: [{ id: 'neg-1', currentRound: 2 }], awards: [], ppos: [],
+    };
+    const reply = (body: unknown) => ({ ok: true, json: async () => body });
+    mockSearchParams.mockReturnValue(paramsFor());
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/auth/session') return reply({ user: { role: 'BUYER' } });
+      if (url === '/api/procurement/rfqs/rfq-history') return reply({ rfq });
+      if (url === '/api/procurement/rfqs/rfq-history?includeNegotiationHistory=true') {
+        return reply({ rfq: { ...rfq, negotiations: [{ ...rfq.negotiations[0], rounds: [{ id: 'round-1' }] }] } });
+      }
+      if (url === '/api/procurement/rfqs/rfq-history/compare') return reply({ vendors: [], lines: [] });
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-history&page=1') return reply({ matchedRateCards: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderRfq('rfq-history');
+    expect(await screen.findByRole('heading', { name: 'History package' })).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-history');
+    expect(mockFetch).not.toHaveBeenCalledWith('/api/procurement/rfqs/rfq-history?includeNegotiationHistory=true');
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-history?includeNegotiationHistory=true'));
+    expect(await screen.findByTestId('commercial-workspace')).toHaveTextContent('RFQ-HISTORY-1');
   });
 
   it('records a manual demonstration quote and creates a direct rate-card PPO', async () => {
@@ -447,7 +475,7 @@ describe('RFQ detail lifecycle page', () => {
     };
     mockFetch.mockImplementation(async (url: string) => {
       if (url === '/api/auth/session') return { ok: true, json: async () => ({ user: {} }) };
-      if (url === '/api/procurement/rfqs/rfq-sparse') return { ok: true, json: async () => ({ rfq: sparseRfq }) };
+      if (url === '/api/procurement/rfqs/rfq-sparse' || url === '/api/procurement/rfqs/rfq-sparse?includeNegotiationHistory=true') return { ok: true, json: async () => ({ rfq: sparseRfq }) };
       if (url === '/api/procurement/rfqs/rfq-sparse/compare') throw new Error('Comparison unavailable');
       if (url === '/api/procurement/rate-cards/match?rfqId=rfq-sparse&page=1') throw new Error('Rate cards unavailable');
       throw new Error(`Unexpected fetch: ${url}`);
@@ -507,7 +535,7 @@ describe('RFQ detail lifecycle page', () => {
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/auth/session') return { ok: false, json: async () => ({}) };
       if (url === '/api/procurement/rfqs/rfq-fallback' && init?.method === 'PUT') throw new Error('');
-      if (url === '/api/procurement/rfqs/rfq-fallback') return { ok: true, json: async () => ({ rfq: sparseRfq }) };
+      if (url === '/api/procurement/rfqs/rfq-fallback' || url === '/api/procurement/rfqs/rfq-fallback?includeNegotiationHistory=true') return { ok: true, json: async () => ({ rfq: sparseRfq }) };
       if (url === '/api/procurement/rfqs/rfq-fallback/compare') return { ok: true, json: async () => comparison };
       if (url === '/api/procurement/rate-cards/match?rfqId=rfq-fallback&page=1') return { ok: true, json: async () => ({ matchedRateCards: [] }) };
       throw new Error(`Unexpected fetch: ${url}`);
