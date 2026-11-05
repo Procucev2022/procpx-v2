@@ -231,16 +231,16 @@ function RfqsListContent() {
               </thead>
               <tbody>
                 {rfqs.map((rfq) => {
-                  const boqNo = rfq.boqCode || rfq.boqRevision?.boq?.boqCode || (rfq.project?.projectCode ? `BOQ-${rfq.project.projectCode}` : 'BOQ-R1');
+                  const boqNo = rfq.boqCode || rfq.boqRevision?.boq?.boqCode || UI_STRINGS.common.notAvailable;
                   const rfqNo = rfq.rfqNumber;
-                  const projectName = rfq.project?.name || 'Project';
-                  const location = rfq.location || rfq.project?.location || rfq.project?.city || 'India';
-                  const packageTrade = rfq.packageName || rfq.title || 'Civil & Interior Package';
-                  const costCentre = rfq.costCentre || 'CC45 - Fitout';
-                  const boqRevision = rfq.boqRevision?.revisionCode || 'R0';
+                  const projectName = rfq.project?.name || UI_STRINGS.common.notAvailable;
+                  const location = rfq.location || rfq.project?.location || rfq.project?.city || UI_STRINGS.common.notAvailable;
+                  const packageTrade = rfq.packageName || rfq.title || UI_STRINGS.common.notAvailable;
+                  const costCentre = rfq.costCentre || UI_STRINGS.common.notAvailable;
+                  const boqRevision = rfq.boqRevision?.revisionCode || UI_STRINGS.common.notAvailable;
                   const totalBoqValue = rfq.totalBoqValue || rfq.estimatedBenchmarkValue || 0;
                   const rfqLinesCount = rfq.totalLines || 0;
-                  const createdDate = rfq.releasedAt ? new Date(rfq.releasedAt).toLocaleDateString() : rfq.createdAt ? new Date(rfq.createdAt).toLocaleDateString() : '—';
+                  const createdDate = rfq.releasedAt ? new Date(rfq.releasedAt).toLocaleDateString() : rfq.createdAt ? new Date(rfq.createdAt).toLocaleDateString() : UI_STRINGS.common.notAvailable;
                   const invitedCount = rfq.invitedVendorsCount || rfq.invitedVendors?.length || 0;
                   const quotesCount = rfq.quotesCount || 0;
                   const workflow = getActualRfqWorkflowStage(rfq);

@@ -117,7 +117,7 @@ describe('RFQ collection API', () => {
       status: 'RELEASED', submissionDeadline: new Date('2026-11-01'), clarificationDeadline: null, commercialValidityDays: 60,
       estimatedBenchmarkValue: 500, totalLines: 0, _count: { lines: 2 },
       project: { id: 'p1', name: 'North', projectCode: 'N1', location: 'Site', city: 'City' },
-      boqRevision: { id: 'rev-1', revisionCode: 'R2', approvedAt: new Date('2026-01-01'), boq: { id: 'b1', boqCode: 'BOQ-1', totalBenchmarkAmount: 600 } },
+      boqRevision: { id: 'rev-1', revisionCode: 'R2', approvedAt: new Date('2026-01-01'), boq: { id: 'b1', boqCode: 'BOQ-1' } },
       pr: { id: 'pr1', prNumber: 'PR-1', costCentre: { id: 'cc1', code: 'CC-1', name: 'Electrical' }, boq: { id: 'b1', boqCode: 'BOQ-PR' } },
       invitedVendors: [{ id: 'iv1', vendorId: 'v1', invitationStatus: 'INVITED', submissionStatus: 'PENDING', vendor: { name: 'Acme', performanceScore: 88 } }],
       quotes: [{ id: 'q1', quoteNumber: 'QT-1', quoteVersion: 1, vendorId: 'v1', totalQuoteAmount: 1000 },
@@ -129,7 +129,7 @@ describe('RFQ collection API', () => {
     await expect(GET(getRequest('?status=active&projectId=p1&search=cable%20%26%20panel&page=2&pageSize=10'))).resolves.toMatchObject({ ok: true, data: {
       total: 21, page: 2, pageSize: 10, totalPages: 3, statusCounts: { RELEASED: 3 },
       rfqs: [{ id: 'rfq-1', totalLines: 2, boqCode: 'BOQ-1', costCentre: 'CC-1 - Electrical', location: 'Site',
-        totalBoqValue: 600, invitedVendorsCount: 1, invitedVendors: [{ vendorName: 'Acme', performanceScore: 88 }],
+        totalBoqValue: 500, invitedVendorsCount: 1, invitedVendors: [{ vendorName: 'Acme', performanceScore: 88 }],
         quotesCount: 2, hasQuotes: true, lowestQuoteAmount: 0, negotiation: { id: 'n1' }, auction: { id: 'a1' },
         award: { id: 'aw1' }, ppo: { id: 'ppo1' } }],
     } });
@@ -144,6 +144,11 @@ describe('RFQ collection API', () => {
       take: 10,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     }));
+    const listQuery = db.rfq.findMany.mock.calls.at(-1)?.[0];
+    expect(listQuery.include.invitedVendors).toMatchObject({
+      orderBy: [{ invitedAt: 'asc' }, { id: 'asc' }],
+      take: 5,
+    });
     expect(db.quote.groupBy).toHaveBeenCalledWith({
       by: ['rfqId'],
       where: { tenantId: 'tenant-1', rfqId: { in: ['rfq-1'] } },
@@ -153,28 +158,39 @@ describe('RFQ collection API', () => {
 
     db.rfq.findMany.mockResolvedValueOnce([{
       id: 'rfq-fallback', rfqNumber: 'RFQ-2', totalLines: null, _count: { lines: 4 }, status: 'DRAFT',
-      project: { projectCode: 'P2', city: 'South' }, boqRevision: null, pr: null, invitedVendors: [], quotes: [],
+      project: { projectCode: 'P2', city: 'South' },
+      boqRevision: { revisionCode: 'R2', costCentre: null, boq: { boqCode: 'BOQ-2' } },
+      pr: null, invitedVendors: [], quotes: [],
       negotiations: [], auctions: [], awards: [], ppos: [], estimatedBenchmarkValue: 0,
     }, {
       id: 'rfq-pr-fallback', rfqNumber: 'RFQ-3', totalLines: 1, _count: { lines: 1 }, status: 'DRAFT',
-      project: {}, boqRevision: null, pr: { boq: { boqCode: 'BOQ-PR' } }, invitedVendors: [], quotes: undefined,
+      project: { location: 'Pune' }, boqRevision: null,
+      pr: { boq: { boqCode: 'BOQ-PR' }, costCentre: { code: 'CC-3', name: 'Costs' } }, invitedVendors: [], quotes: undefined,
       negotiations: [], auctions: [], awards: [], ppos: [],
     }, {
       id: 'rfq-generic-fallback', rfqNumber: 'RFQ-4', totalLines: 1, _count: { lines: 1 }, status: 'DRAFT',
-      project: {}, boqRevision: null, pr: null, invitedVendors: [], quotes: [], negotiations: [], auctions: [], awards: [], ppos: [],
+      project: null, boqRevision: null, pr: null, invitedVendors: [], quotes: [], negotiations: [], auctions: [], awards: [], ppos: [],
     }]);
     await expect(GET(getRequest('?status=DRAFT'))).resolves.toMatchObject({ ok: true, data: { rfqs: [
-      { totalLines: 4, boqCode: 'BOQ-P2', costCentre: 'CC45 - Fitout', location: 'South', totalBoqValue: 0,
+      { totalLines: 4, boqCode: 'BOQ-2', costCentre: null, location: 'South', totalBoqValue: 0,
         invitedVendorsCount: 0, quotesCount: 0, hasQuotes: false, lowestQuoteAmount: null,
         negotiation: null, auction: null, award: null, ppo: null },
-      { boqCode: 'BOQ-PR', costCentre: 'CC45 - Fitout', location: 'India', quotesCount: 0, lowestQuoteAmount: null },
-      { boqCode: 'BOQ-R1', costCentre: 'CC45 - Fitout', location: 'India' },
+      { boqCode: 'BOQ-PR', costCentre: 'CC-3 - Costs', location: 'Pune', quotesCount: 0, lowestQuoteAmount: null },
+      { boqCode: null, costCentre: null, location: null },
     ] } });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.rfq_register_relationships_missing', expect.objectContaining({
+      operation: 'list_rfqs', route: '/api/procurement/rfqs', tenantId: 'tenant-1',
+      affectedRecordCount: 2,
+      records: expect.arrayContaining([
+        expect.objectContaining({ rfqId: 'rfq-pr-fallback', missingRelations: ['boqRevision'] }),
+        expect.objectContaining({ rfqId: 'rfq-generic-fallback', missingRelations: ['project', 'boqRevision'] }),
+      ]),
+    }), 'application');
     db.rfq.findMany.mockRejectedValueOnce(new Error('RFQ list failed'));
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqs, status: 500 });
     db.rfq.findMany.mockRejectedValueOnce({});
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqs, status: 500 });
-    expect(structuredLog).toHaveBeenCalledTimes(2);
+    expect(structuredLog).toHaveBeenCalledTimes(3);
     expect(structuredLog).toHaveBeenCalledWith('error', 'procurement.rfq_register_read_failed', expect.objectContaining({
       operation: 'list_rfqs', tenantId: 'tenant-1', pageSize: 50,
     }), 'application');

@@ -145,6 +145,12 @@ The current local database is a Wrangler D1 SQLite state. The Prisma SQLite prov
 - Migration 0026 adds `(tenantId, rateCardId)` to support page-card item aggregation. The index is additive. Before the local migration, `vendor_rate_cards` and `vendor_rate_card_items` each had zero rows and no IDs to preserve. Post-change local integrity remains 44 tables and 493 records with no duplicate, foreign-key, or cross-tenant violations. Local `EXPLAIN QUERY PLAN` confirms the aggregate's item lookup uses `vendor_rate_card_items_tenant_card_idx`. No remote migration ran.
 - Regression coverage verifies the tenant-bound aggregate, summary totals, invalid comparison metadata diagnostics, and that list responses omit child item payloads. Approval detail still loads its line items on demand.
 
+### RFQ register reference integrity and stable vendor preview
+
+- The RFQ register used fabricated BOQ, cost-centre, and location values when persisted relations were absent, and attempted to read a benchmark field that does not exist on the BOQ model. It now uses the actual BOQ/PR/revision cost-centre relations and the persisted RFQ estimate; absent values display the localized “Not Available” label. Missing required project/revision/BOQ and PR cost-centre relations produce a bounded structured warning with RFQ IDs and missing relation names.
+- The five-vendor register preview now sorts by `(invitedAt, id)`. Migration 0027 adds `(tenantId, rfqId, invitedAt, id)` for that lookup and ordering. Local `EXPLAIN QUERY PLAN` uses the covering index and no longer reports a temporary sort.
+- Regression tests cover stable preview order, revision cost-centre fallback, missing-relation logging, and the removal of fabricated register values. Local D1 remains at 44 tables and 493 records; all 21 captured RFQ-vendor IDs and relationships are unchanged. Migration 0027 was local only; no RFQ/vendor data was modified.
+
 ### PPO register projection
 
 - The buyer PPO register previously selected RFQ lines, full cost centres, award recommendation details, and rating data that the list screen did not display. Those expansions were removed or narrowed to the fields actually used for the register, reducing D1 row transfer and Worker object allocation on each page.

@@ -540,6 +540,7 @@ model RfqVendor {
   vendor           Vendor   @relation(fields: [vendorId], references: [id])
 
   @@unique([rfqId, vendorId])
+  @@index([tenantId, rfqId, invitedAt, id], map: "rfq_vendors_tenant_rfq_invited_order_idx")
   @@map("rfq_vendors")
 }
 

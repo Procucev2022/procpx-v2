@@ -43,7 +43,7 @@ describe('RFQ sourcing register page', () => {
     global.fetch = originalFetch;
   });
 
-  it('renders rows for every persisted workflow stage and uses the documented fallbacks', async () => {
+  it('renders workflow stages and uses a clear empty value when reference data is missing', async () => {
     const rows = [
       rfq('ppo-list', 'DRAFT', { ppos: [{}] }),
       rfq('ppo-flag', 'PPO_ISSUED'),
@@ -103,8 +103,11 @@ describe('RFQ sourcing register page', () => {
     expect(document.body).toHaveTextContent(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: UI_STRINGS.common.indianRupeeSymbol, amount: '5,000' }));
     expect(screen.getByText('2 Vendors')).toBeInTheDocument();
     expect(screen.getByText('Fallback trade')).toBeInTheDocument();
-    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.india)).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('BOQ-R1').length).toBeGreaterThan(0);
+    expect(screen.queryByText('BOQ-R1')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.india))).not.toBeInTheDocument();
+    expect(screen.queryByText('CC45 - Fitout')).not.toBeInTheDocument();
+    expect(screen.queryByText('Civil & Interior Package')).not.toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.rERFQ))).toBeInTheDocument();
     expect(screen.getByText('21')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.allSourcingPackages))).toBeInTheDocument();

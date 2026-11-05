@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
             id: true,
             revisionCode: true,
             approvedAt: true,
+            costCentre: { select: { id: true, code: true, name: true } },
             boq: {
               select: {
                 id: true,
@@ -102,6 +103,7 @@ export async function GET(req: NextRequest) {
           },
         },
         invitedVendors: {
+          orderBy: [{ invitedAt: 'asc' }, { id: 'asc' }],
           take: RFQ_REGISTER_VENDOR_PREVIEW_LIMIT,
           include: {
             vendor: {
@@ -168,6 +170,25 @@ export async function GET(req: NextRequest) {
     }) : [];
     const quotesByRfqId = new Map(quoteGroups.map((group) => [group.rfqId, group]));
 
+    const relationshipIssues = rfqs.flatMap((rfq: any) => {
+      const missingRelations = [
+        ...(!rfq.project ? ['project'] : []),
+        ...(!rfq.boqRevision ? ['boqRevision'] : []),
+        ...(rfq.boqRevision && !rfq.boqRevision.boq ? ['boqRevision.boq'] : []),
+        ...(rfq.pr && !rfq.pr.costCentre ? ['purchaseRequest.costCentre'] : []),
+      ];
+      return missingRelations.length > 0 ? [{ rfqId: rfq.id, rfqNumber: rfq.rfqNumber, missingRelations }] : [];
+    });
+    if (relationshipIssues.length > 0) {
+      await writeStructuredLog('warn', 'procurement.rfq_register_relationships_missing', {
+        operation: 'list_rfqs', route: '/api/procurement/rfqs',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        tenantId: ctx.tenantId, userId: ctx.userId,
+        affectedRecordCount: relationshipIssues.length,
+        records: relationshipIssues.slice(0, 20),
+      }, 'application');
+    }
+
     const formatted = rfqs.map((rfq: any) => {
       const quoteGroup = quotesByRfqId.get(rfq.id);
       const quotesCount = quoteGroup?._count?._all ?? rfq.quotes?.length ?? 0;
@@ -187,10 +208,14 @@ export async function GET(req: NextRequest) {
       totalLines: rfq.totalLines || rfq._count.lines,
       project: rfq.project,
       boqRevision: rfq.boqRevision,
-      boqCode: rfq.boqRevision?.boq?.boqCode || rfq.pr?.boq?.boqCode || (rfq.project?.projectCode ? `BOQ-${rfq.project.projectCode}` : 'BOQ-R1'),
-      costCentre: rfq.pr?.costCentre ? `${rfq.pr.costCentre.code} - ${rfq.pr.costCentre.name}` : 'CC45 - Fitout',
-      location: rfq.project?.location || rfq.project?.city || 'India',
-      totalBoqValue: rfq.boqRevision?.boq?.totalBenchmarkAmount || rfq.estimatedBenchmarkValue || 0,
+      boqCode: rfq.boqRevision?.boq?.boqCode || rfq.pr?.boq?.boqCode || null,
+      costCentre: rfq.pr?.costCentre
+        ? `${rfq.pr.costCentre.code} - ${rfq.pr.costCentre.name}`
+        : rfq.boqRevision?.costCentre
+          ? `${rfq.boqRevision.costCentre.code} - ${rfq.boqRevision.costCentre.name}`
+          : null,
+      location: rfq.project?.location || [rfq.project?.city, rfq.project?.state].filter(Boolean).join(', ') || null,
+      totalBoqValue: Number(rfq.estimatedBenchmarkValue || 0),
       invitedVendorsCount,
       invitedVendors: rfq.invitedVendors?.map((iv: any) => ({
         id: iv.id,
