@@ -9,7 +9,11 @@ import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE_SQL } from './route.constants';
-import type { RfqCompareRateCardRow, RfqLatestCompareQuoteLineRow } from '@app-types/app/api/procurement/rfqs/compare.types';
+import type {
+  RfqCompareRateCardRow,
+  RfqLatestCompareNegotiationRoundRow,
+  RfqLatestCompareQuoteLineRow,
+} from '@app-types/app/api/procurement/rfqs/compare.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -129,13 +133,6 @@ export async function GET(
             id: true,
             status: true,
             currentRound: true,
-            rounds: {
-              select: {
-                vendorId: true, roundNumber: true, lineItemsJson: true, counterOfferAmount: true,
-                revisedQuoteAmount: true, status: true, nextResponsibleParty: true, buyerDecision: true,
-              },
-              orderBy: { roundNumber: 'desc' },
-            },
           },
         },
         awards: {
@@ -199,6 +196,30 @@ export async function GET(
       ...quote,
       lines: linesByQuoteId.get(quote.id) || [],
     }));
+
+    const latestNegotiationRoundRows = rfq.negotiations.length > 0
+      ? await prisma.$queryRaw<RfqLatestCompareNegotiationRoundRow[]>(Prisma.sql`
+        WITH latest_negotiation_rounds AS (
+          SELECT rounds."tenantId", rounds."negotiationId", rounds."vendorId",
+            MAX(rounds."roundNumber") AS "latestRoundNumber"
+          FROM "negotiation_rounds" AS rounds
+          INNER JOIN "negotiations" AS negotiation
+            ON negotiation."id" = rounds."negotiationId" AND negotiation."tenantId" = rounds."tenantId"
+          WHERE rounds."tenantId" = ${ctx.tenantId} AND negotiation."rfqId" = ${id}
+          GROUP BY rounds."tenantId", rounds."negotiationId", rounds."vendorId"
+        )
+        SELECT rounds."vendorId", rounds."roundNumber", rounds."lineItemsJson", rounds."counterOfferAmount",
+          rounds."revisedQuoteAmount", rounds."status", rounds."nextResponsibleParty", rounds."buyerDecision"
+        FROM latest_negotiation_rounds AS latest
+        INNER JOIN "negotiation_rounds" AS rounds
+          ON rounds."tenantId" = latest."tenantId" AND rounds."negotiationId" = latest."negotiationId"
+            AND rounds."vendorId" = latest."vendorId" AND rounds."roundNumber" = latest."latestRoundNumber"
+        ORDER BY rounds."vendorId" ASC
+      `)
+      : [];
+    const latestNegotiationRoundByVendor = new Map(
+      latestNegotiationRoundRows.map((round) => [round.vendorId, round])
+    );
 
     // 2. Fetch historical PPO lines for baseline price comparison
     const historicalPpoLines = await prisma.ppoLine.findMany({
@@ -369,12 +390,7 @@ export async function GET(
         // Vendor-specific Rate Card
         const vendorRc = vendorRateCardMap.get(`${q.vendorId}___${reqDesc}`);
 
-        // Negotiation rounds for this vendor - sort descending by roundNumber
-        const allRounds = rfq.negotiations
-          .flatMap((n) => n.rounds)
-          .filter((r) => r.vendorId === q.vendorId)
-          .sort((a, b) => (b.roundNumber || 1) - (a.roundNumber || 1));
-        const latestRound = allRounds[0];
+        const latestRound = latestNegotiationRoundByVendor.get(q.vendorId);
 
         // 3. Our Offer Rate (persisted buyer counteroffer for this line/round)
         let ourOfferRate: number | null = null;
@@ -407,7 +423,7 @@ export async function GET(
           (latestRound.nextResponsibleParty === 'BUYER' || latestRound.buyerDecision !== null)
         );
 
-        if (isRevisionSubmitted) {
+        if (isRevisionSubmitted && latestRound) {
           if (latestRound.lineItemsJson) {
             try {
               const items = typeof latestRound.lineItemsJson === 'string' ? JSON.parse(latestRound.lineItemsJson) : latestRound.lineItemsJson;

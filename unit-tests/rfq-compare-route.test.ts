@@ -77,21 +77,24 @@ const fullRfq = (overrides: Record<string, any> = {}) => {
       quote('v3', 'v3', 1200, 1, [line('line-1', 100, 1000), line('line-2', 50, 100)]),
       quote('v4', 'v4', 1500, 1, [line('line-1', 150, 1500), line('line-2', 75, 150)]),
     ],
-    negotiations: [{ id: 'neg-1', status: 'ACTIVE', rounds: [
-      { vendorId: 'v1', roundNumber: 1, status: 'ROUND_ACTIVE', counterOfferAmount: 900, revisedQuoteAmount: null, lineItemsJson: '[]' },
-      { vendorId: 'v1', roundNumber: 2, status: 'REVISED_SUBMITTED', counterOfferAmount: 800, revisedQuoteAmount: 1100,
-        nextResponsibleParty: 'BUYER', buyerDecision: null,
-        lineItemsJson: JSON.stringify([{ rfqLineId: 'line-1', counterRate: 95, revisedRate: 98 }]) },
-      { vendorId: 'v2', roundNumber: 1, status: 'ROUND_ACTIVE', counterOfferAmount: 600, revisedQuoteAmount: null, lineItemsJson: null },
-      { vendorId: 'v3', roundNumber: 1, status: 'FINAL_OFFER_SUBMITTED', counterOfferAmount: null, revisedQuoteAmount: 1800,
-        nextResponsibleParty: 'BUYER', lineItemsJson: '{bad json' },
-      { vendorId: 'v4', roundNumber: 1, status: 'FINAL_OFFER_SUBMITTED', counterOfferAmount: 700, revisedQuoteAmount: 1300,
-        nextResponsibleParty: 'BUYER', lineItemsJson: [{ id: 'line-1', counterRate: 120, revisedRate: 110 }, { id: 'line-2' }] },
-    ] }],
+    negotiations: [{ id: 'neg-1', status: 'ACTIVE', currentRound: 2 }],
     awards: [{ id: 'award-1', status: 'PENDING' }],
     ...overrides,
   };
 };
+
+const latestNegotiationRoundRows = () => [
+  { vendorId: 'v1', roundNumber: 2, status: 'REVISED_SUBMITTED', counterOfferAmount: 800, revisedQuoteAmount: 1100,
+    nextResponsibleParty: 'BUYER', buyerDecision: null,
+    lineItemsJson: JSON.stringify([{ rfqLineId: 'line-1', counterRate: 95, revisedRate: 98 }]) },
+  { vendorId: 'v2', roundNumber: 1, status: 'ROUND_ACTIVE', counterOfferAmount: 600, revisedQuoteAmount: null, lineItemsJson: null,
+    nextResponsibleParty: null, buyerDecision: null },
+  { vendorId: 'v3', roundNumber: 1, status: 'FINAL_OFFER_SUBMITTED', counterOfferAmount: null, revisedQuoteAmount: 1800,
+    nextResponsibleParty: 'BUYER', buyerDecision: null, lineItemsJson: '{bad json' },
+  { vendorId: 'v4', roundNumber: 1, status: 'FINAL_OFFER_SUBMITTED', counterOfferAmount: 700, revisedQuoteAmount: 1300,
+    nextResponsibleParty: 'BUYER', buyerDecision: null,
+    lineItemsJson: JSON.stringify([{ id: 'line-1', counterRate: 120, revisedRate: 110 }, { id: 'line-2' }]) },
+];
 
 const latestQuoteLineRows = () => {
   const latestByVendor = new Map<string, ReturnType<typeof fullRfq>['quotes'][number]>();
@@ -120,7 +123,9 @@ describe('RFQ quote comparison API', () => {
     db.vendorRateCard.count.mockReset().mockResolvedValue(1);
     db.$queryRaw.mockReset().mockImplementation((query: { sql: string }) => query.sql.includes('latest_quotes')
       ? latestQuoteLineRows()
-      : [
+      : query.sql.includes('latest_negotiation_rounds')
+        ? latestNegotiationRoundRows()
+        : [
       { description: ' copper cable ', rate: 85, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
         validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendorId: 'v1', vendorName: 'Vendor v1' },
       { description: 'Panel', rate: 75, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
@@ -154,9 +159,10 @@ describe('RFQ quote comparison API', () => {
       rfqId: 'rfq-1', invalidRoundCount: 1,
     }));
     expect(db.vendorRateCard.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', status: 'APPROVED' }) }));
-    expect(db.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(db.$queryRaw).toHaveBeenCalledTimes(3);
     const rfqQuery = db.rfq.findFirst.mock.calls[0][0];
     expect(rfqQuery.include.quotes.select).not.toHaveProperty('lines');
+    expect(rfqQuery.include.negotiations.select).not.toHaveProperty('rounds');
     const quoteLineQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
     expect(quoteLineQuery).toBeDefined();
     if (!quoteLineQuery) throw new Error('Latest quote line query was not executed');
@@ -164,6 +170,12 @@ describe('RFQ quote comparison API', () => {
     expect(quoteLineQuery.sql).toContain('latest."quoteVersion" = summary."latestVersion"');
     expect(quoteLineQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     expect(db.$queryRaw.mock.calls[0][0].sql).toContain('latest_quotes');
+    const negotiationRoundQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_negotiation_rounds'))?.[0];
+    expect(negotiationRoundQuery).toBeDefined();
+    if (!negotiationRoundQuery) throw new Error('Latest negotiation round query was not executed');
+    expect(negotiationRoundQuery.sql).toContain('MAX(rounds."roundNumber") AS "latestRoundNumber"');
+    expect(negotiationRoundQuery.sql).toContain('negotiation."rfqId" = ?');
+    expect(negotiationRoundQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     expect(result).toMatchObject({ ok: true, data: {
       rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' } },
       vendors: [
@@ -222,6 +234,13 @@ describe('RFQ quote comparison API', () => {
     await expect(GET(request(), params())).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
     });
+
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq());
+    db.$queryRaw.mockImplementationOnce(() => latestQuoteLineRows())
+      .mockRejectedValueOnce(new Error('Latest negotiation rounds unavailable'));
+    await expect(GET(request(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
+    });
   });
 
   it('uses empty comparison fallbacks, skips closed RFQ transitions, and handles failures in dependent reads', async () => {
@@ -236,7 +255,7 @@ describe('RFQ quote comparison API', () => {
     expect(db.rfq.update).not.toHaveBeenCalled();
 
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq({
-      status: 'COMPARISON', estimatedBenchmarkValue: 0, quotes: [], negotiations: [{ id: 'closed-neg', status: 'CONCLUDED', rounds: [] }],
+      status: 'COMPARISON', estimatedBenchmarkValue: 0, quotes: [], negotiations: [{ id: 'closed-neg', status: 'CONCLUDED', currentRound: 1 }],
       boqRevision: { lines: [
         { id: 'revision-line', lineNumber: '3', itemCode: 'REV-3', standardDescription: 'Revision source', originalDescription: 'Other wording' },
         { id: 'standard-line', lineNumber: '4', standardDescription: 'Standard match', originalDescription: 'Standard source wording' },
