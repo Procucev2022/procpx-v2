@@ -179,6 +179,91 @@ describe('BOQ and PR approval workspace', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-1/lines?cursor=cursor-1');
   });
 
+  it('shows a safe error when PR review details cannot be loaded', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({ error: 'database details' }, false));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests))).toBeInTheDocument();
+  });
+
+  it('reports a failed PR line page and preserves the original lines', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail, lines: [primaryPrDetail.lines[0]],
+        linePagination: { hasMore: true, nextCursor: 'cursor-fail', pageSize: 25 },
+      }));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor-fail') return Promise.resolve(response({ error: 'database details' }, false));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests))).toBeInTheDocument();
+    expect(screen.queryByText('Grounding strip')).not.toBeInTheDocument();
+  });
+
+  it('ignores a late line page after switching the approval review to another PR', async () => {
+    type MockResponse = ReturnType<typeof response>;
+    let resolvePage: ((value: MockResponse) => void) | undefined;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr, sparsePr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail, lines: [primaryPrDetail.lines[0]],
+        linePagination: { hasMore: true, nextCursor: 'cursor-old', pageSize: 25 },
+      }));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor-old') return new Promise<MockResponse>((resolve) => { resolvePage = resolve; });
+      if (url === '/api/pr/pr-2') return Promise.resolve(response({
+        ...sparsePr, lines: [{ id: 'new-line', itemDescription: 'Current PR line', quantity: 1 }],
+      }));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const firstRow = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(firstRow).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    const secondRow = screen.getByRole('row', { name: /PR-002/ });
+    fireEvent.click(within(secondRow).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect((await screen.findAllByText('Current PR line')).length).toBeGreaterThan(0);
+    resolvePage?.(response({ lines: [{ id: 'stale-line', itemDescription: 'Stale PR line' }] }));
+    await waitFor(() => expect(screen.queryByText('Stale PR line')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Current PR line').length).toBeGreaterThan(0);
+  });
+
+  it('does not issue a line-page request when the review cursor is missing', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail, linePagination: { hasMore: true, nextCursor: null, pageSize: 25 },
+      }));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/lines?'))).toBe(false);
+  });
+
   it('approves from the queue and review modal with errors and status dismissal', async () => {
     render(<BoqPrApprovalPage />);
     await screen.findByText('PR-001');

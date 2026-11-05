@@ -141,6 +141,73 @@ describe('purchase request detail modal', () => {
     expect(mockFetch.mock.calls[1][0]).toBe('/api/pr/pr-paged/lines?cursor=cursor-25');
   });
 
+  it('reports line-page failures and recovers when a later page is empty', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        id: 'pr-page-error', totalLines: 2, lines: [fullLine],
+        linePagination: { hasMore: true, nextCursor: 'cursor-1', pageSize: 25 },
+      }) })
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ linePagination: { hasMore: false, nextCursor: null, pageSize: 25 } }) });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-page-error', prNumber: 'PR-PAGE-ERROR' }} />);
+
+    const loadMore = await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) });
+    fireEvent.click(loadMore);
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+    expect(consoleError).toHaveBeenCalledWith(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId: 'pr-page-error' }));
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+
+  it('does not call the line endpoint when the PR ID or continuation cursor is missing', () => {
+    const prWithoutCursor = {
+      id: 'pr-no-cursor', lines: [fullLine],
+      linePagination: { hasMore: true, nextCursor: null, pageSize: 25 },
+    };
+    const first = render(<PrDetailModal isOpen onClose={jest.fn()} pr={prWithoutCursor} />);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(mockFetch).not.toHaveBeenCalled();
+    first.unmount();
+
+    render(<PrDetailModal isOpen onClose={jest.fn()} pr={{
+      lines: [fullLine], linePagination: { hasMore: true, nextCursor: 'cursor-1', pageSize: 25 },
+    }} />);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale line page after the modal switches to another PR', async () => {
+    type MockResponse = { ok: boolean; json: () => Promise<unknown> };
+    let resolveOldPage: ((value: MockResponse) => void) | undefined;
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/pr/pr-old') return Promise.resolve({ ok: true, json: async () => ({
+        id: 'pr-old', lines: [fullLine], linePagination: { hasMore: true, nextCursor: 'cursor-old', pageSize: 25 },
+      }) });
+      if (url === '/api/pr/pr-old/lines?cursor=cursor-old') {
+        return new Promise<MockResponse>((resolve) => { resolveOldPage = resolve; });
+      }
+      if (url === '/api/pr/pr-new') return Promise.resolve({ ok: true, json: async () => ({
+        id: 'pr-new', title: 'New package', lines: [{ ...fullLine, id: 'new-line', itemDescription: 'New PR line' }],
+      }) });
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-old', prNumber: 'PR-OLD' }} />);
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-new', prNumber: 'PR-NEW' }} />);
+    expect(await screen.findByText('New PR line')).toBeInTheDocument();
+    resolveOldPage?.({ ok: true, json: async () => ({
+      lines: [{ ...fullLine, id: 'stale-line', itemDescription: 'Stale PR line' }],
+      linePagination: { hasMore: false, nextCursor: null, pageSize: 25 },
+    }) });
+    await waitFor(() => expect(screen.queryByText('Stale PR line')).not.toBeInTheDocument());
+    expect(screen.getByText('New PR line')).toBeInTheDocument();
+  });
+
   it('uses explicit unavailable values for sparse API lines and supports legacy revision links', async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { lines: [

@@ -94,6 +94,7 @@ export default function BoqPrApprovalPage() {
     setReviewLoading(true);
     setReviewError('');
     setLinePagination(null);
+    setLoadingMoreLines(false);
     setLineLoadError('');
     try {
       const response = await fetch(`/api/pr/${pr.id}`);
@@ -130,9 +131,9 @@ export default function BoqPrApprovalPage() {
         ? { ...current, lines: [...(current.lines || []), ...(page.lines || [])] }
         : current);
       setLinePagination(page.linePagination || null);
-    } catch (error) {
+    } catch {
       if (sequence === reviewRequestSequence.current) {
-        console.error('Failed to load more purchase request lines', error);
+        console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
         setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
       }
     } finally {

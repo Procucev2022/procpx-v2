@@ -104,6 +104,18 @@ describe('purchase request detail API', () => {
     }));
   });
 
+  it('handles a legacy detail result without a line collection and captures Cloudflare request IDs for unknown errors', async () => {
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', lines: undefined, rfqs: [] });
+    await expect(GET(request(), params())).resolves.toMatchObject({ ok: true, data: { lines: [], linePagination: { hasMore: false } } });
+
+    db.procurementRequest.findFirst.mockRejectedValueOnce('database failure');
+    await expect(GET(new NextRequest('http://localhost/api/pr/pr-1', { headers: { 'cf-ray': 'ray-1' } }), params()))
+      .resolves.toMatchObject({ ok: false, status: 500 });
+    expect(log).toHaveBeenLastCalledWith('error', 'purchase_request.detail_read_failed', expect.objectContaining({
+      requestId: 'ray-1', error: { name: 'UnknownError' },
+    }));
+  });
+
   it('pages tenant-scoped PR lines and rejects invalid cursors before querying', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);
@@ -114,6 +126,14 @@ describe('purchase request detail API', () => {
     await expect(GETPrLines(new NextRequest('http://localhost/api/pr/pr-1/lines?cursor=bad'), params()))
       .resolves.toMatchObject({ ok: false, error: UI_STRINGS.appApiPrIdLinesRoute.invalidPurchaseRequestLineCursor, status: 400 });
     expect(db.procurementRequest.findFirst).not.toHaveBeenCalled();
+
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', lines: [] });
+    await expect(GETPrLines(request(), params())).resolves.toMatchObject({
+      ok: true, data: { lines: [], linePagination: { hasMore: false, nextCursor: null } },
+    });
+    expect(db.procurementRequest.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ lines: expect.objectContaining({ where: { tenantId: 'tenant-1' }, take: PR_DETAIL_LINE_PAGE_SIZE + 1 }) }),
+    }));
 
     const cursor = encodePrLineCursor({ id: 'line-25', lineNumber: '25' });
     const lines = Array.from({ length: PR_DETAIL_LINE_PAGE_SIZE + 1 }, (_, index) => ({
@@ -159,6 +179,13 @@ describe('purchase request detail API', () => {
     expect(log).toHaveBeenCalledWith('error', 'purchase_request.lines_read_failed', expect.objectContaining({
       operation: 'read_purchase_request_lines', route: '/api/pr/[id]/lines', requestId: 'req-1',
       tenantId: 'tenant-1', userId: 'buyer-1', prId: 'pr-1', durationMs: expect.any(Number), error: { name: 'Error' },
+    }));
+
+    db.procurementRequest.findFirst.mockRejectedValueOnce('database failure');
+    await expect(GETPrLines(new NextRequest('http://localhost/api/pr/pr-1/lines', { headers: { 'cf-ray': 'ray-2' } }), params()))
+      .resolves.toMatchObject({ ok: false, status: 500 });
+    expect(log).toHaveBeenLastCalledWith('error', 'purchase_request.lines_read_failed', expect.objectContaining({
+      requestId: 'ray-2', error: { name: 'UnknownError' },
     }));
   });
 });

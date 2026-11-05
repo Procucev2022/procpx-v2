@@ -2,7 +2,7 @@
 // src/components/PrDetailModal.tsx
 // Standardised, reusable PR Detail Modal for Dashboard, Approved PRs, and PR Register
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -27,6 +27,7 @@ import type { PrDetailModalProps, PurchaseRequestRfqSummary } from "@app-types/c
 export type { PrDetailModalProps };
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { normalizePrLineForDisplay } from '@/lib/pr-line-detail';
 import type { PrLineDetailRecord, PrLinePaginationMetadata } from "@app-types/lib/pr-line-pagination.types";
 
 
@@ -43,8 +44,10 @@ export default function PrDetailModal({
   const [linePagination, setLinePagination] = useState<PrLinePaginationMetadata | null>(null);
   const [loadingMoreLines, setLoadingMoreLines] = useState(false);
   const [lineLoadError, setLineLoadError] = useState('');
+  const linePageRequestSequence = useRef(0);
 
   useEffect(() => {
+    const sequence = ++linePageRequestSequence.current;
     if (!isOpen || !pr) {
       setDetailedPr(null);
       setLoadingLines(false);
@@ -59,6 +62,8 @@ export default function PrDetailModal({
       setDetailedPr(pr);
       setLoadingLines(false);
       setLinePagination(pr.linePagination || null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
       return;
     }
 
@@ -69,6 +74,7 @@ export default function PrDetailModal({
       setDetailedPr(null);
       setLoadingLines(true);
       setLinePagination(null);
+      setLoadingMoreLines(false);
       setLineLoadError('');
       fetch(`/api/pr/${prId}`)
         .then(async (res) => {
@@ -79,25 +85,15 @@ export default function PrDetailModal({
           return res.json();
         })
         .then((json) => {
-          if (!active) return;
+          if (!active || sequence !== linePageRequestSequence.current) return;
           const detail = json?.data ?? json;
           if (detail && typeof detail === 'object') {
             setLinePagination(detail.linePagination || null);
+            const detailLines = (detail.lines || []) as PrLineDetailRecord[];
             setDetailedPr({
               ...pr,
               ...detail,
-              lines: (detail.lines || []).map((l: any, idx: number) => ({
-                id: l.id,
-                lineNumber: l.lineNumber ?? String(idx + 1),
-                itemCode: l.itemCode ?? l.boqLine?.itemCode ?? null,
-                itemDescription: l.itemDescription ?? l.boqLine?.standardDescription ?? l.boqLine?.originalDescription ?? null,
-                specification: l.specification ?? l.boqLine?.specification ?? l.itemDescription ?? null,
-                category: l.category ?? pr.category ?? null,
-                quantity: l.quantity,
-                uom: l.uom ?? l.boqLine?.uom?.code ?? l.boqLine?.uomRaw ?? null,
-                estimatedRate: l.estimatedRate ?? l.boqLine?.aiUnitCost ?? null,
-                estimatedValue: l.estimatedValue ?? l.boqLine?.aiTotalCost ?? null,
-              })),
+              lines: detailLines.map((line, index) => normalizePrLineForDisplay(line, index, pr.category)),
             });
           } else {
             setDetailedPr(pr);
@@ -105,18 +101,24 @@ export default function PrDetailModal({
           }
         })
         .catch(() => {
-          if (!active) return;
+          if (!active || sequence !== linePageRequestSequence.current) return;
           console.error(JSON.stringify({ event: 'purchase_request.detail_fetch_failed', prId, reason: 'network_error' }));
           setDetailedPr(pr);
           setLinePagination(null);
         })
         .finally(() => {
-          if (active) setLoadingLines(false);
+          if (active && sequence === linePageRequestSequence.current) setLoadingLines(false);
         });
-      return () => { active = false; };
+      return () => {
+        active = false;
+        if (sequence === linePageRequestSequence.current) linePageRequestSequence.current += 1;
+      };
     } else {
       setDetailedPr(pr);
       setLoadingLines(false);
+      setLinePagination(null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
     }
   }, [isOpen, pr]);
 
@@ -155,32 +157,26 @@ export default function PrDetailModal({
   const loadMoreLines = async () => {
     const cursor = linePagination?.nextCursor;
     if (!prId || !cursor || loadingMoreLines) return;
+    const sequence = ++linePageRequestSequence.current;
     setLoadingMoreLines(true);
     setLineLoadError('');
     try {
       const response = await fetch(`/api/pr/${prId}/lines?cursor=${encodeURIComponent(cursor)}`);
       const json = await response.json();
       if (!response.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      if (sequence !== linePageRequestSequence.current) return;
       const page = (json?.data ?? json) as { lines?: PrLineDetailRecord[]; linePagination?: PrLinePaginationMetadata | null };
-      const nextLines = (page?.lines || []).map((line, idx) => ({
-        id: line.id,
-        lineNumber: line.lineNumber ?? String(lines.length + idx + 1),
-        itemCode: line.itemCode ?? line.boqLine?.itemCode ?? null,
-        itemDescription: line.itemDescription ?? line.boqLine?.standardDescription ?? line.boqLine?.originalDescription ?? null,
-        specification: line.specification ?? line.boqLine?.specification ?? line.itemDescription ?? null,
-        category: line.category ?? currentPr.category ?? null,
-        quantity: line.quantity,
-        uom: line.uom ?? line.boqLine?.uom?.code ?? line.boqLine?.uomRaw ?? null,
-        estimatedRate: line.estimatedRate ?? line.boqLine?.aiUnitCost ?? null,
-        estimatedValue: line.estimatedValue ?? line.boqLine?.aiTotalCost ?? null,
-      }));
-      setDetailedPr((current: typeof detailedPr) => current ? { ...current, lines: [...(current.lines || []), ...nextLines] } : current);
+      const nextLines = (page?.lines || []).map((line, index) => normalizePrLineForDisplay(line, lines.length + index, currentPr.category));
+      setDetailedPr((current: typeof detailedPr) => current?.id === prId
+        ? { ...current, lines: [...(current.lines || []), ...nextLines] }
+        : current);
       setLinePagination(page?.linePagination || null);
     } catch {
+      if (sequence !== linePageRequestSequence.current) return;
       setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
       console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
     } finally {
-      setLoadingMoreLines(false);
+      if (sequence === linePageRequestSequence.current) setLoadingMoreLines(false);
     }
   };
 

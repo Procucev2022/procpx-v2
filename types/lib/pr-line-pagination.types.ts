@@ -25,6 +25,33 @@ export interface PrLineDetailRecord extends PrLineCursorRecord {
   } | null;
 }
 
+export interface PrLineDisplayRecord {
+  id?: string | null;
+  lineNumber?: string | number | null;
+  itemCode?: string | null;
+  itemDescription?: string | null;
+  specification?: string | null;
+  category?: string | null;
+  quantity?: number | null;
+  uom?: string | null;
+  estimatedRate?: number | null;
+  estimatedValue?: number | null;
+  boqLine?: PrLineDetailRecord['boqLine'];
+}
+
+export interface PrLineDisplayRow {
+  id: string;
+  lineNumber: string | number;
+  itemCode: string | null;
+  itemDescription: string | null;
+  specification: string | null;
+  category: string | null;
+  quantity: number | null | undefined;
+  uom: string | null;
+  estimatedRate: number | null | undefined;
+  estimatedValue: number | null | undefined;
+}
+
 export interface PrLinePaginationMetadata {
   hasMore: boolean;
   nextCursor: string | null;
