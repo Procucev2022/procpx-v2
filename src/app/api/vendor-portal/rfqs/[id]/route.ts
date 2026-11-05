@@ -42,6 +42,7 @@ export async function GET(
   }
 
   const { id: rfqId } = await params;
+  const startedAt = Date.now();
 
   try {
     const rfq = await prisma.rfq.findFirst({
@@ -89,9 +90,24 @@ export async function GET(
     }
 
     return apiSuccess({ rfq });
-  } catch (error: any) {
-    console.error('Error fetching vendor RFQ detail:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqDetail }), 500);
+  } catch (error: unknown) {
+    try {
+      await writeStructuredLog('error', 'vendor_portal.rfq_detail_failed', {
+        operation: 'read_vendor_rfq_detail', route: `/api/vendor-portal/rfqs/${rfqId}`,
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        tenantId: ctx.tenantId, userId: ctx.userId, vendorId, rfqId,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+      }, 'application');
+    } catch (loggingError: unknown) {
+      console.error('vendor_portal.rfq_detail_log_failed', {
+        operation: 'read_vendor_rfq_detail', route: `/api/vendor-portal/rfqs/${rfqId}`,
+        tenantId: ctx.tenantId, userId: ctx.userId, vendorId, rfqId,
+        error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+        loggingError: loggingError instanceof Error ? { name: loggingError.name } : { type: typeof loggingError },
+      });
+    }
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqDetail, 500);
   }
 }
 

@@ -127,9 +127,32 @@ describe('vendor portal RFQ detail and quote API', () => {
     db.rfq.findFirst.mockResolvedValueOnce(null);
     await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockRejectedValueOnce(new Error('RFQ store offline'));
-    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'RFQ store offline', status: 500 });
+    await expect(GET(getRequest(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqDetail, status: 500,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'vendor_portal.rfq_detail_failed', expect.objectContaining({
+      operation: 'read_vendor_rfq_detail', route: '/api/vendor-portal/rfqs/rfq-1', tenantId: 'tenant-1',
+      userId: 'user-1', vendorId: 'vendor-1', rfqId: 'rfq-1', durationMs: expect.any(Number),
+      error: { name: 'Error', message: 'RFQ store offline' },
+    }), 'application');
     db.rfq.findFirst.mockRejectedValueOnce({});
-    await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: 'Failed to fetch RFQ detail', status: 500 });
+    await expect(GET(getRequest(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqDetail, status: 500,
+    });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'vendor_portal.rfq_detail_failed', expect.objectContaining({
+      error: { type: 'object' },
+    }), 'application');
+    expect(consoleError).not.toHaveBeenCalled();
+
+    structuredLog.mockRejectedValueOnce(new Error('log store offline'));
+    db.rfq.findFirst.mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(GET(getRequest(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRfqDetail, status: 500,
+    });
+    expect(consoleError).toHaveBeenCalledWith('vendor_portal.rfq_detail_log_failed', expect.objectContaining({
+      tenantId: 'tenant-1', rfqId: 'rfq-1', error: { name: 'Error', message: 'database unavailable' },
+      loggingError: { name: 'Error' },
+    }));
   });
 
   it('validates RFQ access, status, quote version limit, and required positive line rates', async () => {
