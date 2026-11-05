@@ -92,10 +92,10 @@ describe('purchase request detail modal', () => {
   });
 
   it('hydrates incomplete line data without fabricating missing master data', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: { totalEstimatedValue: 9000, lines: [
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ totalEstimatedValue: 9000, lines: [
       { id: 'fetched-1', lineNumber: 0, boqLine: { itemCode: 'BOQ-ITM', standardDescription: 'Valve', specification: 'Steel valve', uom: { code: 'EA' }, aiUnitCost: 300, aiTotalCost: 600 }, quantity: 2 },
       { id: 'fetched-2', itemDescription: 'Fastener', category: '', quantity: null, uom: '', estimatedRate: 0, estimatedValue: 0 },
-    ] } }) });
+    ] }) });
     render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-fetch', prNumber: 'PR-FETCH', category: 'Mechanical', estimatedValue: 7000, project: { name: 'Fallback Site', projectCode: 'FS' }, costCentre: 'CC-9', title: 'Valve package' }} />);
     expect(await screen.findByText('Valve')).toBeInTheDocument();
     expect(screen.getByText('BOQ-ITM')).toBeInTheDocument();
@@ -109,6 +109,36 @@ describe('purchase request detail modal', () => {
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-fetch');
     expect((await screen.findAllByText(/9,000/)).length).toBeGreaterThan(0);
+  });
+
+  it('loads additional detail lines while retaining the total count from the raw API response', async () => {
+    const firstPageLines = Array.from({ length: 25 }, (_, index) => ({
+      id: `line-${index + 1}`,
+      lineNumber: String(index + 1),
+      itemDescription: `Line ${index + 1}`,
+      specification: `Specification ${index + 1}`,
+      itemCode: `ITEM-${index + 1}`,
+      quantity: 1,
+      uom: 'EA',
+      estimatedRate: 10,
+      estimatedValue: 10,
+    }));
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        id: 'pr-paged', totalLines: 26, lines: firstPageLines, rfqs: [],
+        linePagination: { hasMore: true, nextCursor: 'cursor-25', pageSize: 25 },
+      }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        lines: [{ ...fullLine, id: 'line-26', lineNumber: '26', itemDescription: 'Line 26', itemCode: 'ITEM-26' }],
+        linePagination: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }) });
+
+    render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-paged', prNumber: 'PR-PAGED' }} />);
+    expect(await screen.findByText('Line 1')).toBeInTheDocument();
+    expect(screen.getByText('26')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Line 26')).toBeInTheDocument();
+    expect(mockFetch.mock.calls[1][0]).toBe('/api/pr/pr-paged/lines?cursor=cursor-25');
   });
 
   it('uses explicit unavailable values for sparse API lines and supports legacy revision links', async () => {

@@ -153,6 +153,32 @@ describe('BOQ and PR approval workspace', () => {
     expect(screen.queryByText('BOQ Details: PR-002')).not.toBeInTheDocument();
   });
 
+  it('loads the next PR line page from the review modal', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail,
+        lines: [primaryPrDetail.lines[0]],
+        linePagination: { hasMore: true, nextCursor: 'cursor-1', pageSize: 25 },
+      }));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor-1') return Promise.resolve(response({
+        lines: [primaryPrDetail.lines[1]],
+        linePagination: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }));
+      return Promise.resolve(response({}));
+    });
+
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Grounding strip')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-1/lines?cursor=cursor-1');
+  });
+
   it('approves from the queue and review modal with errors and status dismissal', async () => {
     render(<BoqPrApprovalPage />);
     await screen.findByText('PR-001');

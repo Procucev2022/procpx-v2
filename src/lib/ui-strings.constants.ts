@@ -347,6 +347,9 @@ export const UI_STRINGS = {
     bOQPrNumberValue2ForProjectApproverReviewToLocaleString: "BOQ {{prNumber}} {{value2}} for Project Approver review (₹ {{toLocaleString}})",
     cannotSubmitPRInStatusStatusExpectedPRDRAFTOrPRRETURNEDFORCORRECTION: "Cannot submit PR in status {{status}}. Expected PR_DRAFT or PR_RETURNED_FOR_CORRECTION.",
   },
+  appApiPrIdLinesRoute: {
+    invalidPurchaseRequestLineCursor: "The purchase request line cursor is invalid. Refresh the details and try again.",
+  },
   appApiProcurementAuctionsIdBidRoute: {
     auctionHasNotStartedYetStartsAtToISOString: "Auction has not started yet. Starts at {{toISOString}}.",
     auctionNotFoundOrAccessDenied: "Auction not found or access denied.",

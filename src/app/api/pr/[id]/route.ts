@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { getPrLinePaginationMetadata, paginatePrLineRecords } from '@/lib/pr-line-pagination';
+import { PR_DETAIL_LINE_PAGE_SIZE } from '@/lib/pr-line-pagination.constants';
+import { PR_DETAIL_LINE_SELECT } from './route.constants';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_VIEW');
@@ -42,31 +45,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         boq: { select: { id: true, boqCode: true } },
         boqRevision: { select: { id: true, revisionCode: true } },
         lines: {
-          select: {
-            id: true,
-            lineNumber: true,
-            itemDescription: true,
-            specification: true,
-            category: true,
-            subcategory: true,
-            uom: true,
-            quantity: true,
-            estimatedRate: true,
-            estimatedValue: true,
-            boqLine: {
-              select: {
-                itemCode: true,
-                standardDescription: true,
-                originalDescription: true,
-                specification: true,
-                uomRaw: true,
-                aiUnitCost: true,
-                aiTotalCost: true,
-                uom: { select: { code: true } },
-              },
-            },
-          },
+          select: PR_DETAIL_LINE_SELECT,
           orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: PR_DETAIL_LINE_PAGE_SIZE + 1,
         },
         rfqs: {
           select: {
@@ -81,7 +62,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
-    return apiSuccess(pr);
+    const linePage = paginatePrLineRecords(pr.lines || []);
+    return apiSuccess({
+      ...pr,
+      lines: linePage.lines,
+      linePagination: getPrLinePaginationMetadata(linePage),
+    });
   } catch (error) {
     await writeStructuredLog('error', 'purchase_request.detail_read_failed', {
       operation: 'read_purchase_request_detail',

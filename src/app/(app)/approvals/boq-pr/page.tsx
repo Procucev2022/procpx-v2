@@ -28,6 +28,7 @@ import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { PrLinePaginationMetadata } from '@app-types/lib/pr-line-pagination.types';
 
 
 export default function BoqPrApprovalPage() {
@@ -43,6 +44,9 @@ export default function BoqPrApprovalPage() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [linePagination, setLinePagination] = useState<PrLinePaginationMetadata | null>(null);
+  const [loadingMoreLines, setLoadingMoreLines] = useState(false);
+  const [lineLoadError, setLineLoadError] = useState('');
   const reviewRequestSequence = useRef(0);
   const [revertModalOpen, setRevertModalOpen] = useState(false);
   const [revertReason, setRevertReason] = useState('');
@@ -89,6 +93,8 @@ export default function BoqPrApprovalPage() {
     setReviewModalOpen(true);
     setReviewLoading(true);
     setReviewError('');
+    setLinePagination(null);
+    setLineLoadError('');
     try {
       const response = await fetch(`/api/pr/${pr.id}`);
       const body = await response.json();
@@ -96,6 +102,7 @@ export default function BoqPrApprovalPage() {
       if (sequence !== reviewRequestSequence.current) return;
       const detail = body.data ?? body;
       setSelectedPr({ ...pr, ...detail });
+      setLinePagination(detail.linePagination || null);
     } catch (error) {
       if (sequence === reviewRequestSequence.current) {
         console.error('Failed to load purchase request review details', error);
@@ -103,6 +110,33 @@ export default function BoqPrApprovalPage() {
       }
     } finally {
       if (sequence === reviewRequestSequence.current) setReviewLoading(false);
+    }
+  };
+
+  const loadMorePrLines = async () => {
+    const prId = selectedPr?.id;
+    const cursor = linePagination?.nextCursor;
+    if (!prId || !cursor || loadingMoreLines) return;
+    const sequence = reviewRequestSequence.current;
+    setLoadingMoreLines(true);
+    setLineLoadError('');
+    try {
+      const response = await fetch(`/api/pr/${prId}/lines?cursor=${encodeURIComponent(cursor)}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      if (sequence !== reviewRequestSequence.current) return;
+      const page = body.data ?? body;
+      setSelectedPr((current: typeof selectedPr) => current?.id === prId
+        ? { ...current, lines: [...(current.lines || []), ...(page.lines || [])] }
+        : current);
+      setLinePagination(page.linePagination || null);
+    } catch (error) {
+      if (sequence === reviewRequestSequence.current) {
+        console.error('Failed to load more purchase request lines', error);
+        setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      }
+    } finally {
+      if (sequence === reviewRequestSequence.current) setLoadingMoreLines(false);
     }
   };
 
@@ -482,6 +516,14 @@ export default function BoqPrApprovalPage() {
                 </tbody>
               </table>
             </div>
+            {lineLoadError && <p role="alert" style={{ marginBottom: 12, color: '#b91c1c' }}>{lineLoadError}</p>}
+            {linePagination?.hasMore && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={loadMorePrLines} disabled={loadingMoreLines}>
+                  {loadingMoreLines ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
+              </div>
+            )}
 
             {/* Modal actions */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

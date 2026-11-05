@@ -207,13 +207,18 @@ describe('BOQ and PR workflow routes', () => {
     await expect(getPr(request(), { params: Promise.resolve({ id: 'missing' }) })).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
-    db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', prNumber: 'PR-001' });
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', prNumber: 'PR-001', lines: [] });
     await expect(getPr(request(), { params: Promise.resolve({ id: 'pr-1' }) })).resolves.toEqual({
-      ok: true, data: { id: 'pr-1', prNumber: 'PR-001' }, status: 200,
+      ok: true,
+      data: { id: 'pr-1', prNumber: 'PR-001', lines: [], linePagination: { hasMore: false, nextCursor: null, pageSize: 25 } },
+      status: 200,
     });
     expect(db.procurementRequest.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { id: 'pr-1', tenantId: 'tenant-1' },
-      select: expect.objectContaining({ project: expect.any(Object), costCentre: expect.any(Object), boq: expect.any(Object), boqRevision: expect.any(Object), rfqs: expect.any(Object) }),
+      select: expect.objectContaining({
+        project: expect.any(Object), costCentre: expect.any(Object), boq: expect.any(Object), boqRevision: expect.any(Object), rfqs: expect.any(Object),
+        lines: expect.objectContaining({ take: 26 }),
+      }),
     }));
   });
 });

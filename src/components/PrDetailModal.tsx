@@ -27,6 +27,7 @@ import type { PrDetailModalProps, PurchaseRequestRfqSummary } from "@app-types/c
 export type { PrDetailModalProps };
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { PrLineDetailRecord, PrLinePaginationMetadata } from "@app-types/lib/pr-line-pagination.types";
 
 
 
@@ -39,11 +40,17 @@ export default function PrDetailModal({
 }: PrDetailModalProps) {
   const [detailedPr, setDetailedPr] = useState<any | null>(null);
   const [loadingLines, setLoadingLines] = useState(false);
+  const [linePagination, setLinePagination] = useState<PrLinePaginationMetadata | null>(null);
+  const [loadingMoreLines, setLoadingMoreLines] = useState(false);
+  const [lineLoadError, setLineLoadError] = useState('');
 
   useEffect(() => {
     if (!isOpen || !pr) {
       setDetailedPr(null);
       setLoadingLines(false);
+      setLinePagination(null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
       return;
     }
 
@@ -51,6 +58,7 @@ export default function PrDetailModal({
     if (pr.lines && pr.lines.length > 0 && pr.lines[0].specification && pr.lines[0].itemCode) {
       setDetailedPr(pr);
       setLoadingLines(false);
+      setLinePagination(pr.linePagination || null);
       return;
     }
 
@@ -60,6 +68,8 @@ export default function PrDetailModal({
       let active = true;
       setDetailedPr(null);
       setLoadingLines(true);
+      setLinePagination(null);
+      setLineLoadError('');
       fetch(`/api/pr/${prId}`)
         .then(async (res) => {
           if (!res.ok) {
@@ -70,11 +80,13 @@ export default function PrDetailModal({
         })
         .then((json) => {
           if (!active) return;
-          if (json?.data) {
+          const detail = json?.data ?? json;
+          if (detail && typeof detail === 'object') {
+            setLinePagination(detail.linePagination || null);
             setDetailedPr({
               ...pr,
-              ...json.data,
-              lines: (json.data.lines || []).map((l: any, idx: number) => ({
+              ...detail,
+              lines: (detail.lines || []).map((l: any, idx: number) => ({
                 id: l.id,
                 lineNumber: l.lineNumber ?? String(idx + 1),
                 itemCode: l.itemCode ?? l.boqLine?.itemCode ?? null,
@@ -89,12 +101,14 @@ export default function PrDetailModal({
             });
           } else {
             setDetailedPr(pr);
+            setLinePagination(null);
           }
         })
         .catch(() => {
           if (!active) return;
           console.error(JSON.stringify({ event: 'purchase_request.detail_fetch_failed', prId, reason: 'network_error' }));
           setDetailedPr(pr);
+          setLinePagination(null);
         })
         .finally(() => {
           if (active) setLoadingLines(false);
@@ -135,7 +149,40 @@ export default function PrDetailModal({
       : currentPr.costCentre)
     : UI_STRINGS.common.notAvailable;
   const categoryText = currentPr.category || (currentPr.categories?.length ? currentPr.categories.join(', ') : UI_STRINGS.common.notAvailable);
-  const itemCount = lines.length || currentPr.itemCount || currentPr.totalLines || 0;
+  const knownItemCount = Number(currentPr.totalLines ?? currentPr.itemCount ?? lines.length);
+  const itemCount = Number.isFinite(knownItemCount) ? Math.max(lines.length, knownItemCount) : lines.length;
+
+  const loadMoreLines = async () => {
+    const cursor = linePagination?.nextCursor;
+    if (!prId || !cursor || loadingMoreLines) return;
+    setLoadingMoreLines(true);
+    setLineLoadError('');
+    try {
+      const response = await fetch(`/api/pr/${prId}/lines?cursor=${encodeURIComponent(cursor)}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      const page = (json?.data ?? json) as { lines?: PrLineDetailRecord[]; linePagination?: PrLinePaginationMetadata | null };
+      const nextLines = (page?.lines || []).map((line, idx) => ({
+        id: line.id,
+        lineNumber: line.lineNumber ?? String(lines.length + idx + 1),
+        itemCode: line.itemCode ?? line.boqLine?.itemCode ?? null,
+        itemDescription: line.itemDescription ?? line.boqLine?.standardDescription ?? line.boqLine?.originalDescription ?? null,
+        specification: line.specification ?? line.boqLine?.specification ?? line.itemDescription ?? null,
+        category: line.category ?? currentPr.category ?? null,
+        quantity: line.quantity,
+        uom: line.uom ?? line.boqLine?.uom?.code ?? line.boqLine?.uomRaw ?? null,
+        estimatedRate: line.estimatedRate ?? line.boqLine?.aiUnitCost ?? null,
+        estimatedValue: line.estimatedValue ?? line.boqLine?.aiTotalCost ?? null,
+      }));
+      setDetailedPr((current: typeof detailedPr) => current ? { ...current, lines: [...(current.lines || []), ...nextLines] } : current);
+      setLinePagination(page?.linePagination || null);
+    } catch {
+      setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
+    } finally {
+      setLoadingMoreLines(false);
+    }
+  };
 
   return (
     <Modal
@@ -223,7 +270,7 @@ export default function PrDetailModal({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-2">
-              <span>{UI_STRINGS.componentsPrDetailModal.controlledLineItems}{lines.length}{UI_STRINGS.common.items2}</span>
+                <span>{UI_STRINGS.componentsPrDetailModal.controlledLineItems}{itemCount}{UI_STRINGS.common.items2}</span>
               <span className="text-[10px] text-slate-500 font-normal lowercase">{UI_STRINGS.componentsPrDetailModal.descriptionsQuantitiesAndSpecificationsLockedFromApprovedBOQ}</span>
             </h4>
           </div>
@@ -302,6 +349,14 @@ export default function PrDetailModal({
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          )}
+          {lineLoadError && <p role="alert" className="mt-2 text-xs text-red-700">{lineLoadError}</p>}
+          {linePagination?.hasMore && (
+            <div className="mt-2 flex justify-center">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={loadMoreLines} disabled={loadingMoreLines}>
+                {loadingMoreLines ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
             </div>
           )}
         </div>
