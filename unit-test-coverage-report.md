@@ -6,10 +6,10 @@ Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.73% (95865/97092) |
-| branches | 91.00% (20660/22703) |
+| statements | 98.73% (95884/97111) |
+| branches | 90.98% (20653/22699) |
 | functions | 97.85% (1825/1865) |
-| lines | 98.73% (95865/97092) |
+| lines | 98.73% (95884/97111) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -203,7 +203,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
 | `src/app/api/procurement/rate-cards/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/route.ts` | 97.22% | 83.47% | 100.00% | 97.22% | BELOW 90% |
 | `src/app/api/procurement/rfqs/[id]/compare/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.39% | 94.33% | 100.00% | 99.39% | PASS |
+| `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.41% | 93.00% | 100.00% | 99.41% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.ts` | 95.51% | 87.50% | 100.00% | 95.51% | BELOW 90% |
 | `src/app/api/procurement/rfqs/[id]/messages/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

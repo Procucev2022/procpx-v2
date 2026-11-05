@@ -96,14 +96,34 @@ const latestNegotiationRoundRows = () => [
     lineItemsJson: JSON.stringify([{ id: 'line-1', counterRate: 120, revisedRate: 110 }, { id: 'line-2' }]) },
 ];
 
-const latestQuoteLineRows = () => {
-  const latestByVendor = new Map<string, ReturnType<typeof fullRfq>['quotes'][number]>();
-  for (const quote of fullRfq().quotes) {
+const latestCompareQuoteRows = (rfq = fullRfq()) => {
+  const latestByVendor = new Map<string, typeof rfq.quotes[number]>();
+  const versionCounts = new Map<string, number>();
+  for (const quote of rfq.quotes) {
+    versionCounts.set(quote.vendorId, (versionCounts.get(quote.vendorId) || 0) + 1);
     const latest = latestByVendor.get(quote.vendorId);
     if (!latest || quote.quoteVersion > latest.quoteVersion) latestByVendor.set(quote.vendorId, quote);
   }
-  return [...latestByVendor.values()].flatMap((quote) =>
-    quote.lines.map((line) => ({ quoteId: quote.id, ...line })));
+  return [...latestByVendor.values()].flatMap((quote) => {
+    const vendor = quote.vendor as typeof quote.vendor & {
+      vendorType?: string | null;
+      qualificationStatus?: string | null;
+      complianceStatus?: string | null;
+      performanceScore?: number | null;
+    };
+    const header = {
+      quoteId: quote.id, vendorId: quote.vendorId, quoteNumber: quote.quoteNumber, quoteVersion: quote.quoteVersion,
+      versionCount: versionCounts.get(quote.vendorId), totalQuoteAmount: quote.totalQuoteAmount,
+      submittedAt: quote.submittedAt, status: quote.status, commercialTerms: quote.commercialTerms,
+      paymentTermsOffered: quote.paymentTermsOffered, deliveryLeadTimeDays: quote.deliveryLeadTimeDays,
+      vendorName: vendor.name, vendorCode: vendor.code, vendorType: vendor.vendorType ?? null,
+      qualificationStatus: vendor.qualificationStatus ?? null, complianceStatus: vendor.complianceStatus ?? null,
+      performanceScore: vendor.performanceScore ?? null,
+    };
+    return quote.lines.length > 0
+      ? quote.lines.map((line) => ({ ...header, quoteLineId: line.id, ...line }))
+      : [{ ...header, quoteLineId: null, rfqLineId: null, unitRate: null, lineTotal: null, discountPercent: null, taxPercent: null }];
+  });
 };
 
 describe('RFQ quote comparison API', () => {
@@ -122,7 +142,7 @@ describe('RFQ quote comparison API', () => {
     ]);
     db.vendorRateCard.count.mockReset().mockResolvedValue(1);
     db.$queryRaw.mockReset().mockImplementation((query: { sql: string }) => query.sql.includes('latest_quotes')
-      ? latestQuoteLineRows()
+      ? latestCompareQuoteRows()
       : query.sql.includes('latest_negotiation_rounds')
         ? latestNegotiationRoundRows()
         : [
@@ -153,7 +173,7 @@ describe('RFQ quote comparison API', () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it('builds quote history, benchmark comparisons, negotiation rates, and tied package rankings', async () => {
+  it('builds latest quote comparisons, negotiation rates, and tied package rankings', async () => {
     const result = await GET(request(), params());
     expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.negotiation_line_items_invalid', expect.objectContaining({
       rfqId: 'rfq-1', invalidRoundCount: 1,
@@ -161,14 +181,16 @@ describe('RFQ quote comparison API', () => {
     expect(db.vendorRateCard.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', status: 'APPROVED' }) }));
     expect(db.$queryRaw).toHaveBeenCalledTimes(3);
     const rfqQuery = db.rfq.findFirst.mock.calls[0][0];
-    expect(rfqQuery.include.quotes.select).not.toHaveProperty('lines');
+    expect(rfqQuery.include).not.toHaveProperty('quotes');
     expect(rfqQuery.include.negotiations.select).not.toHaveProperty('rounds');
-    const quoteLineQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
-    expect(quoteLineQuery).toBeDefined();
-    if (!quoteLineQuery) throw new Error('Latest quote line query was not executed');
-    expect(quoteLineQuery.sql).toContain('MAX(quote."quoteVersion") AS "latestVersion"');
-    expect(quoteLineQuery.sql).toContain('latest."quoteVersion" = summary."latestVersion"');
-    expect(quoteLineQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
+    const latestQuoteQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
+    expect(latestQuoteQuery).toBeDefined();
+    if (!latestQuoteQuery) throw new Error('Latest quote query was not executed');
+    expect(latestQuoteQuery.sql).toContain('MAX(quote."quoteVersion") AS "latestVersion"');
+    expect(latestQuoteQuery.sql).toContain('latest."quoteVersion" = summary."latestVersion"');
+    expect(latestQuoteQuery.sql).toContain('COUNT(*) AS "versionCount"');
+    expect(latestQuoteQuery.sql).toContain('LEFT JOIN "quote_lines" AS quoteLine');
+    expect(latestQuoteQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     expect(db.$queryRaw.mock.calls[0][0].sql).toContain('latest_quotes');
     const negotiationRoundQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_negotiation_rounds'))?.[0];
     expect(negotiationRoundQuery).toBeDefined();
@@ -180,7 +202,7 @@ describe('RFQ quote comparison API', () => {
       rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' } },
       vendors: [
         { vendorId: 'v1', vendorType: 'CLIENT_VENDOR', qualificationStatus: 'NOT_EVALUATED', quoteId: 'v1-new', quoteVersion: 2,
-          completenessPercent: 100, revisions: [{ version: 1 }, { version: 2 }], rank: 1, rankLabel: 'L1' },
+          versionCount: 2, completenessPercent: 100, rank: 1, rankLabel: 'L1' },
         { vendorId: 'v3', rank: 1, rankLabel: 'L1' },
         { vendorId: 'v4', rank: 3, rankLabel: 'L3' },
         { vendorId: 'v2', completenessPercent: 50, missingLineCount: 1, isRankable: false },
@@ -198,6 +220,8 @@ describe('RFQ quote comparison API', () => {
       summary: { packageTotal: 1160, benchmarkTotal: 1160, lowestQuoteTotal: 1200, lowestVendor: 'Vendor v1',
         savings: -40, isFavorable: false, hasApprovedRateCards: true, approvedRateCardsCount: 1 },
     } });
+    const comparedData = result as unknown as { data: { vendors: Array<Record<string, unknown>> } };
+    expect(comparedData.data.vendors[0]).not.toHaveProperty('revisions');
     expect(db.rfq.update).not.toHaveBeenCalled();
     expect(writeBatch).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ sql: expect.stringContaining('UPDATE "rfqs"'), values: expect.arrayContaining(['rfq-1', 'tenant-1', 'RELEASED']) }),
@@ -206,15 +230,15 @@ describe('RFQ quote comparison API', () => {
     expect(audit).not.toHaveBeenCalled();
   });
 
-  it('keeps quote history when the latest quote has no lines and captures latest-line query failures', async () => {
+  it('keeps vendors when the latest quote has no lines and captures latest-quote query failures', async () => {
     const rfqWithoutLatestLines = fullRfq({
       status: 'COMPARISON',
-      quotes: [fullRfq().quotes[1]],
+      quotes: [{ ...fullRfq().quotes[1], lines: [] }],
       negotiations: [],
       awards: [],
     });
     db.rfq.findFirst.mockResolvedValueOnce(rfqWithoutLatestLines);
-    db.$queryRaw.mockImplementationOnce(() => []);
+    db.$queryRaw.mockImplementationOnce(() => latestCompareQuoteRows(rfqWithoutLatestLines));
 
     const noLinesResult = await GET(request(), params());
     expect(noLinesResult).toMatchObject({ ok: true });
@@ -230,13 +254,13 @@ describe('RFQ quote comparison API', () => {
     expect(noLinesData.lines[0].vendorQuotes.v1).toMatchObject({ rate: 0, quoted: false });
 
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ status: 'COMPARISON' }));
-    db.$queryRaw.mockRejectedValueOnce(new Error('Latest quote lines unavailable'));
+    db.$queryRaw.mockRejectedValueOnce(new Error('Latest quote data unavailable'));
     await expect(GET(request(), params())).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
     });
 
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq());
-    db.$queryRaw.mockImplementationOnce(() => latestQuoteLineRows())
+    db.$queryRaw.mockImplementationOnce(() => latestCompareQuoteRows())
       .mockRejectedValueOnce(new Error('Latest negotiation rounds unavailable'));
     await expect(GET(request(), params())).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
@@ -247,6 +271,7 @@ describe('RFQ quote comparison API', () => {
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq({
       status: 'COMPARISON', quotes: [], lines: [], negotiations: [], awards: [], boqRevision: null, estimatedBenchmarkValue: 500,
     }));
+    db.$queryRaw.mockImplementationOnce(() => []);
     await expect(GET(request(), params())).resolves.toMatchObject({ ok: true, data: {
       vendors: [], lines: [], activeNegotiation: null,
       summary: { packageTotal: 500, benchmarkTotal: 500, lowestQuoteTotal: 0, lowestVendor: '—', savings: 500,

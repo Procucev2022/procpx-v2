@@ -12,7 +12,7 @@ import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE
 import type {
   RfqCompareRateCardRow,
   RfqLatestCompareNegotiationRoundRow,
-  RfqLatestCompareQuoteLineRow,
+  RfqLatestCompareQuoteRow,
 } from '@app-types/app/api/procurement/rfqs/compare.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -107,27 +107,6 @@ export async function GET(
           },
           orderBy: { lineNumber: 'asc' },
         },
-        quotes: {
-          select: {
-            id: true,
-            vendorId: true,
-            quoteNumber: true,
-            quoteVersion: true,
-            totalQuoteAmount: true,
-            submittedAt: true,
-            status: true,
-            commercialTerms: true,
-            paymentTermsOffered: true,
-            deliveryLeadTimeDays: true,
-            vendor: {
-              select: {
-                id: true, name: true, code: true, vendorType: true, qualificationStatus: true,
-                complianceStatus: true, performanceScore: true,
-              },
-            },
-          },
-          orderBy: [{ quoteVersion: 'desc' }, { createdAt: 'desc' }],
-        },
         negotiations: {
           select: {
             id: true,
@@ -150,52 +129,101 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
-    // 1. Group quotes by vendor to keep full version history and evaluate latest active quote
-    const allQuotesByVendor: Record<string, typeof rfq.quotes> = {};
-    for (const q of rfq.quotes) {
-      if (!allQuotesByVendor[q.vendorId]) {
-        allQuotesByVendor[q.vendorId] = [];
+    // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.
+    const latestQuoteRows = await prisma.$queryRaw<RfqLatestCompareQuoteRow[]>(Prisma.sql`
+      WITH latest_quotes AS (
+        SELECT quote."tenantId", quote."rfqId", quote."vendorId",
+          COUNT(*) AS "versionCount", MAX(quote."quoteVersion") AS "latestVersion"
+        FROM "quotes" AS quote
+        WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${id}
+        GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+      )
+      SELECT latest."id" AS "quoteId", latest."vendorId", latest."quoteNumber", latest."quoteVersion",
+        summary."versionCount", latest."totalQuoteAmount", latest."submittedAt", latest."status",
+        latest."commercialTerms", latest."paymentTermsOffered", latest."deliveryLeadTimeDays",
+        vendor."name" AS "vendorName", vendor."code" AS "vendorCode", vendor."vendorType",
+        vendor."qualificationStatus", vendor."complianceStatus", vendor."performanceScore",
+        quoteLine."id" AS "quoteLineId", quoteLine."rfqLineId", quoteLine."unitRate", quoteLine."lineTotal",
+        quoteLine."discountPercent", quoteLine."taxPercent"
+      FROM latest_quotes AS summary
+      INNER JOIN "quotes" AS latest
+        ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
+          AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
+      LEFT JOIN "vendors" AS vendor
+        ON vendor."id" = latest."vendorId" AND vendor."tenantId" = latest."tenantId"
+      LEFT JOIN "quote_lines" AS quoteLine
+        ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
+    `);
+    const latestQuotesById = new Map<string, {
+      id: string;
+      vendorId: string;
+      quoteNumber: string;
+      quoteVersion: number;
+      versionCount: number;
+      totalQuoteAmount: number;
+      submittedAt: string | Date;
+      status: string;
+      commercialTerms: string | null;
+      paymentTermsOffered: string | null;
+      deliveryLeadTimeDays: number | null;
+      vendor: {
+        id: string;
+        name: string;
+        code: string;
+        vendorType: string | null;
+        qualificationStatus: string | null;
+        complianceStatus: string | null;
+        performanceScore: number | null;
+      };
+      lines: Array<{
+        id: string;
+        rfqLineId: string;
+        unitRate: number;
+        lineTotal: number;
+        discountPercent: number;
+        taxPercent: number;
+      }>;
+    }>();
+    for (const row of latestQuoteRows) {
+      let quote = latestQuotesById.get(row.quoteId);
+      if (!quote) {
+        quote = {
+          id: row.quoteId,
+          vendorId: row.vendorId,
+          quoteNumber: row.quoteNumber,
+          quoteVersion: Number(row.quoteVersion),
+          versionCount: Number(row.versionCount),
+          totalQuoteAmount: Number(row.totalQuoteAmount),
+          submittedAt: row.submittedAt,
+          status: row.status,
+          commercialTerms: row.commercialTerms,
+          paymentTermsOffered: row.paymentTermsOffered,
+          deliveryLeadTimeDays: row.deliveryLeadTimeDays,
+          vendor: {
+            id: row.vendorId,
+            name: row.vendorName || '',
+            code: row.vendorCode || '',
+            vendorType: row.vendorType,
+            qualificationStatus: row.qualificationStatus,
+            complianceStatus: row.complianceStatus,
+            performanceScore: row.performanceScore,
+          },
+          lines: [],
+        };
+        latestQuotesById.set(row.quoteId, quote);
       }
-      allQuotesByVendor[q.vendorId].push(q);
+      if (row.quoteLineId && row.rfqLineId) {
+        quote.lines.push({
+          id: row.quoteLineId,
+          rfqLineId: row.rfqLineId,
+          unitRate: Number(row.unitRate || 0),
+          lineTotal: Number(row.lineTotal || 0),
+          discountPercent: Number(row.discountPercent || 0),
+          taxPercent: Number(row.taxPercent || 0),
+        });
+      }
     }
-
-    const latestQuotesByVendor: Record<string, typeof rfq.quotes[0]> = {};
-    for (const [vendorId, quoteList] of Object.entries(allQuotesByVendor)) {
-      // Sort by quoteVersion descending
-      const sorted = [...quoteList].sort((a, b) => b.quoteVersion - a.quoteVersion);
-      latestQuotesByVendor[vendorId] = sorted[0];
-    }
-    const latestQuoteSummaries = Object.values(latestQuotesByVendor);
-    const latestQuoteIds = latestQuoteSummaries.map((quote) => quote.id);
-    const latestQuoteLineRows = latestQuoteIds.length > 0
-      ? await prisma.$queryRaw<RfqLatestCompareQuoteLineRow[]>(Prisma.sql`
-        WITH latest_quotes AS (
-          SELECT quote."tenantId", quote."rfqId", quote."vendorId",
-            MAX(quote."quoteVersion") AS "latestVersion"
-          FROM "quotes" AS quote
-          WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${id}
-          GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
-        )
-        SELECT latest."id" AS "quoteId", quoteLine."id", quoteLine."rfqLineId",
-          quoteLine."unitRate", quoteLine."lineTotal", quoteLine."discountPercent", quoteLine."taxPercent"
-        FROM latest_quotes AS summary
-        INNER JOIN "quotes" AS latest
-          ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
-            AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
-        INNER JOIN "quote_lines" AS quoteLine
-          ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
-      `)
-      : [];
-    const linesByQuoteId = new Map<string, RfqLatestCompareQuoteLineRow[]>();
-    for (const line of latestQuoteLineRows) {
-      const quoteLines = linesByQuoteId.get(line.quoteId) || [];
-      quoteLines.push(line);
-      linesByQuoteId.set(line.quoteId, quoteLines);
-    }
-    const evaluatedQuotes = latestQuoteSummaries.map((quote) => ({
-      ...quote,
-      lines: linesByQuoteId.get(quote.id) || [],
-    }));
+    const evaluatedQuotes = [...latestQuotesById.values()];
 
     const latestNegotiationRoundRows = rfq.negotiations.length > 0
       ? await prisma.$queryRaw<RfqLatestCompareNegotiationRoundRow[]>(Prisma.sql`
@@ -313,15 +341,6 @@ export async function GET(
 
     // 4. Vendors participating in comparison
     const vendors = evaluatedQuotes.map((q) => {
-      const allRevisions = (allQuotesByVendor[q.vendorId] || []).map((rev) => ({
-        id: rev.id,
-        quoteNumber: rev.quoteNumber,
-        version: rev.quoteVersion,
-        totalAmount: rev.totalQuoteAmount,
-        submittedAt: rev.submittedAt,
-        status: rev.status,
-      }));
-
       const quotedLineIds = new Set(q.lines.filter((l) => l.unitRate > 0).map((l) => l.rfqLineId));
       const totalRfqLines = rfq.lines.length;
       const quotedCount = quotedLineIds.size;
@@ -339,6 +358,7 @@ export async function GET(
         quoteId: q.id,
         quoteNumber: q.quoteNumber,
         quoteVersion: q.quoteVersion,
+        versionCount: q.versionCount,
         totalQuoteAmount: q.totalQuoteAmount,
         commercialTerms: q.commercialTerms,
         paymentTermsOffered: q.paymentTermsOffered,
@@ -348,7 +368,6 @@ export async function GET(
         quotedCount,
         missingLineCount,
         isComplete: missingLineCount === 0,
-        revisions: allRevisions,
       };
     });
 

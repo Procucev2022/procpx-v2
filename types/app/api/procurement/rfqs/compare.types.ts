@@ -10,14 +10,30 @@ export type RfqCompareRateCardRow = {
   vendorName: string;
 };
 
-export type RfqLatestCompareQuoteLineRow = {
+export type RfqLatestCompareQuoteRow = {
   quoteId: string;
-  id: string;
-  rfqLineId: string;
-  unitRate: number;
-  lineTotal: number;
-  discountPercent: number;
-  taxPercent: number;
+  vendorId: string;
+  quoteNumber: string;
+  quoteVersion: number;
+  versionCount: number;
+  totalQuoteAmount: number;
+  submittedAt: string | Date;
+  status: string;
+  commercialTerms: string | null;
+  paymentTermsOffered: string | null;
+  deliveryLeadTimeDays: number | null;
+  vendorName: string | null;
+  vendorCode: string | null;
+  vendorType: string | null;
+  qualificationStatus: string | null;
+  complianceStatus: string | null;
+  performanceScore: number | null;
+  quoteLineId: string | null;
+  rfqLineId: string | null;
+  unitRate: number | null;
+  lineTotal: number | null;
+  discountPercent: number | null;
+  taxPercent: number | null;
 };
 
 export type RfqLatestCompareNegotiationRoundRow = {
