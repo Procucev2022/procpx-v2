@@ -8,6 +8,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import ProcurementCommercialWorkspace from '../src/components/ProcurementCommercialWorkspace';
 
 const mockToast = { success: jest.fn(), error: jest.fn(), warning: jest.fn() };
+const fetchResponse = (body: unknown) => ({ ok: true, json: async () => body });
 
 jest.mock('../src/components/ui/Toast', () => ({
   useToast: () => mockToast,
@@ -108,7 +109,12 @@ describe('ProcurementCommercialWorkspace', () => {
     global.fetch = jest.fn();
   });
 
-  it('renders quote comparison statuses, rankings, commercial terms, and opens each negotiation history state', () => {
+  it('renders quote comparison statuses, rankings, commercial terms, and opens each negotiation history state', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(fetchResponse({
+      rounds: baseRfq().negotiations[0].rounds,
+      nextCursor: null,
+      hasMore: false,
+    }));
     renderWorkspace();
 
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.completeQuote, '', true))).toBeInTheDocument();
@@ -121,6 +127,7 @@ describe('ProcurementCommercialWorkspace', () => {
 
     fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.negotiationHistoryAuditTrail))).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sUPERSEDED))).toBeInTheDocument());
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.sUPERSEDED))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.rEVISED))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.awaitingResponse))).toBeInTheDocument();
@@ -135,6 +142,127 @@ describe('ProcurementCommercialWorkspace', () => {
     expect(screen.queryByText('Net 45')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.expandTerms, "", false) }));
     expect(screen.getByText('Net 45')).toBeInTheDocument();
+  });
+
+  it('loads older negotiation history pages without duplicating the first page', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fetchResponse({
+        rounds: [{ id: 'history-new', vendorId: 'v1', roundNumber: 4, createdAt: '2026-11-05T12:00:00.000Z',
+          counterOfferAmount: 450, revisedQuoteAmount: 440, status: 'REVISED_SUBMITTED', notes: 'Newest history round' }],
+        nextCursor: '2026-11-05T12:00:00.000Z~history-new', hasMore: true,
+      }))
+      .mockResolvedValueOnce(fetchResponse({
+        rounds: [
+          { id: 'history-new', vendorId: 'v1', roundNumber: 4, createdAt: '2026-11-05T12:00:00.000Z',
+            counterOfferAmount: 450, revisedQuoteAmount: 440, status: 'REVISED_SUBMITTED', notes: 'Newest history round' },
+          { id: 'history-old', vendorId: 'v1', roundNumber: 1, createdAt: '2026-11-01T12:00:00.000Z',
+            counterOfferAmount: 480, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', notes: 'Older history round' },
+        ],
+        nextCursor: null, hasMore: false,
+      }));
+    renderWorkspace();
+
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText('Newest history round')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) }));
+
+    await waitFor(() => expect(screen.getByText('Older history round')).toBeInTheDocument());
+    expect(screen.getAllByText('Newest history round')).toHaveLength(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('vendorId=v1'));
+  });
+
+  it('shows safe loading and failure states for malformed or unavailable history pages', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(fetchResponse({
+      rounds: null,
+      nextCursor: 123,
+      hasMore: false,
+    }));
+    renderWorkspace();
+
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.noNegotiationCounteroffersLoggedYetForThisVendor))).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText(UI_STRINGS.common.userMessages.failedToFetchNegotiationHistory)).toBeInTheDocument());
+  });
+
+  it('reports failures while loading older negotiation pages', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fetchResponse({
+        rounds: [{ id: 'history-new', vendorId: 'v1', roundNumber: 2, createdAt: '2026-11-05T12:00:00.000Z',
+          counterOfferAmount: 450, revisedQuoteAmount: 440, status: 'REVISED_SUBMITTED', notes: 'Newest history round' }],
+        nextCursor: '2026-11-05T12:00:00.000Z~history-new', hasMore: true,
+      }))
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    renderWorkspace();
+
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText('Newest history round')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) }));
+
+    await waitFor(() => expect(screen.getByText(UI_STRINGS.common.userMessages.failedToFetchNegotiationHistory)).toBeInTheDocument());
+  });
+
+  it('does not request an older page when the server omits its cursor', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(fetchResponse({
+      rounds: [{ id: 'history-new', vendorId: 'v1', roundNumber: 2, createdAt: '2026-11-05T12:00:00.000Z',
+        counterOfferAmount: 450, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', notes: 'Latest round' }],
+      nextCursor: null,
+      hasMore: true,
+    }));
+    renderWorkspace();
+
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText('Latest round')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) }));
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders unusual older-round fields without losing the audit row', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fetchResponse({
+        rounds: [{ id: 'history-new', vendorId: 'v1', roundNumber: 3, createdAt: '2026-11-05T12:00:00.000Z',
+          counterOfferAmount: 450, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', notes: 'Latest round' }],
+        nextCursor: '2026-11-05T12:00:00.000Z~history-new', hasMore: true,
+      }))
+      .mockResolvedValueOnce(fetchResponse({
+        rounds: [{ id: 'history-unusual', vendorId: 'v1', roundNumber: 2, createdAt: '2026-11-04T12:00:00.000Z',
+          counterOfferAmount: null, revisedQuoteAmount: 440, status: 'ROUND_ACTIVE', notes: null }],
+        nextCursor: null, hasMore: false,
+      }));
+    renderWorkspace();
+
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText('Latest round')).toBeInTheDocument());
+    const loadOlder = () => screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) });
+    fireEvent.click(loadOlder());
+    await waitFor(() => expect(screen.getAllByText(/440/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.copy4s9bsz)).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) })).not.toBeInTheDocument());
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('safely ends older history when the server returns a malformed page', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fetchResponse({
+        rounds: [{ id: 'history-new', vendorId: 'v1', roundNumber: 3, createdAt: '2026-11-05T12:00:00.000Z',
+          counterOfferAmount: 450, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', notes: 'Latest round' }],
+        nextCursor: '2026-11-05T12:00:00.000Z~history-new', hasMore: true,
+      }))
+      .mockResolvedValueOnce(fetchResponse({ rounds: null, nextCursor: 42, hasMore: false }));
+    renderWorkspace();
+
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier)));
+    await waitFor(() => expect(screen.getByText('Latest round')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds) })).not.toBeInTheDocument());
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('ranks tied complete vendor offers and handles a final buyer-reviewed quote', () => {

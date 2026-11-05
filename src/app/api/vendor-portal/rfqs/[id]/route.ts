@@ -21,6 +21,8 @@ import {
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import { getNegotiationHistoryPageMetadata, paginateNegotiationHistory } from '@/lib/negotiation-history';
+import { NEGOTIATION_HISTORY_PAGE_SIZE } from '@/lib/negotiation-history.constants';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import type { NegotiationQuoteLineSnapshot } from '@app-types/app/api/vendor-portal-rfqs.types';
 
@@ -75,10 +77,13 @@ export async function GET(
           include: { lines: true },
         },
         negotiations: {
+          take: 1,
+          orderBy: { updatedAt: 'desc' },
           include: {
             rounds: {
               where: { vendorId },
-              orderBy: { roundNumber: 'desc' },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: NEGOTIATION_HISTORY_PAGE_SIZE + 1,
             },
           },
         },
@@ -89,7 +94,18 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
-    return apiSuccess({ rfq });
+    const roundRecords = rfq.negotiations.flatMap((negotiation) => negotiation.rounds || []);
+    const historyPage = paginateNegotiationHistory(roundRecords);
+    const pageIds = new Set(historyPage.rounds.map((round) => round.id));
+    const pageNegotiations = rfq.negotiations.map((negotiation) => ({
+      ...negotiation,
+      rounds: (negotiation.rounds || []).filter((round) => pageIds.has(round.id)),
+    }));
+
+    return apiSuccess({
+      rfq: { ...rfq, negotiations: pageNegotiations },
+      negotiationHistory: getNegotiationHistoryPageMetadata(historyPage),
+    });
   } catch (error: unknown) {
     try {
       await writeStructuredLog('error', 'vendor_portal.rfq_detail_failed', {

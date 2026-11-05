@@ -648,6 +648,8 @@ model NegotiationRound {
   vendor              Vendor      @relation(fields: [vendorId], references: [id])
 
   @@unique([negotiationId, vendorId, roundNumber])
+  @@index([tenantId, negotiationId, createdAt, id], map: "negotiation_rounds_tenant_negotiation_created_idx")
+  @@index([tenantId, negotiationId, vendorId, createdAt, id], map: "negotiation_rounds_tenant_neg_vendor_created_idx")
   @@map("negotiation_rounds")
 }
 

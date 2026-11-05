@@ -17,6 +17,8 @@ import {
 import { NOTIFICATION_OUTBOX_INSERT_AFTER_AUDIT_SQL } from '../src/lib/notification-outbox.constants';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { NEGOTIATION_HISTORY_PAGE_SIZE } from '../src/lib/negotiation-history.constants';
+import { encodeNegotiationHistoryCursor } from '../src/lib/negotiation-history';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -110,7 +112,14 @@ describe('vendor portal RFQ detail and quote API', () => {
       quotes: [{ id: 'quote-1', quoteVersion: 2, lines: [{ id: 'quote-line-1' }] }], negotiations: [{ rounds: [{ id: 'round-1' }] }],
     });
     db.rfq.findFirst.mockResolvedValueOnce(detail);
-    await expect(GET(getRequest(), params('rfq-custom'))).resolves.toEqual({ ok: true, data: { rfq: detail }, status: 200 });
+    await expect(GET(getRequest(), params('rfq-custom'))).resolves.toEqual({
+      ok: true,
+      data: {
+        rfq: detail,
+        negotiationHistory: { nextCursor: null, hasMore: false, pageSize: NEGOTIATION_HISTORY_PAGE_SIZE },
+      },
+      status: 200,
+    });
     expect(db.rfq.findFirst).toHaveBeenCalledWith({
       where: { id: 'rfq-custom', tenantId: 'tenant-1', invitedVendors: { some: { vendorId: 'vendor-1' } } },
       include: expect.objectContaining({
@@ -118,8 +127,42 @@ describe('vendor portal RFQ detail and quote API', () => {
         lines: { orderBy: { lineNumber: 'asc' } },
         invitedVendors: { where: { vendorId: 'vendor-1' } },
         quotes: { where: { vendorId: 'vendor-1' }, orderBy: { quoteVersion: 'desc' }, include: { lines: true } },
-        negotiations: { include: { rounds: { where: { vendorId: 'vendor-1' }, orderBy: { roundNumber: 'desc' } } } },
+        negotiations: {
+          take: 1,
+          orderBy: { updatedAt: 'desc' },
+          include: {
+            rounds: {
+              where: { vendorId: 'vendor-1' },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: NEGOTIATION_HISTORY_PAGE_SIZE + 1,
+            },
+          },
+        },
       }),
+    });
+  });
+
+  it('bounds vendor negotiation history and reports an older-page cursor', async () => {
+    const rounds = Array.from({ length: NEGOTIATION_HISTORY_PAGE_SIZE + 1 }, (_, index) => ({
+      id: `round-${index + 1}`,
+      vendorId: 'vendor-1',
+      roundNumber: index + 1,
+      createdAt: new Date(Date.UTC(2026, 10, 5, 0, 0, index)),
+    }));
+    db.rfq.findFirst.mockResolvedValueOnce(rfq({ negotiations: [{ id: 'neg-1', rounds }] }));
+
+    const response = await GET(getRequest(), params());
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        rfq: { negotiations: [{ rounds: rounds.slice(0, NEGOTIATION_HISTORY_PAGE_SIZE) }] },
+        negotiationHistory: {
+          nextCursor: encodeNegotiationHistoryCursor(rounds[NEGOTIATION_HISTORY_PAGE_SIZE - 1]),
+          hasMore: true,
+          pageSize: NEGOTIATION_HISTORY_PAGE_SIZE,
+        },
+      },
     });
   });
 

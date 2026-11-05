@@ -8,6 +8,8 @@ import { hasPermission } from '@/lib/permissions';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { getNegotiationHistoryPageMetadata, paginateNegotiationHistory } from '@/lib/negotiation-history';
+import { NEGOTIATION_HISTORY_PAGE_SIZE } from '@/lib/negotiation-history.constants';
 import { RFQ_INVITATION_MARK_RELEASED_SQL, RFQ_TRANSITION_ALLOWED_FIELDS } from './route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -23,7 +25,14 @@ export async function GET(
 
   const { id } = await params;
   const startedAt = Date.now();
-  const includeNegotiationHistory = new URL(req.url).searchParams.get('includeNegotiationHistory') === 'true';
+  const searchParams = new URL(req.url).searchParams;
+  const includeNegotiationHistory = searchParams.get('includeNegotiationHistory') === 'true';
+  const rawHistoryVendorId = includeNegotiationHistory ? searchParams.get('vendorId') : null;
+  const requestedHistoryVendorId = rawHistoryVendorId?.trim() || null;
+
+  if (rawHistoryVendorId !== null && (!requestedHistoryVendorId || requestedHistoryVendorId.length > 100 || !/^[A-Za-z0-9_-]+$/.test(requestedHistoryVendorId))) {
+    return apiError(UI_STRINGS.common.userMessages.invalidNegotiationHistoryVendor, 400);
+  }
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
@@ -51,9 +60,22 @@ export async function GET(
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
       return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
+    if (includeNegotiationHistory && !hasPermission(ctx.role, 'NEGOTIATION_VIEW')) {
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+    }
   }
 
   try {
+    if (includeNegotiationHistory && ctx.role !== 'VENDOR' && requestedHistoryVendorId) {
+      const invitation = await prisma.rfqVendor.findFirst({
+        where: { rfqId: id, tenantId: ctx.tenantId, vendorId: requestedHistoryVendorId },
+        select: { id: true },
+      });
+      if (!invitation) {
+        return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403);
+      }
+    }
+
     const rfq = await prisma.rfq.findFirst({
       where: {
         id,
@@ -87,9 +109,13 @@ export async function GET(
         },
         negotiations: includeNegotiationHistory
           ? {
+            take: 1,
+            orderBy: { updatedAt: 'desc' },
             include: {
               rounds: {
-                where: ctx.role === 'VENDOR' ? { vendorId: ctx.vendorId! } : undefined,
+                where: ctx.role === 'VENDOR'
+                  ? { vendorId: ctx.vendorId! }
+                  : requestedHistoryVendorId ? { vendorId: requestedHistoryVendorId } : undefined,
                 select: {
                   id: true,
                   vendorId: true,
@@ -113,7 +139,8 @@ export async function GET(
                   createdAt: true,
                   vendor: { select: { id: true, name: true, code: true } },
                 },
-                orderBy: { roundNumber: 'desc' },
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                take: NEGOTIATION_HISTORY_PAGE_SIZE + 1,
               },
             },
           }
@@ -231,6 +258,22 @@ export async function GET(
           remarks: row.lineRemarks,
         });
       }
+    }
+
+    if (includeNegotiationHistory) {
+      const roundRecords = rfq.negotiations.flatMap((negotiation) => (
+        'rounds' in negotiation ? negotiation.rounds : []
+      ));
+      const historyPage = paginateNegotiationHistory(roundRecords);
+      const pageIds = new Set(historyPage.rounds.map((round) => round.id));
+      const pageNegotiations = rfq.negotiations.map((negotiation) => ({
+        ...negotiation,
+        rounds: ('rounds' in negotiation ? negotiation.rounds : []).filter((round) => pageIds.has(round.id)),
+      }));
+      return apiSuccess({
+        rfq: { ...rfq, negotiations: pageNegotiations, quotes: [...quotesById.values()] },
+        negotiationHistory: getNegotiationHistoryPageMetadata(historyPage),
+      });
     }
 
     return apiSuccess({ rfq: { ...rfq, quotes: [...quotesById.values()] } });

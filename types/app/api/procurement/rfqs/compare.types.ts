@@ -45,4 +45,42 @@ export type RfqLatestCompareNegotiationRoundRow = {
   status: string;
   nextResponsibleParty: string | null;
   buyerDecision: string | null;
+  totalRoundCount: number | bigint;
+  activeBuyerOfferCount: number | bigint;
+  submittedRoundId: string | null;
+  submittedRoundNumber: number | null;
+  submittedRevisedQuoteAmount: number | null;
+  submittedStatus: string | null;
+  submittedNextResponsibleParty: string | null;
+  submittedBuyerDecision: string | null;
+  pendingRoundId: string | null;
+  pendingRoundNumber: number | null;
+  pendingCounterOfferAmount: number | null;
+  pendingRevisedQuoteAmount: number | null;
+  pendingStatus: string | null;
+  pendingNextResponsibleParty: string | null;
+  pendingBuyerDecision: string | null;
+};
+
+export type RfqCompareNegotiationSummary = {
+  vendorId: string;
+  totalRoundCount: number;
+  activeBuyerOfferCount: number;
+  submittedRevisionRound: {
+    id: string;
+    roundNumber: number;
+    revisedQuoteAmount: number;
+    status: string;
+    nextResponsibleParty: string | null;
+    buyerDecision: string | null;
+  } | null;
+  pendingBuyerOffer: {
+    id: string;
+    roundNumber: number;
+    counterOfferAmount: number | null;
+    revisedQuoteAmount: number | null;
+    status: string;
+    nextResponsibleParty: string | null;
+    buyerDecision: string | null;
+  } | null;
 };

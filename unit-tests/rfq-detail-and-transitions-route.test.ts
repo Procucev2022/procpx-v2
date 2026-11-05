@@ -4,6 +4,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { hasPermission } from '../src/lib/permissions';
 import { createAuditLog } from '../src/lib/audit';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { NEGOTIATION_HISTORY_PAGE_SIZE } from '../src/lib/negotiation-history.constants';
+import { encodeNegotiationHistoryCursor } from '../src/lib/negotiation-history';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '../src/lib/d1-batch.constants';
 import { GET as getRfq, PUT as updateRfq } from '../src/app/api/procurement/rfqs/[id]/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -39,9 +41,13 @@ const audit = createAuditLog as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const buyer = { tenantId: 'tenant-1', userId: 'buyer-1', userName: 'Buyer', role: 'PROCUREMENT_MANAGER' };
 const params = { params: Promise.resolve({ id: 'rfq-1' }) };
-const getRequest = (includeNegotiationHistory = false) => new NextRequest(
-  `http://localhost/api/procurement/rfqs/rfq-1${includeNegotiationHistory ? '?includeNegotiationHistory=true' : ''}`,
-);
+const getRequest = (includeNegotiationHistory = false, vendorId?: string) => {
+  const query = new URLSearchParams();
+  if (includeNegotiationHistory) query.set('includeNegotiationHistory', 'true');
+  if (vendorId !== undefined) query.set('vendorId', vendorId);
+  const search = query.size > 0 ? `?${query.toString()}` : '';
+  return new NextRequest(`http://localhost/api/procurement/rfqs/rfq-1${search}`);
+};
 const putRequest = (body: unknown) => new NextRequest('http://localhost/api/procurement/rfqs/rfq-1', {
   method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 });
@@ -160,8 +166,57 @@ describe('RFQ detail read permissions', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', negotiations: [{ id: 'negotiation-1', rounds: [] }] });
     await getRfq(getRequest(true), params);
     const negotiations = db.rfq.findFirst.mock.calls[0][0].include.negotiations;
+    expect(negotiations.take).toBe(1);
+    expect(negotiations.orderBy).toEqual({ updatedAt: 'desc' });
     expect(negotiations).toHaveProperty('include.rounds.select.lineItemsJson', true);
-    expect(negotiations.include.rounds.orderBy).toEqual({ roundNumber: 'desc' });
+    expect(negotiations.include.rounds.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    expect(negotiations.include.rounds.take).toBe(NEGOTIATION_HISTORY_PAGE_SIZE + 1);
+  });
+
+  it('validates buyer vendor scope before reading bounded negotiation history', async () => {
+    db.rfqVendor.findFirst.mockResolvedValueOnce({ id: 'invite-1' });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', negotiations: [{ id: 'negotiation-1', rounds: [] }] });
+
+    await getRfq(getRequest(true, 'vendor-1'), params);
+
+    expect(db.rfqVendor.findFirst).toHaveBeenCalledWith({
+      where: { rfqId: 'rfq-1', tenantId: 'tenant-1', vendorId: 'vendor-1' },
+      select: { id: true },
+    });
+    expect(db.rfq.findFirst.mock.calls[0][0].include.negotiations.include.rounds.where).toEqual({ vendorId: 'vendor-1' });
+    await expect(getRfq(getRequest(true, 'bad/vendor'), params)).resolves.toMatchObject({ status: 400 });
+  });
+
+  it('returns only the first bounded history page with cursor metadata', async () => {
+    const rounds = Array.from({ length: NEGOTIATION_HISTORY_PAGE_SIZE + 1 }, (_, index) => ({
+      id: `round-${index + 1}`,
+      roundNumber: index + 1,
+      createdAt: new Date(Date.UTC(2026, 10, 5, 0, 0, index)),
+    }));
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', negotiations: [{ id: 'negotiation-1', rounds }] });
+
+    const response = await getRfq(getRequest(true), params);
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        rfq: { negotiations: [{ rounds: rounds.slice(0, NEGOTIATION_HISTORY_PAGE_SIZE) }] },
+        negotiationHistory: {
+          nextCursor: encodeNegotiationHistoryCursor(rounds[NEGOTIATION_HISTORY_PAGE_SIZE - 1]),
+          hasMore: true,
+          pageSize: NEGOTIATION_HISTORY_PAGE_SIZE,
+        },
+      },
+    });
+  });
+
+  it('requires negotiation permission before returning full negotiation data', async () => {
+    permission.mockImplementation((_role: string, permissionName: string) => permissionName !== 'NEGOTIATION_VIEW');
+
+    await expect(getRfq(getRequest(true), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403,
+    });
+    expect(db.rfq.findFirst).not.toHaveBeenCalled();
   });
 
   it('normalizes nullable quote summary fields from D1', async () => {

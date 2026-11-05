@@ -29,7 +29,11 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
-import type { ProcurementCommercialWorkspaceProps } from "@app-types/components/ProcurementCommercialWorkspace.types";
+import type {
+  ProcurementCommercialWorkspaceProps,
+  ProcurementNegotiationHistoryRound,
+} from "@app-types/components/ProcurementCommercialWorkspace.types";
+import type { RfqCompareNegotiationSummary } from "@app-types/app/api/procurement/rfqs/compare.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -211,8 +215,9 @@ export default function ProcurementCommercialWorkspace({
       const vRounds = allNegotiationRounds
         .filter((r: any) => r.vendorId === vId)
         .sort((a: any, b: any) => (b.roundNumber || 0) - (a.roundNumber || 0));
+      const negotiationSummary = comparison?.negotiationSummaries?.find((summary: RfqCompareNegotiationSummary) => summary.vendorId === vId);
 
-      const submittedRevisionRound = vRounds.find(
+      const submittedRevisionRound = negotiationSummary?.submittedRevisionRound || vRounds.find(
         (r: any) =>
           r.revisedQuoteAmount &&
           r.revisedQuoteAmount > 0 &&
@@ -269,7 +274,7 @@ export default function ProcurementCommercialWorkspace({
       }
 
       // Pending buyer offer
-      const pendingBuyerOffer = vRounds.find(
+      const pendingBuyerOffer = negotiationSummary?.pendingBuyerOffer || vRounds.find(
         (r: any) =>
           r.status !== 'SUPERSEDED' &&
           r.counterOfferAmount &&
@@ -282,7 +287,9 @@ export default function ProcurementCommercialWorkspace({
           r.status !== 'SUPERSEDED' &&
           (r.counterOfferAmount !== null || (!r.revisedQuoteAmount && r.nextResponsibleParty === 'VENDOR'))
       );
-      const isEligible = vQuotes.length > 0 && activeBuyerOffers.length < 4;
+      const activeBuyerOfferCount = negotiationSummary?.activeBuyerOfferCount ?? activeBuyerOffers.length;
+      const totalRoundCount = negotiationSummary?.totalRoundCount ?? vRounds.length;
+      const isEligible = vQuotes.length > 0 && activeBuyerOfferCount < 4;
 
       return {
         vendorId: vId,
@@ -301,6 +308,7 @@ export default function ProcurementCommercialWorkspace({
         isEligible,
         pendingBuyerOffer,
         rounds: vRounds,
+        roundCount: totalRoundCount,
       };
     });
 
@@ -323,7 +331,7 @@ export default function ProcurementCommercialWorkspace({
       ...m,
       rank: rankMap[m.vendorId] || null,
     }));
-  }, [rfq.invitedVendors, rfq.quotes, totalRfqLines, aiBenchmarkTotal, allNegotiationRounds, comparison?.lines]);
+  }, [rfq.invitedVendors, rfq.quotes, totalRfqLines, aiBenchmarkTotal, allNegotiationRounds, comparison?.lines, comparison?.negotiationSummaries]);
 
   // L1 vendor (Lowest complete quote)
   const l1Vendor = useMemo(() => {
@@ -436,7 +444,58 @@ export default function ProcurementCommercialWorkspace({
   const [itemOfferFeedback, setItemOfferFeedback] = useState<string | null>(null);
   const [isApplyingOffer, setIsApplyingOffer] = useState<boolean>(false);
   const [historyModalVendor, setHistoryModalVendor] = useState<any | null>(null);
+  const [historyRounds, setHistoryRounds] = useState<ProcurementNegotiationHistoryRound[]>([]);
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoadingOlder, setHistoryLoadingOlder] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [showCommercialTerms, setShowCommercialTerms] = useState<boolean>(true);
+
+  const openNegotiationHistory = async (vendor: { vendorId: string }) => {
+    setHistoryModalVendor(vendor);
+    setHistoryRounds([]);
+    setHistoryNextCursor(null);
+    setHistoryHasMore(false);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try {
+      const query = new URLSearchParams({ vendorId: vendor.vendorId });
+      const res = await fetch(`/api/procurement/rfqs/${rfq.id}/negotiation-history?${query.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchNegotiationHistory);
+      const page = await res.json();
+      setHistoryRounds(Array.isArray(page.rounds) ? page.rounds : []);
+      setHistoryNextCursor(typeof page.nextCursor === 'string' ? page.nextCursor : null);
+      setHistoryHasMore(Boolean(page.hasMore));
+    } catch {
+      setHistoryError(UI_STRINGS.common.userMessages.failedToFetchNegotiationHistory);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const loadOlderNegotiationHistory = async () => {
+    if (!historyModalVendor || !historyHasMore || !historyNextCursor || historyLoadingOlder) return;
+    setHistoryLoadingOlder(true);
+    setHistoryError(null);
+    try {
+      const query = new URLSearchParams({ vendorId: historyModalVendor.vendorId, cursor: historyNextCursor });
+      const res = await fetch(`/api/procurement/rfqs/${rfq.id}/negotiation-history?${query.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchNegotiationHistory);
+      const page = await res.json();
+      const rounds = Array.isArray(page.rounds) ? page.rounds : [];
+      setHistoryRounds((current) => {
+        const existingIds = new Set(current.map((round) => round.id));
+        return [...current, ...rounds.filter((round: ProcurementNegotiationHistoryRound) => !existingIds.has(round.id))];
+      });
+      setHistoryNextCursor(typeof page.nextCursor === 'string' ? page.nextCursor : null);
+      setHistoryHasMore(Boolean(page.hasMore));
+    } catch {
+      setHistoryError(UI_STRINGS.common.userMessages.failedToFetchNegotiationHistory);
+    } finally {
+      setHistoryLoadingOlder(false);
+    }
+  };
 
   // Sync drawer rate input when detail line changes
   useEffect(() => {
@@ -834,10 +893,10 @@ export default function ProcurementCommercialWorkspace({
                       {vendor.vendorCode && (
                         <span className="text-[11px] font-mono text-slate-500">{UI_STRINGS.common.copychzfvb}{vendor.vendorCode}{UI_STRINGS.common.copyc7zu6c}</span>
                       )}
-                      {vendor.rounds?.length > 0 && (
+                      {(vendor.roundCount > 0 || vendor.rounds?.length > 0) && (
                         <button
                           type="button"
-                          onClick={() => setHistoryModalVendor(vendor)}
+                          onClick={() => void openNegotiationHistory(vendor)}
                           className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors rounded"
                           title={UI_STRINGS.componentsProcurementCommercialWorkspace.viewSequentialNegotiationAuditHistoryForThisSupplier}
                         >
@@ -1585,7 +1644,11 @@ export default function ProcurementCommercialWorkspace({
               </div>
 
               {/* Rounds */}
-              {historyModalVendor.rounds?.length === 0 ? (
+              {historyLoading ? (
+                <div className="p-6 text-center text-slate-500">{UI_STRINGS.componentsProcurementCommercialWorkspace.loadingNegotiationHistory}</div>
+              ) : historyError ? (
+                <div className="p-6 text-center text-rose-700">{historyError}</div>
+              ) : historyRounds.length === 0 ? (
                 <div className="p-6 text-center text-slate-500 bg-slate-50/50 rounded border border-dashed border-slate-200">{UI_STRINGS.componentsProcurementCommercialWorkspace.noNegotiationCounteroffersLoggedYetForThisVendor}</div>
               ) : (
                 <div className="border border-slate-200 rounded overflow-hidden">
@@ -1600,7 +1663,7 @@ export default function ProcurementCommercialWorkspace({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {historyModalVendor.rounds.map((r: any) => {
+                      {historyRounds.map((r) => {
                         const isSuperseded = r.status === 'SUPERSEDED';
                         const isRevised = r.status === 'REVISED_SUBMITTED' || (r.revisedQuoteAmount && r.revisedQuoteAmount > 0);
                         const isPending = !isSuperseded && !isRevised;
@@ -1650,7 +1713,17 @@ export default function ProcurementCommercialWorkspace({
               )}
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-slate-100">
+            <div className="flex justify-between pt-2 border-t border-slate-100">
+              {historyHasMore && (
+                <button
+                  type="button"
+                  onClick={() => void loadOlderNegotiationHistory()}
+                  disabled={historyLoadingOlder}
+                  className="btn btn-secondary btn-sm text-xs"
+                >{historyLoadingOlder
+                  ? UI_STRINGS.componentsProcurementCommercialWorkspace.loadingOlderNegotiationRounds
+                  : UI_STRINGS.componentsProcurementCommercialWorkspace.loadOlderNegotiationRounds}</button>
+              )}
               <button
                 type="button"
                 onClick={() => setHistoryModalVendor(null)}

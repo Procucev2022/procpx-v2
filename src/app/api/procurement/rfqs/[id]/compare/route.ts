@@ -227,9 +227,14 @@ export async function GET(
 
     const latestNegotiationRoundRows = rfq.negotiations.length > 0
       ? await prisma.$queryRaw<RfqLatestCompareNegotiationRoundRow[]>(Prisma.sql`
-        WITH latest_negotiation_rounds AS (
+        WITH negotiation_round_summaries AS (
           SELECT rounds."tenantId", rounds."negotiationId", rounds."vendorId",
-            MAX(rounds."roundNumber") AS "latestRoundNumber"
+            MAX(rounds."roundNumber") AS "latestRoundNumber",
+            COUNT(*) AS "totalRoundCount",
+            SUM(CASE WHEN rounds."status" <> 'SUPERSEDED' AND (
+              rounds."counterOfferAmount" IS NOT NULL OR
+              (rounds."revisedQuoteAmount" IS NULL AND rounds."nextResponsibleParty" = 'VENDOR')
+            ) THEN 1 ELSE 0 END) AS "activeBuyerOfferCount"
           FROM "negotiation_rounds" AS rounds
           INNER JOIN "negotiations" AS negotiation
             ON negotiation."id" = rounds."negotiationId" AND negotiation."tenantId" = rounds."tenantId"
@@ -237,17 +242,66 @@ export async function GET(
           GROUP BY rounds."tenantId", rounds."negotiationId", rounds."vendorId"
         )
         SELECT rounds."vendorId", rounds."roundNumber", rounds."lineItemsJson", rounds."counterOfferAmount",
-          rounds."revisedQuoteAmount", rounds."status", rounds."nextResponsibleParty", rounds."buyerDecision"
-        FROM latest_negotiation_rounds AS latest
+          rounds."revisedQuoteAmount", rounds."status", rounds."nextResponsibleParty", rounds."buyerDecision",
+          summary."totalRoundCount", summary."activeBuyerOfferCount",
+          submitted."id" AS "submittedRoundId", submitted."roundNumber" AS "submittedRoundNumber",
+          submitted."revisedQuoteAmount" AS "submittedRevisedQuoteAmount", submitted."status" AS "submittedStatus",
+          submitted."nextResponsibleParty" AS "submittedNextResponsibleParty", submitted."buyerDecision" AS "submittedBuyerDecision",
+          pending."id" AS "pendingRoundId", pending."roundNumber" AS "pendingRoundNumber",
+          pending."counterOfferAmount" AS "pendingCounterOfferAmount", pending."revisedQuoteAmount" AS "pendingRevisedQuoteAmount",
+          pending."status" AS "pendingStatus", pending."nextResponsibleParty" AS "pendingNextResponsibleParty",
+          pending."buyerDecision" AS "pendingBuyerDecision"
+        FROM negotiation_round_summaries AS summary
         INNER JOIN "negotiation_rounds" AS rounds
-          ON rounds."tenantId" = latest."tenantId" AND rounds."negotiationId" = latest."negotiationId"
-            AND rounds."vendorId" = latest."vendorId" AND rounds."roundNumber" = latest."latestRoundNumber"
+          ON rounds."tenantId" = summary."tenantId" AND rounds."negotiationId" = summary."negotiationId"
+            AND rounds."vendorId" = summary."vendorId" AND rounds."roundNumber" = summary."latestRoundNumber"
+        LEFT JOIN "negotiation_rounds" AS submitted
+          ON submitted."id" = (
+            SELECT candidate."id" FROM "negotiation_rounds" AS candidate
+            WHERE candidate."tenantId" = summary."tenantId" AND candidate."negotiationId" = summary."negotiationId"
+              AND candidate."vendorId" = summary."vendorId" AND candidate."revisedQuoteAmount" > 0
+              AND candidate."status" IN ('REVISED_SUBMITTED', 'FINAL_OFFER_SUBMITTED')
+              AND (candidate."nextResponsibleParty" = 'BUYER' OR candidate."buyerDecision" IS NOT NULL)
+            ORDER BY candidate."roundNumber" DESC LIMIT 1
+          )
+        LEFT JOIN "negotiation_rounds" AS pending
+          ON pending."id" = (
+            SELECT candidate."id" FROM "negotiation_rounds" AS candidate
+            WHERE candidate."tenantId" = summary."tenantId" AND candidate."negotiationId" = summary."negotiationId"
+              AND candidate."vendorId" = summary."vendorId" AND candidate."status" <> 'SUPERSEDED'
+              AND candidate."counterOfferAmount" > 0
+              AND (candidate."revisedQuoteAmount" IS NULL OR candidate."revisedQuoteAmount" = 0
+                OR candidate."nextResponsibleParty" = 'VENDOR')
+            ORDER BY candidate."roundNumber" DESC LIMIT 1
+          )
         ORDER BY rounds."vendorId" ASC
       `)
       : [];
     const latestNegotiationRoundByVendor = new Map(
       latestNegotiationRoundRows.map((round) => [round.vendorId, round])
     );
+    const negotiationSummaries = latestNegotiationRoundRows.map((round) => ({
+      vendorId: round.vendorId,
+      totalRoundCount: Number(round.totalRoundCount),
+      activeBuyerOfferCount: Number(round.activeBuyerOfferCount),
+      submittedRevisionRound: round.submittedRoundId ? {
+        id: round.submittedRoundId,
+        roundNumber: round.submittedRoundNumber,
+        revisedQuoteAmount: round.submittedRevisedQuoteAmount,
+        status: round.submittedStatus,
+        nextResponsibleParty: round.submittedNextResponsibleParty,
+        buyerDecision: round.submittedBuyerDecision,
+      } : null,
+      pendingBuyerOffer: round.pendingRoundId ? {
+        id: round.pendingRoundId,
+        roundNumber: round.pendingRoundNumber,
+        counterOfferAmount: round.pendingCounterOfferAmount,
+        revisedQuoteAmount: round.pendingRevisedQuoteAmount,
+        status: round.pendingStatus,
+        nextResponsibleParty: round.pendingNextResponsibleParty,
+        buyerDecision: round.pendingBuyerDecision,
+      } : null,
+    }));
 
     // 2. Fetch historical PPO lines for baseline price comparison
     const historicalPpoLines = await prisma.ppoLine.findMany({
@@ -651,6 +705,7 @@ export async function GET(
       vendors: allRankedVendors,
       lines: lineComparison,
       activeNegotiation,
+      negotiationSummaries,
       awards: rfq.awards,
       summary: {
         packageTotal: benchmarkTotal,

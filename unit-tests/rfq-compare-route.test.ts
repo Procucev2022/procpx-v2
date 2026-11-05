@@ -86,14 +86,30 @@ const fullRfq = (overrides: Record<string, any> = {}) => {
 const latestNegotiationRoundRows = () => [
   { vendorId: 'v1', roundNumber: 2, status: 'REVISED_SUBMITTED', counterOfferAmount: 800, revisedQuoteAmount: 1100,
     nextResponsibleParty: 'BUYER', buyerDecision: null,
-    lineItemsJson: JSON.stringify([{ rfqLineId: 'line-1', counterRate: 95, revisedRate: 98 }]) },
+    lineItemsJson: JSON.stringify([{ rfqLineId: 'line-1', counterRate: 95, revisedRate: 98 }]),
+    totalRoundCount: 5, activeBuyerOfferCount: 2, submittedRoundId: 'v1-submitted', submittedRoundNumber: 2,
+    submittedRevisedQuoteAmount: 1100, submittedStatus: 'REVISED_SUBMITTED', submittedNextResponsibleParty: 'BUYER',
+    submittedBuyerDecision: null, pendingRoundId: null, pendingRoundNumber: null, pendingCounterOfferAmount: null,
+    pendingRevisedQuoteAmount: null, pendingStatus: null, pendingNextResponsibleParty: null, pendingBuyerDecision: null },
   { vendorId: 'v2', roundNumber: 1, status: 'ROUND_ACTIVE', counterOfferAmount: 600, revisedQuoteAmount: null, lineItemsJson: null,
-    nextResponsibleParty: null, buyerDecision: null },
+    nextResponsibleParty: null, buyerDecision: null, totalRoundCount: 1, activeBuyerOfferCount: 1,
+    submittedRoundId: null, submittedRoundNumber: null, submittedRevisedQuoteAmount: null, submittedStatus: null,
+    submittedNextResponsibleParty: null, submittedBuyerDecision: null, pendingRoundId: 'v2-pending', pendingRoundNumber: 1,
+    pendingCounterOfferAmount: 600, pendingRevisedQuoteAmount: null, pendingStatus: 'ROUND_ACTIVE',
+    pendingNextResponsibleParty: null, pendingBuyerDecision: null },
   { vendorId: 'v3', roundNumber: 1, status: 'FINAL_OFFER_SUBMITTED', counterOfferAmount: null, revisedQuoteAmount: 1800,
-    nextResponsibleParty: 'BUYER', buyerDecision: null, lineItemsJson: '{bad json' },
+    nextResponsibleParty: 'BUYER', buyerDecision: null, lineItemsJson: '{bad json', totalRoundCount: 1, activeBuyerOfferCount: 0,
+    submittedRoundId: 'v3-submitted', submittedRoundNumber: 1, submittedRevisedQuoteAmount: 1800,
+    submittedStatus: 'FINAL_OFFER_SUBMITTED', submittedNextResponsibleParty: 'BUYER', submittedBuyerDecision: null,
+    pendingRoundId: null, pendingRoundNumber: null, pendingCounterOfferAmount: null, pendingRevisedQuoteAmount: null,
+    pendingStatus: null, pendingNextResponsibleParty: null, pendingBuyerDecision: null },
   { vendorId: 'v4', roundNumber: 1, status: 'FINAL_OFFER_SUBMITTED', counterOfferAmount: 700, revisedQuoteAmount: 1300,
     nextResponsibleParty: 'BUYER', buyerDecision: null,
-    lineItemsJson: JSON.stringify([{ id: 'line-1', counterRate: 120, revisedRate: 110 }, { id: 'line-2' }]) },
+    lineItemsJson: JSON.stringify([{ id: 'line-1', counterRate: 120, revisedRate: 110 }, { id: 'line-2' }]),
+    totalRoundCount: 1, activeBuyerOfferCount: 1, submittedRoundId: 'v4-submitted', submittedRoundNumber: 1,
+    submittedRevisedQuoteAmount: 1300, submittedStatus: 'FINAL_OFFER_SUBMITTED', submittedNextResponsibleParty: 'BUYER',
+    submittedBuyerDecision: null, pendingRoundId: null, pendingRoundNumber: null, pendingCounterOfferAmount: null,
+    pendingRevisedQuoteAmount: null, pendingStatus: null, pendingNextResponsibleParty: null, pendingBuyerDecision: null },
 ];
 
 const latestCompareQuoteRows = (rfq = fullRfq()) => {
@@ -143,7 +159,7 @@ describe('RFQ quote comparison API', () => {
     db.vendorRateCard.count.mockReset().mockResolvedValue(1);
     db.$queryRaw.mockReset().mockImplementation((query: { sql: string }) => query.sql.includes('latest_quotes')
       ? latestCompareQuoteRows()
-      : query.sql.includes('latest_negotiation_rounds')
+      : query.sql.includes('negotiation_round_summaries')
         ? latestNegotiationRoundRows()
         : [
       { description: ' copper cable ', rate: 85, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
@@ -192,10 +208,14 @@ describe('RFQ quote comparison API', () => {
     expect(latestQuoteQuery.sql).toContain('LEFT JOIN "quote_lines" AS quoteLine');
     expect(latestQuoteQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     expect(db.$queryRaw.mock.calls[0][0].sql).toContain('latest_quotes');
-    const negotiationRoundQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_negotiation_rounds'))?.[0];
+    const negotiationRoundQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('negotiation_round_summaries'))?.[0];
     expect(negotiationRoundQuery).toBeDefined();
     if (!negotiationRoundQuery) throw new Error('Latest negotiation round query was not executed');
     expect(negotiationRoundQuery.sql).toContain('MAX(rounds."roundNumber") AS "latestRoundNumber"');
+    expect(negotiationRoundQuery.sql).toContain('COUNT(*) AS "totalRoundCount"');
+    expect(negotiationRoundQuery.sql).toContain('SUM(CASE WHEN rounds."status" <> \'SUPERSEDED\'');
+    expect(negotiationRoundQuery.sql).toContain('submitted."id" AS "submittedRoundId"');
+    expect(negotiationRoundQuery.sql).toContain('pending."id" AS "pendingRoundId"');
     expect(negotiationRoundQuery.sql).toContain('negotiation."rfqId" = ?');
     expect(negotiationRoundQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     expect(result).toMatchObject({ ok: true, data: {
@@ -216,6 +236,13 @@ describe('RFQ quote comparison API', () => {
         { id: 'line-2', itemCode: 'PANEL-1', boqDescription: 'Distribution panel', aiUnitCost: 80,
           historicalPpoRate: 70, rateCardRate: 75, category: 'Power', vendorQuotes: expect.any(Object) },
       ],
+      negotiationSummaries: expect.arrayContaining([
+        { vendorId: 'v1', totalRoundCount: 5, activeBuyerOfferCount: 2,
+          submittedRevisionRound: { id: 'v1-submitted', roundNumber: 2, revisedQuoteAmount: 1100, status: 'REVISED_SUBMITTED', nextResponsibleParty: 'BUYER', buyerDecision: null },
+          pendingBuyerOffer: null },
+        { vendorId: 'v2', totalRoundCount: 1, activeBuyerOfferCount: 1, submittedRevisionRound: null,
+          pendingBuyerOffer: { id: 'v2-pending', roundNumber: 1, counterOfferAmount: 600, revisedQuoteAmount: null, status: 'ROUND_ACTIVE', nextResponsibleParty: null, buyerDecision: null } },
+      ]),
       activeNegotiation: { id: 'neg-1' }, awards: [{ id: 'award-1' }],
       summary: { packageTotal: 1160, benchmarkTotal: 1160, lowestQuoteTotal: 1200, lowestVendor: 'Vendor v1',
         savings: -40, isFavorable: false, hasApprovedRateCards: true, approvedRateCardsCount: 1 },

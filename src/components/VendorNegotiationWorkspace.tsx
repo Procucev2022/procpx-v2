@@ -86,8 +86,10 @@ export default function VendorNegotiationWorkspace({
     if (!isRfq || !data?.id) return;
     setIsRefreshing(true);
     try {
+      const query = new URLSearchParams({ includeNegotiationHistory: 'true' });
+      if (vendorId) query.set('vendorId', vendorId);
       const detailUrl = isBuyerRole
-        ? `/api/procurement/rfqs/${data.id}?includeNegotiationHistory=true`
+        ? `/api/procurement/rfqs/${data.id}?${query.toString()}`
         : `/api/vendor-portal/rfqs/${data.id}`;
       const res = await fetch(detailUrl);
       if (res.ok) {
@@ -122,8 +124,12 @@ export default function VendorNegotiationWorkspace({
 
     const flatRounds = (rfqSource.negotiations || []).flatMap((n: any) => n.rounds || []);
     const rounds = flatRounds.length > 0 ? flatRounds : (rfqSource.rounds || []);
-    // Sort rounds ascending by roundNumber
-    return [...rounds].sort((a, b) => (a.roundNumber || 1) - (b.roundNumber || 1));
+    // Keep the history order stable when multiple vendors have the same round number.
+    return [...rounds].sort((a, b) =>
+      ((a.roundNumber || 1) - (b.roundNumber || 1))
+      || (new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime())
+      || String(a.id || '').localeCompare(String(b.id || '')),
+    );
   }, [isRfq, rfqSource]);
 
   // Extract Initial Quote (Quote 1) mapping per line
