@@ -73,6 +73,10 @@ function splitArgumentsByLength(args, maxLength) {
   return batches;
 }
 
+function toJestPath(file) {
+  return file.split(path.sep).join('/');
+}
+
 try {
   const tracked = git(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--']);
   const untracked = git(['ls-files', '--others', '--exclude-standard']);
@@ -109,6 +113,8 @@ try {
     const sourceFiles = relativeFiles.filter((file) => /^src[\\/]/.test(file)
       && codeExtensions.has(path.extname(file).toLowerCase())
       && !testFilePattern.test(file.split(path.sep).join('/')));
+    const jestTestFiles = testFiles.map(toJestPath);
+    const jestSourceFiles = sourceFiles.map(toJestPath);
 
     for (const lintBatch of splitArgumentsByLength(lintFiles, MAX_COMMAND_ARGUMENT_CHARS)) {
       npmRun(project, 'lint', lintBatch);
@@ -118,14 +124,14 @@ try {
     if (relativeFiles.some((file) => /^src[\\/]app[\\/]api[\\/]/.test(file)
       || file === 'scripts/check-d1-mutation-boundaries.cjs'
       || file === 'package.json')) npmRun(project, 'check:architecture');
-    const testInputFiles = [...new Set([...testFiles, ...sourceFiles])];
+    const testInputFiles = [...new Set([...jestTestFiles, ...jestSourceFiles])];
     const testInputLength = testInputFiles.reduce((length, file) => length + file.length + 1, 0);
     if (testInputLength > MAX_COMMAND_ARGUMENT_CHARS) {
       process.stdout.write('Changed test/source paths exceed the shell argument limit; running the complete unit suite once.\n');
       npmRun(project, 'test', ['--passWithNoTests']);
     } else {
-      if (testFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--runTestsByPath', ...testFiles]);
-      if (sourceFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--findRelatedTests', ...sourceFiles, '--passWithNoTests']);
+      if (jestTestFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--runTestsByPath', ...jestTestFiles]);
+      if (jestSourceFiles.length) npmRun(project, 'test', ['--runInBand', '--detectOpenHandles', '--findRelatedTests', ...jestSourceFiles, '--passWithNoTests']);
     }
   }
 
