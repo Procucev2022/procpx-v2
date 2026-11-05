@@ -1364,6 +1364,7 @@ model VendorRateCardItem {
   rateCard          VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, isActive, rateCardId], map: "vendor_rate_card_items_tenant_active_card_idx")
+  @@index([tenantId, rateCardId], map: "vendor_rate_card_items_tenant_card_idx")
   @@map("vendor_rate_card_items")
 }
 

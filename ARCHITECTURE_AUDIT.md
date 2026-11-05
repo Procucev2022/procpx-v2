@@ -139,6 +139,12 @@ The current local database is a Wrangler D1 SQLite state. The Prisma SQLite prov
 - Shared `parseStoredJsonObject` now distinguishes absent values, valid objects, and malformed/non-object JSON. Read paths retain their safe legacy-field fallback and emit one structured warning with bounded record IDs/field names. Workflow write paths and finance activation log `rate_card.workflow_metadata_invalid` and stop before the D1 batch when persisted JSON cannot be parsed. Error responses no longer expose raw database exception text.
 - Regression tests cover preserved metadata, read fallback diagnostics, failed-closed vendor/buyer updates, and blocked finance activation. No schema migration or D1 row changes were made for this repair.
 
+### Rate-card register item fan-out
+
+- The paginated rate-card register and approval queue previously loaded every child item for every card, up to 200 items per card, even though list rows need counts and buyer/vendor amount summaries. The list API now reads only the current card page plus a tenant-scoped D1 aggregate for item count and offer totals; the register consumes those totals, and full item details remain on the detail endpoint.
+- Migration 0026 adds `(tenantId, rateCardId)` to support page-card item aggregation. The index is additive. Before the local migration, `vendor_rate_cards` and `vendor_rate_card_items` each had zero rows and no IDs to preserve. Post-change local integrity remains 44 tables and 493 records with no duplicate, foreign-key, or cross-tenant violations. Local `EXPLAIN QUERY PLAN` confirms the aggregate's item lookup uses `vendor_rate_card_items_tenant_card_idx`. No remote migration ran.
+- Regression coverage verifies the tenant-bound aggregate, summary totals, invalid comparison metadata diagnostics, and that list responses omit child item payloads. Approval detail still loads its line items on demand.
+
 ### PPO register projection
 
 - The buyer PPO register previously selected RFQ lines, full cost centres, award recommendation details, and rating data that the list screen did not display. Those expansions were removed or narrowed to the fields actually used for the register, reducing D1 row transfer and Worker object allocation on each page.

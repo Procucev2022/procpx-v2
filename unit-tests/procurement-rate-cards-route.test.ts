@@ -12,6 +12,7 @@ import { UI_STRINGS } from '../src/lib/ui-strings.constants';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     vendorRateCard: { findMany: jest.fn(), count: jest.fn(), groupBy: jest.fn(), findFirst: jest.fn() },
     vendor: { findFirst: jest.fn() },
   },
@@ -27,6 +28,7 @@ jest.mock('../src/lib/notifications', () => ({ dispatchPreparedWorkflowNotificat
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
+const rawQuery = (prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const successResult = apiSuccess as jest.Mock;
@@ -57,6 +59,7 @@ describe('procurement rate cards route', () => {
     db.vendorRateCard.findMany.mockResolvedValue([]);
     db.vendorRateCard.count.mockResolvedValue(0);
     db.vendorRateCard.groupBy.mockResolvedValue([]);
+    rawQuery.mockResolvedValue([]);
     db.vendorRateCard.findFirst.mockResolvedValue({
       id: 'rate-card-1', tenantId: 'tenant-1', vendorId: 'vendor-1', rateCardNumber: `VRC-${new Date().getFullYear()}-000001`,
       vendor: { id: 'vendor-1', code: 'V-1', name: 'Northwind Electrical' }, items: [], approvals: [],
@@ -92,21 +95,22 @@ describe('procurement rate cards route', () => {
       {
         id: 'approved-1', status: 'APPROVED', validFrom: new Date('2020-01-01'), validTo: new Date('2099-01-01'),
         notes: JSON.stringify({ agreement: 'Signed framework' }),
-        items: [{
-          comparisonRef: JSON.stringify({ buyerOffer1: 80, vendorQuote1: 85, buyerOffer2: 78, vendorQuote2: 83, finalAgreedRate: 75, previousPpoRate: 70, referenceQty: 4, remarks: 'approved quote' }),
-          rate: 90, proposedRate: 95, historicalRate: 72, minQuantity: 2, benchmarkRate: 100,
-        }],
       },
       {
         id: 'expired-1', status: 'EXPIRED', validFrom: new Date('2020-01-01'), validTo: new Date('2020-02-01'),
-        notes: '{invalid', items: [{ comparisonRef: '{invalid', rate: 50, proposedRate: 55, historicalRate: 45, minQuantity: 0, benchmarkRate: 0 }],
+        notes: '{invalid',
       },
       {
         id: 'draft-1', status: 'DRAFT', validFrom: new Date('2099-01-01'), validTo: new Date('2099-02-01'),
-        notes: null, items: [],
+        notes: null,
       },
     ];
     db.vendorRateCard.findMany.mockResolvedValue(cards);
+    rawQuery.mockResolvedValueOnce([
+      { rateCardId: 'approved-1', itemCount: 1, totalBuyerOffer: 312, totalVendorQuote: 332, invalidComparisonRefCount: 0 },
+      { rateCardId: 'expired-1', itemCount: 1, totalBuyerOffer: 50, totalVendorQuote: 55, invalidComparisonRefCount: 1 },
+      { rateCardId: 'draft-1', itemCount: 0, totalBuyerOffer: 0, totalVendorQuote: 0, invalidComparisonRefCount: 0 },
+    ]);
     db.vendorRateCard.count.mockResolvedValue(12);
     db.vendorRateCard.groupBy.mockResolvedValue([
       { status: 'APPROVED', _count: { _all: 3 } },
@@ -132,16 +136,20 @@ describe('procurement rate cards route', () => {
     }));
     const listInclude = db.vendorRateCard.findMany.mock.calls.at(-1)?.[0]?.include;
     expect(listInclude).not.toHaveProperty('approvals');
-    expect(listInclude.items.select).toEqual({
-      id: true, rate: true, proposedRate: true, historicalRate: true,
-      benchmarkRate: true, minQuantity: true, comparisonRef: true,
-    });
+    expect(listInclude).not.toHaveProperty('items');
     const data = (result as any).data.rateCards;
-    expect(data[0]).toMatchObject({ isValid: true, isExpired: false, itemCount: 1, agreement: 'Signed framework' });
-    expect(data[0].items[0]).toMatchObject({ buyerOffer1: 80, vendorQuote1: 85, buyerOffer2: 78, vendorQuote2: 83, finalAgreedRate: 75, previousPpoRate: 70, referenceQty: 4, remarks: 'approved quote', variance: -10 });
-    expect(data[1]).toMatchObject({ isValid: false, isExpired: true, agreement: null });
-    expect(data[1].items[0]).toMatchObject({ buyerOffer1: 50, vendorQuote1: 55, buyerOffer2: null, vendorQuote2: null, finalAgreedRate: null, previousPpoRate: 45, referenceQty: 1, remarks: '', variance: 0 });
+    expect(data[0]).toMatchObject({ isValid: true, isExpired: false, itemCount: 1, totalBuyerOffer: 312, totalVendorQuote: 332, agreement: 'Signed framework' });
+    expect(data[0]).not.toHaveProperty('items');
+    expect(data[1]).toMatchObject({ isValid: false, isExpired: true, itemCount: 1, totalBuyerOffer: 50, totalVendorQuote: 55, agreement: null });
     expect(data[2]).toMatchObject({ isValid: false, isExpired: false, itemCount: 0, agreement: null });
+    const summaryQuery = rawQuery.mock.calls.at(-1)?.[0] as { sql: string; values: unknown[] };
+    expect(summaryQuery.sql).toContain('COUNT("itemId") AS "itemCount"');
+    expect(summaryQuery.sql).toContain('json_extract("metadata", \'$.buyerOffer2\')');
+    expect(summaryQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'approved-1', 'expired-1', 'draft-1']));
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'rate_card.stored_metadata_invalid', expect.objectContaining({
+      invalidItemMetadataCount: 1,
+      invalidFields: expect.arrayContaining([expect.objectContaining({ rateCardId: 'expired-1', field: 'comparisonRef', affectedRecordCount: 1 })]),
+    }));
     expect(successResult).toHaveBeenCalledWith(expect.objectContaining({ total: 12, page: 1, totalPages: 4 }));
   });
 
@@ -156,6 +164,10 @@ describe('procurement rate cards route', () => {
     db.vendorRateCard.findMany.mockRejectedValueOnce(new Error('query failed'));
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCards, status: 500 });
     expect(errorResult).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToFetchRateCards, 500);
+
+    db.vendorRateCard.findMany.mockResolvedValueOnce([{ id: 'rate-card-1' }]);
+    rawQuery.mockRejectedValueOnce(new Error('item summary query failed'));
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCards, status: 500 });
   });
 
   it('creates draft cards with normalized defaults and all item comparison fallbacks', async () => {

@@ -1,3 +1,11 @@
+export interface RateCardListSummaryRow {
+  rateCardId: string;
+  itemCount: number | bigint;
+  totalBuyerOffer: number | bigint | null;
+  totalVendorQuote: number | bigint | null;
+  invalidComparisonRefCount: number | bigint | null;
+}
+
 export interface RateCardDetailItemInput {
   id?: string;
   description?: string;

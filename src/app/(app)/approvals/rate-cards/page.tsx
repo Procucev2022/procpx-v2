@@ -492,7 +492,7 @@ export default function RateCardApprovalsPage() {
                     </td>
 
                     <td style={{ width: 75, textAlign: 'right', fontWeight: 600 }}>
-                      {rc.items?.length || 0}
+                      {rc.itemCount || rc.items?.length || 0}
                     </td>
 
                     <td style={{ width: 160, overflow: 'hidden' }}>

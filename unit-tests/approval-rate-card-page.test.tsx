@@ -50,7 +50,7 @@ function setupFetch(overrides: Record<string, (url: string, init?: RequestInit) 
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
     if (url === '/api/auth/me') return Promise.resolve(reply({ user: { role: 'FINANCE_HEAD' } }));
     if (url === '/api/procurement/rate-cards' || url.startsWith('/api/procurement/rate-cards?')) return Promise.resolve(reply({ rateCards: rows.map((row) => {
-      return Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'approvals'));
+      return { ...Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'approvals')), itemCount: row.items?.length || 0 };
     }), summary: { level1Pending: 1, level2Pending: 1 } }));
     const handler = Object.entries(overrides).find(([path]) => url === path || url.startsWith(path))?.[1];
     if (handler) return Promise.resolve(handler(url, init));
@@ -90,6 +90,7 @@ describe('rate card approvals queue', () => {
     render(<RateCardApprovalsPage />);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadingApprovalsQueue))).toBeInTheDocument();
     expect(await screen.findByText('RC-1')).toBeInTheDocument();
+    expect(within(screen.getByText('RC-1').closest('tr')!).getByText(String(cardOne.items.length))).toBeInTheDocument();
     expect(screen.getByTestId('section-six')).toHaveAttribute('data-role', 'FINANCE_APPROVER');
     expect(screen.getByText('2 Pending Approval')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.awaitingLevel1Review))).toBeInTheDocument();

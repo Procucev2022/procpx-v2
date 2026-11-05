@@ -208,17 +208,19 @@ export default function RateCardManagementPage() {
 
         const displayStatus: RateCardRow['status'] = isActive ? 'Active' : 'In Progress';
 
-        const totalBuyerOffer = (rc.items || []).reduce((sum, it) => {
+        const buyerOfferFromItems = (rc.items || []).reduce((sum, it) => {
           const offer = Number(it.buyerOffer2 ?? it.buyerOffer1 ?? it.rate ?? 0);
           const qty = Number(it.referenceQty ?? it.qty ?? 1);
           return sum + (offer * qty);
         }, 0);
 
-        const totalVendorQuote = (rc.items || []).reduce((sum, it) => {
+        const vendorQuoteFromItems = (rc.items || []).reduce((sum, it) => {
           const quote = Number(it.vendorQuote2 ?? it.vendorQuote1 ?? it.proposedRate ?? 0);
           const qty = Number(it.referenceQty ?? it.qty ?? 1);
           return sum + (quote * qty);
         }, 0);
+        const totalBuyerOffer = Number(rc.totalBuyerOffer ?? buyerOfferFromItems);
+        const totalVendorQuote = Number(rc.totalVendorQuote ?? vendorQuoteFromItems);
 
         const stageText = status === 'ROUND_2_NEGOTIATION'
           ? 'Round 2 Negotiation'

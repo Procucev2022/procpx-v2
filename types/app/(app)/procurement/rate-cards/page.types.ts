@@ -34,6 +34,8 @@ export interface RateCardPageRecord {
   category?: string | null;
   scope?: string | null;
   itemCount?: number | null;
+  totalBuyerOffer?: number | null;
+  totalVendorQuote?: number | null;
   validFrom?: string | Date | null;
   validTo?: string | Date | null;
   updatedAt?: string | Date | null;

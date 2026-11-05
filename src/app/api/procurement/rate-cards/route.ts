@@ -1,6 +1,7 @@
 // src/app/api/procurement/rate-cards/route.ts
 // Vendor Rate Card Management & Approved Catalogues
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
@@ -16,6 +17,7 @@ import { dispatchPreparedWorkflowNotification } from '@/lib/notifications';
 import { prepareRateCardNotificationOutbox } from '@/lib/notification-outbox';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { parseStoredJsonObject } from '@/lib/rate-card-utils';
+import type { RateCardListSummaryRow } from '@app-types/app/api/procurement/rate-card-detail.types';
 import {
   MAX_RATE_CARD_NOTES_LENGTH,
   MAX_RATE_CARD_TERMS_LENGTH,
@@ -86,17 +88,6 @@ export async function GET(req: NextRequest) {
             performanceScore: true,
           },
         },
-        items: {
-          select: {
-            id: true,
-            rate: true,
-            proposedRate: true,
-            historicalRate: true,
-            benchmarkRate: true,
-            minQuantity: true,
-            comparisonRef: true,
-          },
-        },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * pageSize,
@@ -109,29 +100,58 @@ export async function GET(req: NextRequest) {
       prisma.vendorRateCard.groupBy({ by: ['status'], where: summaryWhere, _count: { _all: true } }),
     ]);
 
+    const listSummaries = rateCards.length > 0
+      ? await prisma.$queryRaw<RateCardListSummaryRow[]>(Prisma.sql`
+        WITH page_cards AS (
+          SELECT "id", "tenantId"
+          FROM "vendor_rate_cards"
+          WHERE "tenantId" = ${ctx.tenantId}
+            AND "id" IN (${Prisma.join(rateCards.map((rateCard) => rateCard.id))})
+        ), page_items AS (
+          SELECT card."id" AS "rateCardId", item."id" AS "itemId", item."rate", item."proposedRate", item."minQuantity",
+            CASE
+              WHEN item."comparisonRef" IS NULL OR item."comparisonRef" = '' THEN NULL
+              WHEN json_valid(item."comparisonRef") = 0 THEN NULL
+              WHEN json_type(item."comparisonRef") <> 'object' THEN NULL
+              ELSE item."comparisonRef"
+            END AS "metadata",
+            CASE
+              WHEN item."comparisonRef" IS NULL OR item."comparisonRef" = '' THEN 0
+              WHEN json_valid(item."comparisonRef") = 0 THEN 1
+              WHEN json_type(item."comparisonRef") <> 'object' THEN 1
+              ELSE 0
+            END AS "invalidMetadata"
+          FROM page_cards AS card
+          LEFT JOIN "vendor_rate_card_items" AS item
+            ON item."rateCardId" = card."id" AND item."tenantId" = card."tenantId"
+        )
+        SELECT "rateCardId", COUNT("itemId") AS "itemCount",
+          COALESCE(SUM(
+            COALESCE(json_extract("metadata", '$.buyerOffer2'), json_extract("metadata", '$.buyerOffer1'), "rate", 0)
+            * COALESCE(json_extract("metadata", '$.referenceQty'), NULLIF("minQuantity", 0), 1)
+          ), 0) AS "totalBuyerOffer",
+          COALESCE(SUM(
+            COALESCE(json_extract("metadata", '$.vendorQuote2'), json_extract("metadata", '$.vendorQuote1'), "proposedRate", "rate", 0)
+            * COALESCE(json_extract("metadata", '$.referenceQty'), NULLIF("minQuantity", 0), 1)
+          ), 0) AS "totalVendorQuote",
+          COALESCE(SUM("invalidMetadata"), 0) AS "invalidComparisonRefCount"
+        FROM page_items
+        GROUP BY "rateCardId"
+        ORDER BY "rateCardId" ASC
+      `)
+      : [];
+    const listSummaryById = new Map(listSummaries.map((summary) => [summary.rateCardId, summary]));
+
     const now = new Date();
-    const invalidStoredFields: Array<{ rateCardId: string; recordId: string; field: string }> = [];
+    const invalidStoredFields: Array<{ rateCardId: string; recordId: string; field: string; affectedRecordCount?: number }> = [];
     const formatted = rateCards.map((rc: any) => {
+      const summary = listSummaryById.get(rc.id);
+      const invalidComparisonRefCount = Number(summary?.invalidComparisonRefCount || 0);
+      if (invalidComparisonRefCount > 0) {
+        invalidStoredFields.push({ rateCardId: rc.id, recordId: rc.id, field: 'comparisonRef', affectedRecordCount: invalidComparisonRefCount });
+      }
       const isValid = rc.status === 'APPROVED' && rc.validFrom <= now && rc.validTo >= now;
       const isExpired = rc.validTo < now || rc.status === 'EXPIRED';
-
-      const enrichedItems = (rc.items || []).map((it: any) => {
-        const parsedMeta = parseStoredJsonObject(it.comparisonRef);
-        if (it.comparisonRef && !parsedMeta) invalidStoredFields.push({ rateCardId: rc.id, recordId: it.id, field: 'comparisonRef' });
-        const meta = parsedMeta || {};
-        return {
-          ...it,
-          buyerOffer1: meta.buyerOffer1 !== undefined ? meta.buyerOffer1 : it.rate,
-          vendorQuote1: meta.vendorQuote1 !== undefined ? meta.vendorQuote1 : it.proposedRate,
-          buyerOffer2: meta.buyerOffer2 !== undefined ? meta.buyerOffer2 : null,
-          vendorQuote2: meta.vendorQuote2 !== undefined ? meta.vendorQuote2 : null,
-          finalAgreedRate: meta.finalAgreedRate !== undefined ? meta.finalAgreedRate : (rc.status === 'APPROVED' || rc.status === 'FINAL_VENDOR_OFFER_ACCEPTED' ? it.rate : null),
-          previousPpoRate: meta.previousPpoRate !== undefined ? meta.previousPpoRate : it.historicalRate,
-          referenceQty: meta.referenceQty !== undefined ? meta.referenceQty : (it.minQuantity || 1),
-          remarks: meta.remarks || '',
-          variance: it.benchmarkRate ? Math.round(((it.rate - it.benchmarkRate) / it.benchmarkRate) * 100) : 0,
-        };
-      });
 
       const parsedNotes = parseStoredJsonObject(rc.notes);
       if (rc.notes && !parsedNotes) invalidStoredFields.push({ rateCardId: rc.id, recordId: rc.id, field: 'notes' });
@@ -141,8 +161,9 @@ export async function GET(req: NextRequest) {
         ...rc,
         isValid,
         isExpired,
-        items: enrichedItems,
-        itemCount: rc.items.length,
+        itemCount: Number(summary?.itemCount || 0),
+        totalBuyerOffer: Number(summary?.totalBuyerOffer || 0),
+        totalVendorQuote: Number(summary?.totalVendorQuote || 0),
         agreement: notesData.agreement || null,
       };
     });
@@ -151,7 +172,9 @@ export async function GET(req: NextRequest) {
       await writeStructuredLog('warn', 'rate_card.stored_metadata_invalid', {
         operation: 'list_rate_cards', route: '/api/procurement/rate-cards',
         requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
-        invalidFieldCount: invalidStoredFields.length, invalidFields: invalidStoredFields.slice(0, 20),
+        invalidFieldCount: invalidStoredFields.length,
+        invalidItemMetadataCount: invalidStoredFields.reduce((count, field) => count + (field.affectedRecordCount || 0), 0),
+        invalidFields: invalidStoredFields.slice(0, 20),
       });
     }
 
