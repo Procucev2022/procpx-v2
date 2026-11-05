@@ -2,13 +2,13 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
+Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
 
 | Overall | Coverage |
 | --- | ---: |
 | statements | 98.73% (95775/97002) |
-| branches | 90.95% (20643/22696) |
-| functions | 97.80% (1824/1865) |
+| branches | 90.98% (20660/22707) |
+| functions | 97.85% (1825/1865) |
 | lines | 98.73% (95775/97002) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
@@ -56,7 +56,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/(app)/procurement/ppos/page.tsx` | 100.00% | 95.19% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/quotes/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rate-cards/page.tsx` | 94.81% | 62.56% | 92.30% | 94.81% | BELOW 90% |
-| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.32% | 88.85% | 91.37% | 98.32% | BELOW 90% |
+| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.32% | 90.04% | 93.10% | 98.32% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 98.31% | 89.43% | 92.64% | 98.31% | BELOW 90% |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
@@ -278,7 +278,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.24% | 92.85% | 99.18% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.18% | 94.23% | 92.85% | 99.18% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 99.64% | 88.00% | 96.77% | 99.64% | BELOW 90% |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

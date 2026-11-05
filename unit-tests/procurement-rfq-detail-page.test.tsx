@@ -126,6 +126,78 @@ describe('RFQ detail lifecycle page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-history?includeNegotiationHistory=true'));
     expect(await screen.findByTestId('commercial-workspace')).toHaveTextContent('RFQ-HISTORY-1');
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copy1v8aisw, '', false) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) }));
+    expect(mockFetch.mock.calls.filter(([url]) => url === '/api/procurement/rfqs/rfq-history?includeNegotiationHistory=true')).toHaveLength(1);
+  });
+
+  it('retries full history after an empty response and a request failure', async () => {
+    const rfq = {
+      id: 'rfq-history-retry', rfqNumber: 'RFQ-HISTORY-RETRY', title: 'History retry', status: 'COMPARISON',
+      lines: [], invitedVendors: [], quotes: [], negotiations: [{ id: 'neg-1', currentRound: 1 }], awards: [], ppos: [],
+    };
+    let historyRequests = 0;
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSearchParams.mockReturnValue(paramsFor());
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/auth/session') return { ok: true, json: async () => ({ user: { role: 'BUYER' } }) };
+      if (url === '/api/procurement/rfqs/rfq-history-retry') return { ok: true, json: async () => ({ rfq }) };
+      if (url === '/api/procurement/rfqs/rfq-history-retry?includeNegotiationHistory=true') {
+        historyRequests += 1;
+        if (historyRequests === 1) return { ok: true, json: async () => ({}) };
+        throw new Error('Negotiation history unavailable');
+      }
+      if (url === '/api/procurement/rfqs/rfq-history-retry/compare') return { ok: true, json: async () => ({ vendors: [], lines: [] }) };
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-history-retry&page=1') return { ok: true, json: async () => ({ matchedRateCards: [] }) };
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderRfq('rfq-history-retry');
+    expect(await screen.findByRole('heading', { name: 'History retry' })).toBeInTheDocument();
+    const negotiationTab = () => screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) });
+    const quotesTab = () => screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copy1v8aisw, '', false) });
+
+    fireEvent.click(negotiationTab());
+    await waitFor(() => expect(historyRequests).toBe(1));
+    fireEvent.click(quotesTab());
+    fireEvent.click(negotiationTab());
+    await waitFor(() => expect(historyRequests).toBe(2));
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Failed to load RFQ:', expect.any(Error)));
+    errorSpy.mockRestore();
+  });
+
+  it('appends paginated rate cards when the first result has no rows or aggregate count', async () => {
+    const rfq = {
+      id: 'rfq-rate-card-page', rfqNumber: 'RFQ-RATE-PAGE', title: 'Rate card page', status: 'COMPARISON',
+      lines: [], invitedVendors: [], quotes: [], negotiations: [{ id: 'neg-1', currentRound: 1, rounds: [] }], awards: [], ppos: [],
+    };
+    const secondPageCard = {
+      rateCardId: 'rate-card-page-two', rateCardNumber: 'RC-PAGE-2', title: 'Page two rate card', category: 'Electrical',
+      directPpoEligible: false, rateCardTotalValue: 100, totalSavings: 0, savingsPercent: 0,
+      validFrom: '2026-01-01', validTo: '2026-12-31', matchedItemsCount: 1, totalItemsCount: 1, coveragePercent: 100,
+      vendor: { name: 'Page Two Vendor', qualificationStatus: 'QUALIFIED', performanceScore: 90 },
+    };
+    const reply = (body: unknown) => ({ ok: true, json: async () => body });
+    mockSearchParams.mockReturnValue(paramsFor());
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/auth/session') return reply({ user: { role: 'BUYER' } });
+      if (url === '/api/procurement/rfqs/rfq-rate-card-page') return reply({ rfq });
+      if (url === '/api/procurement/rfqs/rfq-rate-card-page?includeNegotiationHistory=true') return reply({ rfq });
+      if (url === '/api/procurement/rfqs/rfq-rate-card-page/compare') return reply({ vendors: [], lines: [] });
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-rate-card-page&page=1') return reply({ page: 1, hasMore: true });
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-rate-card-page&page=2') return reply({ matchedRateCards: [secondPageCard], page: 2, hasMore: false });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderRfq('rfq-rate-card-page');
+    expect(await screen.findByRole('heading', { name: 'Rate card page' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-rate-card-page?includeNegotiationHistory=true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open rate cards' }));
+    const rateCardDialog = screen.getByRole('dialog', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.approvedVendorRateCardSourcingComparison) });
+    fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await within(rateCardDialog).findByText(/Page two rate card/)).toBeInTheDocument();
   });
 
   it('records a manual demonstration quote and creates a direct rate-card PPO', async () => {
@@ -274,6 +346,7 @@ describe('RFQ detail lifecycle page', () => {
         vendor: { name: 'Blocked Vendor' },
       },
     ];
+    const nextPageRateCard = { ...matchedRateCards[1], rateCardId: 'rate-card-blocked-next', title: 'Next blocked cable rate' };
     let releaseFails = true;
     let quoteFails = true;
     let awardFails = true;
@@ -284,7 +357,12 @@ describe('RFQ detail lifecycle page', () => {
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/auth/session') return reply({ user: { role: 'FINANCE_APPROVER' } });
       if (url === '/api/procurement/rfqs/rfq-live/compare') return reply(comparison);
-      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-live&page=1') return reply({ matchedRateCards });
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-live&page=1') {
+        return reply({ matchedRateCards, page: 1, hasMore: true, eligibleCount: 2 });
+      }
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-live&page=2') {
+        return reply({ matchedRateCards: [matchedRateCards[0], nextPageRateCard], page: 2, hasMore: false, eligibleCount: 1 });
+      }
       if (url === '/api/procurement/rfqs/rfq-live' && init?.method === 'PUT') {
         if (releaseFails) {
           releaseFails = false;
@@ -293,7 +371,7 @@ describe('RFQ detail lifecycle page', () => {
         liveRfq = { ...liveRfq, status: 'VENDOR_RESPONSE_OPEN' };
         return reply({});
       }
-      if (url === '/api/procurement/rfqs/rfq-live') return reply({ rfq: liveRfq });
+      if (url === '/api/procurement/rfqs/rfq-live' || url === '/api/procurement/rfqs/rfq-live?includeNegotiationHistory=true') return reply({ rfq: liveRfq });
       if (url === '/api/procurement/quotes' && init?.method === 'POST') {
         if (quoteFails) {
           quoteFails = false;
@@ -443,6 +521,9 @@ describe('RFQ detail lifecycle page', () => {
     expect(within(rateCardDialog).getByText('Coverage is incomplete')).toBeInTheDocument();
     expect(within(rateCardDialog).getByText('0/100')).toBeInTheDocument();
     expect(within(rateCardDialog).getByText(uiStringPattern(UI_STRINGS.common.notAvailable))).toBeInTheDocument();
+    fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await within(rateCardDialog).findByText(/Next blocked cable rate/)).toBeInTheDocument();
+    expect(within(rateCardDialog).getAllByText(/Approved Cable Rates/)).toHaveLength(1);
     (window.confirm as jest.Mock).mockReturnValueOnce(false);
     fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
     fireEvent.click(within(rateCardDialog).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"Direct PPO from Rate Card"})) }));
