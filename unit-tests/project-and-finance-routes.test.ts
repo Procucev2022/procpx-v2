@@ -434,6 +434,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     await expect(addRateCardMessage(request({ message: '  Please confirm lead time  ' }), cardParams())).resolves.toMatchObject({
       ok: true, data: { approvalEntry: { id: 'message-1' } },
     });
+    expect(db.vendorRateCard.findUnique).toHaveBeenLastCalledWith({
+      where: { id: 'rate-card-1', tenantId: 'tenant-1' },
+    });
     expect(db.rateCardApproval.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
       level: UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, approverName: UI_STRINGS.common.projectUser, approverEmail: 'user@example.test',
       action: 'CLARIFICATION_MESSAGE', remarks: 'Please confirm lead time', timestamp: expect.any(Date),
@@ -461,7 +464,33 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findUnique.mockResolvedValueOnce({ tenantId: 'tenant-1', approvals: [{ id: 'message-1' }] });
     await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({ ok: true, data: { approvals: [{ id: 'message-1' }] }, status: 200 });
-    expect(db.vendorRateCard.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ include: { approvals: { orderBy: { timestamp: 'desc' } } } }));
+    expect(db.vendorRateCard.findUnique).toHaveBeenLastCalledWith({
+      where: { id: 'rate-card-1', tenantId: 'tenant-1' },
+      include: { approvals: { orderBy: { timestamp: 'desc' } } },
+    });
+
+    db.vendorRateCard.findUnique.mockRejectedValueOnce(new Error('database detail that must not reach the client'));
+    await expect(addRateCardMessage(request({ message: 'Question' }), cardParams())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToRecordMessage, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'rate_card.clarification_message_create_failed', expect.objectContaining({
+      operation: 'create_rate_card_clarification_message',
+      tenantId: 'tenant-1', userId: 'user-1', rateCardId: 'rate-card-1',
+      error: { name: 'Error' },
+    }));
+    expect(writeStructuredLog).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
+      error: expect.objectContaining({ message: expect.anything() }),
+    }));
+
+    db.vendorRateCard.findUnique.mockRejectedValueOnce(new Error('database detail that must not reach the client'));
+    await expect(getRateCardMessages(request(), cardParams())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToGetMessages, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'rate_card.clarification_messages_read_failed', expect.objectContaining({
+      operation: 'read_rate_card_clarification_messages',
+      tenantId: 'tenant-1', userId: 'user-1', rateCardId: 'rate-card-1',
+      error: { name: 'Error' },
+    }));
   });
 
   it('validates and performs finance and project budget rejections, including pending amount cleanup', async () => {
