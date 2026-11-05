@@ -14,7 +14,7 @@ import { interpolateUiString } from "@/lib/i18n";
 export default function QuotesHubPage() {
   const [quotes, setQuotes] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -22,16 +22,18 @@ export default function QuotesHubPage() {
     fetchQuotes();
   }, []);
 
-  const fetchQuotes = async (nextPage = 1, append = false) => {
+  const fetchQuotes = async (cursor: string | null = null, append = false) => {
     if (append) setLoadingMore(true);
     else setLoading(true);
     try {
-      const res = await fetch(`/api/procurement/quotes?page=${nextPage}&pageSize=50`);
+      const query = new URLSearchParams({ pagination: 'cursor', pageSize: '50' });
+      if (cursor) query.set('cursor', cursor);
+      const res = await fetch(`/api/procurement/quotes?${query.toString()}`);
       const data = await res.json();
       if (Array.isArray(data.quotes)) {
         setQuotes((current) => append ? [...current, ...data.quotes] : data.quotes);
         setTotal(Number(data.total ?? data.quotes.length));
-        setPage(Number(data.page ?? nextPage));
+        setNextCursor(typeof data.nextCursor === 'string' ? data.nextCursor : null);
       }
     } catch (err) {
       console.error(err);
@@ -134,9 +136,9 @@ export default function QuotesHubPage() {
               </tbody>
             </table>
           </div>
-          {quotes.length < total && (
+          {nextCursor && (
             <div style={{ padding: 16, textAlign: 'center' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => fetchQuotes(page + 1, true)} disabled={loadingMore}>
+              <button type="button" className="btn btn-secondary" onClick={() => fetchQuotes(nextCursor, true)} disabled={loadingMore}>
                 {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
               </button>
             </div>

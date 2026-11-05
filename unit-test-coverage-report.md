@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
+Files included: **316**. Files meeting all four 90% thresholds: **266/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.73% (95884/97111) |
-| branches | 90.98% (20653/22699) |
+| statements | 98.73% (95909/97136) |
+| branches | 90.99% (20672/22718) |
 | functions | 97.85% (1825/1865) |
-| lines | 98.73% (95884/97111) |
+| lines | 98.73% (95909/97136) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -189,7 +189,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **265/316**.
 | `src/app/api/procurement/ppos/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/ppos/route.ts` | 91.66% | 82.77% | 100.00% | 91.66% | BELOW 90% |
 | `src/app/api/procurement/ppos/vendor-action.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/quotes/route.ts` | 95.35% | 88.70% | 100.00% | 95.35% | BELOW 90% |
+| `src/app/api/procurement/quotes/route.ts` | 95.66% | 90.07% | 100.00% | 95.66% | PASS |
 | `src/app/api/procurement/rate-cards/[id]/approve/route.ts` | 100.00% | 87.27% | 100.00% | 100.00% | BELOW 90% |
 | `src/app/api/procurement/rate-cards/[id]/message/route.ts` | 93.02% | 90.47% | 100.00% | 93.02% | PASS |
 | `src/app/api/procurement/rate-cards/[id]/reject/route.ts` | 100.00% | 96.29% | 100.00% | 100.00% | PASS |

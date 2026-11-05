@@ -185,11 +185,11 @@ describe('procurement register pages', () => {
 
   it('loads later quote, negotiation, and award pages without dropping earlier records', async () => {
     (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 1, quotes: [{
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 1, nextCursor: 'quote-first', hasMore: true, quotes: [{
         id: 'quote-first', quoteNumber: 'QT-FIRST', vendor: { name: 'Acme' }, rfqId: 'rfq-1', rfq: { rfqNumber: 'RFQ-001' },
         quoteVersion: 1, totalBaseAmount: 10, taxAmount: 0, totalQuoteAmount: 10, createdAt: '2025-01-01T00:00:00Z',
       }] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 2, quotes: [{
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 51, page: 1, nextCursor: null, hasMore: false, quotes: [{
         id: 'quote-second', quoteNumber: 'QT-SECOND', vendor: { name: 'Beta' }, rfqId: 'rfq-2', rfq: { rfqNumber: 'RFQ-002' },
         quoteVersion: 1, totalBaseAmount: 20, taxAmount: 0, totalQuoteAmount: 20, createdAt: '2025-01-02T00:00:00Z',
       }] }) });
@@ -198,6 +198,8 @@ describe('procurement register pages', () => {
     fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
     expect(await screen.findByText('QT-SECOND')).toBeInTheDocument();
     expect(screen.getByText('QT-FIRST')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenNthCalledWith(1, '/api/procurement/quotes?pagination=cursor&pageSize=50');
+    expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/procurement/quotes?pagination=cursor&pageSize=50&cursor=quote-first');
     quotesView.unmount();
 
     (global.fetch as jest.Mock)

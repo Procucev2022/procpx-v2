@@ -575,6 +575,7 @@ model Quote {
 
   @@unique([rfqId, vendorId, quoteVersion])
   @@index([tenantId, quoteNumber])
+  @@index([tenantId, createdAt, id], map: "quotes_tenant_created_id_idx")
   @@map("quotes")
 }
 

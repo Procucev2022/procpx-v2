@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const rfqId = searchParams.get('rfqId');
   const vendorId = searchParams.get('vendorId');
+  const cursorId = searchParams.get('cursor');
+  const useCursorPagination = searchParams.get('pagination') === 'cursor' || cursorId !== null;
   const { page, pageSize, skip } = getListPageWindow(searchParams);
   const startedAt = Date.now();
 
@@ -32,23 +34,44 @@ export async function GET(req: NextRequest) {
     if (rfqId) where.rfqId = rfqId;
     if (vendorId) where.vendorId = vendorId;
 
+    if (cursorId !== null) {
+      if (!cursorId || !(await prisma.quote.findFirst({
+        where: { ...where, id: cursorId },
+        select: { id: true },
+      }))) {
+        return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      }
+    }
+
     const include = {
       vendor: { select: { id: true, name: true, code: true } },
       rfq: { select: { id: true, rfqNumber: true, title: true, status: true } },
       ...(rfqId ? { lines: { include: { rfqLine: true } } } : {}),
     };
-    const [total, quotes] = await Promise.all([
-      prisma.quote.count({ where }),
-      prisma.quote.findMany({
+    const quoteRead = useCursorPagination
+      ? prisma.quote.findMany({
+        where,
+        include,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        ...(cursorId ? { cursor: { id: cursorId }, skip: 1 as const } : {}),
+        take: pageSize + 1,
+      })
+      : prisma.quote.findMany({
         where,
         include,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: pageSize,
-      }),
-    ]);
+      });
+    const [total, quoteRows] = await Promise.all([prisma.quote.count({ where }), quoteRead]);
 
-    return apiSuccess({ quotes, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+    const hasMore = useCursorPagination
+      ? quoteRows.length > pageSize
+      : quoteRows.length > 0 && skip + quoteRows.length < total;
+    const quotes = useCursorPagination ? quoteRows.slice(0, pageSize) : quoteRows;
+    const nextCursor = hasMore && quotes.length > 0 ? quotes[quotes.length - 1].id : null;
+
+    return apiSuccess({ quotes, total, page, pageSize, totalPages: Math.ceil(total / pageSize), nextCursor, hasMore });
   } catch (error) {
     await writeStructuredLog('error', 'procurement.quotes_read_failed', {
       operation: 'read_quotes', route: '/api/procurement/quotes',

@@ -12,7 +12,7 @@ import { NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL } from '../src/lib/not
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    quote: { findMany: jest.fn(), count: jest.fn() },
+    quote: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
     rfq: { findFirst: jest.fn() },
     rfqVendor: { findFirst: jest.fn() },
     vendor: { findFirst: jest.fn() },
@@ -67,6 +67,7 @@ describe('procurement quote routes', () => {
     errorResponse.mockImplementation((error: string, status = 400) => ({ ok: false, error, status }));
     successResponse.mockImplementation((data: unknown, status = 200) => ({ ok: true, data, status }));
     db.quote.findMany.mockResolvedValue([]);
+    db.quote.findFirst.mockResolvedValue(null);
     db.quote.count.mockResolvedValue(1);
     persistedQuoteVersion = 1;
     persistedQuoteNumber = 'QTE-2026-000003';
@@ -107,7 +108,8 @@ describe('procurement quote routes', () => {
     db.quote.findMany.mockResolvedValueOnce([{ id: 'quote-1' }]);
     db.quote.count.mockResolvedValueOnce(11);
     await expect(GET(getRequest('?rfqId=rfq-1&vendorId=vendor-1&page=2&pageSize=5'))).resolves.toEqual({
-      ok: true, data: { quotes: [{ id: 'quote-1' }], total: 11, page: 2, pageSize: 5, totalPages: 3 }, status: 200,
+      ok: true, data: { quotes: [{ id: 'quote-1' }], total: 11, page: 2, pageSize: 5, totalPages: 3,
+        nextCursor: 'quote-1', hasMore: true }, status: 200,
     });
     expect(db.quote.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1' },
@@ -123,6 +125,46 @@ describe('procurement quote routes', () => {
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchQuotes, status: 500 });
     db.quote.findMany.mockRejectedValueOnce({});
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Failed to fetch quotes', status: 500 });
+  });
+
+  it('uses tenant-scoped quote cursors for stable ledger paging and rejects invalid anchors', async () => {
+    db.quote.count.mockResolvedValueOnce(3);
+    db.quote.findFirst.mockResolvedValueOnce({ id: 'quote-cursor' });
+    db.quote.findMany.mockResolvedValueOnce([{ id: 'quote-first' }, { id: 'quote-next' }, { id: 'quote-extra' }]);
+    await expect(GET(getRequest('?pagination=cursor&rfqId=rfq-1&pageSize=2&cursor=quote-cursor'))).resolves.toEqual({
+      ok: true,
+      data: {
+        quotes: [{ id: 'quote-first' }, { id: 'quote-next' }], total: 3, page: 1, pageSize: 2, totalPages: 2,
+        nextCursor: 'quote-next', hasMore: true,
+      },
+      status: 200,
+    });
+    expect(db.quote.findFirst).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1', id: 'quote-cursor' }, select: { id: true },
+    });
+    expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1' }, cursor: { id: 'quote-cursor' }, skip: 1, take: 3,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }));
+
+    db.quote.findMany.mockResolvedValueOnce([{ id: 'quote-first' }, { id: 'quote-second' }]);
+    db.quote.count.mockResolvedValueOnce(2);
+    await expect(GET(getRequest('?pagination=cursor&pageSize=2'))).resolves.toMatchObject({
+      ok: true, data: { nextCursor: null, hasMore: false },
+    });
+    expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1' }, take: 3,
+    }));
+    expect(db.quote.findMany.mock.calls[1]?.[0]).not.toHaveProperty('skip');
+
+    db.quote.findFirst.mockResolvedValueOnce(null);
+    await expect(GET(getRequest('?pagination=cursor&cursor=other-tenant-quote'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    await expect(GET(getRequest('?pagination=cursor&cursor='))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    expect(db.quote.findMany).toHaveBeenCalledTimes(2);
   });
 
   it('validates quote fields, vendor ownership, RFQ access, invitation, status, and vendor access', async () => {
