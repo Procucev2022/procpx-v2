@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **314**. Files meeting all four 90% thresholds: **262/314**.
+Files included: **315**. Files meeting all four 90% thresholds: **263/315**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.72% (95550/96786) |
-| branches | 90.94% (20618/22670) |
-| functions | 97.79% (1822/1863) |
-| lines | 98.72% (95550/96786) |
+| statements | 98.72% (95598/96834) |
+| branches | 90.93% (20603/22656) |
+| functions | 97.80% (1823/1864) |
+| lines | 98.72% (95598/96834) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -82,7 +82,8 @@ Files included: **314**. Files meeting all four 90% thresholds: **262/314**.
 | `src/app/api/admin/users/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/admin/users/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/messages/route.ts` | 94.77% | 84.73% | 100.00% | 94.77% | BELOW 90% |
-| `src/app/api/approvals/route.ts` | 100.00% | 93.33% | 100.00% | 100.00% | PASS |
+| `src/app/api/approvals/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/approvals/route.ts` | 100.00% | 91.74% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/audit/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -306,7 +307,7 @@ Files included: **314**. Files meeting all four 90% thresholds: **262/314**.
 | `src/lib/observability/edge-logger.ts` | 94.36% | 94.73% | 100.00% | 94.36% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.94% | 95.94% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 95.77% | 100.00% | 98.94% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

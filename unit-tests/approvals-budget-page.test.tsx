@@ -92,7 +92,7 @@ describe('project budget approval workspace', () => {
     expect(await screen.findByText('BOQ-01')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.clarificationPending))).toBeInTheDocument();
     expect(screen.getByText('Electrical package')).toBeInTheDocument();
-    expect(screen.getByText('+3 more categories')).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: 3 }))).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.projectUser))).toHaveLength(2);
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
     expect(screen.getByText(/12,500/)).toBeInTheDocument();

@@ -102,7 +102,7 @@ describe('BOQ and PR approval workspace', () => {
     expect(screen.getByText('1 Inquiries')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.clarificationPending))).toBeInTheDocument();
     expect(screen.getByText('General package')).toBeInTheDocument();
-    expect(screen.getByText('+3 more categories')).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: 3 }))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.standard))).toBeInTheDocument();
     expect(screen.getByText('Mira')).toBeInTheDocument();
     expect(screen.getByText('BOQ-01')).toBeInTheDocument();
