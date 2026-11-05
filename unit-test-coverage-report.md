@@ -6,10 +6,10 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.72% (95618/96854) |
-| branches | 90.94% (20601/22652) |
+| statements | 98.72% (95643/96879) |
+| branches | 90.95% (20594/22643) |
 | functions | 97.80% (1823/1864) |
-| lines | 98.72% (95618/96854) |
+| lines | 98.72% (95643/96879) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -18,7 +18,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/(app)/admin/users/page.tsx` | 100.00% | 98.21% | 94.73% | 100.00% | PASS |
 | `src/app/(app)/approvals/boq-pr/page.tsx` | 99.25% | 91.04% | 96.55% | 99.25% | PASS |
 | `src/app/(app)/approvals/budget/page.tsx` | 99.13% | 93.79% | 95.65% | 99.13% | PASS |
-| `src/app/(app)/approvals/rate-cards/page.tsx` | 98.58% | 88.51% | 95.23% | 98.58% | BELOW 90% |
+| `src/app/(app)/approvals/rate-cards/page.tsx` | 98.58% | 88.59% | 95.23% | 98.58% | BELOW 90% |
 | `src/app/(app)/approvals/vendor-ratings/page.tsx` | 100.00% | 98.29% | 95.00% | 100.00% | PASS |
 | `src/app/(app)/audit/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/audit/page.tsx` | 100.00% | 92.30% | 100.00% | 100.00% | PASS |
@@ -55,7 +55,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/(app)/procurement/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/ppos/page.tsx` | 100.00% | 95.19% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/quotes/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/procurement/rate-cards/page.tsx` | 94.80% | 62.56% | 92.30% | 94.80% | BELOW 90% |
+| `src/app/(app)/procurement/rate-cards/page.tsx` | 94.81% | 62.56% | 92.30% | 94.81% | BELOW 90% |
 | `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.26% | 88.41% | 91.22% | 98.26% | BELOW 90% |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 98.31% | 89.43% | 92.64% | 98.31% | BELOW 90% |
@@ -201,7 +201,7 @@ Files included: **316**. Files meeting all four 90% thresholds: **264/316**.
 | `src/app/api/procurement/rate-cards/direct-ppo/route.ts` | 94.88% | 78.89% | 100.00% | 94.88% | BELOW 90% |
 | `src/app/api/procurement/rate-cards/match/route.ts` | 99.73% | 86.86% | 100.00% | 99.73% | BELOW 90% |
 | `src/app/api/procurement/rate-cards/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rate-cards/route.ts` | 97.05% | 83.33% | 100.00% | 97.05% | BELOW 90% |
+| `src/app/api/procurement/rate-cards/route.ts` | 97.22% | 83.47% | 100.00% | 97.22% | BELOW 90% |
 | `src/app/api/procurement/rfqs/[id]/compare/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.34% | 94.09% | 100.00% | 99.34% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
