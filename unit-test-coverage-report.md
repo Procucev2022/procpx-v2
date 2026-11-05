@@ -6,10 +6,10 @@ Files included: **319**. Files meeting all four 90% thresholds: **269/319**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.73% (96305/97536) |
-| branches | 90.99% (20805/22864) |
+| statements | 98.73% (96324/97557) |
+| branches | 90.98% (20812/22873) |
 | functions | 97.86% (1833/1873) |
-| lines | 98.73% (96305/97536) |
+| lines | 98.73% (96324/97557) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -196,7 +196,7 @@ Files included: **319**. Files meeting all four 90% thresholds: **269/319**.
 | `src/app/api/procurement/rate-cards/[id]/revert/route.ts` | 100.00% | 96.29% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/[id]/route.ts` | 92.66% | 75.59% | 100.00% | 92.66% | BELOW 90% |
 | `src/app/api/procurement/rate-cards/[id]/submit/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rate-cards/compare-workspace/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/procurement/rate-cards/compare-workspace/route.ts` | 99.25% | 95.55% | 100.00% | 99.25% | PASS |
 | `src/app/api/procurement/rate-cards/direct-ppo/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/direct-ppo/route.ts` | 94.88% | 78.89% | 100.00% | 94.88% | BELOW 90% |
 | `src/app/api/procurement/rate-cards/match/route.ts` | 99.73% | 86.86% | 100.00% | 99.73% | BELOW 90% |
