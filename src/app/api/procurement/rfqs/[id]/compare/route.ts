@@ -9,7 +9,7 @@ import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE_SQL } from './route.constants';
-import type { RfqCompareRateCardRow } from '@app-types/app/api/procurement/rfqs/compare.types';
+import type { RfqCompareRateCardRow, RfqLatestCompareQuoteLineRow } from '@app-types/app/api/procurement/rfqs/compare.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -121,7 +121,6 @@ export async function GET(
                 complianceStatus: true, performanceScore: true,
               },
             },
-            lines: { select: { id: true, rfqLineId: true, unitRate: true, lineTotal: true, discountPercent: true, taxPercent: true } },
           },
           orderBy: [{ quoteVersion: 'desc' }, { createdAt: 'desc' }],
         },
@@ -169,7 +168,37 @@ export async function GET(
       const sorted = [...quoteList].sort((a, b) => b.quoteVersion - a.quoteVersion);
       latestQuotesByVendor[vendorId] = sorted[0];
     }
-    const evaluatedQuotes = Object.values(latestQuotesByVendor);
+    const latestQuoteSummaries = Object.values(latestQuotesByVendor);
+    const latestQuoteIds = latestQuoteSummaries.map((quote) => quote.id);
+    const latestQuoteLineRows = latestQuoteIds.length > 0
+      ? await prisma.$queryRaw<RfqLatestCompareQuoteLineRow[]>(Prisma.sql`
+        WITH latest_quotes AS (
+          SELECT quote."tenantId", quote."rfqId", quote."vendorId",
+            MAX(quote."quoteVersion") AS "latestVersion"
+          FROM "quotes" AS quote
+          WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${id}
+          GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+        )
+        SELECT latest."id" AS "quoteId", quoteLine."id", quoteLine."rfqLineId",
+          quoteLine."unitRate", quoteLine."lineTotal", quoteLine."discountPercent", quoteLine."taxPercent"
+        FROM latest_quotes AS summary
+        INNER JOIN "quotes" AS latest
+          ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
+            AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
+        INNER JOIN "quote_lines" AS quoteLine
+          ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
+      `)
+      : [];
+    const linesByQuoteId = new Map<string, RfqLatestCompareQuoteLineRow[]>();
+    for (const line of latestQuoteLineRows) {
+      const quoteLines = linesByQuoteId.get(line.quoteId) || [];
+      quoteLines.push(line);
+      linesByQuoteId.set(line.quoteId, quoteLines);
+    }
+    const evaluatedQuotes = latestQuoteSummaries.map((quote) => ({
+      ...quote,
+      lines: linesByQuoteId.get(quote.id) || [],
+    }));
 
     // 2. Fetch historical PPO lines for baseline price comparison
     const historicalPpoLines = await prisma.ppoLine.findMany({

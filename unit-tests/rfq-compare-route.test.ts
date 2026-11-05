@@ -27,7 +27,12 @@ jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
-const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
+const db = prisma as unknown as {
+  rfq: Record<string, jest.Mock>;
+  ppoLine: Record<string, jest.Mock>;
+  vendorRateCard: Record<string, jest.Mock>;
+  $queryRaw: jest.Mock;
+};
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
@@ -88,6 +93,16 @@ const fullRfq = (overrides: Record<string, any> = {}) => {
   };
 };
 
+const latestQuoteLineRows = () => {
+  const latestByVendor = new Map<string, ReturnType<typeof fullRfq>['quotes'][number]>();
+  for (const quote of fullRfq().quotes) {
+    const latest = latestByVendor.get(quote.vendorId);
+    if (!latest || quote.quoteVersion > latest.quoteVersion) latestByVendor.set(quote.vendorId, quote);
+  }
+  return [...latestByVendor.values()].flatMap((quote) =>
+    quote.lines.map((line) => ({ quoteId: quote.id, ...line })));
+};
+
 describe('RFQ quote comparison API', () => {
   let consoleError: jest.SpyInstance;
 
@@ -103,12 +118,14 @@ describe('RFQ quote comparison API', () => {
         ppo: { ppoNumber: 'PPO-1', vendor: { name: 'Legacy Vendor' } } },
     ]);
     db.vendorRateCard.count.mockReset().mockResolvedValue(1);
-    db.$queryRaw.mockReset().mockResolvedValue([
+    db.$queryRaw.mockReset().mockImplementation((query: { sql: string }) => query.sql.includes('latest_quotes')
+      ? latestQuoteLineRows()
+      : [
       { description: ' copper cable ', rate: 85, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
         validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendorId: 'v1', vendorName: 'Vendor v1' },
       { description: 'Panel', rate: 75, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
         validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendorId: 'v1', vendorName: 'Vendor v1' },
-    ]);
+      ]);
     audit.mockReset().mockResolvedValue(undefined);
     writeBatch.mockReset().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -137,7 +154,16 @@ describe('RFQ quote comparison API', () => {
       rfqId: 'rfq-1', invalidRoundCount: 1,
     }));
     expect(db.vendorRateCard.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', status: 'APPROVED' }) }));
-    expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(db.$queryRaw).toHaveBeenCalledTimes(2);
+    const rfqQuery = db.rfq.findFirst.mock.calls[0][0];
+    expect(rfqQuery.include.quotes.select).not.toHaveProperty('lines');
+    const quoteLineQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
+    expect(quoteLineQuery).toBeDefined();
+    if (!quoteLineQuery) throw new Error('Latest quote line query was not executed');
+    expect(quoteLineQuery.sql).toContain('MAX(quote."quoteVersion") AS "latestVersion"');
+    expect(quoteLineQuery.sql).toContain('latest."quoteVersion" = summary."latestVersion"');
+    expect(quoteLineQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
+    expect(db.$queryRaw.mock.calls[0][0].sql).toContain('latest_quotes');
     expect(result).toMatchObject({ ok: true, data: {
       rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' } },
       vendors: [
@@ -166,6 +192,36 @@ describe('RFQ quote comparison API', () => {
       expect.objectContaining({ sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: expect.arrayContaining(['QUOTE_COMPARED', 'rfq-1']) }),
     ]));
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it('keeps quote history when the latest quote has no lines and captures latest-line query failures', async () => {
+    const rfqWithoutLatestLines = fullRfq({
+      status: 'COMPARISON',
+      quotes: [fullRfq().quotes[1]],
+      negotiations: [],
+      awards: [],
+    });
+    db.rfq.findFirst.mockResolvedValueOnce(rfqWithoutLatestLines);
+    db.$queryRaw.mockImplementationOnce(() => []);
+
+    const noLinesResult = await GET(request(), params());
+    expect(noLinesResult).toMatchObject({ ok: true });
+    const noLinesData = (noLinesResult as unknown as {
+      data: {
+        vendors: Array<Record<string, unknown>>;
+        lines: Array<{ vendorQuotes: Record<string, { rate: number; quoted: boolean }> }>;
+      };
+    }).data;
+    expect(noLinesData.vendors).toHaveLength(1);
+    expect(noLinesData.vendors[0]).toMatchObject({ vendorId: 'v1', completenessPercent: 0, missingLineCount: 2, isComplete: false });
+    expect(noLinesData.lines).toHaveLength(2);
+    expect(noLinesData.lines[0].vendorQuotes.v1).toMatchObject({ rate: 0, quoted: false });
+
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ status: 'COMPARISON' }));
+    db.$queryRaw.mockRejectedValueOnce(new Error('Latest quote lines unavailable'));
+    await expect(GET(request(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
+    });
   });
 
   it('uses empty comparison fallbacks, skips closed RFQ transitions, and handles failures in dependent reads', async () => {

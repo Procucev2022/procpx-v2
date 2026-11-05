@@ -9,3 +9,13 @@ export type RfqCompareRateCardRow = {
   vendorId: string;
   vendorName: string;
 };
+
+export type RfqLatestCompareQuoteLineRow = {
+  quoteId: string;
+  id: string;
+  rfqLineId: string;
+  unitRate: number;
+  lineTotal: number;
+  discountPercent: number;
+  taxPercent: number;
+};
