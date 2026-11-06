@@ -15,7 +15,7 @@ import {
   BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
   BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL,
 } from '@/lib/d1-batch.constants';
-import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
 import { DRAWING_BOQ_AUDIT_ACTION, DRAWING_BOQ_SOURCE_TYPE, MAX_DRAWING_BOQ_LINES, SUPPORTED_DRAWING_EXTENSIONS } from './route.constants';
@@ -33,10 +33,6 @@ function text(value: unknown): string {
 function isUpload(value: FormDataEntryValue | null): value is File {
   return typeof value === 'object' && value !== null && 'name' in value && 'size' in value
     && 'arrayBuffer' in value && typeof value.arrayBuffer === 'function';
-}
-
-function changed(result: D1BatchResult | undefined): number {
-  return Number(result?.meta?.changes || 0);
 }
 
 function drawingLineStatement(line: PreparedDrawingBoqLine, revisionId: string, tenantId: string, auditId: string, now: Date): D1BatchInputStatement {

@@ -7,6 +7,9 @@ import { deleteUpload, saveUpload } from '../src/lib/storage';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { UI_STRINGS } from '../src/lib/ui-strings.constants';
 import { interpolateUiString } from '../src/lib/i18n';
+import { MAX_DRAWING_BOQ_LINES } from '../src/app/api/boq/drawing-extract/route.constants';
+import { MAX_BOQ_UPLOAD_BYTES } from '../src/lib/boq-upload.constants';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -32,6 +35,7 @@ jest.mock('../src/lib/api-utils', () => ({
 jest.mock('../src/lib/drawing-parser', () => ({ processDrawingFile: jest.fn() }));
 jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn(), deleteUpload: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -42,6 +46,7 @@ const parseDrawing = processDrawingFile as jest.Mock;
 const storeUpload = saveUpload as jest.Mock;
 const removeUpload = deleteUpload as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 
 function jsonRequest(body: unknown) {
@@ -58,12 +63,12 @@ function formRequest(values: Record<string, unknown> = {}) {
   } as unknown as NextRequest;
 }
 
-function upload(name: string, type = 'application/pdf') {
+function upload(name: string, type = 'application/pdf', size?: number) {
   const bytes = Uint8Array.from([37, 80, 68, 70, 45, 49]);
   return {
     name,
     type,
-    size: bytes.byteLength,
+    size: size ?? bytes.byteLength,
     arrayBuffer: async () => bytes.buffer,
   };
 }
@@ -118,6 +123,28 @@ describe('BOQ drawing extraction route', () => {
     expect(db.project.findFirst).toHaveBeenCalledWith({ where: { id: 'foreign-project', tenantId: 'tenant-1' } });
   });
 
+  it('rejects oversized and malformed JSON draft requests before persistence', async () => {
+    const oversized = {
+      headers: { get: (name: string) => name === 'content-type' ? 'multipart/form-data' : name === 'content-length' ? String(MAX_BOQ_UPLOAD_BYTES + 65_537) : null },
+      formData: jest.fn(),
+    } as unknown as NextRequest;
+    await expect(POST(oversized)).resolves.toMatchObject({ ok: false, status: 413 });
+    expect(oversized.formData).not.toHaveBeenCalled();
+    await expect(POST(jsonRequest(null))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [null] }))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: Array.from({ length: MAX_DRAWING_BOQ_LINES + 1 }, () => ({ description: 'Line' })) }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.common.boqLineBatchLimitExceeded,
+    });
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: '   ' }] }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.common.descriptionIsRequired,
+    });
+    db.costCentre.findFirst.mockResolvedValueOnce(null);
+    await expect(POST(jsonRequest({ projectId: 'project-1', costCentreId: 'foreign-cc', lines: [{ description: 'Cable' }] }))).resolves.toMatchObject({
+      ok: false, status: 404, error: UI_STRINGS.common.costCentreNotFoundForThisProject,
+    });
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
   it('creates a draft BOQ with matched and uncertain reviewed lines', async () => {
     const lines = [
       { description: 'Cable tray', specification: 'Hot dip galvanized', category: 'ELECTRICAL', uom: 'ea', quantity: '4', confidence: 0.8, mark: 'CT-01', location: 'Roof' },
@@ -165,6 +192,25 @@ describe('BOQ drawing extraction route', () => {
     expect(statements[4].values[10]).toBe('EA');
   });
 
+  it('persists negative quantities as errors and reports a failed atomic draft invariant', async () => {
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: 'Invalid count', quantity: -2, confidence: 'unknown' }] }))).resolves.toMatchObject({
+      ok: true, data: { totalLines: 1, validLines: 0 },
+    });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ values: unknown[] }>;
+    expect(statements[3].values[25]).toBe('ERROR');
+    expect(statements[3].values[11]).toBe(-2);
+
+    writeBatch.mockImplementationOnce(async (input: Array<{ sql: string }>) => input.map((statement) => ({
+      success: statement.sql.includes('INSERT INTO "boqs"'),
+      meta: { changes: 1 },
+      ...(statement.sql.includes('INSERT INTO "boqs"') ? { results: [{ boqCode: '' }] } : {}),
+    })));
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: 'No generated code', quantity: 1 }] }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.drawing_draft_batch_invariant_failed', expect.objectContaining({ hasBoqCode: false }));
+  });
+
   it('validates multipart uploads and tenant-scoped projects', async () => {
     await expect(POST(formRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, status: 400 });
     await expect(POST(formRequest({ file: upload('plan.pdf') }))).resolves.toEqual({
@@ -179,6 +225,17 @@ describe('BOQ drawing extraction route', () => {
     });
     await expect(POST(formRequest({ file: upload('plan.'), projectId: 'project-1' }))).resolves.toMatchObject({
       ok: false, error: expect.stringContaining(interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { ext: '' })), status: 400,
+    });
+    await expect(POST(formRequest({ file: { name: 'plan.pdf' }, projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired,
+    });
+    await expect(POST(formRequest({ file: { name: 'plan.pdf', size: 1 }, projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired,
+    });
+    await expect(POST(formRequest({ file: upload('empty.pdf', 'application/pdf', 0), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 413 });
+    await expect(POST(formRequest({ file: upload('large.pdf', 'application/pdf', MAX_BOQ_UPLOAD_BYTES + 1), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 413 });
+    await expect(POST(formRequest({ file: upload('x'.repeat(205) + '.pdf'), projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired,
     });
   });
 
@@ -203,6 +260,26 @@ describe('BOQ drawing extraction route', () => {
       filePath: expect.stringMatching(/drawings[\\/][0-9a-f-]{36}\.pdf$/),
     }) });
     expect(parseDrawing).toHaveBeenCalledWith(expect.any(Buffer), 'floor-plan.pdf', 'A-22');
+  });
+
+  it('stores JPEG drawings with a safe basename and removes uploads when document persistence fails', async () => {
+    const result = await POST(formRequest({ file: upload('folder\\floor-plan.jpg', 'image/jpeg'), projectId: 'project-1' }));
+    expect(result).toMatchObject({ ok: true, status: 200, data: { success: true, fileName: 'floor-plan.jpg' } });
+    expect(db.projectDocument.create).toHaveBeenCalledWith({ data: expect.objectContaining({ name: 'floor-plan.jpg', fileType: 'image/jpeg' }) });
+
+    db.projectDocument.create.mockRejectedValueOnce(new Error('document row failed'));
+    await expect(POST(formRequest({ file: upload('orphan.pdf'), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(removeUpload).toHaveBeenCalledWith(expect.stringContaining('uploads/tenant-1/project-1/drawings/'), ['tenant-1', 'project-1', 'drawings']);
+
+    db.projectDocument.create.mockRejectedValueOnce({ code: 'D1_UNAVAILABLE' });
+    removeUpload.mockRejectedValueOnce(new Error('cleanup failed'));
+    await expect(POST(formRequest({ file: upload('orphan-again.pdf'), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.drawing_upload_cleanup_failed', expect.objectContaining({
+      error: { name: 'Error', message: 'cleanup failed' },
+    }));
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.drawing_processing_failed', expect.objectContaining({
+      error: { type: 'object' }, documentPersisted: false,
+    }));
   });
 
   it('returns server errors when parsing or persistence throws', async () => {
