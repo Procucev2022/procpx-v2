@@ -11,6 +11,7 @@ import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { POST as createReRfq } from '../src/app/api/procurement/rfqs/[id]/re-rfq/route';
 import { POST as submitEvaluation } from '../src/app/api/procurement/vendors/[id]/evaluation/route';
 import { POST as evaluateVendorAi } from '../src/app/api/procurement/vendors/[id]/evaluate-ai/route';
+import { MAX_LOCK_RATES_REMARKS_LENGTH } from '../src/app/api/procurement/rfqs/[id]/lock-rates/route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -159,6 +160,42 @@ describe('RFQ final-rate lock and Re-RFQ endpoints', () => {
     db.rfq.findFirst.mockRejectedValueOnce(new Error('private database detail'));
     await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToLockFinalRates, status: 500 });
     expect(structuredLog).toHaveBeenCalledWith('error', 'procurement.final_rates_lock_failed', expect.objectContaining({ rfqId: 'record-1', tenantId: 'tenant-1' }), 'application');
+  });
+
+  it('rejects malformed lock payloads and validates remarks and final values', async () => {
+    const malformed = new NextRequest('http://localhost/api/test', { method: 'POST', body: '{' });
+    await expect(lockRates(malformed, routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post(null), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post([]), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post({ vendorId: 'vendor-1', remarks: 7 }), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post({ vendorId: 'vendor-1', remarks: 'x'.repeat(MAX_LOCK_RATES_REMARKS_LENGTH + 1) }), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post({ vendorId: 'vendor-1', finalCommercialValue: {} }), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post({ vendorId: 'vendor-1', finalCommercialValue: 'Infinity' }), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(lockRates(post({ vendorId: 'vendor-1', finalCommercialValue: -1 }), routeParams)).resolves.toMatchObject({ ok: false, status: 400 });
+  });
+
+  it('locks rates without an optional notification and detects every stale batch result', async () => {
+    const configureLock = () => {
+      db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', tenantId: 'tenant-1', rfqNumber: 'RFQ-1', projectId: 'project-1', status: 'COMPARISON', estimatedBenchmarkValue: 500 });
+      db.vendor.findFirst.mockResolvedValueOnce(vendor);
+      db.rfqVendor.findFirst.mockResolvedValueOnce({ id: 'invite-1' });
+      db.quote.findFirst.mockResolvedValueOnce({ id: 'quote-1', totalQuoteAmount: 400 });
+    };
+
+    configureLock();
+    notify.mockResolvedValueOnce(undefined);
+    d1Batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toMatchObject({ ok: true });
+    expect(d1Batch.mock.calls.at(-1)?.[0]).toHaveLength(2);
+    expect(dispatchPrepared).not.toHaveBeenCalled();
+
+    configureLock();
+    d1Batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toMatchObject({ ok: false, status: 409 });
+
+    configureLock();
+    d1Batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    await expect(lockRates(post({ vendorId: 'vendor-1' }), routeParams)).resolves.toMatchObject({ ok: false, status: 409 });
   });
 
   it('commits the rate-lock notification with the transition for scheduled retry', async () => {
