@@ -7,6 +7,7 @@ import { createAuditLog } from '../src/lib/audit';
 import { computeLineCostBreakdown } from '../src/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -26,6 +27,7 @@ jest.mock('../src/lib/boq-validate', () => ({ validateBoqLine: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/boq-cost-breakdown', () => ({ computeLineCostBreakdown: jest.fn(() => ({ material: 2, labour: 1 })) }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -34,6 +36,7 @@ const validate = validateBoqLine as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const computeCost = computeLineCostBreakdown as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const revision = { id: 'revision-1', status: 'DRAFT', validLines: 4, boq: { projectId: 'project-1' } };
 const existingLine = {
@@ -304,5 +307,91 @@ describe('BOQ revision lines API', () => {
     expect(statements[1].sql).toContain('INSERT INTO "audit_logs"');
     expect(statements[2].sql).toContain('"warningLines"');
     expect(statements[3].sql).toContain('"isDeleted" = 1');
+  });
+
+  it('rejects malformed batch requests before querying or writing lines', async () => {
+    const malformedJson = new NextRequest(new URL('/api/boq/revision-1/lines', 'http://localhost'), { method: 'PUT', body: '{' });
+    await expect(PUT(malformedJson, params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', null), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [null] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: ' ' }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: 'line-1' }, { lineId: 'line-1' }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: Array.from({ length: 91 }, (_, index) => ({ id: `line-${index}` })) }), params)).resolves.toMatchObject({ ok: false, status: 400 });
+    db.boqLine.findMany.mockResolvedValueOnce([{ ...existingLine, id: 'line-1' }]);
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: 'line-1', updates: { brand: 42 } }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    db.boqLine.findMany.mockResolvedValueOnce([{ ...existingLine, id: 'line-1' }]);
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: 'line-1', updates: { originalDescription: null } }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    db.boqLine.findMany.mockResolvedValueOnce([{ ...existingLine, id: 'line-1' }]);
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: 'line-1', updates: { quantity: -1 } }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.quantityMustBeGreaterThanZero, status: 400 });
+    expect(db.boqLine.findMany).toHaveBeenCalledTimes(3);
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('reports atomic batch conflicts and logs failed batch writes', async () => {
+    db.boqLine.findMany.mockResolvedValueOnce([{ ...existingLine, id: 'line-1' }]).mockResolvedValueOnce([{ ...existingLine, id: 'line-1' }]);
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: 'line-1', updates: { quantity: 2 } }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    writeBatch.mockRejectedValueOnce(new Error('D1 batch unavailable'));
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lines: [{ id: 'line-1', updates: { quantity: 2 } }] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.line_batch_update_failed', expect.objectContaining({ lineIds: ['line-1'], error: { name: 'Error', message: 'D1 batch unavailable' } }));
+  });
+
+  it('validates malformed single-line updates and stale timestamps', async () => {
+    const malformedJson = new NextRequest(new URL('/api/boq/revision-1/lines', 'http://localhost'), { method: 'PUT', body: '{' });
+    await expect(PUT(malformedJson, params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 42, updates: {} }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDRequired, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: [] }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { brand: 4 } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { originalDescription: null } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { quantity: 'not-a-number' } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { aiUnitCost: 'not-a-number' } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    db.boqLine.findFirst.mockResolvedValueOnce({ ...existingLine, updatedAt: 'invalid-date' });
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: {} }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+  });
+
+  it('reports single-line write conflicts and captures unexpected D1 failures', async () => {
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { quantity: '' } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    writeBatch.mockRejectedValueOnce(new Error('single update failed'));
+    await expect(PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { aiUnitCost: null } }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.line_update_failed', expect.objectContaining({ lineId: 'line-1', error: { name: 'Error', message: 'single update failed' } }));
+  });
+
+  it('calculates a single-line total when quantity and unit cost are present', async () => {
+    const result = await PUT(request('/api/boq/revision-1/lines', 'PUT', { lineId: 'line-1', updates: { quantity: '2', aiUnitCost: '3' } }), params) as unknown as { data: { aiTotalCost: number } };
+    expect(result.data.aiTotalCost).toBe(6);
+    const statements = writeBatch.mock.calls[0][0] as Array<{ values: unknown[] }>;
+    expect(statements[0].values[16]).toBe(6);
+  });
+
+  it('validates create values, applies text defaults, and handles D1 create failures', async () => {
+    const malformedJson = new NextRequest(new URL('/api/boq/revision-1/lines', 'http://localhost'), { method: 'POST', body: '{' });
+    await expect(POST(malformedJson, params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', null), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 42 }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.descriptionIsRequired, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Valid', quantity: 'bad' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.quantityMustBeGreaterThanZero, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Valid', aiUnitCost: 'bad' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Valid', aiUnitCost: -1 }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Valid', brand: 42 }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+
+    await POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Defaults', specification: '  ', uomRaw: '', quantity: null, aiUnitCost: null }), params);
+    const statements = writeBatch.mock.calls.at(-1)?.[0] as Array<{ values: unknown[] }>;
+    expect(statements[0].values).toEqual(expect.arrayContaining(['Defaults', null, UI_STRINGS.common.nOS, 1, 150, 150]));
+
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Conflict' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 1 }, results: [{ lineNumber: '' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'No line number' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    writeBatch.mockRejectedValueOnce(new Error('create failed'));
+    await expect(POST(request('/api/boq/revision-1/lines', 'POST', { description: 'Failed' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.line_create_failed', expect.objectContaining({ error: { name: 'Error', message: 'create failed' } }));
+  });
+
+  it('reports delete conflicts and records failed soft-delete batches', async () => {
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(DELETE(request('/api/boq/revision-1/lines?lineId=line-1', 'DELETE'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    writeBatch.mockRejectedValueOnce(new Error('delete failed'));
+    await expect(DELETE(request('/api/boq/revision-1/lines?lineId=line-1', 'DELETE'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.line_delete_failed', expect.objectContaining({ lineId: 'line-1', error: { name: 'Error', message: 'delete failed' } }));
   });
 });
