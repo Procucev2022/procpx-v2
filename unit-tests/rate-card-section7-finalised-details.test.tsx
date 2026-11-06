@@ -157,7 +157,7 @@ describe('rate card Section 7 finalised details', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.savings))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.notAvailable))).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
 
     cleanup();
     const empty = render(<Section7FinalisedDetails rateCard={{ rateCardNumber: 'RC-EMPTY', status: 'DRAFT', items: [], notes: null }} items={[]} agreement={{ required: false, type: 'NONE' }} />);
@@ -205,5 +205,46 @@ describe('rate card Section 7 finalised details', () => {
     expect(screen.getByText('Project checked')).toBeInTheDocument();
     expect(screen.getByText('Finance checked')).toBeInTheDocument();
     expect(screen.getByText('Signatory')).toBeInTheDocument();
+  });
+
+  it('renders partial audit records when actors or dates are missing', () => {
+    const actorOnlyNotes = {
+      round1: { buyerOffer1Actor: 'Buyer actor only', vendorQuote1Actor: 'Vendor actor only' },
+      round2: { buyerOffer2Actor: 'Second buyer actor', vendorQuote2Actor: 'Second vendor actor' },
+      buyerAccepted: {},
+    };
+    render(<Section7FinalisedDetails rateCard={{
+      rateCardNumber: 'RC-ACTOR-ONLY', status: 'DRAFT', vendor: { name: 'Fallback Vendor' },
+      notes: JSON.stringify(actorOnlyNotes),
+    }} items={[{
+      id: 'sparse', itemCode: '', category: '', subcategory: '', description: 'Sparse line item',
+      specification: '', uom: 'EA', qty: 1, buyerTargetRate: 0, round1VendorQuote: 0, agreedRate: 0,
+    }]} />);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
+    expect(document.body).toHaveTextContent(/Buyer actor only/);
+    expect(document.body).toHaveTextContent(/Vendor actor only/);
+    expect(document.body).toHaveTextContent(/Second buyer actor/);
+    expect(document.body).toHaveTextContent(/Second vendor actor/);
+    expect(document.body).toHaveTextContent(uiStringPattern(UI_STRINGS.common.notAvailable));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
+    expect(screen.getAllByText('Sparse line item').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.governanceSignOffTimelineApprovalsChain))).toBeInTheDocument();
+
+    cleanup();
+    const dateOnlyNotes = {
+      round1: { buyerOffer1Date: '2026-10-11T00:00:00.000Z', vendorQuote1Date: '2026-10-12T00:00:00.000Z' },
+      round2: { buyerOffer2Date: '2026-10-13T00:00:00.000Z', vendorQuote2Date: '2026-10-14T00:00:00.000Z' },
+      buyerAccepted: {},
+    };
+    render(<Section7FinalisedDetails rateCard={{
+      rateCardNumber: 'RC-DATE-ONLY', status: 'APPROVED', vendor: { name: 'Fallback Vendor' },
+      notes: JSON.stringify(dateOnlyNotes),
+      agreement: { required: true, type: 'GENERATED', signature: { verified: true, signedAt: '2026-10-16T00:00:00.000Z', signedBy: 'Fallback Signatory' } },
+    }} />);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
+    expect(screen.getByText('Fallback Signatory')).toBeInTheDocument();
   });
 });
