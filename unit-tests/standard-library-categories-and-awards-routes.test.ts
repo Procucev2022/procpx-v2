@@ -58,8 +58,11 @@ describe('standard BOQ library API', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
-    db.standardBoqItem.count.mockResolvedValue(0);
-    db.awardRecommendation.count.mockResolvedValue(0);
+    db.standardBoqItem.findMany.mockReset().mockResolvedValue([]);
+    db.standardBoqItem.count.mockReset().mockResolvedValue(0);
+    db.category.findMany.mockReset().mockResolvedValue([]);
+    db.awardRecommendation.findMany.mockReset().mockResolvedValue([]);
+    db.awardRecommendation.count.mockReset().mockResolvedValue(0);
     (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue([]);
     notify.mockReset().mockImplementation(async (_input: unknown, options?: { prepareOnly?: boolean }) => options?.prepareOnly ? {
       tenantId: 'tenant-1', targetRole: 'FINANCE_USER', title: 'Award update', message: 'Award workflow updated',
@@ -95,6 +98,23 @@ describe('standard BOQ library API', () => {
     expect(db.standardBoqItem.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true } }));
   });
 
+  it('bounds page sizes, reports additional pages, and logs library read errors', async () => {
+    db.standardBoqItem.findMany.mockResolvedValueOnce([{ id: 'item-1' }]);
+    db.standardBoqItem.count.mockResolvedValueOnce(2);
+    await expect(getStandardItems(request('http://localhost/api/boq/standard-library?pageSize=10000'))).resolves.toMatchObject({
+      data: { page: 1, pageSize: 100, hasMore: true },
+    });
+    expect(db.standardBoqItem.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0, take: 100 }));
+
+    db.standardBoqItem.findMany.mockRejectedValueOnce({ code: 'D1_READ_FAILED' });
+    await expect(getStandardItems(request('http://localhost/api/boq/standard-library?pageSize=invalid'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiBoqStandardLibraryRoute.failedToFetchStandardBOQItems, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'standard_boq.library_read_failed', expect.objectContaining({
+      page: 1, pageSize: 50, error: { type: 'object' },
+    }));
+  });
+
   it('validates standard item batches before creating rows', async () => {
     const denied = { status: 403 };
     auth.mockResolvedValueOnce(denied);
@@ -113,6 +133,59 @@ describe('standard BOQ library API', () => {
     ]))).resolves.toMatchObject({ ok: false, error: 'Duplicate item code detected within submission: "dup".', status: 409 });
     db.standardBoqItem.findMany.mockResolvedValueOnce([{ itemCode: 'EXIST' }]);
     await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [{ itemCode: 'EXIST', standardDescription: 'Cable', category: 'Electrical', uom: 'MTR' }]))).resolves.toMatchObject({ ok: false, error: expect.stringContaining('already exists in the central Standard BOQ Master'), status: 409 });
+  });
+
+  it('accepts one item objects and rejects malformed fields before any write', async () => {
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    db.category.findMany.mockReset().mockResolvedValue([{ name: 'Electrical' }]);
+    db.standardBoqItem.findMany.mockReset().mockResolvedValue([]);
+    const baseItem = { itemCode: 'ONE', standardDescription: 'Cable', category: 'Electrical', uom: 'M' };
+    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', baseItem))).resolves.toMatchObject({
+      ok: true, status: 201, data: { count: 1 },
+    });
+
+    const malformedJson = new NextRequest('http://localhost/api/boq/standard-library', { method: 'POST', body: '{' });
+    await expect(createStandardItems(malformedJson)).resolves.toMatchObject({ ok: false, status: 500, error: UI_STRINGS.common.userMessages.failedToAddStandardBoqItems });
+    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', null))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [null]))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const invalidItems = [
+      { ...baseItem, itemCode: 'I'.repeat(130) },
+      { ...baseItem, category: 'C'.repeat(170) },
+      { ...baseItem, uom: 'U'.repeat(170) },
+      { ...baseItem, sector: 'S'.repeat(170) },
+      { ...baseItem, projectType: 'P'.repeat(170) },
+      { ...baseItem, subcategory: 'G'.repeat(170) },
+      { ...baseItem, standardDescription: 'D'.repeat(2_000) },
+      { ...baseItem, detailedSpecification: 'S'.repeat(5_000) },
+      { ...baseItem, brandMake: 'B'.repeat(170) },
+      { ...baseItem, costDrivers: 'C'.repeat(6_000) },
+      { ...baseItem, benchmarkRate: 'not-a-number' },
+      { ...baseItem, benchmarkRate: -1 },
+    ];
+    for (const item of invalidItems) {
+      await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [item]))).resolves.toMatchObject({
+        ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody,
+      });
+    }
+    expect(writeD1BatchAtomically).toHaveBeenCalledTimes(1);
+  });
+
+  it('classifies raced unique failures and unsuccessful atomic inserts', async () => {
+    db.category.findMany.mockReset().mockResolvedValue([{ name: 'Electrical' }]);
+    db.standardBoqItem.findMany.mockReset().mockResolvedValue([]);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockRejectedValueOnce(new Error('UNIQUE constraint failed: standard_boq_items.tenantId, itemCode'));
+    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [{ itemCode: 'RACE', standardDescription: 'Cable', category: 'Electrical', uom: 'M' }]))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.appApiBoqStandardLibraryRoute.duplicateStandardBoqCodesFoundBeforeSaving,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'standard_boq.bulk_create_failed', expect.objectContaining({
+      error: expect.objectContaining({ message: expect.stringContaining('UNIQUE constraint failed') }),
+    }));
+
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+    await expect(createStandardItems(request('http://localhost/api/boq/standard-library', [{ itemCode: 'NO-INSERT', standardDescription: 'Cable', category: 'Electrical', uom: 'M' }]))).resolves.toMatchObject({
+      ok: false, status: 500, error: UI_STRINGS.common.userMessages.failedToAddStandardBoqItems,
+    });
   });
 
   it('normalizes and persists a grouped standard item batch with its audit event atomically', async () => {
@@ -377,6 +450,19 @@ describe('category master API and category code generator', () => {
 describe('commercial award workflow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    db.awardRecommendation.findFirst.mockReset();
+    db.awardRecommendation.findMany.mockReset().mockResolvedValue([]);
+    db.awardRecommendation.count.mockReset().mockResolvedValue(0);
+    db.rfq.findFirst.mockReset();
+    db.vendor.findFirst.mockReset();
+    db.rfqVendor.findFirst.mockReset();
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue(Array.from({ length: 4 }, () => ({ meta: { changes: 1 } })));
+    notify.mockReset().mockImplementation(async (_input: unknown, options?: { prepareOnly?: boolean }) => options?.prepareOnly ? {
+      tenantId: 'tenant-1', targetRole: 'FINANCE_USER', title: 'Award update', message: 'Award workflow updated',
+      type: 'ACTION_REQUIRED', entityType: 'AWARD', entityId: 'award-1', recordNumber: 'RFQ-1',
+    } : undefined);
+    dispatchNotification.mockReset().mockResolvedValue(undefined);
+    (writeStructuredLog as jest.Mock).mockReset().mockResolvedValue(undefined);
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
   });
@@ -398,6 +484,52 @@ describe('commercial award workflow', () => {
     }));
     db.awardRecommendation.findMany.mockRejectedValueOnce(new Error('award listing failed'));
     await expect(getAwards(request('http://localhost/api/procurement/awards'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAwards, status: 500 });
+  });
+
+  it('rejects invalid recommendation inputs and handles missing notification payloads', async () => {
+    const malformedJson = new NextRequest('http://localhost/api/procurement/awards', { method: 'POST', body: '{' });
+    await expect(createAward(malformedJson)).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(createAward(request('http://localhost/api/procurement/awards', null))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const baseBody = { rfqId: 'rfq-coverage', recommendedVendorId: 'vendor-coverage', finalNegotiatedAmount: 90, justification: 'Best value' };
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-coverage', status: 'DRAFT' });
+    await expect(createAward(request('http://localhost/api/procurement/awards', baseBody))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    const rfq = { id: 'rfq-coverage', rfqNumber: 'RFQ-COVERAGE', projectId: 'project-1', status: 'COMPARISON', estimatedBenchmarkValue: 100 };
+    const vendor = { id: 'vendor-coverage', name: 'Vendor' };
+    for (const amounts of [
+      { finalNegotiatedAmount: -1 },
+      { benchmarkAmount: 'not-a-number' },
+      { originalQuoteAmount: 'not-a-number' },
+    ]) {
+      db.rfq.findFirst.mockResolvedValueOnce(rfq);
+      db.vendor.findFirst.mockResolvedValueOnce(vendor);
+      db.rfqVendor.findFirst.mockResolvedValueOnce({ id: 'invitation-coverage' });
+      await expect(createAward(request('http://localhost/api/procurement/awards', { ...baseBody, ...amounts }))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    }
+
+    db.rfq.findFirst.mockResolvedValueOnce(rfq);
+    db.vendor.findFirst.mockResolvedValueOnce(vendor);
+    db.rfqVendor.findFirst.mockResolvedValueOnce({ id: 'invitation-coverage' });
+    notify.mockReset().mockResolvedValueOnce(undefined);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(createAward(request('http://localhost/api/procurement/awards', baseBody))).resolves.toMatchObject({ ok: true, status: 201 });
+    expect((writeD1BatchAtomically as jest.Mock).mock.calls[0][0]).toHaveLength(3);
+  });
+
+  it('recovers concurrent award submissions and logs failures in the recovery lookup', async () => {
+    const rfq = { id: 'rfq-race', rfqNumber: 'RFQ-RACE', projectId: 'project-1', status: 'COMPARISON', estimatedBenchmarkValue: 100 };
+    db.rfq.findFirst.mockResolvedValue(rfq);
+    db.vendor.findFirst.mockResolvedValue({ id: 'vendor-race', name: 'Vendor' });
+    db.rfqVendor.findFirst.mockResolvedValue({ id: 'invitation-race' });
+    notify.mockReset().mockRejectedValueOnce(new Error('notification prepare failed')).mockRejectedValueOnce(new Error('notification prepare failed'));
+    db.awardRecommendation.findFirst.mockResolvedValueOnce({ id: 'pending-award' }).mockRejectedValueOnce(new Error('recovery lookup failed'));
+    const body = { rfqId: 'rfq-race', recommendedVendorId: 'vendor-race', finalNegotiatedAmount: 90, justification: 'Best value' };
+    await expect(createAward(request('http://localhost/api/procurement/awards', body))).resolves.toMatchObject({ ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh });
+    await expect(createAward(request('http://localhost/api/procurement/awards', body))).resolves.toMatchObject({ ok: false, status: 500, error: UI_STRINGS.common.userMessages.failedToSubmitAwardRecommendation });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'procurement.award_submission_failed', expect.objectContaining({
+      rfqId: 'rfq-race', error: { name: 'Error', message: 'notification prepare failed' },
+    }));
   });
 
   it('validates and submits an award recommendation with calculated savings', async () => {
@@ -495,5 +627,31 @@ describe('commercial award workflow', () => {
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'AWARD_REJECTED' }), { prepareOnly: true });
     db.awardRecommendation.findFirst.mockRejectedValueOnce(new Error('award review failed'));
     await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: 'award-1', action: 'REJECT' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToReviewAwardRecommendation, status: 500 });
+  });
+
+  it('rejects malformed award decisions and handles stale decisions without notifications', async () => {
+    const malformedJson = new NextRequest('http://localhost/api/procurement/awards', { method: 'PUT', body: '{' });
+    await expect(reviewAward(malformedJson)).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', null))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: 'award-1', action: 'HOLD' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.awardRecommendation.findFirst.mockResolvedValueOnce({ id: 'award-stale', status: 'APPROVED' });
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: 'award-stale', action: 'APPROVE' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
+
+    const award = { id: 'award-decision', tenantId: 'tenant-1', status: 'PENDING_APPROVAL', rfqId: 'rfq-decision', finalNegotiatedAmount: 80, rfq: { projectId: 'project-1', rfqNumber: 'RFQ-DECISION' }, recommendedVendor: { name: 'Vendor' } };
+    db.awardRecommendation.findFirst.mockResolvedValueOnce(award);
+    notify.mockReset().mockResolvedValueOnce(undefined);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: award.id, action: 'REJECT' }))).resolves.toMatchObject({ ok: true });
+    expect((writeD1BatchAtomically as jest.Mock).mock.calls[0][0]).toHaveLength(3);
+
+    db.awardRecommendation.findFirst.mockResolvedValueOnce(award);
+    notify.mockResolvedValueOnce(undefined);
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(reviewAward(request('http://localhost/api/procurement/awards', { awardId: award.id, action: 'APPROVE' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
   });
 });
