@@ -215,6 +215,68 @@ describe('BOQ validation route', () => {
     db.boq.findFirst.mockResolvedValueOnce(null);
     await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.revisionNotFound, status: 404 });
   });
+
+  it('enforces validation batch limits and reports each partial write conflict', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-large', lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, (_, index) => ({ id: `line-${index}` })),
+    });
+    await expect(validateRevision(request(), params)).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const revision = {
+      id: 'revision-1', revisionCode: 'R1', updatedAt: new Date('2026-01-01T00:00:00.000Z'), boq: { projectId: 'project-1' },
+      lines: [{ id: 'line-1', lineNumber: '1', originalDescription: 'Cable', quantity: 1 }],
+    };
+    validateLine.mockReturnValue({ status: 'VALID', messages: [] });
+    summarize.mockReturnValue({ qualityScore: 100 });
+    const partialResults = [
+      [{}, { meta: { changes: 1 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }],
+    ];
+    for (const results of partialResults) {
+      db.boqRevision.findFirst.mockResolvedValueOnce(revision);
+      db.uomMaster.findMany.mockResolvedValueOnce([]);
+      writeBatch.mockResolvedValueOnce(results);
+      await expect(validateRevision(request(), params)).resolves.toMatchObject({
+        ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+      });
+    }
+  });
+
+  it('logs validation and quality-read failures while keeping logging failures contained', async () => {
+    db.boqRevision.findFirst.mockRejectedValueOnce(new Error('validation lookup failed'));
+    writeLog.mockRejectedValueOnce(new Error('local diagnostic store unavailable'));
+    await expect(validateRevision(request(), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToUpdateBoq, status: 500,
+    });
+    expect(writeLog).toHaveBeenCalledWith('error', 'boq.validation_failed', expect.objectContaining({
+      operation: 'validate_boq_revision', boqRevisionId: 'revision-1', error: { name: 'Error', message: 'validation lookup failed' },
+    }));
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-large', lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, (_, index) => ({ id: `line-${index}` })),
+    });
+    await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.boqRevision.findFirst.mockRejectedValueOnce(new Error('quality lookup failed'));
+    await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToUpdateBoq, status: 500,
+    });
+    expect(writeLog).toHaveBeenCalledWith('error', 'boq.validation_read_failed', expect.objectContaining({
+      operation: 'read_boq_validation', boqRevisionId: 'revision-1', error: { name: 'Error', message: 'quality lookup failed' },
+    }));
+
+    db.boqRevision.findFirst.mockRejectedValueOnce('non-error validation failure');
+    await expect(validateRevision(request(), params)).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(writeLog).toHaveBeenLastCalledWith('error', 'boq.validation_failed', expect.objectContaining({
+      error: { type: 'string' },
+    }));
+    db.boqRevision.findFirst.mockRejectedValueOnce('non-error quality failure');
+    await expect(getValidation(request('http://localhost/api/test'), params)).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(writeLog).toHaveBeenLastCalledWith('error', 'boq.validation_read_failed', expect.objectContaining({
+      error: { type: 'string' },
+    }));
+  });
 });
 
 describe('AI BOQ refinement route', () => {
