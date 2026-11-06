@@ -84,6 +84,19 @@ describe('vendor portal rate cards API', () => {
     });
   });
 
+  it('allows mapped buyer contexts and falls back when legacy final rates are absent', async () => {
+    auth.mockResolvedValueOnce({ ...baseContext, role: 'PROJECT_USER' });
+    db.vendorRateCard.findMany.mockResolvedValueOnce([card({
+      status: 'ROUND_1_BUYER_OFFER', notes: '{}',
+      items: [{ id: 'legacy-round', rate: 25, proposedRate: null, comparisonRef: null }],
+    })]);
+    const result = await GET(getRequest());
+    expect(result).toMatchObject({ ok: true, data: { rateCards: [{ items: [{ finalAgreedRate: null }] }] } });
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
+      tenantId: 'tenant-1', vendorId: 'vendor-1',
+    } }));
+  });
+
   it('lists only the current vendor rate cards and derives values from metadata or legacy fields', async () => {
     db.vendorRateCard.count.mockResolvedValueOnce(2);
     db.vendorRateCard.findMany.mockResolvedValueOnce([
@@ -191,6 +204,26 @@ describe('vendor portal rate cards API', () => {
     expect(notes.agreement).toBeUndefined();
     expect(statements[1].values).toEqual(expect.arrayContaining(['Vendor User', 'Vendor Vendor User accepted terms & executed digital signature (evidence-1)']));
     expect(statements[2].values).toEqual(expect.arrayContaining(['RATE_CARD_VENDOR_ACCEPTED', expect.stringContaining('terms')]));
+  });
+
+  it('handles malformed submissions, missing signature metadata, and D1 write conflicts', async () => {
+    await expect(POST(postRequest([]))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ rateCardId: 'rate-card-1', action: 'UNKNOWN_ACTION' }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ rateCardId: 'rate-card-1', items: [] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ items: [{ id: 'item-1', comparisonRef: '{}' }] }));
+    await expect(POST(postRequest({ rateCardId: 'rate-card-1', items: [{ id: 12, rate: 10 }] }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ items: [{ id: 'item-1', comparisonRef: '{}' }] }));
+    batch.mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(POST(postRequest({ rateCardId: 'rate-card-1', items: [{ id: 'item-1', rate: 10 }] }))).resolves.toMatchObject({ ok: false, status: 500 });
+
+    auth.mockResolvedValueOnce({ ...baseContext, userEmail: '' });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({
+      status: 'CATEGORY_MANAGER_ACCEPTED', notes: JSON.stringify({ agreement: {} }),
+    }));
+    batch.mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(POST(postRequest({ rateCardId: 'rate-card-1', action: 'VENDOR_ACCEPT', signature: { verified: true } }))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(batch.mock.calls.at(-1)?.[0][1].values).toContain(null);
   });
 
   it('submits first-round quotes and persists item, approval, audit, and notification writes atomically', async () => {
