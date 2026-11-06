@@ -1,9 +1,7 @@
 import { prisma } from '../src/lib/prisma';
 import { createAuditLog } from '../src/lib/audit';
-import { logEvent } from '../src/lib/observability/server-logger';
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { auditLog: { create: jest.fn() } } }));
-jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const createAuditRecord = (prisma.auditLog as unknown as { create: jest.Mock }).create;
 
@@ -50,13 +48,15 @@ describe('createAuditLog', () => {
 
   it('does not throw when audit persistence fails', async () => {
     const error = new Error('database unavailable');
+    const logError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     createAuditRecord.mockRejectedValueOnce(error);
 
     await expect(createAuditLog({
       tenantId: 'tenant-1', entityType: 'PR', entityId: 'pr-1', action: 'CREATED', description: 'Created request',
     })).resolves.toBeUndefined();
-    expect(logEvent).toHaveBeenCalledWith('error', 'audit_log.create_failed', {
-      tenantId: 'tenant-1', projectId: undefined, entityType: 'PR', entityId: 'pr-1', action: 'CREATED', error,
-    });
+    expect(logError).toHaveBeenCalledWith('audit.write_failed', expect.objectContaining({
+      tenantId: 'tenant-1', entityType: 'PR', entityId: 'pr-1', action: 'CREATED', error,
+    }));
+    logError.mockRestore();
   });
 });

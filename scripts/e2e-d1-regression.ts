@@ -1,19 +1,21 @@
 // scripts/e2e-d1-regression.ts
-// End-to-end regression of proCPX against the database the running app uses
-// (Cloudflare D1 when DATABASE_PROVIDER=d1). Drives the real HTTP API, then
-// verifies every write directly in D1 with `wrangler d1 execute`.
+// Local-only end-to-end regression of proCPX against the isolated Wrangler D1
+// state in .wrangler/e2e-d1. Drives the real HTTP API, then verifies every
+// write directly in that same local D1.
 //
 // Usage:  npx tsx scripts/e2e-d1-regression.ts [baseUrl]      (default http://localhost:3001)
 //
-// It only ADDS clearly-labelled records (title/name prefix "E2E-D1 <run id>");
-// it never deletes or edits baseline test data.
+// It only ADDS clearly-labelled records (prefix "E2E-D1 <run id>") to the
+// isolated test D1; it never touches shared or remote records and refuses
+// non-local app URLs.
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { TEST_FIXTURE_PASSWORD } from '../src/app/login/page.constants';
+import { LOCAL_D1_EXECUTE_ARGS, requireLocalE2EBaseUrl } from './e2e-d1-regression.constants';
 
-const BASE_URL = process.argv[2] || process.env.E2E_BASE_URL || 'http://localhost:3001';
-const RUN = `E2E-D1 ${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
-const DEMO_PASSWORD = 'Demo@1234';
-const VENDOR_PASSWORD = 'welcome';
+const BASE_URL = requireLocalE2EBaseUrl(process.argv[2] || process.env.E2E_BASE_URL || 'http://localhost:3001');
+const RUN = `E2E-D1 ${new Date().toISOString().replace(/[-:.TZ]/g, '')}-${randomUUID().slice(0, 8)}`;
 
 // API responses are untyped JSON; the checks below read them defensively.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,7 +57,7 @@ class Session {
   put(path: string, body: unknown = {}) { return this.request('PUT', path, body); }
 }
 
-async function login(email: string, password = DEMO_PASSWORD): Promise<Session> {
+async function login(email: string, password = TEST_FIXTURE_PASSWORD): Promise<Session> {
   const s = new Session(email);
   const csrf = await s.get('/api/auth/csrf');
   const form = new URLSearchParams({ csrfToken: csrf.json.csrfToken, email, password, callbackUrl: `${BASE_URL}/dashboard` });
@@ -78,8 +80,9 @@ const errorOf = (r: { status: number; json: ApiJson; text: string }) =>
 const WRANGLER = path.join(__dirname, '..', 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 
 function d1<T = Record<string, unknown>>(sql: string): T[] {
-  // Run wrangler's JS entry with node directly: no shell, so SQL is passed verbatim.
-  const out = execFileSync(process.execPath, [WRANGLER, 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql.replace(/\s+/g, ' ')], {
+  // Local-only D1 is deliberate: the regression must never read or write remote data.
+  // Run Wrangler directly without a shell so SQL is passed verbatim.
+  const out = execFileSync(process.execPath, [WRANGLER, ...LOCAL_D1_EXECUTE_ARGS, '--command', sql.replace(/\s+/g, ' ')], {
     encoding: 'utf8', env: { ...process.env, CI: '1' }, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024,
   });
   return JSON.parse(out)[0].results as T[];
@@ -110,9 +113,9 @@ const LIST_ENDPOINTS = [
 ];
 const PAGES = ['/dashboard', '/projects', '/boq', '/pr', '/approvals/boq-pr', '/procurement/rfqs', '/masters/standard-boq'];
 const ROLES = [
-  'project.user@procucev-demo.local', 'project.approver@procucev-demo.local', 'procurement.user@procucev-demo.local',
-  'finance.user@procucev-demo.local', 'category.manager@procucev-demo.local', 'client.admin@procucev-demo.local',
-  'super.admin@procucev-demo.local', 'viewer@procucev-demo.local',
+  'project.user@test.procpx.local', 'project.approver@test.procpx.local', 'procurement.user@test.procpx.local',
+  'finance.user@test.procpx.local', 'category.manager@test.procpx.local', 'client.admin@test.procpx.local',
+  'super.admin@test.procpx.local', 'viewer@test.procpx.local',
 ];
 
 async function roleSweep() {
@@ -147,20 +150,21 @@ async function securityChecks(s: Record<string, Session>) {
     const r = await anon.get(path);
     record('security', `anonymous ${path} rejected`, r.status === 401 || r.status === 403, `HTTP ${r.status}`);
   }
-  const viewer = s['viewer@procucev-demo.local'];
+  const viewer = s['viewer@test.procpx.local'];
   if (viewer) {
     const r = await viewer.post('/api/projects', { name: `${RUN} viewer must not create` });
     record('security', 'VIEWER cannot create a project', r.status === 403, `HTTP ${r.status}`);
   }
-  const pu = s['project.user@procucev-demo.local'];
+  const pu = s['project.user@test.procpx.local'];
   if (pu) {
     const r = await pu.post('/api/procurement/rfqs', { title: `${RUN} forbidden` });
     record('security', 'PROJECT_USER cannot create an RFQ', r.status === 403, `HTTP ${r.status}`);
   }
 
   // Tenant isolation: the hospitality tenant must not see retail records.
-  const retailProject = d1<{ id: string }>(`SELECT p.id FROM projects p JOIN tenants t ON t.id=p.tenantId WHERE t.slug='procucev-retail-demo' LIMIT 1`)[0];
-  const hosp = await login('hospitality.user@procucev-demo.local');
+  const retailProject = d1<{ id: string }>(`SELECT p.id FROM projects p JOIN tenants t ON t.id=p.tenantId WHERE t.slug='procpx-regression-fixtures' LIMIT 1`)[0];
+  if (!retailProject) throw new Error('Local D1 regression fixtures are missing; run npm run db:seed:test first.');
+  const hosp = await login('hospitality.user@test.procpx.local');
   const list = await hosp.get('/api/projects');
   const ids: string[] = (data(list) || []).map((p: { id: string }) => p.id);
   record('security', 'tenant isolation: hospitality tenant does not list retail projects', !ids.includes(retailProject.id), `${ids.length} own projects`);
@@ -170,11 +174,11 @@ async function securityChecks(s: Record<string, Session>) {
 
 // ---------------------------------------------------------------- 3. full workflow with writes
 async function workflow(s: Record<string, Session>) {
-  const pu = s['project.user@procucev-demo.local'];
-  const pa = s['project.approver@procucev-demo.local'];
-  const proc = s['procurement.user@procucev-demo.local'];
-  const cm = s['category.manager@procucev-demo.local'] || s['client.admin@procucev-demo.local'];
-  const stamp = Date.now().toString().slice(-6);
+  const pu = s['project.user@test.procpx.local'];
+  const pa = s['project.approver@test.procpx.local'];
+  const proc = s['procurement.user@test.procpx.local'];
+  const cm = s['category.manager@test.procpx.local'] || s['client.admin@test.procpx.local'];
+  const stamp = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
   const step = (name: string, ok: boolean, detail = '') => { record('workflow', name, ok, detail); if (!ok) throw new Error(`stopped at: ${name}`); };
 
   // Category
@@ -252,8 +256,8 @@ async function workflow(s: Record<string, Session>) {
   const rfqLines = d1<{ id: string }>(`SELECT id FROM rfq_lines WHERE rfqId=${q(rfq?.id ?? '')}`);
   step('RFQ and lines persisted in D1', !!rfq && rfqLines.length === 3, `${rfq?.rfqNumber} status=${rfq?.status} lines=${rfqLines.length}`);
 
-  // Invite 3 vendors ($transaction)
-  const vendorLogins = ['bluepeak.engineering@vendor.procpx.local', 'craftline.interior@vendor.procpx.local', 'zenith.retail@vendor.procpx.local'];
+  // Invite 3 vendors with one atomic D1 batch.
+  const vendorLogins = ['vendor.one@test.procpx.local', 'vendor.two@test.procpx.local', 'vendor.three@test.procpx.local'];
   const vendorIds = d1<{ vendorId: string; email: string }>(`SELECT vendorId, email FROM users WHERE email IN (${vendorLogins.map(q).join(',')})`);
   r = await proc.post(`/api/procurement/rfqs/${rfq.id}/vendors`, { vendorIds: vendorIds.map((v) => v.vendorId) });
   step('invite 3 vendors (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
@@ -262,10 +266,10 @@ async function workflow(s: Record<string, Session>) {
   r = await proc.put(`/api/procurement/rfqs/${rfq.id}`, { action: 'RELEASE' });
   step('release RFQ to vendors', r.status < 300, r.status < 300 ? '' : errorOf(r));
 
-  // Each vendor quotes ($transaction); different rates so L1/L2/L3 exist
+  // Each vendor quotes with one atomic D1 batch; different rates so L1/L2/L3 exist.
   const rates = [[950, 1450, 2100], [990, 1500, 2050], [1020, 1390, 2200]];
   for (const [i, v] of vendorIds.entries()) {
-    const vs = await login(v.email, VENDOR_PASSWORD);
+    const vs = await login(v.email);
     r = await vs.post(`/api/vendor-portal/rfqs/${rfq.id}`, {
       lines: rfqLines.map((l, j) => ({ rfqLineId: l.id, unitRate: rates[i][j], gstPercent: 18, leadTimeDays: 14 })),
       commercialNotes: `${RUN} quote`, deliveryLeadTimeDays: 14,
@@ -280,25 +284,51 @@ async function workflow(s: Record<string, Session>) {
   r = await proc.get(`/api/procurement/rfqs/${rfq.id}/compare`);
   step('quote comparison loads', r.status === 200, `HTTP ${r.status}`);
 
-  // Negotiation counter-offer ($transaction) to the L1 vendor
+  // Negotiation counter-offer to the L1 vendor uses an atomic D1 batch.
   const l1 = d1<{ vendorId: string; totalAmount: number }>(`SELECT vendorId, totalQuoteAmount totalAmount FROM quotes WHERE rfqId=${q(rfq.id)} ORDER BY totalQuoteAmount ASC LIMIT 1`)[0];
+  const l1Vendor = vendorIds.find((vendor) => vendor.vendorId === l1.vendorId);
+  step('L1 vendor has a test login', Boolean(l1Vendor));
   r = await proc.post('/api/procurement/negotiations', { rfqId: rfq.id, vendorId: l1.vendorId, counterOfferAmount: Math.round(l1.totalAmount * 0.95), notes: `${RUN} counter-offer` });
   step('send negotiation counter-offer (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
   const rounds = d1<{ c: number }>(`SELECT count(*) c FROM negotiation_rounds nr JOIN negotiations n ON n.id=nr.negotiationId WHERE n.rfqId=${q(rfq.id)}`)[0]?.c;
   step('negotiation round persisted in D1', rounds >= 1, `${rounds} round(s)`);
 
+  // Vendor submits a binding final offer, the buyer accepts it, then rates are locked.
+  const finalQuoteLines = d1<{ rfqLineId: string; unitRate: number; quantity: number }>(
+    `SELECT ql.rfqLineId, ql.unitRate, rl.quantity FROM quote_lines ql JOIN quotes qq ON qq.id=ql.quoteId JOIN rfq_lines rl ON rl.id=ql.rfqLineId WHERE qq.rfqId=${q(rfq.id)} AND qq.vendorId=${q(l1.vendorId)} ORDER BY rl.lineNumber ASC`);
+  const revisedLines = finalQuoteLines.map((line) => {
+    const unitRate = Number((line.unitRate * 0.95).toFixed(2));
+    return { rfqLineId: line.rfqLineId, unitRate, revisedRate: unitRate, quantity: line.quantity,
+      lineTotal: Number((unitRate * line.quantity * 1.18).toFixed(2)) };
+  });
+  const finalAmount = Number(revisedLines.reduce((total, line) => total + line.lineTotal, 0).toFixed(2));
+  step('L1 quote has complete line detail', revisedLines.length === rfqLines.length);
+  const l1Session = await login(l1Vendor!.email);
+  r = await l1Session.post('/api/procurement/negotiations/submit-offer', {
+    rfqId: rfq.id, vendorId: l1.vendorId, revisedQuoteAmount: finalAmount, isFinalOffer: true,
+    lineItems: revisedLines, notes: `${RUN} final offer`,
+  });
+  step('vendor submits final offer (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const finalRound = d1<{ id: string }>(`SELECT nr.id FROM negotiation_rounds nr JOIN negotiations n ON n.id=nr.negotiationId WHERE n.rfqId=${q(rfq.id)} AND nr.vendorId=${q(l1.vendorId)} ORDER BY nr.roundNumber DESC LIMIT 1`)[0];
+  step('final offer round persisted in D1', Boolean(finalRound?.id));
+  r = await proc.post('/api/procurement/negotiations/decision', { roundId: finalRound.id, decision: 'ACCEPTED', remarks: `${RUN} accepted` });
+  step('buyer accepts final offer', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await proc.post(`/api/procurement/rfqs/${rfq.id}/lock-rates`, { vendorId: l1.vendorId, finalCommercialValue: finalAmount, remarks: `${RUN} rates locked` });
+  step('lock final rates atomically', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  step('final rate lock persisted in D1', d1<{ status: string }>(`SELECT status FROM rfqs WHERE id=${q(rfq.id)}`)[0]?.status === 'FINAL_RATE_LOCKED');
+
   // Award
-  r = await proc.post('/api/procurement/awards', { rfqId: rfq.id, recommendedVendorId: l1.vendorId, originalQuoteAmount: l1.totalAmount, finalNegotiatedAmount: l1.totalAmount, justification: `${RUN} L1 award` });
+  r = await proc.post('/api/procurement/awards', { rfqId: rfq.id, recommendedVendorId: l1.vendorId, originalQuoteAmount: l1.totalAmount, finalNegotiatedAmount: finalAmount, justification: `${RUN} L1 award` });
   step('submit award recommendation', r.status < 300, r.status < 300 ? '' : errorOf(r));
   const award = d1<{ id: string; status: string }>(`SELECT id, status FROM award_recommendations WHERE rfqId=${q(rfq.id)} ORDER BY createdAt DESC LIMIT 1`)[0];
   step('award persisted in D1', !!award, `status=${award?.status}`);
   if (award.status !== 'APPROVED') {
-    const approver = s['client.admin@procucev-demo.local'] || proc;
+    const approver = s['client.admin@test.procpx.local'] || proc;
     r = await approver.put('/api/procurement/awards', { awardId: award.id, action: 'APPROVE', remarks: `${RUN} approved` });
     record('workflow', 'approve award', r.status < 300, r.status < 300 ? '' : errorOf(r));
   }
 
-  // PPO ($transaction)
+  // PPO creation uses an atomic D1 batch.
   r = await proc.post('/api/procurement/ppos', { rfqId: rfq.id, awardRecommendationId: award.id, targetVendorId: l1.vendorId, justification: `${RUN} PPO`, deliveryTerms: 'Ex-site', paymentTerms: '30 days' });
   step('generate PPO (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
   const ppo = d1<{ id: string; ppoNumber: string; status: string }>(`SELECT id, ppoNumber, status FROM ppos WHERE rfqId=${q(rfq.id)}`)[0];

@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { PR_APPROVAL_INSERT_AFTER_STATUS_UPDATE_SQL, PR_APPROVE_STATUS_UPDATE_SQL, PR_AUDIT_INSERT_AFTER_TRANSITION_SQL, PR_REVISION_STATUS_UPDATE_AFTER_APPROVAL_SQL } from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { remarks } = body;
+    const remarks = typeof body?.remarks === 'string' ? body.remarks : undefined;
 
     const pr = await prisma.procurementRequest.findFirst({
       where: { id, tenantId: ctx.tenantId },
@@ -27,54 +30,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return apiError(interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.cannotApprovePRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400, { route: '/api/pr/[id]/approve', method: 'POST' });
     }
 
-    // Record PR approval log
-    await prisma.pRApproval.create({
-      data: {
-        tenantId: ctx.tenantId,
-        prId: id,
-        approverId: ctx.userId,
-        status: 'APPROVED',
-        remarks: remarks || 'Procurement request technical specification and quantity approved.',
-        timestamp: new Date(),
+    const approvedAt = new Date();
+    const updated = {
+      ...pr,
+      status: 'PR_RELEASED_TO_PROCUREMENT',
+      projectApprovedAt: approvedAt,
+      projectApprovedBy: ctx.userId,
+      releasedAt: approvedAt,
+      releasedBy: ctx.userId,
+    };
+    const approvalRemarks = remarks || UI_STRINGS.appApiPrIdApproveRoute.procurementRequestTechnicalSpecificationAndQuantityApproved;
+    const batch: Array<{ sql: string; values: unknown[] }> = [
+      {
+        sql: PR_APPROVE_STATUS_UPDATE_SQL,
+        values: [approvedAt.toISOString(), ctx.userId, approvedAt.toISOString(), ctx.userId, approvedAt.toISOString(), id, ctx.tenantId],
       },
-    });
-
-    // Move to PR_APPROVED and directly release to procurement
-    const updated = await prisma.procurementRequest.update({
-      where: { id },
-      data: {
-        status: 'PR_RELEASED_TO_PROCUREMENT',
-        projectApprovedAt: new Date(),
-        projectApprovedBy: ctx.userId,
-        releasedAt: new Date(),
-        releasedBy: ctx.userId,
+      {
+        sql: PR_APPROVAL_INSERT_AFTER_STATUS_UPDATE_SQL,
+        values: [crypto.randomUUID(), ctx.tenantId, id, ctx.userId, 'APPROVED', approvalRemarks, approvedAt.toISOString()],
       },
+    ];
+    if (pr.boqRevisionId) {
+      batch.push({
+        sql: PR_REVISION_STATUS_UPDATE_AFTER_APPROVAL_SQL,
+        values: ['PR_APPROVED', approvedAt.toISOString(), pr.boqRevisionId, ctx.tenantId],
+      });
+    }
+    batch.push({
+      sql: PR_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+      values: [
+        crypto.randomUUID(), ctx.tenantId, ctx.userId, pr.projectId, 'PR', pr.id, 'PR_APPROVED',
+        interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.procurementRequestPrNumberApprovedByProjectApproverAndRELEASEDToProcurementUserToLocaleString, {
+          prNumber: pr.prNumber,
+          toLocaleString: pr.totalEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale),
+        }), null, null, null, null, approvedAt.toISOString(),
+      ],
     });
-
-    // Update revision PR status (DOES NOT TOUCH BUDGET WORKFLOW STATUS!)
-    await prisma.boqRevision.update({
-      where: { id: pr.boqRevisionId },
-      data: { prStatus: 'PR_APPROVED' },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: pr.projectId,
-        entityType: 'PR',
-        entityId: pr.id,
-        action: 'PR_APPROVED',
-        description: interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.procurementRequestPrNumberApprovedByProjectApproverAndRELEASEDToProcurementUserToLocaleString, { "prNumber": pr.prNumber, "toLocaleString": pr.totalEstimatedValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
-      },
-    });
+    const results = await writeD1BatchAtomically(batch);
+    if (Number(results[0]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
 
     return apiSuccess({
       pr: updated,
       status: 'PR_RELEASED_TO_PROCUREMENT',
       message: UI_STRINGS.appApiPrIdApproveRoute.pRApprovedAndReleasedToProcurementUserForSourcing,
     });
-  } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prApprovalFailed }), 500, { route: '/api/pr/[id]/approve', method: 'POST', error: err });
+  } catch (error) {
+    await writeStructuredLog('error', 'purchase_request.approval_failed', {
+      operation: 'approve', route: '/api/pr/[id]/approve', tenantId: ctx.tenantId,
+      userId: ctx.userId, prId: id, requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      error,
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.prApprovalFailed, 500);
   }
 }

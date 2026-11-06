@@ -2,11 +2,16 @@
 // Individual PPO-Level Vendor Performance Rating API with Areas for Improvement & Approver Workflow
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { isUserAuthorizedForProject } from '@/lib/project-auth';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, PPO_MARK_COMPLETED_AFTER_AUDIT_SQL, PPO_VENDOR_RATING_UPSERT_IF_ELIGIBLE_SQL } from '@/lib/d1-batch.constants';
+import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import { dispatchPreparedWorkflowNotification } from '@/lib/notifications';
+import { MAX_VENDOR_RATING_EVIDENCE_LENGTH, MAX_VENDOR_RATING_TEXT_LENGTH } from './route.constants';
 
 
 export async function GET(
@@ -18,6 +23,8 @@ export async function GET(
 
   const { id } = await params;
   const isProcurementUser = ctx.role === 'PROCUREMENT_USER';
+  const pageWindow = getListPageWindow(new URL(req.url).searchParams);
+  const pageSize = pageWindow.pageSize;
 
   try {
     // If Procurement User: view approved ratings only per Requirement 4
@@ -30,31 +37,75 @@ export async function GET(
       whereClause.status = 'APPROVED';
     }
 
-    const rawRatings = await prisma.ppoVendorRating.findMany({
-      where: whereClause,
-      include: {
-        ppo: {
-          select: {
-            id: true,
-            ppoNumber: true,
-            title: true,
-            totalValue: true,
-            status: true,
-            completedAt: true,
-            project: { select: { id: true, name: true, projectCode: true } },
-            costCentre: { select: { id: true, name: true, code: true } },
+    const [ratingRows, statusGroups, ppoStatusGroups] = await Promise.all([
+      prisma.ppoVendorRating.findMany({
+        where: whereClause,
+        skip: pageWindow.skip,
+        take: pageSize + 1,
+        select: {
+          id: true,
+          tenantId: true,
+          vendorId: true,
+          ppoId: true,
+          projectId: true,
+          costCentreId: true,
+          qualityScore: true,
+          deliveryScore: true,
+          commercialComplianceScore: true,
+          responsivenessScore: true,
+          documentationClosureScore: true,
+          overallScore: true,
+          criteriaDetails: true,
+          comments: true,
+          supportingEvidence: true,
+          status: true,
+          ratedBy: true,
+          ratedAt: true,
+          ppo: {
+            select: {
+              id: true,
+              ppoNumber: true,
+              title: true,
+              totalValue: true,
+              status: true,
+              completedAt: true,
+              project: { select: { id: true, name: true, projectCode: true } },
+              costCentre: { select: { id: true, name: true, code: true } },
+            },
           },
         },
-      },
-      orderBy: { ratedAt: 'desc' },
-    });
+        orderBy: [{ ratedAt: 'desc' }, { id: 'desc' }],
+      }),
+      prisma.ppoVendorRating.groupBy({
+        by: ['status'],
+        where: { vendorId: id, tenantId: ctx.tenantId },
+        _count: { _all: true },
+        _avg: {
+          overallScore: true,
+          qualityScore: true,
+          deliveryScore: true,
+          commercialComplianceScore: true,
+          responsivenessScore: true,
+          documentationClosureScore: true,
+        },
+      }),
+      prisma.ppo.groupBy({
+        by: ['status'],
+        where: { tenantId: ctx.tenantId, vendorId: id },
+        _count: { _all: true },
+      }),
+    ]);
+    const hasMore = ratingRows.length > pageSize;
+    const rawRatings = hasMore ? ratingRows.slice(0, pageSize) : ratingRows;
 
     // Resolve user names for ratedBy
     const userIds = Array.from(new Set(rawRatings.map((r) => r.ratedBy).filter(Boolean)));
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true, role: true, email: true },
-    });
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true },
+        })
+      : [];
     const userMap = new Map(users.map((u) => [u.id, u.name]));
 
     const ratings = rawRatings.map((r) => {
@@ -86,49 +137,51 @@ export async function GET(
       };
     });
 
-    // Calculate scorecard summary across APPROVED ratings (or legacy ratings)
-    const approvedRatings = ratings.filter((r) => r.status === 'APPROVED');
-    const ppoRatingsCount = approvedRatings.length;
-    let averageOverall: number | null = null;
-    let avgQuality: number | null = null;
-    let avgDelivery: number | null = null;
-    let avgCommercial: number | null = null;
-    let avgResponsiveness: number | null = null;
-    let avgDocumentation: number | null = null;
-
-    if (ppoRatingsCount > 0) {
-      const sumOverall = approvedRatings.reduce((acc, r) => acc + r.overallScore, 0);
-      const sumQuality = approvedRatings.reduce((acc, r) => acc + r.qualityScore, 0);
-      const sumDelivery = approvedRatings.reduce((acc, r) => acc + r.deliveryScore, 0);
-      const sumCommercial = approvedRatings.reduce((acc, r) => acc + r.commercialComplianceScore, 0);
-      const sumResp = approvedRatings.reduce((acc, r) => acc + r.responsivenessScore, 0);
-      const sumDocs = approvedRatings.reduce((acc, r) => acc + r.documentationClosureScore, 0);
-
-      averageOverall = Math.round((sumOverall / ppoRatingsCount) * 10) / 10;
-      avgQuality = Math.round((sumQuality / ppoRatingsCount) * 10) / 10;
-      avgDelivery = Math.round((sumDelivery / ppoRatingsCount) * 10) / 10;
-      avgCommercial = Math.round((sumCommercial / ppoRatingsCount) * 10) / 10;
-      avgResponsiveness = Math.round((sumResp / ppoRatingsCount) * 10) / 10;
-      avgDocumentation = Math.round((sumDocs / ppoRatingsCount) * 10) / 10;
-    }
+    const approvedAggregate = statusGroups.find((group) => group.status === 'APPROVED');
+    const average = (value: number | null | undefined) => value == null ? null : Math.round(value * 10) / 10;
+    const ppoRatingsCount = Number(approvedAggregate?._count._all || 0);
+    const ppoCount = ppoStatusGroups.reduce((sum, group) => sum + Number(group._count._all || 0), 0);
+    const completedPpoCount = ppoStatusGroups
+      .filter((group) => group.status === 'COMPLETED' || group.status === 'ACCEPTED')
+      .reduce((sum, group) => sum + Number(group._count._all || 0), 0);
+    const totalRatingCount = isProcurementUser
+      ? ppoRatingsCount
+      : statusGroups.reduce((sum, group) => sum + Number(group._count._all || 0), 0);
 
     return apiSuccess({
       ratings,
       summary: {
         ppoRatingsCount,
-        averageOverall,
-        avgQuality,
-        avgDelivery,
-        avgCommercial,
-        avgResponsiveness,
-        avgDocumentation,
+        averagePpoRating: average(approvedAggregate?._avg.overallScore),
+        averageOverall: average(approvedAggregate?._avg.overallScore),
+        avgQuality: average(approvedAggregate?._avg.qualityScore),
+        avgDelivery: average(approvedAggregate?._avg.deliveryScore),
+        avgCommercial: average(approvedAggregate?._avg.commercialComplianceScore),
+        avgResponsiveness: average(approvedAggregate?._avg.responsivenessScore),
+        avgDocumentation: average(approvedAggregate?._avg.documentationClosureScore),
+        ppoCount,
+        completedPpoCount,
       },
       userRole: ctx.role,
       isProcurementUser,
+      pagination: { page: pageWindow.page, pageSize, total: totalRatingCount, hasMore },
     });
-  } catch (error: any) {
-    console.error('Error fetching PPO vendor ratings:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchPpoRatings }), 500, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'GET', error: error });
+  } catch (error) {
+    await writeStructuredLog('error', 'vendor.rating_history_read_failed', {
+      operation: 'list_vendor_ratings',
+      route: '/api/procurement/vendors/[id]/ppo-ratings',
+      requestId: req.headers.get('x-request-id') || null,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      role: ctx.role,
+      vendorId: id,
+      page: pageWindow.page,
+      pageSize,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 400) }
+        : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchPpoRatings, 500);
   }
 }
 
@@ -144,6 +197,8 @@ export async function POST(
   }
 
   const { id } = await params;
+  let ratingPpoId: string | null = null;
+  const startedAt = Date.now();
 
   try {
     const vendor = await prisma.vendor.findFirst({
@@ -160,25 +215,43 @@ export async function POST(
       return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
-    const body = await req.json();
-    const {
-      ppoId,
-      qualityScore = 3, // 1 to 5 (30%)
-      deliveryScore = 3, // 1 to 5 (25%)
-      commercialComplianceScore = 3, // 1 to 5 (20%)
-      responsivenessScore = 3, // 1 to 5 (15%)
-      documentationClosureScore = 3, // 1 to 5 (10%)
-      comments,
-      supportingEvidence,
-      qualityComments = '',
-      deliveryComments = '',
-      commercialComments = '',
-      documentationComments = '',
-      responsivenessComments = '',
-      overallImprovement = '',
-      action = 'SUBMIT', // 'SAVE_DRAFT' | 'SUBMIT'
-      markPpoCompleted = true,
-    } = body;
+    const bodyValue: unknown = await req.json();
+    if (!bodyValue || typeof bodyValue !== 'object' || Array.isArray(bodyValue)) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    const body = bodyValue as Record<string, unknown>;
+    const ppoId = typeof body.ppoId === 'string' ? body.ppoId : '';
+    const qualityScore = body.qualityScore ?? 3;
+    const deliveryScore = body.deliveryScore ?? 3;
+    const commercialComplianceScore = body.commercialComplianceScore ?? 3;
+    const responsivenessScore = body.responsivenessScore ?? 3;
+    const documentationClosureScore = body.documentationClosureScore ?? 3;
+    const comments = typeof body.comments === 'string' ? body.comments.trim() : '';
+    const qualityComments = typeof body.qualityComments === 'string' ? body.qualityComments : '';
+    const deliveryComments = typeof body.deliveryComments === 'string' ? body.deliveryComments : '';
+    const commercialComments = typeof body.commercialComments === 'string' ? body.commercialComments : '';
+    const documentationComments = typeof body.documentationComments === 'string' ? body.documentationComments : '';
+    const responsivenessComments = typeof body.responsivenessComments === 'string' ? body.responsivenessComments : '';
+    const overallImprovement = typeof body.overallImprovement === 'string' ? body.overallImprovement : '';
+    const action = body.action === undefined ? 'SUBMIT' : body.action;
+    const markPpoCompleted = body.markPpoCompleted === undefined ? true : body.markPpoCompleted;
+    const evidenceValue = body.supportingEvidence;
+    const supportingEvidence = typeof evidenceValue === 'string'
+      ? evidenceValue
+      : evidenceValue === undefined || evidenceValue === null ? null : JSON.stringify(evidenceValue);
+    ratingPpoId = ppoId || null;
+
+    if (action !== 'SUBMIT' && action !== 'SAVE_DRAFT') {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    if (typeof markPpoCompleted !== 'boolean') {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    if ([comments, qualityComments, deliveryComments, commercialComments, documentationComments,
+      responsivenessComments, overallImprovement].some((value) => value.length > MAX_VENDOR_RATING_TEXT_LENGTH)
+      || (supportingEvidence && supportingEvidence.length > MAX_VENDOR_RATING_EVIDENCE_LENGTH)) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
 
     if (!ppoId) {
       return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOIDIsRequiredToRecordPerformanceEvaluation, 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
@@ -206,14 +279,14 @@ export async function POST(
     }
 
     // Security Rule: Project scope authorization check
-    const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, ppo.projectId);
+    const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, ppo.projectId, ctx.tenantId);
     if (!isAuthorized) {
       return apiError(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.accessDeniedYouAreNotAuthorisedToEvaluatePPOsForThisProject, 403, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
     }
 
     // Check for existing rating for this PPO & enforce immutability
-    const existingRating = await prisma.ppoVendorRating.findUnique({
-      where: { ppoId },
+    const existingRating = await prisma.ppoVendorRating.findFirst({
+      where: { ppoId, tenantId: ctx.tenantId, vendorId: vendor.id },
     });
 
     if (existingRating) {
@@ -222,6 +295,9 @@ export async function POST(
       }
       if (existingRating.status === 'SUBMITTED') {
         return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsCurrentlySubmittedAndUnderProjectApproverReviewItCannotBeModifiedUntilReviewedOrReturned, { "ppoNumber": ppo.ppoNumber }), 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
+      }
+      if (existingRating.status !== 'DRAFT' && existingRating.status !== 'RETURNED_FOR_CORRECTION') {
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.pPOPpoNumberAssessmentIsInStatusStatusAndIsLockedAgainstModifications, { "ppoNumber": ppo.ppoNumber, "status": existingRating.status }), 400);
       }
     }
 
@@ -242,8 +318,8 @@ export async function POST(
     const newStatus = isDraft ? 'DRAFT' : 'SUBMITTED';
 
     if (!isDraft) {
-      if (!overallImprovement && !comments && !qualityComments) {
-        return apiError(UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, 400, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST' });
+      if (!overallImprovement.trim() && !comments && !qualityComments.trim()) {
+        return apiError(UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, 400);
       }
     }
 
@@ -257,13 +333,14 @@ export async function POST(
       }
     }
 
-    const history = existingCriteria.history || [];
+    const history = Array.isArray(existingCriteria.history) ? existingCriteria.history : [];
+    const now = new Date();
     history.push({
       action: isDraft ? 'DRAFT_SAVED' : (existingRating?.status === 'RETURNED_FOR_CORRECTION' ? 'RESUBMITTED' : 'SUBMITTED'),
       performedBy: ctx.userId,
       performedByName: ctx.userName || 'Project User',
       performedByRole: ctx.role,
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
       overallScore,
       qualityScore: q,
       deliveryScore: d,
@@ -276,7 +353,7 @@ export async function POST(
       documentationComments: documentationComments.trim(),
       responsivenessComments: responsivenessComments.trim(),
       overallImprovement: overallImprovement.trim(),
-      notes: comments || overallImprovement || null,
+      notes: comments || overallImprovement.trim() || null,
     });
 
     const criteriaDetails = {
@@ -290,95 +367,49 @@ export async function POST(
       history,
     };
 
-    let rating: any;
-
-    if (existingRating) {
-      // Update existing draft or returned rating
-      rating = await prisma.ppoVendorRating.update({
-        where: { id: existingRating.id },
-        data: {
-          qualityScore: q,
-          deliveryScore: d,
-          commercialComplianceScore: c,
-          responsivenessScore: r,
-          documentationClosureScore: doc,
-          overallScore,
-          comments: comments || overallImprovement || null,
-          supportingEvidence: supportingEvidence || null,
-          criteriaDetails: JSON.stringify(criteriaDetails),
-          status: newStatus,
-          ratedBy: ctx.userId,
-          ratedAt: new Date(),
-        },
-      });
-    } else {
-      // Create new rating
-      rating = await prisma.ppoVendorRating.create({
-        data: {
-          tenantId: ctx.tenantId,
-          vendorId: vendor.id,
-          ppoId: ppo.id,
-          projectId: ppo.projectId,
-          costCentreId: ppo.costCentreId,
-          qualityScore: q,
-          deliveryScore: d,
-          commercialComplianceScore: c,
-          responsivenessScore: r,
-          documentationClosureScore: doc,
-          overallScore,
-          comments: comments || overallImprovement || null,
-          supportingEvidence: supportingEvidence || null,
-          criteriaDetails: JSON.stringify(criteriaDetails),
-          status: newStatus,
-          ratedBy: ctx.userId,
-          ratedAt: new Date(),
-        },
-      });
-    }
-
-    // Mark PPO completed if submitted, requested, and not yet marked
-    if (!isDraft && markPpoCompleted && ppo.status !== 'COMPLETED') {
-      await prisma.ppo.update({
-        where: { id: ppo.id },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-        },
-      });
-    }
-
-    // Create Audit Log
-    await createAuditLog({
+    const ratingId = existingRating?.id || crypto.randomUUID();
+    const auditId = crypto.randomUUID();
+    const ratingValues = [ratingId, ctx.tenantId, vendor.id, ppo.id, ppo.projectId, ppo.costCentreId,
+      q, d, c, r, doc, overallScore, JSON.stringify(criteriaDetails), comments || overallImprovement.trim() || null,
+      supportingEvidence, newStatus, ctx.userId, now, existingRating?.createdAt || now, now,
+      ppo.id, ctx.tenantId, vendor.id];
+    const auditAction = isDraft ? 'PPO_RATING_DRAFT_SAVED' : 'PPO_RATING_SUBMITTED';
+    const auditDescription = isDraft
+      ? `Draft performance assessment saved for PPO ${ppo.ppoNumber} against vendor ${vendor.name} (Score: ${overallScore}/5.0)`
+      : `Performance assessment submitted for Project Approval for PPO ${ppo.ppoNumber} against vendor ${vendor.name} (Score: ${overallScore}/5.0)`;
+    const notification = !isDraft ? {
       tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      entityType: 'VENDOR',
-      entityId: vendor.id,
-      action: isDraft ? 'PPO_RATING_DRAFT_SAVED' : 'PPO_RATING_SUBMITTED',
-      description: isDraft
-        ? `Draft performance assessment saved for PPO ${ppo.ppoNumber} against vendor ${vendor.name} (Score: ${overallScore}/5.0)`
-        : `Performance assessment submitted for Project Approval for PPO ${ppo.ppoNumber} against vendor ${vendor.name} (Score: ${overallScore}/5.0)`,
-      newValue: {
-        ppoNumber: ppo.ppoNumber,
-        status: newStatus,
-        overallScore,
-        ratingId: rating.id,
-      },
-    });
-
-    // Notify Project Approver if submitted
-    if (!isDraft) {
-      await prisma.notification.create({
-        data: {
-          tenantId: ctx.tenantId,
-          targetRole: 'PROJECT_APPROVER',
-          title: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.vendorPerformanceReviewSubmittedPpoNumber, { "ppoNumber": ppo.ppoNumber }),
-          message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.value1SubmittedAOverallScore50PerformanceRatingForVendorNameOnPPOPpoNumber, { "value1": ctx.userName || UI_STRINGS.common.projectUser, "overallScore": overallScore, "name": vendor.name, "ppoNumber": ppo.ppoNumber }),
-          type: 'ACTION_REQUIRED',
-          entityType: 'PPO',
-          entityId: ppo.id,
-          recordNumber: ppo.ppoNumber,
-          link: `/approvals/vendor-ratings`,
-        },
+      userId: null,
+      targetRole: 'PROJECT_APPROVER',
+      title: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.vendorPerformanceReviewSubmittedPpoNumber, { "ppoNumber": ppo.ppoNumber }),
+      message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdPpoRatingsRoute.value1SubmittedAOverallScore50PerformanceRatingForVendorNameOnPPOPpoNumber, { "value1": ctx.userName || UI_STRINGS.common.projectUser, "overallScore": overallScore, "name": vendor.name, "ppoNumber": ppo.ppoNumber }),
+      type: 'ACTION_REQUIRED' as const,
+      entityType: 'PPO' as const,
+      entityId: ppo.id,
+      recordNumber: ppo.ppoNumber,
+      link: '/approvals/vendor-ratings',
+    } : null;
+    const preparedNotification = notification ? prepareNotificationOutbox(notification, now, auditId) : null;
+    const batch = [
+      { sql: PPO_VENDOR_RATING_UPSERT_IF_ELIGIBLE_SQL, values: ratingValues },
+      { sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: [auditId, ctx.tenantId, ctx.userId, ppo.projectId,
+        'VENDOR', vendor.id, auditAction, auditDescription, null,
+        JSON.stringify({ ppoNumber: ppo.ppoNumber, status: newStatus, overallScore, ratingId }), null, null, now] },
+      ...(!isDraft && markPpoCompleted && ppo.status !== 'COMPLETED' ? [{
+        sql: PPO_MARK_COMPLETED_AFTER_AUDIT_SQL,
+        values: [now, now, ppo.id, ctx.tenantId, auditId, ctx.tenantId],
+      }] : []),
+      ...(preparedNotification ? [preparedNotification.statement] : []),
+    ];
+    const results = await writeD1BatchAtomically(batch);
+    if (Number(results[0]?.meta?.changes || 0) !== 1 || Number(results[1]?.meta?.changes || 0) !== 1
+      || (preparedNotification && Number(results[results.length - 1]?.meta?.changes || 0) !== 1)) {
+      return apiError(UI_STRINGS.common.userMessages.failedToSubmitPpoRating, 409);
+    }
+    const rating = results[0]?.results?.[0] || { id: ratingId, status: newStatus };
+    if (preparedNotification) {
+      await dispatchPreparedWorkflowNotification(preparedNotification.id, now, {
+        tenantId: ctx.tenantId, entityType: 'PPO', entityId: ppo.id, route: '/api/procurement/vendors/[id]/ppo-ratings',
       });
     }
 
@@ -388,8 +419,21 @@ export async function POST(
         ? `Draft rating for PPO ${ppo.ppoNumber} saved successfully.`
         : `Performance assessment for PPO ${ppo.ppoNumber} submitted for Project Approval.`,
     }, 201);
-  } catch (error: any) {
-    console.error('Error submitting PPO vendor rating:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitPpoRating }), 500, { route: '/api/procurement/vendors/[id]/ppo-ratings', method: 'POST', error: error });
+  } catch (error) {
+    await writeStructuredLog('error', 'vendor.rating_submission_failed', {
+      operation: 'submit_vendor_rating',
+      route: '/api/procurement/vendors/[id]/ppo-ratings',
+      requestId: req.headers.get('x-request-id') || null,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      role: ctx.role,
+      vendorId: id,
+      ppoId: ratingPpoId,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 400) }
+        : { type: typeof error },
+      durationMs: Date.now() - startedAt,
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToSubmitPpoRating, 500);
   }
 }

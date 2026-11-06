@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
-import type { VendorSourcingDashboardProps } from "@app-types/components/VendorSourcingDashboard.types";
+import type { VendorDashboardListRecord, VendorDashboardState, VendorRfqSummary, VendorSourcingDashboardProps } from "@app-types/components/VendorSourcingDashboard.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -47,6 +47,8 @@ export default function VendorSourcingDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loadingSections, setLoadingSections] = useState<Record<string, boolean>>({});
+  const [openingNegotiationRfqId, setOpeningNegotiationRfqId] = useState<string | null>(null);
 
   // Full-window dedicated negotiation workspace state
   const [activeNegotiatingRfq, setActiveNegotiatingRfq] = useState<any | null>(null);
@@ -87,10 +89,59 @@ export default function VendorSourcingDashboard({
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }));
       }
       setDashboardData(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreDashboardSection = async (section: 'rfqs' | 'ppos' | 'rateCards') => {
+    const pagination = dashboardData?.pagination?.[section];
+    if (!pagination?.hasMore || loadingSections[section]) return;
+    const pageKey = section === 'rfqs' ? 'rfqPage' : section === 'ppos' ? 'ppoPage' : 'rateCardPage';
+    const query = new URLSearchParams({ section, [pageKey]: String(pagination.page + 1), pageSize: String(pagination.pageSize) });
+
+    setLoadingSections((current) => ({ ...current, [section]: true }));
+    try {
+      const res = await fetch(`/api/procurement/vendors/${vendorId}/dashboard?${query.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData);
+      const listKey = section === 'rfqs' ? 'rfqRegister' : section === 'ppos' ? 'ppos' : 'rateCards';
+      setDashboardData((current: VendorDashboardState | null) => {
+        const existing = (current?.[listKey] as VendorDashboardListRecord[] | undefined) || [];
+        const incoming = (data[listKey] as VendorDashboardListRecord[] | undefined) || [];
+        const seen = new Set(existing.map((item) => item.id));
+        const additions = incoming.filter((item) => !seen.has(item.id));
+        return {
+          ...current,
+          [listKey]: [...existing, ...additions],
+          pagination: { ...current?.pagination, ...data.pagination },
+        };
+      });
+    } catch (err: unknown) {
+      alert(interpolateUiString(UI_STRINGS.common.errorMessage, { message: err instanceof Error ? err.message : UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData }));
+    } finally {
+      setLoadingSections((current) => ({ ...current, [section]: false }));
+    }
+  };
+
+  const openNegotiationWorkspace = async (rfqSummary: VendorRfqSummary) => {
+    if (openingNegotiationRfqId) return;
+    setOpeningNegotiationRfqId(rfqSummary.id);
+    try {
+      const query = new URLSearchParams({ includeNegotiationHistory: 'true' });
+      if (vendorId) query.set('vendorId', vendorId);
+      const res = await fetch(`/api/procurement/rfqs/${rfqSummary.id}?${query.toString()}`);
+      const data = await res.json();
+      if (!res.ok || !data.rfq) {
+        throw new Error(data.error || UI_STRINGS.common.userMessages.failedToFetchRfqDetail);
+      }
+      setActiveNegotiatingRfq({ ...rfqSummary, ...data.rfq });
+    } catch (err: unknown) {
+      alert(interpolateUiString(UI_STRINGS.common.errorMessage, { message: err instanceof Error ? err.message : UI_STRINGS.common.userMessages.failedToFetchRfqDetail }));
+    } finally {
+      setOpeningNegotiationRfqId(null);
     }
   };
 
@@ -568,12 +619,13 @@ export default function VendorSourcingDashboard({
                           {/* Open Negotiation */}
                           <button
                             type="button"
-                            onClick={() => setActiveNegotiatingRfq(r)}
+                            onClick={() => openNegotiationWorkspace(r)}
+                            disabled={openingNegotiationRfqId !== null}
                             className="btn btn-primary btn-sm"
                             style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
                             title={UI_STRINGS.common.openCommercialNegotiationWorkspace}
                           >
-                            <TrendingDown size={12} style={{ marginRight: 3 }} />{UI_STRINGS.componentsVendorSourcingDashboard.negotiate}</button>
+                            <TrendingDown size={12} style={{ marginRight: 3 }} />{openingNegotiationRfqId === r.id ? UI_STRINGS.common.loading : UI_STRINGS.componentsVendorSourcingDashboard.negotiate}</button>
 
                           {/* Chat / Clarify */}
                           <button
@@ -640,6 +692,13 @@ export default function VendorSourcingDashboard({
             </tbody>
           </table>
         </div>
+        {dashboardData?.pagination?.rfqs?.hasMore && (
+          <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid #e2e8f0' }}>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(loadingSections.rfqs)} onClick={() => loadMoreDashboardSection('rfqs')}>
+              {loadingSections.rfqs ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── 3. PPOS / ORDERS AWAITING ACCEPTANCE AREA (Requirement D) ── */}
@@ -810,6 +869,13 @@ export default function VendorSourcingDashboard({
               })}
             </div>
           )}
+          {dashboardData?.pagination?.ppos?.hasMore && (
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(loadingSections.ppos)} onClick={() => loadMoreDashboardSection('ppos')}>
+                {loadingSections.ppos ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -858,7 +924,7 @@ export default function VendorSourcingDashboard({
                     <td><span className="badge badge-draft">{rc.category}</span></td>
                     <td>{new Date(rc.validFrom).toLocaleDateString()}</td>
                     <td>{new Date(rc.validTo).toLocaleDateString()}</td>
-                    <td style={{ fontWeight: 600 }}>{rc.items?.length || 0}{UI_STRINGS.common.items3}</td>
+                    <td style={{ fontWeight: 600 }}>{rc._count?.items ?? rc.items?.length ?? 0}{UI_STRINGS.common.items3}</td>
                     <td><span className="badge badge-approved">{rc.status}</span></td>
                   </tr>
                 ))
@@ -866,6 +932,13 @@ export default function VendorSourcingDashboard({
             </tbody>
           </table>
         </div>
+        {dashboardData?.pagination?.rateCards?.hasMore && (
+          <div style={{ padding: 12, textAlign: 'center', borderTop: '1px solid #e2e8f0' }}>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(loadingSections.rateCards)} onClick={() => loadMoreDashboardSection('rateCards')}>
+              {loadingSections.rateCards ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── MODAL 2: ACCEPT PPO CONFIRMATION MODAL (Requirement D) ── */}

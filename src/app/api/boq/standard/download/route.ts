@@ -1,22 +1,32 @@
 // src/app/api/boq/standard/download/route.ts - Dynamic Category-Specific Standard BOQ Excel Generator
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import {
+  MAX_STANDARD_BOQ_EXPORT_CATEGORIES,
+  MAX_STANDARD_BOQ_EXPORT_CATEGORY_CHILDREN,
+  MAX_STANDARD_BOQ_EXPORT_ITEMS,
+  MAX_STANDARD_BOQ_EXPORT_UOMS,
+} from './route.constants';
 
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
 
+  const startedAt = Date.now();
+  let projectId: string | undefined;
+  let costCentreId: string | undefined;
   try {
     const { searchParams } = new URL(req.url);
     const sector = (searchParams.get('sector') || 'RETAIL').toUpperCase();
     const projectType = searchParams.get('projectType') || 'Retail Store Fitout';
-    const projectId = searchParams.get('projectId') || '';
-    const costCentreId = searchParams.get('costCentreId') || '';
+    projectId = searchParams.get('projectId') || '';
+    costCentreId = searchParams.get('costCentreId') || '';
     const categoriesParam = searchParams.get('categories') || '';
     const selectedCategories = categoriesParam ? categoriesParam.split(',').map(c => c.trim()).filter(Boolean) : [];
 
@@ -35,7 +45,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Query standard items from database for this sector & categories
-    const whereClause: any = {
+    const whereClause: Prisma.StandardBoqItemWhereInput = {
       tenantId: ctx.tenantId,
       isActive: true,
     };
@@ -50,7 +60,9 @@ export async function GET(req: NextRequest) {
 
     let standardItems = await prisma.standardBoqItem.findMany({
       where: whereClause,
-      orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { itemCode: 'asc' }],
+      select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
+      orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
+      take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1,
     });
 
     // Fallback: If sector specific query yields few items, pull items matching the categories across tenant
@@ -61,7 +73,9 @@ export async function GET(req: NextRequest) {
           isActive: true,
           category: { in: selectedCategories },
         },
-        orderBy: [{ category: 'asc' }, { itemCode: 'asc' }],
+        select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
+        orderBy: [{ category: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
+        take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1,
       });
     }
 
@@ -69,23 +83,44 @@ export async function GET(req: NextRequest) {
     if (standardItems.length === 0) {
       standardItems = await prisma.standardBoqItem.findMany({
         where: { tenantId: ctx.tenantId, isActive: true },
+        select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
         take: 30,
-        orderBy: [{ category: 'asc' }, { itemCode: 'asc' }],
+        orderBy: [{ category: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
       });
+    }
+
+    if (standardItems.length > MAX_STANDARD_BOQ_EXPORT_ITEMS) {
+      return apiError(UI_STRINGS.appApiBoqStandardDownloadRoute.standardBoqExportExceedsSafeSizeSelectFewerCategories, 413);
     }
 
     // Fetch Master UOMs and Categories for Excel Data & Reference Sheets
     const uoms = await prisma.uomMaster.findMany({
       where: { tenantId: ctx.tenantId, isActive: true },
       select: { code: true, name: true, category: true },
-      orderBy: { code: 'asc' },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      take: MAX_STANDARD_BOQ_EXPORT_UOMS + 1,
     });
 
     const categories = await prisma.category.findMany({
       where: { tenantId: ctx.tenantId, isActive: true, level: 1 },
-      include: { children: true },
-      orderBy: { sortOrder: 'asc' },
+      select: {
+        name: true,
+        children: {
+          where: { isActive: true },
+          select: { name: true },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          take: MAX_STANDARD_BOQ_EXPORT_CATEGORY_CHILDREN + 1,
+        },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      take: MAX_STANDARD_BOQ_EXPORT_CATEGORIES + 1,
     });
+
+    if (uoms.length > MAX_STANDARD_BOQ_EXPORT_UOMS
+      || categories.length > MAX_STANDARD_BOQ_EXPORT_CATEGORIES
+      || categories.some((category) => category.children.length > MAX_STANDARD_BOQ_EXPORT_CATEGORY_CHILDREN)) {
+      return apiError(UI_STRINGS.appApiBoqStandardDownloadRoute.standardBoqExportExceedsSafeSizeSelectFewerCategories, 413);
+    }
 
     const workbook = XLSX.utils.book_new();
 
@@ -184,7 +219,7 @@ export async function GET(req: NextRequest) {
     // =========================================================================
     // SHEET 3: MASTER_DATA (Supporting Taxonomy & Approved Values)
     // =========================================================================
-    const masterDataRows: any[] = [];
+    const masterDataRows: Array<Record<string, string>> = [];
     const maxLen = Math.max(uoms.length, categories.length, 10);
     for (let i = 0; i < maxLen; i++) {
       masterDataRows.push({
@@ -192,7 +227,7 @@ export async function GET(req: NextRequest) {
         'UOM Description': uoms[i]?.name || '',
         'UOM Category': uoms[i]?.category || '',
         'Standard Category': categories[i]?.name || '',
-        'Sub-categories': categories[i]?.children?.map((c: any) => c.name).join(', ') || '',
+        'Sub-categories': categories[i]?.children?.map((child) => child.name).join(', ') || '',
       });
     }
 
@@ -212,8 +247,13 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-store, max-age=0',
       },
     });
-  } catch (err: any) {
-    console.error('Error downloading standard BOQ:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateStandardBoqDownload }), 500, { route: '/api/boq/standard/download', method: 'GET', error: err });
+  } catch (error) {
+    await writeStructuredLog('error', 'boq.standard_download_failed', {
+      operation: 'generate_standard_boq_download', route: '/api/boq/standard/download',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId, projectId, costCentreId,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToGenerateStandardBoqDownload, 500);
   }
 }

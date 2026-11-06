@@ -9,7 +9,7 @@ describe('runtime detection', () => {
     jest.restoreAllMocks();
   });
 
-  it('uses the local SQLite database by default outside Workers', () => {
+  it('does not select D1 when no D1 provider is configured outside Workers', () => {
     delete process.env.DATABASE_PROVIDER;
     expect(isCloudflareWorker()).toBe(false);
     expect(usesD1Database()).toBe(false);

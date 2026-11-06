@@ -1,36 +1,108 @@
-// src/app/api/boq/estimate-cost/route.ts - AI Generated Cost & Benchmark Engine
-import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { MAX_BOQ_BATCH_LINES } from '@/lib/d1-batch.constants';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import type { BoqCostEstimateCategoryTotals, BoqCostEstimateUpdate } from '@app-types/app/api/boq/estimate-cost/route.types';
+import {
+  BOQ_COST_ESTIMATE_AUDIT_INSERT_AFTER_UPDATE_SQL,
+  BOQ_COST_ESTIMATE_BENCHMARK_RATES,
+  BOQ_COST_ESTIMATE_LINES_UPDATE_JSON_SQL,
+  BOQ_COST_ESTIMATE_REVISION_UPDATE_SQL,
+} from './route.constants';
 
+const EMPTY_CATEGORY_TOTALS = (): BoqCostEstimateCategoryTotals => ({
+  Material: 0,
+  Electrical: 0,
+  Civil: 0,
+  Interior: 0,
+  Other: 0,
+});
+
+function getQuantity(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const quantity = Number(value);
+  return Number.isFinite(quantity) ? quantity : null;
+}
+
+function getLineBenchmark(description: string, categoryName: string): {
+  unitCost: number;
+  costSource: string;
+  confidence: number;
+  category: string;
+} {
+  const descriptionLower = description.toLowerCase();
+  const match = Object.entries(BOQ_COST_ESTIMATE_BENCHMARK_RATES).find(([key]) => descriptionLower.includes(key));
+  if (match) {
+    return {
+      unitCost: match[1].rate,
+      costSource: match[1].source,
+      confidence: match[1].conf,
+      category: match[1].category,
+    };
+  }
+
+  const categoryLower = categoryName.toLowerCase();
+  if (categoryLower.includes('electrical')) {
+    return { unitCost: 180, costSource: 'AI Estimate (Regional Market Average)', confidence: 0.80, category: 'Electrical' };
+  }
+  if (categoryLower.includes('civil') || categoryLower.includes('interior')) {
+    return { unitCost: 145, costSource: 'AI Estimate (Regional Market Average)', confidence: 0.80, category: 'Civil' };
+  }
+  if (categoryLower.includes('material')) {
+    return { unitCost: 110, costSource: 'AI Estimate (Regional Market Average)', confidence: 0.80, category: 'Material' };
+  }
+  return { unitCost: 150, costSource: 'AI Estimate (Regional Market Average)', confidence: 0.80, category: 'Other' };
+}
+
+function addCategoryTotal(totals: BoqCostEstimateCategoryTotals, category: string, value: number): void {
+  if (category.includes('Electrical')) totals.Electrical += value;
+  else if (category.includes('Civil')) totals.Civil += value;
+  else if (category.includes('Interior')) totals.Interior += value;
+  else if (category.includes('Material')) totals.Material += value;
+  else totals.Other += value;
+}
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_EDIT');
   if (!isApiContext(ctx)) return ctx;
 
+  const startedAt = Date.now();
+  let targetId: string | null = null;
+  let targetRevisionId: string | null = null;
+
   try {
     const body = await req.json();
     const { boqRevisionId, boqId, lineIds } = body;
-
-    const targetId = boqRevisionId || boqId;
-    if (!targetId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400, { route: '/api/boq/estimate-cost', method: 'POST' });
+    targetId = typeof boqRevisionId === 'string' ? boqRevisionId : typeof boqId === 'string' ? boqId : null;
+    if (!targetId) return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
+    if (lineIds !== undefined && (!Array.isArray(lineIds) || lineIds.some((lineId: unknown) => typeof lineId !== 'string'))) {
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.lineIdsMustBeAListOfStrings, 400);
     }
+    if (Array.isArray(lineIds) && lineIds.length > MAX_BOQ_BATCH_LINES) {
+      return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
+    }
+
+    const selectedLineIds = Array.isArray(lineIds) && lineIds.length > 0 ? [...new Set(lineIds as string[])] : null;
+    const lineFilter = {
+      where: {
+        isDeleted: false,
+        ...(selectedLineIds ? { id: { in: selectedLineIds } } : {}),
+      },
+      include: { category: true, subcategory: true, uom: true },
+      take: MAX_BOQ_BATCH_LINES + 1,
+      orderBy: [{ lineNumber: 'asc' as const }, { id: 'asc' as const }],
+    };
 
     let revision = await prisma.boqRevision.findFirst({
       where: { id: targetId, tenantId: ctx.tenantId },
       include: {
-        lines: {
-          where: {
-            isDeleted: false,
-            ...(lineIds && lineIds.length > 0 ? { id: { in: lineIds } } : {}),
-          },
-          include: { category: true, subcategory: true, uom: true },
-        },
+        lines: lineFilter,
         boq: { include: { project: true, costCentre: true } },
       },
     });
@@ -42,265 +114,129 @@ export async function POST(req: NextRequest) {
           project: true,
           costCentre: true,
           revisions: {
-            orderBy: { revisionNumber: 'desc' },
+            orderBy: [{ revisionNumber: 'desc' }, { id: 'desc' }],
             take: 1,
-            include: {
-              lines: {
-                where: {
-                  isDeleted: false,
-                  ...(lineIds && lineIds.length > 0 ? { id: { in: lineIds } } : {}),
-                },
-                include: { category: true, subcategory: true, uom: true },
-              },
-            },
+            include: { lines: lineFilter },
           },
         },
       });
-      if (boqRecord && boqRecord.revisions.length > 0) {
-        revision = {
-          ...boqRecord.revisions[0],
-          boq: boqRecord,
-        };
-      }
+      if (boqRecord?.revisions[0]) revision = { ...boqRecord.revisions[0], boq: boqRecord };
     }
 
-    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/estimate-cost', method: 'POST' });
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    targetRevisionId = revision.id;
+    if (revision.lines.length > MAX_BOQ_BATCH_LINES) {
+      return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
+    }
 
-    // Comprehensive Benchmark dictionary for retail, hospitality, banking & corporate fitouts
-    const benchmarkRates: Record<string, { rate: number; source: string; conf: number; category: string }> = {
-      tile: { rate: 125.0, source: 'Approved Vendor Rate Card', conf: 0.94, category: 'Civil & Interior' },
-      flooring: { rate: 140.0, source: 'Approved Vendor Rate Card', conf: 0.93, category: 'Civil & Interior' },
-      granite: { rate: 220.0, source: 'Market Benchmark', conf: 0.90, category: 'Civil & Interior' },
-      ceiling: { rate: 110.0, source: 'Standard Catalogue', conf: 0.91, category: 'Civil & Interior' },
-      gypsum: { rate: 105.0, source: 'Standard Catalogue', conf: 0.92, category: 'Civil & Interior' },
-      partition: { rate: 165.0, source: 'Standard Catalogue', conf: 0.90, category: 'Civil & Interior' },
-      paint: { rate: 38.0, source: 'Historical Awarded Price', conf: 0.88, category: 'Civil & Interior' },
-      door: { rate: 14500.0, source: 'Historical Awarded Price', conf: 0.87, category: 'Civil & Interior' },
-      glass: { rate: 450.0, source: 'Market Rate Benchmark', conf: 0.89, category: 'Civil & Interior' },
-      carpet: { rate: 180.0, source: 'Approved Vendor Catalog', conf: 0.91, category: 'Civil & Interior' },
-      plywood: { rate: 95.0, source: 'Standard Catalogue', conf: 0.90, category: 'Material' },
-
-      cable: { rate: 65.0, source: 'Standard Catalogue', conf: 0.95, category: 'Electrical' },
-      wire: { rate: 65.0, source: 'Standard Catalogue', conf: 0.95, category: 'Electrical' },
-      conduit: { rate: 42.0, source: 'Standard Catalogue', conf: 0.93, category: 'Electrical' },
-      light: { rate: 2100.0, source: 'Client Contract / Rate Card', conf: 0.96, category: 'Electrical' },
-      led: { rate: 1850.0, source: 'Client Contract / Rate Card', conf: 0.95, category: 'Electrical' },
-      switch: { rate: 320.0, source: 'Standard Catalogue', conf: 0.92, category: 'Electrical' },
-      socket: { rate: 280.0, source: 'Standard Catalogue', conf: 0.92, category: 'Electrical' },
-      mcb: { rate: 750.0, source: 'Standard Catalogue', conf: 0.94, category: 'Electrical' },
-      db: { rate: 4500.0, source: 'Standard Catalogue', conf: 0.91, category: 'Electrical' },
-      distribution: { rate: 6500.0, source: 'Engineered Cost Model', conf: 0.89, category: 'Electrical' },
-      panel: { rate: 18500.0, source: 'Engineered Cost Model', conf: 0.88, category: 'Electrical' },
-      earthing: { rate: 3500.0, source: 'Standard Catalogue', conf: 0.92, category: 'Electrical' },
-      ups: { rate: 42000.0, source: 'Client Contract / Rate Card', conf: 0.94, category: 'Electrical' },
-
-      ac: { rate: 52000.0, source: 'Approved Vendor Rate Card', conf: 0.93, category: 'HVAC' },
-      hvac: { rate: 48000.0, source: 'Approved Vendor Rate Card', conf: 0.91, category: 'HVAC' },
-      cassette: { rate: 62000.0, source: 'Approved Vendor Rate Card', conf: 0.94, category: 'HVAC' },
-      chiller: { rate: 75000.0, source: 'Approved Vendor Rate Card', conf: 0.92, category: 'HVAC' },
-      duct: { rate: 120.0, source: 'Historical Awarded Price', conf: 0.88, category: 'HVAC' },
-
-      chair: { rate: 4500.0, source: 'Standard Furniture Catalogue', conf: 0.93, category: 'Furniture' },
-      table: { rate: 12500.0, source: 'Standard Furniture Catalogue', conf: 0.91, category: 'Furniture' },
-      desk: { rate: 14000.0, source: 'Standard Furniture Catalogue', conf: 0.90, category: 'Furniture' },
-      workstation: { rate: 18500.0, source: 'Validated Vendor Catalogue', conf: 0.92, category: 'Furniture' },
-      rack: { rate: 8500.0, source: 'Validated Vendor Catalogue', conf: 0.90, category: 'Furniture' },
-      storage: { rate: 9500.0, source: 'Standard Catalogue', conf: 0.89, category: 'Furniture' },
-
-      counter: { rate: 24000.0, source: 'Engineered Cost Build-up', conf: 0.85, category: 'Interior' },
-      signage: { rate: 18500.0, source: 'Historical Awarded Price', conf: 0.89, category: 'Signage & Branding' },
-      branding: { rate: 15000.0, source: 'Standard Catalogue', conf: 0.87, category: 'Signage & Branding' },
-      board: { rate: 8500.0, source: 'Standard Catalogue', conf: 0.86, category: 'Signage & Branding' },
-
-      camera: { rate: 3800.0, source: 'Standard Catalogue', conf: 0.94, category: 'ELV / IT' },
-      cctv: { rate: 4200.0, source: 'Standard Catalogue', conf: 0.94, category: 'ELV / IT' },
-      dvr: { rate: 12000.0, source: 'Standard Catalogue', conf: 0.92, category: 'ELV / IT' },
-      nvr: { rate: 16000.0, source: 'Standard Catalogue', conf: 0.93, category: 'ELV / IT' },
-      wifi: { rate: 5500.0, source: 'Standard Catalogue', conf: 0.93, category: 'ELV / IT' },
-      access: { rate: 8500.0, source: 'Standard Catalogue', conf: 0.91, category: 'ELV / IT' },
-      biometric: { rate: 9500.0, source: 'Standard Catalogue', conf: 0.92, category: 'ELV / IT' },
-    };
-
+    const estimatedAt = new Date(Math.max(Date.now(), revision.updatedAt.getTime() + 1));
+    const estimatedAtIso = estimatedAt.toISOString();
+    const categoryTotals = EMPTY_CATEGORY_TOTALS();
+    const unestimatedItems: Array<Record<string, unknown>> = [];
+    const costResults: Array<Record<string, unknown>> = [];
+    const lineUpdates: BoqCostEstimateUpdate[] = [];
     let totalEstimatedRevValue = 0;
-    const costResults: any[] = [];
-    const unestimatedItems: any[] = [];
-    const categoryTotals: Record<string, number> = {
-      Material: 0,
-      Electrical: 0,
-      Civil: 0,
-      Interior: 0,
-      Other: 0,
-    };
 
     for (const line of revision.lines) {
-      const desc = (line.standardDescription || line.originalDescription || '').toLowerCase();
-      const qty = (line.quantity !== null && line.quantity !== undefined && !isNaN(Number(line.quantity))) ? Number(line.quantity) : null;
+      const description = line.standardDescription || line.originalDescription || '';
+      const benchmark = getLineBenchmark(description, line.category?.name || '');
+      const quantity = getQuantity(line.quantity);
+      const confidenceLabel = benchmark.confidence >= 0.90 ? 'High' : benchmark.confidence >= 0.75 ? 'Medium' : 'Low';
+      const requiresQuantity = quantity === null || quantity <= 0;
+      const totalCost = requiresQuantity ? null : Math.round(benchmark.unitCost * quantity * 100) / 100;
+      const categoryName = line.category?.name || benchmark.category;
+      const costSource = requiresQuantity ? `${benchmark.costSource} (Indicative Rate)` : benchmark.costSource;
+      const costMethod = 'WEIGHTED_MEDIAN_BENCHMARK';
+      const breakdown = computeLineCostBreakdown(
+        benchmark.unitCost,
+        requiresQuantity ? null : quantity,
+        categoryName,
+        description,
+      );
 
-      // 1. Calculate Indicative AI Benchmark Unit Cost for all items
-      const match = Object.entries(benchmarkRates).find(([key]) => desc.includes(key));
-      let unitCost = 150.0;
-      let costSource = 'AI Estimate (Regional Market Average)';
-      let confidence = 0.80;
-      let broadCat = 'Other';
-
-      if (match) {
-        unitCost = match[1].rate;
-        costSource = match[1].source;
-        confidence = match[1].conf;
-        broadCat = match[1].category;
+      if (totalCost !== null) {
+        totalEstimatedRevValue += totalCost;
+        addCategoryTotal(categoryTotals, benchmark.category, totalCost);
       } else {
-        // Fallback by category name
-        const lineCat = (line.category?.name || '').toLowerCase();
-        if (lineCat.includes('electrical')) {
-          unitCost = 180.0;
-          broadCat = 'Electrical';
-        } else if (lineCat.includes('civil') || lineCat.includes('interior')) {
-          unitCost = 145.0;
-          broadCat = 'Civil';
-        } else if (lineCat.includes('material')) {
-          unitCost = 110.0;
-          broadCat = 'Material';
-        } else {
-          unitCost = 150.0;
-          broadCat = 'Other';
-        }
-      }
-
-      const confLabel = confidence >= 0.90 ? 'High' : confidence >= 0.75 ? 'Medium' : 'Low';
-
-      // 2. Section 6: AI Cost must NOT generate a commercial total for a line whose quantity is blank
-      if (qty === null || qty <= 0) {
         unestimatedItems.push({
           id: line.id,
           lineNumber: line.lineNumber,
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": line.standardDescription || line.originalDescription }),
-          reason: qty === null ? 'Quantity is pending input.' : 'Quantity must be greater than zero.',
+          description: interpolateUiString(UI_STRINGS.common.value1, { value1: description }),
+          reason: quantity === null ? 'Quantity is pending input.' : 'Quantity must be greater than zero.',
           suggestedAction: 'Edit the line item in BOQ Workspace to enter quantity.',
         });
-
-        const breakdown = computeLineCostBreakdown(
-          unitCost,
-          null,
-          line.category?.name || broadCat,
-          line.standardDescription || line.originalDescription
-        );
-
-        const updated = await prisma.boqLine.update({
-          where: { id: line.id },
-          data: {
-            aiUnitCost: unitCost,
-            aiTotalCost: null, // NOT CALCULATED until quantity is entered
-            aiReason: JSON.stringify({ costBreakdown: breakdown }),
-            costConfidence: confidence,
-            costSource: `${costSource} (Indicative Rate)`,
-            costMethod: 'WEIGHTED_MEDIAN_BENCHMARK',
-            costDate: new Date(),
-            geography: 'India / Bengaluru Region',
-            validationStatus: 'QUANTITY_REQUIRED',
-          },
-        });
-
-        costResults.push({
-          id: updated.id,
-          lineNumber: updated.lineNumber,
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": updated.standardDescription || updated.originalDescription }),
-          uom: line.uom?.code || updated.uomRaw || 'NOS',
-          quantity: null,
-          aiUnitCost: unitCost,
-          aiTotalCost: null,
-          costBreakdown: breakdown,
-          confidence: confLabel,
-          costConfidence: confidence,
-          costSource: `${costSource} (Indicative Rate)`,
-          costMethod: 'WEIGHTED_MEDIAN_BENCHMARK',
-          geography: 'India / Bengaluru Region',
-          status: 'QUANTITY REQUIRED',
-          disclaimer: 'AI Indicative Unit Cost shown. Total Cost pending quantity entry.',
-        });
-        continue;
       }
 
-      // 3. Valid quantity: Calculate commercial total cost
-      const totalCost = Math.round(unitCost * qty * 100) / 100;
-      totalEstimatedRevValue += totalCost;
-
-      const breakdown = computeLineCostBreakdown(
-        unitCost,
-        qty,
-        line.category?.name || broadCat,
-        line.standardDescription || line.originalDescription
-      );
-
-      // Group into summary buckets
-      if (broadCat.includes('Electrical')) categoryTotals.Electrical += totalCost;
-      else if (broadCat.includes('Civil')) categoryTotals.Civil += totalCost;
-      else if (broadCat.includes('Interior')) categoryTotals.Interior += totalCost;
-      else if (broadCat.includes('Material')) categoryTotals.Material += totalCost;
-      else categoryTotals.Other += totalCost;
-
-      const updated = await prisma.boqLine.update({
-        where: { id: line.id },
-        data: {
-          aiUnitCost: unitCost,
-          aiTotalCost: totalCost,
-          aiReason: JSON.stringify({ costBreakdown: breakdown }),
-          costConfidence: confidence,
-          costSource,
-          costMethod: 'WEIGHTED_MEDIAN_BENCHMARK',
-          costDate: new Date(),
-          geography: 'India / Bengaluru Region',
-          validationStatus: 'COST GENERATED',
-        },
+      lineUpdates.push({
+        id: line.id,
+        aiUnitCost: benchmark.unitCost,
+        aiTotalCost: totalCost,
+        aiReason: JSON.stringify({ costBreakdown: breakdown }),
+        costConfidence: benchmark.confidence,
+        costSource,
+        costMethod,
+        costDate: estimatedAtIso,
+        geography: 'India / Bengaluru Region',
+        validationStatus: requiresQuantity ? 'QUANTITY_REQUIRED' : 'COST GENERATED',
+        updatedAt: estimatedAtIso,
       });
 
       costResults.push({
-        id: updated.id,
-        lineNumber: updated.lineNumber,
-        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": updated.standardDescription || updated.originalDescription }),
-        uom: line.uom?.code || updated.uomRaw || 'NOS',
-        quantity: qty,
-        aiUnitCost: unitCost,
+        id: line.id,
+        lineNumber: line.lineNumber,
+        description: interpolateUiString(UI_STRINGS.common.value1, { value1: description }),
+        uom: line.uom?.code || line.uomRaw || 'NOS',
+        quantity: requiresQuantity ? null : quantity,
+        aiUnitCost: benchmark.unitCost,
         aiTotalCost: totalCost,
         costBreakdown: breakdown,
-        confidence: confLabel,
-        costConfidence: confidence,
+        confidence: confidenceLabel,
+        costConfidence: benchmark.confidence,
         costSource,
-        costMethod: 'WEIGHTED_MEDIAN_BENCHMARK',
+        costMethod,
         geography: 'India / Bengaluru Region',
-        status: 'COST GENERATED',
-        disclaimer: 'AI ESTIMATED COST — For budgeting and sourcing benchmark only.',
+        status: requiresQuantity ? 'QUANTITY REQUIRED' : 'COST GENERATED',
+        disclaimer: requiresQuantity
+          ? 'AI Indicative Unit Cost shown. Total Cost pending quantity entry.'
+          : 'AI ESTIMATED COST — For budgeting and sourcing benchmark only.',
       });
     }
 
-    // Update revision status to AI_COST_GENERATED
-    await prisma.boqRevision.update({
-      where: { id: revision.id },
-      data: {
-        preparationStatus: 'AI_COST_GENERATED',
+    const auditDescription = interpolateUiString(
+      UI_STRINGS.appApiBoqEstimateCostRoute.aICostEstimationGeneratedForLengthLinesTotalEstimatedBenchmarkToLocaleString,
+      {
+        length: costResults.length,
+        toLocaleString: totalEstimatedRevValue.toLocaleString(I18N_CONFIG.defaultLocale),
       },
-    });
+    );
+    const batchResults = await writeD1BatchAtomically([
+      {
+        sql: BOQ_COST_ESTIMATE_LINES_UPDATE_JSON_SQL,
+        values: [JSON.stringify(lineUpdates), ctx.tenantId, revision.id],
+      },
+      {
+        sql: BOQ_COST_ESTIMATE_REVISION_UPDATE_SQL,
+        values: [estimatedAt, revision.id, ctx.tenantId, revision.updatedAt, lineUpdates.length],
+      },
+      {
+        sql: BOQ_COST_ESTIMATE_AUDIT_INSERT_AFTER_UPDATE_SQL,
+        values: [crypto.randomUUID(), ctx.tenantId, ctx.userId, revision.boq.projectId, revision.id, auditDescription, estimatedAt],
+      },
+    ]);
 
-    // Calculate cost per sq ft if area is available
-    const areaSqFt = revision.boq.costCentre?.areaSqFt ||
-      revision.boq.project?.areaSqFt ||
-      (revision.boq as any).areaSqFt ||
-      null;
+    if (Number(batchResults[0]?.meta?.changes ?? -1) !== lineUpdates.length
+      || Number(batchResults[1]?.meta?.changes || 0) !== 1
+      || Number(batchResults[2]?.meta?.changes || 0) !== 1) {
+      throw new Error(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh);
+    }
 
+    const areaSqFt = revision.boq.costCentre?.areaSqFt
+      || revision.boq.project?.areaSqFt
+      || (revision.boq as unknown as { areaSqFt?: number | null }).areaSqFt
+      || null;
     const costPerSqFt = areaSqFt && areaSqFt > 0
       ? Math.round((totalEstimatedRevValue / areaSqFt) * 100) / 100
       : null;
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: revision.boq.projectId,
-        entityType: 'BOQ_REVISION',
-        entityId: revision.id,
-        action: 'AI_COST_GENERATED',
-        description: interpolateUiString(UI_STRINGS.appApiBoqEstimateCostRoute.aICostEstimationGeneratedForLengthLinesTotalEstimatedBenchmarkToLocaleString, { "length": costResults.length, "toLocaleString": totalEstimatedRevValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
-      },
-    });
 
     return apiSuccess({
       success: true,
@@ -313,8 +249,25 @@ export async function POST(req: NextRequest) {
       lines: costResults,
       unestimatedItems,
     });
-  } catch (err: any) {
-    console.error('Error generating AI cost:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.aiCostEstimationFailed }), 500, { route: '/api/boq/estimate-cost', method: 'POST', error: err });
+  } catch (error: unknown) {
+    try {
+      await writeStructuredLog('error', 'boq.cost_estimation_failed', {
+        operation: 'estimate_boq_costs',
+        route: '/api/boq/estimate-cost',
+        requestId: req.headers.get('x-request-id') || null,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        role: ctx.role,
+        boqId: targetId,
+        boqRevisionId: targetRevisionId,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error
+          ? { name: error.name, message: error.message.slice(0, 400) }
+          : { type: typeof error },
+      });
+    } catch {
+      // Preserve the stable API response if optional local log storage fails.
+    }
+    return apiError(UI_STRINGS.common.userMessages.aiCostEstimationFailed, 500);
   }
 }

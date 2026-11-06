@@ -14,3 +14,9 @@ export interface ColumnMapping {
   grade?: string;
   remarks?: string;
 }
+
+export type BoqImportRequest = {
+  revisionId?: unknown;
+  sheetName?: unknown;
+  columnMapping?: unknown;
+};

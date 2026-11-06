@@ -2,7 +2,7 @@
 // src/app/(app)/vendor-portal/rfqs/page.tsx
 // proCPX — Vendor Portal: My RFQs & Bids Register with Dedicated Negotiation Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   FileText,
@@ -25,6 +25,8 @@ import RfqChatDrawer from '@/components/RfqChatDrawer';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { VENDOR_RFQ_PAGE_SIZE } from './page.constants';
+import type { VendorPortalRfqSummary } from '@app-types/app/api/vendor-portal-rfqs.types';
 
 
 export default function VendorRfqsPage() {
@@ -33,6 +35,10 @@ export default function VendorRfqsPage() {
   const sessionVendorName = sessionUser?.name || undefined;
 
   const [rfqs, setRfqs] = useState<any[]>([]);
+  const [totalRfqs, setTotalRfqs] = useState(0);
+  const [nextRfqCursor, setNextRfqCursor] = useState<string | null>(null);
+  const [hasMoreRfqs, setHasMoreRfqs] = useState(false);
+  const [loadingMoreRfqs, setLoadingMoreRfqs] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'NEGOTIATION' | 'AWARDED'>('ALL');
@@ -48,18 +54,30 @@ export default function VendorRfqsPage() {
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [chatRfq, setChatRfq] = useState<any | null>(null);
 
-  const loadRfqs = async () => {
-    setLoading(true);
+  const loadRfqs = useCallback(async (append = false) => {
+    if (append) setLoadingMoreRfqs(true);
+    else setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/vendor-portal/rfqs');
+      const query = new URLSearchParams({ pageSize: String(VENDOR_RFQ_PAGE_SIZE) });
+      if (append && nextRfqCursor) query.set('cursor', nextRfqCursor);
+      if (!append && typeof window !== 'undefined') {
+        const negotiate = new URLSearchParams(window.location.search).get('negotiate');
+        if (negotiate) query.set('search', negotiate);
+      }
+      const res = await fetch(`/api/vendor-portal/rfqs?${query.toString()}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadRfqs }));
       }
       const data = await res.json();
-      const list = data.rfqs || [];
-      setRfqs(list);
+      const list = (data.rfqs || []) as VendorPortalRfqSummary[];
+      setRfqs((current) => append
+        ? [...current, ...list.filter((item) => !current.some((loaded) => loaded.id === item.id))]
+        : list);
+      setTotalRfqs(Number(data.total) || list.length);
+      setNextRfqCursor(typeof data.nextCursor === 'string' ? data.nextCursor : null);
+      setHasMoreRfqs(Boolean(data.hasMore));
 
       // Check if URL has ?negotiate=<rfqNumber or id> to auto-open workspace
       if (typeof window !== 'undefined') {
@@ -67,9 +85,9 @@ export default function VendorRfqsPage() {
         const negParam = params.get('negotiate');
         if (negParam) {
           const match = list.find(
-            (r: any) => r.id === negParam || r.rfqNumber?.toLowerCase() === negParam.toLowerCase()
+            (r) => r.id === negParam || r.rfqNumber?.toLowerCase() === negParam.toLowerCase()
           );
-          if (match) {
+          if (match && !append) {
             setNegotiatingRfq(match);
           }
         }
@@ -78,8 +96,9 @@ export default function VendorRfqsPage() {
       setError(e.message);
     } finally {
       setLoading(false);
+      setLoadingMoreRfqs(false);
     }
-  };
+  }, [nextRfqCursor]);
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -88,8 +107,8 @@ export default function VendorRfqsPage() {
         if (data?.user) setSessionUser(data.user);
       })
       .catch(() => {});
-    loadRfqs();
-  }, []);
+    void loadRfqs();
+  }, [loadRfqs]);
 
   // Format date helper: deterministic and clean
   const formatDate = (dateVal: any, includeTime = false) => {
@@ -197,7 +216,7 @@ export default function VendorRfqsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             type="button"
-            onClick={loadRfqs}
+            onClick={() => loadRfqs()}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
           >
@@ -227,7 +246,7 @@ export default function VendorRfqsPage() {
               className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-secondary'}`}
               style={{ fontSize: 13, padding: '6px 14px' }}
             >
-              {tab === 'ALL' && interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.allInvitedLength, { "length": rfqs.length })}
+              {tab === 'ALL' && interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.allInvitedLength, { "length": totalRfqs })}
               {tab === 'PENDING' && UI_STRINGS.common.pendingQuote}
               {tab === 'NEGOTIATION' && UI_STRINGS.common.inNegotiation}
               {tab === 'AWARDED' && UI_STRINGS.appAppVendorPortalRfqsPage.pPOAwarded}
@@ -481,7 +500,7 @@ export default function VendorRfqsPage() {
                             className="cell-compact-text text-muted"
                             style={{ fontSize: 10, textAlign: 'right' }}
                             title={interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.versionQuoteVersionSubmittedValue2, { "quoteVersion": latestQuote.quoteVersion, "value2": formatDate(latestQuote.submittedAt) })}
-                          >{UI_STRINGS.common.v}{latestQuote.quoteVersion}{UI_STRINGS.common.copyko5tj9}{rfq.lines?.length || 0}{UI_STRINGS.common.lines2}</div>
+                          >{UI_STRINGS.common.v}{latestQuote.quoteVersion}{UI_STRINGS.common.copyko5tj9}{rfq.lineCount ?? rfq.lines?.length ?? 0}{UI_STRINGS.common.lines2}</div>
                           {rfq.latestRound?.counterOfferAmount && (!rfq.latestRound?.revisedQuoteAmount || rfq.latestRound?.nextResponsibleParty === 'VENDOR') && (
                             <div style={{ marginTop: 3 }}>
                               <span
@@ -623,6 +642,22 @@ export default function VendorRfqsPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {hasMoreRfqs && !loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '18px 0' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.showingRfqsOfTotal, { shown: rfqs.length, total: totalRfqs })}
+          </span>
+          <button
+            type="button"
+            disabled={loadingMoreRfqs}
+            onClick={() => loadRfqs(true)}
+            className="btn btn-secondary"
+          >
+            {loadingMoreRfqs ? UI_STRINGS.common.loading : UI_STRINGS.appAppVendorPortalRfqsPage.loadMoreRfqs}
+          </button>
         </div>
       )}
 

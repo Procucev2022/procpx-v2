@@ -1,6 +1,6 @@
 'use client';
 // src/components/RfqChatDrawer.tsx - Persistent RFQ & Negotiation Clarification Drawer
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
   Send,
@@ -14,6 +14,7 @@ import {
   Paperclip,
 } from 'lucide-react';
 import type { RfqChatDrawerProps } from "@app-types/components/RfqChatDrawer.types";
+import type { RfqMessageCreateRequest } from '@app-types/app/api/procurement/rfq-messages.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -35,7 +36,13 @@ export default function RfqChatDrawer({
   const [inputText, setInputText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [nextMessageCursor, setNextMessageCursor] = useState<string | null>(null);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const shouldScrollToEndRef = useRef(true);
+  const pendingScrollAdjustmentRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
 
   useEffect(() => {
     if (isOpen && rfqId) {
@@ -43,9 +50,15 @@ export default function RfqChatDrawer({
     }
   }, [isOpen, rfqId, vendorId]);
 
-  useEffect(() => {
-    if (messagesEndRef.current) {
+  useLayoutEffect(() => {
+    const list = messageListRef.current;
+    const pendingAdjustment = pendingScrollAdjustmentRef.current;
+    if (list && pendingAdjustment) {
+      list.scrollTop = pendingAdjustment.scrollTop + list.scrollHeight - pendingAdjustment.scrollHeight;
+      pendingScrollAdjustmentRef.current = null;
+    } else if (shouldScrollToEndRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      shouldScrollToEndRef.current = false;
     }
   }, [messages]);
 
@@ -53,10 +66,15 @@ export default function RfqChatDrawer({
     setLoading(true);
     setError('');
     try {
-      const param = vendorId ? `?vendorId=${vendorId}` : '';
+      const query = new URLSearchParams();
+      if (vendorId) query.set('vendorId', vendorId);
+      const param = query.size > 0 ? `?${query.toString()}` : '';
       const res = await fetch(`/api/procurement/rfqs/${rfqId}/messages${param}`);
       if (res.ok) {
         const data = await res.json();
+        shouldScrollToEndRef.current = true;
+        setHasMoreMessages(Boolean(data.hasMore ?? data.data?.hasMore));
+        setNextMessageCursor(data.nextCursor ?? data.data?.nextCursor ?? null);
         setMessages(data.messages || data.data?.messages || []);
       } else {
         const err = await res.json();
@@ -69,6 +87,33 @@ export default function RfqChatDrawer({
     }
   };
 
+  const loadOlderMessages = async () => {
+    if (!nextMessageCursor || loadingOlderMessages) return;
+    setLoadingOlderMessages(true);
+    setError('');
+    try {
+      const query = new URLSearchParams({ cursor: nextMessageCursor });
+      if (vendorId) query.set('vendorId', vendorId);
+      const res = await fetch(`/api/procurement/rfqs/${rfqId}/messages?${query.toString()}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory);
+      }
+      const data = await res.json();
+      const olderMessages = data.messages || data.data?.messages || [];
+      const list = messageListRef.current;
+      pendingScrollAdjustmentRef.current = list ? { scrollHeight: list.scrollHeight, scrollTop: list.scrollTop } : null;
+      shouldScrollToEndRef.current = false;
+      setMessages((current) => [...olderMessages, ...current]);
+      setHasMoreMessages(Boolean(data.hasMore ?? data.data?.hasMore));
+      setNextMessageCursor(data.nextCursor ?? data.data?.nextCursor ?? null);
+    } catch (e: any) {
+      setError(interpolateUiString(UI_STRINGS.common.value1, { value1: e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
@@ -77,7 +122,7 @@ export default function RfqChatDrawer({
     setError('');
 
     try {
-      const payload: any = {
+      const payload: RfqMessageCreateRequest = {
         message: inputText.trim(),
         isVendorSent: isVendorUser,
         vendorId: vendorId || null,
@@ -125,6 +170,7 @@ export default function RfqChatDrawer({
     >
       {/* Drawer Header */}
       <div
+        ref={messageListRef}
         style={{
           padding: '16px 20px',
           borderBottom: '1px solid #e2e8f0',
@@ -172,6 +218,11 @@ export default function RfqChatDrawer({
           gap: 12,
         }}
       >
+        {hasMoreMessages && (
+          <button type="button" onClick={loadOlderMessages} disabled={loadingOlderMessages} className="btn btn-secondary" style={{ alignSelf: 'center' }}>
+            {loadingOlderMessages ? UI_STRINGS.common.loadingMessages : UI_STRINGS.common.loadMore}
+          </button>
+        )}
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, color: '#64748b' }}>
             <Loader2 size={24} className="animate-spin" />

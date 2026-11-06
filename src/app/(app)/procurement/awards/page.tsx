@@ -16,23 +16,32 @@ import { interpolateUiString } from "@/lib/i18n";
 export default function AwardsDeskPage() {
   const toast = useToast();
   const [awards, setAwards] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchAwards();
   }, []);
 
-  const fetchAwards = async () => {
-    setLoading(true);
+  const fetchAwards = async (nextPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/procurement/awards');
+      const res = await fetch(`/api/procurement/awards?page=${nextPage}&pageSize=50`);
       const data = await res.json();
-      if (data.awards) setAwards(data.awards);
+      if (Array.isArray(data.awards)) {
+        setAwards((current) => append ? [...current, ...data.awards] : data.awards);
+        setTotal(Number(data.total ?? data.awards.length));
+        setPage(Number(data.page ?? nextPage));
+      }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
@@ -84,7 +93,7 @@ export default function AwardsDeskPage() {
       />
 
       <Card
-        title={interpolateUiString(UI_STRINGS.appAppProcurementAwardsPage.commercialAwardProposalsLength, { "length": awards.length })}
+        title={interpolateUiString(UI_STRINGS.appAppProcurementAwardsPage.commercialAwardProposalsLength, { "length": total })}
         subtitle={UI_STRINGS.appAppProcurementAwardsPage.submissionsAwaitingFinanceSignOffAndContractGeneration}
         noPadding
       >
@@ -104,6 +113,7 @@ export default function AwardsDeskPage() {
             />
           </div>
         ) : (
+          <>
           <div className="table-wrapper">
             <table className="table">
               <thead>
@@ -184,6 +194,14 @@ export default function AwardsDeskPage() {
               </tbody>
             </table>
           </div>
+          {awards.length < total && (
+            <div style={{ padding: 16, textAlign: 'center' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => fetchAwards(page + 1, true)} disabled={loadingMore}>
+                {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
+            </div>
+          )}
+          </>
         )}
       </Card>
     </div>

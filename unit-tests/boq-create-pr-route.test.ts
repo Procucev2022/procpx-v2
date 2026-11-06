@@ -1,8 +1,17 @@
-import { existingCodes, currentYear } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/create-pr/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { interpolateUiString } from '../src/lib/i18n';
+import {
+  PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
+  PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
+  PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
+  PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
+  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+} from '../src/lib/d1-batch.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -11,11 +20,11 @@ jest.mock('../src/lib/prisma', () => ({
     boqRevision: { findFirst: jest.fn(), update: jest.fn() },
     boq: { findFirst: jest.fn(), update: jest.fn() },
     costCentre: { findFirst: jest.fn() },
-    procurementRequest: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), create: jest.fn() },
-    pRLine: { create: jest.fn() },
-    auditLog: { create: jest.fn() },
+    procurementRequest: { findFirst: jest.fn() },
   },
 }));
+jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -28,6 +37,8 @@ const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const errorResponse = apiError as jest.Mock;
 const successResponse = apiSuccess as jest.Mock;
+const writeBatch = writeD1BatchAtomically as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1' };
 const request = (body: unknown) => new NextRequest('http://localhost/api/boq/create-pr', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -56,12 +67,11 @@ describe('create PR from BOQ route', () => {
     db.boq.findFirst.mockResolvedValue(null);
     db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1', code: 'CC01', name: 'North Wing' });
     db.procurementRequest.findFirst.mockResolvedValue(null);
-    db.procurementRequest.findMany.mockResolvedValue(existingCodes('prNumber', `PR-${currentYear}-`, 6, 8));
-    db.procurementRequest.create.mockResolvedValue({ id: 'pr-1', prNumber: 'PR-2026-000009' });
-    db.pRLine.create.mockResolvedValue({ id: 'pr-line-1' });
-    db.boqRevision.update.mockResolvedValue({ id: 'revision-1' });
-    db.boq.update.mockResolvedValue({ id: 'boq-1' });
-    db.auditLog.create.mockResolvedValue({ id: 'audit-1' });
+    writeBatch.mockResolvedValue([
+      { results: [{ id: 'pr-1', prNumber: 'PR-2026-000009' }] },
+      ...Array.from({ length: 6 }, () => ({ meta: { changes: 1 } })),
+    ]);
+    structuredLog.mockResolvedValue(undefined);
   });
 
   it('requires PR creation permission and at least one BOQ identifier', async () => {
@@ -99,7 +109,7 @@ describe('create PR from BOQ route', () => {
       ok: false, error: UI_STRINGS.appApiBoqCreatePrRoute.aValidCostCentreIsRequiredToCreateAPR, status: 400,
     });
     db.costCentre.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'wrong-cc', projectId: 'project-other' }))).resolves.toEqual({
+    await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'wrong-cc', projectId: 'project-1' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404,
     });
     await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', selectedLineIds: ['missing'] }))).resolves.toEqual({
@@ -138,31 +148,39 @@ describe('create PR from BOQ route', () => {
       { id: 'line-3', lineNumber: null, quantity: 1, aiUnitCost: null, benchmarkRate: null, aiTotalCost: null, standardDescription: null, originalDescription: null, specification: '', category: null, subcategory: null, uom: null, uomRaw: null, drawingReference: null },
     ] }));
     await expect(POST(request({
-      boqRevisionId: 'revision-1', projectId: 'project-override', costCentreId: 'cc-override',
+      boqRevisionId: 'revision-1', projectId: 'project-1', costCentreId: 'cc-1',
       title: 'Urgent package', requiredDate: '2026-12-20', selectedLineIds: ['line-1', 'line-2', 'line-3'], autoSubmit: true,
     }))).resolves.toMatchObject({ ok: true, status: 201, data: {
       success: true, prId: 'pr-1', totalLines: 3, totalValue: 132, status: 'PR_PENDING_PROJECT_APPROVAL',
     } });
-    expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'cc-override', projectId: 'project-override', tenantId: 'tenant-1' } });
-    expect(db.procurementRequest.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      tenantId: 'tenant-1', prNumber: expect.stringMatching(/^PR-\d{4}-000009$/), projectId: 'project-override',
-      costCentreId: 'cc-override', boqId: 'boq-1', boqRevisionId: 'revision-1', title: 'Urgent package',
-      totalEstimatedValue: 132, totalLines: 3, status: 'PR_PENDING_PROJECT_APPROVAL', requiredDate: new Date('2026-12-20'),
-    }) });
-    expect(db.pRLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      boqLineId: 'line-1', lineNumber: 'L-1', itemDescription: 'Cable', specification: 'Copper', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical,
-      subcategory: 'Wire', uom: 'MTR', quantity: 2, estimatedRate: 10, estimatedValue: 20, drawingReference: 'D-1', costCentre: 'CC01',
-    }) });
-    expect(db.pRLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      boqLineId: 'line-2', lineNumber: UI_STRINGS.common.copyefwnq4, itemDescription: 'Panel', specification: null, category: UI_STRINGS.common.general,
-      subcategory: null, uom: UI_STRINGS.common.nOS, quantity: 3, estimatedRate: 4, estimatedValue: 12, drawingReference: null,
-    }) });
-    expect(db.pRLine.create).toHaveBeenNthCalledWith(3, { data: expect.objectContaining({
-      boqLineId: 'line-3', itemDescription: 'Line Item', specification: null, quantity: 1, estimatedRate: 100, estimatedValue: 100,
-    }) });
-    expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { prStatus: 'PR_PENDING_PROJECT_APPROVAL' } });
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-1' }, data: { costCentreId: 'cc-override', purpose: 'PR' } });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'PR_CREATED_FROM_BOQ', entityId: 'pr-1' }) });
+    expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'cc-1', projectId: 'project-1', tenantId: 'tenant-1' } });
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+    const statements = writeBatch.mock.calls[0][0];
+    expect(statements).toHaveLength(7);
+    expect(statements.map((statement: { sql: string }) => statement.sql)).toEqual([
+      PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
+      PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
+      PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
+      PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
+      PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+      PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
+      PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
+    ]);
+    for (const statement of statements) {
+      expect(statement.values).toHaveLength((statement.sql.match(/\?/g) || []).length);
+    }
+    expect(statements[0].values).toEqual(expect.arrayContaining([
+      'tenant-1', 'project-1', 'cc-1', 'boq-1', 'revision-1', 'Urgent package', 132, 3,
+    ]));
+    expect(statements[1].values).toEqual(expect.arrayContaining([
+      'line-1', 'L-1', 'Cable', 'Copper', 'Electrical', 'Wire', 'MTR', 2, 10, 20, 'D-1', 'CC01',
+    ]));
+    expect(statements[2].values).toEqual(expect.arrayContaining([
+      'line-2', '2', 'Panel', 'General', 'NOS', 3, 4, 12,
+    ]));
+    expect(statements[3].values).toEqual(expect.arrayContaining([
+      'line-3', '3', 'Line Item', 'General', 'NOS', 1, 100, 100,
+    ]));
   });
 
   it('uses a draft status and generated title/date when optional PR fields are missing', async () => {
@@ -172,24 +190,53 @@ describe('create PR from BOQ route', () => {
     await expect(POST(request({ boqId: 'unused-fallback', boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toMatchObject({
       ok: true, data: { status: 'PR_DRAFT', totalValue: 32, message: expect.stringContaining('created with 2 items') },
     });
-    expect(db.procurementRequest.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      title: 'BOQ-000001 - Procurement Package', status: 'PR_DRAFT', requiredDate: expect.any(Date),
-    }) });
-    expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { prStatus: 'PR_DRAFT' } });
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+    expect(writeBatch.mock.calls[0][0][0].values).toEqual(expect.arrayContaining([
+      'BOQ-000001 - Procurement Package', 'PR_DRAFT',
+    ]));
   });
 
-  it('reports parse and persistence failures with the available error message', async () => {
-    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('returns safe validation errors and logs detailed persistence failures', async () => {
     const malformed = { json: jest.fn().mockRejectedValue(new Error('invalid body')) } as unknown as NextRequest;
-    await expect(POST(malformed)).resolves.toEqual({ ok: false, error: 'invalid body', status: 500 });
+    await expect(POST(malformed)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
     const generic = { json: jest.fn().mockRejectedValue({}) } as unknown as NextRequest;
-    await expect(POST(generic)).resolves.toEqual({ ok: false, error: 'Failed to create Procurement Request from BOQ.', status: 500 });
-    db.procurementRequest.create.mockRejectedValueOnce(new Error('database unavailable'));
-    const log = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(POST(generic)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    writeBatch.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({
-      ok: false, error: 'database unavailable', status: 500,
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProcurementRequestFromBoq, status: 500,
     });
-    expect(log).toHaveBeenCalledWith('Error creating PR from BOQ:', expect.any(Error));
-    errorLog.mockRestore();
+    expect(structuredLog).toHaveBeenCalledWith('error', 'purchase_request.creation_failed', expect.objectContaining({
+      operation: 'create_from_boq', route: '/api/boq/create-pr', tenantId: 'tenant-1', userId: 'buyer-1',
+      boqRevisionId: 'revision-1', durationMs: expect.any(Number), error: expect.any(Error),
+    }), 'application');
+  });
+
+  it('rejects project mismatches and unsafe atomic batch sizes before writing', async () => {
+    await expect(POST(request({ boqRevisionId: 'revision-1', projectId: 'other-project', costCentreId: 'cc-1' })))
+      .resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqCreatePrRoute.projectMustMatchTheProjectLinkedToThisBOQ, status: 400 });
+    expect(writeBatch).not.toHaveBeenCalled();
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(validRevision({
+      lines: Array.from({ length: 497 }, (_, index) => ({
+        id: `line-${index}`, lineNumber: String(index + 1), quantity: 1, aiUnitCost: 1, aiTotalCost: 1,
+      })),
+    }));
+    await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' })))
+      .resolves.toMatchObject({ ok: false, status: 400, error: expect.stringContaining('200') });
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('returns conflict when a concurrent PR creation wins the active revision guard', async () => {
+    writeBatch.mockResolvedValueOnce([{ results: [] }]);
+    db.procurementRequest.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ prNumber: 'PR-2026-000010' });
+    await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({
+      ok: false,
+      error: interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.anActiveProcurementRequestPrNumberAlreadyExistsForThisBOQRevisionDuplicatePRCreationIsPrevented, {
+        prNumber: 'PR-2026-000010',
+      }),
+      status: 409,
+    });
   });
 });

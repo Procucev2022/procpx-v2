@@ -187,6 +187,7 @@ describe('AI drawing parser and file processing', () => {
   const originalFetch = global.fetch;
   const originalGeminiKey = process.env.GEMINI_API_KEY;
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalNextRuntime = process.env.NEXT_RUNTIME;
 
   beforeEach(() => {
     delete process.env.GEMINI_API_KEY;
@@ -200,6 +201,8 @@ describe('AI drawing parser and file processing', () => {
     else process.env.GEMINI_API_KEY = originalGeminiKey;
     if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalOpenAiKey;
+    if (originalNextRuntime === undefined) delete process.env.NEXT_RUNTIME;
+    else process.env.NEXT_RUNTIME = originalNextRuntime;
     global.fetch = originalFetch;
   });
 
@@ -304,6 +307,14 @@ describe('AI drawing parser and file processing', () => {
     await expect(processDrawingFile(Buffer.from('image-data'), 'drawing.png')).resolves.toMatchObject({
       success: true, parserUsed: 'AI_GEMINI_VISION', totalDetected: 1,
     });
+    expect(createWorkerMock).not.toHaveBeenCalled();
+  });
+
+  it('does not start local OCR in the edge runtime', async () => {
+    process.env.NEXT_RUNTIME = 'edge';
+
+    await expect(processDrawingFile(Buffer.from('image-data'), 'drawing.png'))
+      .rejects.toThrow(UI_STRINGS.libDrawingParser.localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings);
     expect(createWorkerMock).not.toHaveBeenCalled();
   });
 

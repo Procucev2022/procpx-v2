@@ -3,6 +3,7 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-utils';
 import { GET } from '../src/app/api/procurement/rate-cards/compare-workspace/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -20,35 +21,33 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
 }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const errorResponse = apiError as jest.Mock;
 const successResponse = apiSuccess as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1', role: 'BUYER' };
 const request = (query = '?vendorId=vendor-1') => new NextRequest(`http://localhost/api/rate-cards/compare-workspace${query}`);
 const vendor = { id: 'vendor-1', code: 'V-1', name: 'Cable Supplier', vendorType: 'LOCAL' };
 const instant = '2026-02-01T10:00:00.000Z';
 
 describe('rate card comparison workspace API', () => {
-  let consoleError: jest.SpyInstance;
-
   beforeEach(() => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     errorResponse.mockImplementation((error: string, status = 400) => ({ ok: false, error, status }));
     successResponse.mockImplementation((data: unknown, status = 200) => ({ ok: true, data, status }));
+    structuredLog.mockResolvedValue(undefined);
     db.vendor.findUnique.mockResolvedValue(vendor);
     db.quote.findMany.mockResolvedValue([]);
     db.vendorRateCard.findMany.mockResolvedValue([]);
     db.ppoLine.findMany.mockResolvedValue([]);
     db.standardBoqItem.findMany.mockResolvedValue([]);
-    consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
-
-  afterEach(() => consoleError.mockRestore());
 
   it('validates authentication and the required vendor before querying comparison data', async () => {
     const denied = { status: 401 };
@@ -107,6 +106,9 @@ describe('rate card comparison workspace API', () => {
       where: { tenantId: 'tenant-1', vendorId: 'vendor-1', status: { in: [UI_STRINGS.common.sUBMITTED, 'ACCEPTED', 'UNDER_EVALUATION', UI_STRINGS.componentsProcurementCommercialWorkspace.rEVISED] } },
       take: 20,
     }));
+    expect(db.vendor.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'vendor-1', tenantId: 'tenant-1' },
+    }));
     expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', vendorId: 'vendor-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical } }));
     expect(db.ppoLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical } }));
     expect(db.standardBoqItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -140,11 +142,39 @@ describe('rate card comparison workspace API', () => {
     expect(db.standardBoqItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true } }));
   });
 
-  it('maps query failures to specific or generic server errors', async () => {
-    db.quote.findMany.mockRejectedValueOnce(new Error('quote history unavailable'));
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'quote history unavailable', status: 500 });
+  it('does not query comparison data when the vendor is outside the request tenant', async () => {
+    db.vendor.findUnique.mockResolvedValueOnce(null);
+    await expect(GET(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFound, status: 404 });
+    expect(db.vendor.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'vendor-1', tenantId: 'tenant-1' },
+    }));
+    expect(db.quote.findMany).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.findMany).not.toHaveBeenCalled();
+    expect(db.ppoLine.findMany).not.toHaveBeenCalled();
+  });
+
+  it('logs query failures with safe context and returns a generic server error', async () => {
+    db.quote.findMany.mockRejectedValueOnce(Object.assign(new Error('quote history unavailable'), { code: 'P2024' }));
+    await expect(GET(request())).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData,
+      status: 500,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'procurement.rate_card_comparison_workspace_read_failed', expect.objectContaining({
+      operation: 'read_rate_card_comparison_workspace',
+      route: '/api/procurement/rate-cards/compare-workspace',
+      tenantId: 'tenant-1',
+      userId: 'buyer-1',
+      vendorId: 'vendor-1',
+      error: { name: 'Error', code: 'P2024' },
+    }));
+    expect(structuredLog.mock.calls[0][2].error).not.toHaveProperty('message');
     db.quote.findMany.mockRejectedValueOnce({});
-    await expect(GET(request())).resolves.toEqual({ ok: false, error: 'Failed to fetch comparison workspace data', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    await expect(GET(request())).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData,
+      status: 500,
+    });
+    expect(structuredLog).toHaveBeenCalledTimes(2);
   });
 });

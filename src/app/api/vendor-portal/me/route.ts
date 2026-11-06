@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
+import { runAuditedD1UpdateAtomically } from '@/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -98,18 +98,21 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    const updated = await prisma.vendor.update({
-      where: { id: vendorId },
-      data: updateData,
-    });
-
-    await createAuditLog({
+    const updated = await runAuditedD1UpdateAtomically({
+      table: 'vendor',
+      id: vendorId,
       tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      entityType: 'VENDOR',
-      entityId: vendorId,
-      action: 'VENDOR_PROFILE_SELF_UPDATED',
-      description: interpolateUiString(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileSelfUpdatedByValue1, { "value1": ctx.userName || ctx.userEmail }),
+      data: updateData,
+      route: '/api/vendor-portal/me',
+      requestId: req.headers.get('x-request-id'),
+      audit: {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        entityType: 'VENDOR',
+        entityId: vendorId,
+        action: 'VENDOR_PROFILE_SELF_UPDATED',
+        description: interpolateUiString(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileSelfUpdatedByValue1, { "value1": ctx.userName || ctx.userEmail }),
+      },
     });
 
     return apiSuccess({ vendor: updated, message: UI_STRINGS.appApiVendorPortalMeRoute.companyProfileUpdatedSuccessfully });

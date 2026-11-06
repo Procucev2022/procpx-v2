@@ -4,17 +4,26 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { hasPermission } from '../src/lib/permissions';
 import { createAuditLog } from '../src/lib/audit';
-import { notifyNextResponsibleParty } from '../src/lib/notifications';
+import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '../src/lib/notifications';
 import { GET as getMessages, POST as postMessage } from '../src/app/api/procurement/rfqs/[id]/messages/route';
 import { POST as recordDecision } from '../src/app/api/procurement/negotiations/decision/route';
 import { GET as downloadStandardBoq } from '../src/app/api/boq/standard/download/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { interpolateUiString } from '../src/lib/i18n';
+import {
+  MAX_STANDARD_BOQ_EXPORT_CATEGORIES,
+  MAX_STANDARD_BOQ_EXPORT_CATEGORY_CHILDREN,
+  MAX_STANDARD_BOQ_EXPORT_ITEMS,
+  MAX_STANDARD_BOQ_EXPORT_UOMS,
+} from '../src/app/api/boq/standard/download/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     rfq: { findFirst: jest.fn() },
-    rfqMessage: { findMany: jest.fn(), create: jest.fn() },
+    rfqVendor: { findFirst: jest.fn() },
+    rfqMessage: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
     negotiationRound: { findFirst: jest.fn(), update: jest.fn() },
     quote: { findFirst: jest.fn(), update: jest.fn() },
     project: { findFirst: jest.fn() },
@@ -32,7 +41,9 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/permissions', () => ({ hasPermission: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
-jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn() }));
+jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn(), dispatchPreparedWorkflowNotification: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -53,6 +64,8 @@ describe('RFQ clarification messages', () => {
     auth.mockResolvedValue(buyer);
     isContext.mockReturnValue(true);
     permission.mockReturnValue(true);
+    db.rfqMessage.count.mockResolvedValue(1);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
   });
 
   it('enforces buyer and vendor access and forces vendor message filters to the signed-in vendor', async () => {
@@ -66,11 +79,14 @@ describe('RFQ clarification messages', () => {
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: 'vendor-1' });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
     db.rfqMessage.findMany.mockResolvedValueOnce([{ id: 'message-1' }]);
-    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1?vendorId=attacker'), params)).resolves.toEqual({ ok: true, data: { messages: [{ id: 'message-1' }], total: 1 }, status: 200 });
+    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1?vendorId=attacker'), params)).resolves.toEqual({
+      ok: true, data: { messages: [{ id: 'message-1' }], total: 1, hasMore: false, nextCursor: null }, status: 200,
+    });
     expect(db.rfq.findFirst).toHaveBeenCalledWith({ where: { id: 'rfq-1', tenantId: 'tenant-1', invitedVendors: { some: { vendorId: 'vendor-1' } } } });
     expect(db.rfqMessage.findMany).toHaveBeenCalledWith({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1', OR: [{ vendorId: 'vendor-1' }, { vendorId: null }] },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 51,
     });
   });
 
@@ -82,12 +98,55 @@ describe('RFQ clarification messages', () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
     db.rfqMessage.findMany.mockResolvedValueOnce([]);
     await getMessages(request('http://localhost/api/rfqs/rfq-1?vendorId=vendor-2'), params);
-    expect(db.rfqMessage.findMany).toHaveBeenLastCalledWith({ where: { tenantId: 'tenant-1', rfqId: 'rfq-1', OR: [{ vendorId: 'vendor-2' }, { vendorId: null }] }, orderBy: { createdAt: 'asc' } });
+    expect(db.rfqMessage.findMany).toHaveBeenLastCalledWith({
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1', OR: [{ vendorId: 'vendor-2' }, { vendorId: null }] },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 51,
+    });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
     db.rfqMessage.findMany.mockRejectedValueOnce(new Error('message lookup failed'));
-    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: 'message lookup failed', status: 500 });
+    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchMessages2, status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
     await expect(getMessages(request('http://localhost/api/rfqs/rfq-1'), params)).resolves.toEqual({ ok: false, error: 'Failed to fetch messages', status: 500 });
+  });
+
+  it('returns the newest bounded page and an exclusive cursor for older conversation history', async () => {
+    const messages = Array.from({ length: 51 }, (_, offset) => {
+      const index = 50 - offset;
+      return {
+        id: `message-${String(index).padStart(2, '0')}`,
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      };
+    });
+    db.rfqMessage.count.mockResolvedValueOnce(151);
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
+    db.rfqMessage.findMany.mockResolvedValueOnce(messages);
+    const result = await getMessages(request('http://localhost/api/rfqs/rfq-1'), params) as unknown as {
+      data: { total: number; hasMore: boolean; nextCursor: string | null; messages: Array<{ id: string }> };
+    };
+    expect(result.data).toMatchObject({ total: 151, hasMore: true, nextCursor: '2026-01-01T00:01:00.000Z|message-01' });
+    expect(result.data.messages).toHaveLength(50);
+    expect(result.data.messages[0].id).toBe('message-01');
+    expect(result.data.messages[49].id).toBe('message-50');
+
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
+    db.rfqMessage.findMany.mockResolvedValueOnce([]);
+    await getMessages(request('http://localhost/api/rfqs/rfq-1?cursor=2026-01-01T00%3A01%3A00.000Z%7Cmessage-01'), params);
+    expect(db.rfqMessage.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: {
+        tenantId: 'tenant-1', rfqId: 'rfq-1',
+        AND: [{ OR: [
+          { createdAt: { lt: new Date('2026-01-01T00:01:00.000Z') } },
+          { createdAt: new Date('2026-01-01T00:01:00.000Z'), id: { lt: 'message-01' } },
+        ] }],
+      },
+    }));
+  });
+
+  it('rejects malformed history cursors before querying message rows', async () => {
+    await expect(getMessages(request('http://localhost/api/rfqs/rfq-1?cursor=not-a-cursor'), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    expect(db.rfqMessage.findMany).not.toHaveBeenCalled();
   });
 
   it('validates posts and stores buyer and vendor messages with their correct identity', async () => {
@@ -104,26 +163,33 @@ describe('RFQ clarification messages', () => {
     await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Question' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
 
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' });
-    const created = { id: 'message-1', senderName: 'Buyer', senderRole: 'PROCUREMENT_MANAGER' };
-    db.rfqMessage.create.mockResolvedValueOnce(created);
-    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: '  Please clarify  ', attachments: [{ name: 'scope.pdf' }], vendorId: 'vendor-2' }), params)).resolves.toEqual({ ok: true, data: { message: created }, status: 201 });
-    expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: {
-      tenantId: 'tenant-1', rfqId: 'rfq-1', senderId: 'buyer-1', senderName: UI_STRINGS.appLoginPageConstants.buyer, senderRole: 'PROCUREMENT_MANAGER',
-      message: 'Please clarify', attachments: JSON.stringify([{ name: 'scope.pdf' }]), isVendorSent: false, vendorId: 'vendor-2',
-    } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'CLARIFICATION_MESSAGE_SENT', entityId: 'rfq-1', projectId: 'project-1' }));
+    db.rfqVendor.findFirst.mockResolvedValueOnce({ id: 'invitation-1' });
+    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: '  Please clarify  ', attachments: [{ name: 'scope.pdf' }], vendorId: 'vendor-2' }), params)).resolves.toMatchObject({
+      ok: true, status: 201, data: { message: {
+        id: expect.any(String), senderId: 'buyer-1', senderName: 'Buyer', senderRole: 'PROCUREMENT_MANAGER',
+        message: 'Please clarify', isVendorSent: false, vendorId: 'vendor-2',
+      } },
+    });
+    expect(db.rfqVendor.findFirst).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-2' }, select: { id: true } });
+    const buyerBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(buyerBatch).toHaveLength(2);
+    expect(buyerBatch[0].values).toEqual(expect.arrayContaining(['buyer-1', 'Buyer', 'PROCUREMENT_MANAGER', 'Please clarify', JSON.stringify([{ name: 'scope.pdf' }]), 0, 'vendor-2']));
+    expect(buyerBatch[1].sql).toContain('WHERE changes() = 1');
+    expect(db.rfqMessage.create).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
 
     auth.mockResolvedValueOnce({ ...buyer, role: 'VENDOR', vendorId: 'vendor-1' });
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' });
-    db.rfqMessage.create.mockResolvedValueOnce({ id: 'message-2', senderName: 'Vendor Representative', senderRole: 'VENDOR' });
-    await postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Vendor reply', vendorId: 'vendor-2', isVendorSent: false } ), params);
-    expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ vendorId: 'vendor-1', isVendorSent: true, senderRole: UI_STRINGS.common.vENDOR, message: 'Vendor reply' }) });
+    await postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Vendor reply', vendorId: 'vendor-2', isVendorSent: false, senderName: 'Spoofed', senderRole: 'ADMIN' } ), params);
+    const vendorBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[1][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(vendorBatch[0].values).toEqual(expect.arrayContaining(['Buyer', 'VENDOR', 'Vendor reply', 1, 'vendor-1']));
+    expect(vendorBatch[0].values).not.toContain('Spoofed');
   });
 
   it('reports errors raised while writing a message', async () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1' });
-    db.rfqMessage.create.mockRejectedValueOnce(new Error('message write failed'));
-    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Question' }), params)).resolves.toEqual({ ok: false, error: 'message write failed', status: 500 });
+    (writeD1BatchAtomically as jest.Mock).mockRejectedValueOnce(new Error('message write failed'));
+    await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Question' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToSendMessage, status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
     await expect(postMessage(request('http://localhost/api/rfqs/rfq-1', { message: 'Question' }), params)).resolves.toEqual({ ok: false, error: 'Failed to send message', status: 500 });
   });
@@ -134,6 +200,7 @@ describe('negotiation buyer decisions', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(buyer);
     isContext.mockReturnValue(true);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue(Array.from({ length: 6 }, () => ({ meta: { changes: 1 } })));
   });
 
   it('validates authorization, decision input, and negotiation round access', async () => {
@@ -148,53 +215,100 @@ describe('negotiation buyer decisions', () => {
   });
 
   it('accepts a final offer, updates its quote, posts a message, audits, and notifies', async () => {
+    notify.mockResolvedValueOnce({
+      tenantId: 'tenant-1', targetRole: 'PROCUREMENT_USER', title: 'Offer accepted', message: 'PPO awaited',
+      entityType: 'NEGOTIATION', entityId: 'rfq-1', recordNumber: 'RFQ-1',
+    });
     const round = {
-      id: 'round-1', status: 'OPEN', revisedQuoteAmount: 0, previousQuoteAmount: 500,
+      id: 'round-1', status: 'OPEN', buyerDecision: null, revisedQuoteAmount: 0, previousQuoteAmount: 500,
       vendor: { id: 'vendor-1', name: 'Acme Works' },
-      negotiation: { rfq: { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' } },
+      negotiation: { id: 'negotiation-1', rfq: { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' } },
     };
     db.negotiationRound.findFirst.mockResolvedValueOnce(round);
-    const updated = { id: 'round-1', status: 'CONCLUDED' };
-    db.negotiationRound.update.mockResolvedValueOnce(updated);
-    db.quote.findFirst.mockResolvedValueOnce({ id: 'quote-1' });
-    db.quote.update.mockResolvedValueOnce({ id: 'quote-1', status: 'ACCEPTED' });
-    db.rfqMessage.create.mockResolvedValueOnce({ id: 'message-1' });
 
     await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'ACCEPTED', remarks: 'Approved' }))).resolves.toMatchObject({
-      ok: true, data: { round: updated, decision: 'ACCEPTED', statusLabel: expect.stringContaining('PPO Awaited') },
+      ok: true, data: {
+        round: expect.objectContaining({ id: 'round-1', status: 'CONCLUDED', buyerDecision: 'ACCEPTED' }),
+        decision: 'ACCEPTED', statusLabel: UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.quoteAcceptedByBuyerPpoAwaited,
+      },
     });
     expect(db.negotiationRound.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'round-1', tenantId: 'tenant-1' } }));
-    expect(db.negotiationRound.update).toHaveBeenCalledWith({ where: { id: 'round-1' }, data: expect.objectContaining({ buyerDecision: 'ACCEPTED', buyerDecisionRemarks: UI_STRINGS.common.approved, status: UI_STRINGS.common.cONCLUDED, nextResponsibleParty: 'BUYER' }) });
-    expect(db.quote.update).toHaveBeenCalledWith({ where: { id: 'quote-1' }, data: { status: 'ACCEPTED' } });
-    expect(db.rfqMessage.create).toHaveBeenCalledWith({ data: expect.objectContaining({ rfqId: 'rfq-1', vendorId: 'vendor-1', isVendorSent: false, message: expect.stringContaining('500') }) });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'BUYER_DECISION_ACCEPTED', entityId: 'round-1' }));
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'COMMERCIAL_AWARD_APPROVED', entityId: 'rfq-1', details: expect.objectContaining({ amount: 500 }) }));
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(batch).toHaveLength(6);
+    expect(batch[0].values).toContain('ACCEPTED');
+    expect(batch[1].values).toContain('BUYER_DECISION_ACCEPTED');
+    expect(batch[2].sql).toContain('ORDER BY "quoteVersion" DESC');
+    expect(batch[3].sql).toContain("SET \"status\" = 'CONCLUDED'");
+    expect(batch[4].values).toContain(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.buyerAcceptedOfferMessage, { amount: '0', vendorName: 'Acme Works' }));
+    expect(batch[4].sql).toContain('rfq_messages');
+    expect(batch[5].sql).toContain('INSERT INTO "notification_outbox"');
+    expect(db.negotiationRound.update).not.toHaveBeenCalled();
+    expect(db.quote.update).not.toHaveBeenCalled();
+    expect(db.rfqMessage.create).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'COMMERCIAL_AWARD_APPROVED', entityId: 'rfq-1', details: expect.objectContaining({ amount: 0 }) }), { prepareOnly: true });
+    expect(dispatchPreparedWorkflowNotification).toHaveBeenCalledWith(expect.any(String), expect.any(Date), expect.objectContaining({ entityId: 'round-1' }));
+  });
+
+  it('allows a buyer to decide on a vendor final offer awaiting buyer decision', async () => {
+    db.negotiationRound.findFirst.mockResolvedValueOnce({
+      id: 'round-final', status: 'FINAL_OFFER_SUBMITTED', buyerDecision: 'PENDING_BUYER_DECISION',
+      revisedQuoteAmount: 450, previousQuoteAmount: 500,
+      vendor: { id: 'vendor-1', name: 'Acme Works' },
+      negotiation: { id: 'negotiation-1', rfq: { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' } },
+    });
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-final', decision: 'ACCEPTED' })))
+      .resolves.toMatchObject({ ok: true, data: { decision: 'ACCEPTED' } });
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(batch[0].sql).toContain("'PENDING_BUYER_DECISION'");
+    expect(batch[0].values.slice(-3)).toEqual(['ACCEPTED', 'tenant-1', 'tenant-1']);
   });
 
   it('rejects and acknowledges final acceptance without changing quote state', async () => {
     for (const [decision, status, next, label] of [
-      ['REJECTED', 'REJECTED', 'CLOSED', 'Quote Not Accepted / Negotiation Closed'],
-      ['FINAL_ACCEPTANCE_PENDING', 'OPEN', 'BUYER', 'Final Acceptance Pending from Buyer'],
+      ['REJECTED', 'REJECTED', 'CLOSED', UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.quoteNotAcceptedNegotiationClosed],
+      ['FINAL_ACCEPTANCE_PENDING', 'OPEN', 'BUYER', UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.finalAcceptancePendingFromBuyer],
     ]) {
       db.negotiationRound.findFirst.mockResolvedValueOnce({
-        id: 'round-1', status: 'OPEN', previousQuoteAmount: 700, vendor: { id: 'vendor-1', name: 'Acme Works' },
-        negotiation: { rfq: { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' } },
+        id: 'round-1', status: 'OPEN', buyerDecision: null, previousQuoteAmount: 700, vendor: { id: 'vendor-1', name: 'Acme Works' },
+        negotiation: { id: 'negotiation-1', rfq: { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' } },
       });
-      db.negotiationRound.update.mockResolvedValueOnce({ id: 'round-1', status });
-      db.rfqMessage.create.mockResolvedValueOnce({ id: `message-${decision}` });
       await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision }))).resolves.toMatchObject({ ok: true, data: { decision, statusLabel: label } });
-      expect(db.negotiationRound.update).toHaveBeenLastCalledWith({ where: { id: 'round-1' }, data: expect.objectContaining({ status, nextResponsibleParty: next, buyerDecisionRemarks: null }) });
-      expect(db.rfqMessage.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ message: expect.stringContaining(decision === 'REJECTED' ? 'Commercial parameters not aligned' : 'internal commercial committee') }) });
+      const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[(writeD1BatchAtomically as jest.Mock).mock.calls.length - 1][0] as Array<{ sql: string; values: unknown[] }>;
+      expect(batch[0].values).toEqual(expect.arrayContaining([decision, status, next]));
+      expect(batch[batch.length - 1].sql).toContain('rfq_messages');
       expect(db.quote.findFirst).not.toHaveBeenCalled();
     }
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'NEGOTIATION_CLOSED' }));
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'NEGOTIATION_CLOSED' }), { prepareOnly: true });
+  });
+
+  it('prevents repeated or racing buyer decisions from duplicating negotiation records', async () => {
+    db.negotiationRound.findFirst.mockResolvedValueOnce({
+      id: 'round-1', buyerDecision: 'ACCEPTED', negotiation: { rfq: { id: 'rfq-1' } },
+    });
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'ACCEPTED' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.buyerDecisionConflictPleaseRefresh, status: 409,
+    });
+    db.negotiationRound.findFirst.mockResolvedValueOnce({
+      id: 'round-2', status: 'OPEN', buyerDecision: null, previousQuoteAmount: 50,
+      vendor: { id: 'vendor-1', name: 'Acme Works' },
+      negotiation: { id: 'negotiation-1', rfq: { id: 'rfq-1', rfqNumber: 'RFQ-1', projectId: 'project-1' } },
+    });
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-2', decision: 'REJECTED' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.buyerDecisionConflictPleaseRefresh, status: 409,
+    });
   });
 
   it('returns a useful server error if a decision cannot be loaded', async () => {
     db.negotiationRound.findFirst.mockRejectedValueOnce(new Error('decision lookup failed'));
-    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'REJECTED' }))).resolves.toEqual({ ok: false, error: 'decision lookup failed', status: 500 });
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'REJECTED' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToRecordBuyerDecision, status: 500,
+    });
     db.negotiationRound.findFirst.mockRejectedValueOnce({});
-    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'REJECTED' }))).resolves.toEqual({ ok: false, error: 'Failed to record buyer decision', status: 500 });
+    await expect(recordDecision(request('http://localhost/api/decision', { roundId: 'round-1', decision: 'REJECTED' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToRecordBuyerDecision, status: 500,
+    });
   });
 });
 
@@ -252,8 +366,8 @@ describe('standard BOQ download', () => {
     db.category.findMany.mockResolvedValueOnce([]);
     const response = await downloadStandardBoq(request('http://localhost/api/boq/standard/download?sector=ALL'));
     expect(response.status).toBe(200);
-    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(1, { where: { tenantId: 'tenant-1', isActive: true }, orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { itemCode: 'asc' }] });
-    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(2, { where: { tenantId: 'tenant-1', isActive: true }, take: 30, orderBy: [{ category: 'asc' }, { itemCode: 'asc' }] });
+    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true }, take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1 }));
+    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true }, take: 30 }));
     const workbook = XLSX.read(Buffer.from(await response.arrayBuffer()), { type: 'buffer' });
     expect(XLSX.utils.sheet_to_json(workbook.Sheets.BOQ)).toEqual([]);
     expect(XLSX.utils.sheet_to_json(workbook.Sheets.MASTER_DATA)).toHaveLength(10);
@@ -275,6 +389,26 @@ describe('standard BOQ download', () => {
     expect(instructions).toContainEqual(['Cost Centre:', 'Not Specified']);
 
     db.standardBoqItem.findMany.mockRejectedValueOnce(new Error('catalog unavailable'));
-    await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toEqual({ ok: false, error: 'catalog unavailable', status: 500 });
+    await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToGenerateStandardBoqDownload, status: 500 });
+  });
+
+  it('bounds exported BOQ items and master references instead of building unbounded workbooks', async () => {
+    db.standardBoqItem.findMany.mockResolvedValueOnce(Array.from({ length: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1 }, () => ({})));
+    await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toMatchObject({ status: 413 });
+
+    db.standardBoqItem.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce(Array.from({ length: MAX_STANDARD_BOQ_EXPORT_UOMS + 1 }, () => ({})));
+    db.category.findMany.mockResolvedValueOnce([]);
+    await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toMatchObject({ status: 413 });
+
+    db.standardBoqItem.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce(Array.from({ length: MAX_STANDARD_BOQ_EXPORT_CATEGORIES + 1 }, () => ({ children: [] })));
+    await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toMatchObject({ status: 413 });
+
+    db.standardBoqItem.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce([{ children: Array.from({ length: MAX_STANDARD_BOQ_EXPORT_CATEGORY_CHILDREN + 1 }, () => ({})) }]);
+    await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toMatchObject({ status: 413 });
   });
 });

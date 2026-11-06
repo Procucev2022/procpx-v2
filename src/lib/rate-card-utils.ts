@@ -1,6 +1,20 @@
 import type { ParsedRateCardItemMeta, RateCardNegotiationMeta } from "@app-types/lib/rate-card-utils.types";
 export type { ParsedRateCardItemMeta, RateCardNegotiationMeta };
 
+/** Parses persisted JSON objects without treating malformed data as an empty object. */
+export function parseStoredJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value === null || value === undefined || value === '') return {};
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 
 /**
  * Parses the structured comparison metadata stored in VendorRateCardItem.comparisonRef

@@ -17,7 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { Persona } from "@app-types/app/login/page.types";
-import { BUYER_PERSONAS, VENDOR_PERSONAS, TENANT_B_PERSONAS } from "./page.constants";
+import { BUYER_PERSONAS, TEST_FIXTURE_PASSWORD, VENDOR_PERSONAS, TENANT_B_PERSONAS } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -65,7 +65,7 @@ export default function LoginPage() {
     }
   }
 
-  const selectPersona = (targetEmail: string, targetPassword = 'Demo@1234', roleName?: string) => {
+  const selectPersona = (targetEmail: string, targetPassword = TEST_FIXTURE_PASSWORD, roleName?: string) => {
     setEmail(targetEmail);
     setPassword(targetPassword);
     setError('');
@@ -386,6 +386,8 @@ export default function LoginPage() {
                 )}
               </button>
 
+              {/* Local fixture personas are not shown on production login pages. */}
+              {process.env.NODE_ENV !== 'production' && <>
               {/* Quick Persona Fill Chips */}
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -407,7 +409,7 @@ export default function LoginPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   <button
                     type="button"
-                    onClick={() => selectPersona('category.manager@procucev-demo.local', 'Demo@1234', 'Category Manager')}
+                    onClick={() => selectPersona(BUYER_PERSONAS[0].email, TEST_FIXTURE_PASSWORD, BUYER_PERSONAS[0].role)}
                     style={{
                       padding: '5px 10px',
                       fontSize: 11,
@@ -421,7 +423,7 @@ export default function LoginPage() {
                   >{UI_STRINGS.common.categoryManager}</button>
                   <button
                     type="button"
-                    onClick={() => selectPersona('procurement.user@procucev-demo.local', 'Demo@1234', 'Procurement User')}
+                    onClick={() => selectPersona(BUYER_PERSONAS[1].email, TEST_FIXTURE_PASSWORD, BUYER_PERSONAS[1].role)}
                     style={{
                       padding: '5px 10px',
                       fontSize: 11,
@@ -435,7 +437,7 @@ export default function LoginPage() {
                   >{UI_STRINGS.common.procurementUser}</button>
                   <button
                     type="button"
-                    onClick={() => selectPersona('vendor.apex@apex-infra.com', 'Demo@1234', 'Vendor: Apex Infra')}
+                    onClick={() => selectPersona(VENDOR_PERSONAS[0].email, TEST_FIXTURE_PASSWORD, VENDOR_PERSONAS[0].role)}
                     style={{
                       padding: '5px 10px',
                       fontSize: 11,
@@ -446,10 +448,10 @@ export default function LoginPage() {
                       color: '#059669',
                       cursor: 'pointer',
                     }}
-                  >{UI_STRINGS.appLoginPage.vendorApexInfra}</button>
+                  >{VENDOR_PERSONAS[0].role}</button>
                   <button
                     type="button"
-                    onClick={() => selectPersona('bluepeak.engineering@vendor.procpx.local', 'welcome', 'Vendor: BluePeak')}
+                    onClick={() => selectPersona(VENDOR_PERSONAS[1].email, TEST_FIXTURE_PASSWORD, VENDOR_PERSONAS[1].role)}
                     style={{
                       padding: '5px 10px',
                       fontSize: 11,
@@ -460,9 +462,10 @@ export default function LoginPage() {
                       color: '#059669',
                       cursor: 'pointer',
                     }}
-                  >{UI_STRINGS.appLoginPage.vendorBluePeak}</button>
+                  >{VENDOR_PERSONAS[1].role}</button>
                 </div>
               </div>
+              </>}
 
               {/* Forgot password */}
               <div style={{ marginTop: 16, textAlign: 'center' }}>
@@ -503,7 +506,7 @@ export default function LoginPage() {
           </div>
 
           {/* Developer / Demo Access (Discreet secondary trigger) */}
-          <div style={{ marginTop: 14, textAlign: 'center' }}>
+          {process.env.NODE_ENV !== 'production' && <div style={{ marginTop: 14, textAlign: 'center' }}>
             <button
               type="button"
               onClick={() => setShowDemoModal(true)}
@@ -523,7 +526,7 @@ export default function LoginPage() {
               <KeyRound size={13} strokeWidth={1.8} />
               <span>{UI_STRINGS.appLoginPage.exploreAll}{BUYER_PERSONAS.length + VENDOR_PERSONAS.length + TENANT_B_PERSONAS.length}{UI_STRINGS.appLoginPage.demoAccounts}</span>
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -574,7 +577,7 @@ export default function LoginPage() {
       )}
 
       {/* ── Modal: Demo Personas Switcher (Comprehensive 3-Section Selector) ─ */}
-      {showDemoModal && (
+      {process.env.NODE_ENV !== 'production' && showDemoModal && (
         <div
           className="modal-backdrop"
           onClick={() => setShowDemoModal(false)}
@@ -600,14 +603,14 @@ export default function LoginPage() {
               {/* Section 1: Tenant A Buyers */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appLoginPage.tenantAEnterpriseBuyerPersonas}</span>
-                <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.password}<strong>{UI_STRINGS.appLoginPage.demo1234}</strong></span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.password}<strong>{UI_STRINGS.appLoginPage.testFixturePassword}</strong></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 18 }}>
                 {BUYER_PERSONAS.map((p) => (
                   <button
                     key={p.email}
                     type="button"
-                    onClick={() => selectPersona(p.email, p.password || 'Demo@1234', p.role)}
+                    onClick={() => selectPersona(p.email, p.password || TEST_FIXTURE_PASSWORD, p.role)}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -643,7 +646,7 @@ export default function LoginPage() {
                     <button
                       key={p.email}
                       type="button"
-                      onClick={() => selectPersona(p.email, p.password || 'welcome', p.role)}
+                      onClick={() => selectPersona(p.email, p.password || TEST_FIXTURE_PASSWORD, p.role)}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -673,14 +676,14 @@ export default function LoginPage() {
               <div style={{ paddingTop: 14, borderTop: '1px dashed #cbd5e1' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appLoginPage.tenantBHospitalityProjectMultiTenantIsolation}</span>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.password}<strong>{UI_STRINGS.appLoginPage.demo1234}</strong></span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appLoginPage.password}<strong>{UI_STRINGS.appLoginPage.testFixturePassword}</strong></span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {TENANT_B_PERSONAS.map((p) => (
                     <button
                       key={p.email}
                       type="button"
-                      onClick={() => selectPersona(p.email, p.password || 'Demo@1234', p.role)}
+                      onClick={() => selectPersona(p.email, p.password || TEST_FIXTURE_PASSWORD, p.role)}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',

@@ -47,9 +47,12 @@ const originalFetch = global.fetch;
 const primaryPr = {
   id: 'pr-1', prNumber: 'PR-001', title: 'Electrical package', totalLines: 2,
   totalEstimatedValue: 12500, totalQuantity: 12, requesterName: 'Asha Rao', requesterEmail: 'asha@example.test',
-  requestedDate: '2026-10-20', hasEnquiry: true, categories: ['Electrical', 'Power'],
+  requestedDate: '2026-10-20', hasEnquiry: true, categories: ['Electrical', 'Power'], remainingCategoryCount: 3,
   boq: { boqCode: 'BOQ-01' }, boqRevision: { revisionCode: 'R2' },
   project: { name: 'North Plant', projectCode: 'NP-1' }, costCentre: { code: 'CC-01', name: 'Electrical' },
+};
+const primaryPrDetail = {
+  ...primaryPr,
   lines: [
     { id: 'line-1', lineNumber: 3, itemDescription: 'Cable tray', specification: 'Hot dip galvanized', category: 'Electrical', quantity: 10, uom: 'M', estimatedRate: 400, estimatedValue: 4000 },
     { id: 'line-2', itemDescription: 'Grounding strip', boqLine: { specification: 'Copper strip' }, category: 'Power', quantity: 5, uom: 'M', estimatedRate: 150 },
@@ -57,9 +60,7 @@ const primaryPr = {
 };
 const sparsePr = {
   id: 'pr-2', prNumber: 'PR-002', title: 'General package', requestedBy: 'Mira', createdAt: '2026-10-21',
-  categories: [], hasEnquiry: false, totalEstimatedValue: 0, lines: [
-    { id: 'line-3', itemDescription: 'Other item', quantity: 2, estimatedRate: 25 },
-  ],
+  categories: [], hasEnquiry: false, totalEstimatedValue: 0, totalLines: 1,
 };
 
 function response(body: any, ok = true) {
@@ -68,7 +69,9 @@ function response(body: any, ok = true) {
 
 function setupFetch() {
   mockFetch.mockImplementation((url: string) => {
-    if (url === '/api/approvals?type=PR') return Promise.resolve(response(queueBody, queueOk));
+    if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response(queueBody, queueOk));
+    if (url === '/api/pr/pr-1') return Promise.resolve(response(primaryPrDetail));
+    if (url === '/api/pr/pr-2') return Promise.resolve(response({ ...sparsePr, lines: [{ id: 'line-3', itemDescription: 'Other item', quantity: 2, estimatedRate: 25 }] }));
     if (url === '/api/pr/pr-1/approve' || url === '/api/pr/pr-2/approve') return Promise.resolve(response(approveResult.body, approveResult.ok));
     if (url.endsWith('/revert')) return Promise.resolve(response(revertResult.body, revertResult.ok));
     if (url.endsWith('/reject')) return Promise.resolve(response(rejectResult.body, rejectResult.ok));
@@ -99,6 +102,7 @@ describe('BOQ and PR approval workspace', () => {
     expect(screen.getByText('1 Inquiries')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.clarificationPending))).toBeInTheDocument();
     expect(screen.getByText('General package')).toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: 3 }))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.standard))).toBeInTheDocument();
     expect(screen.getByText('Mira')).toBeInTheDocument();
     expect(screen.getByText('BOQ-01')).toBeInTheDocument();
@@ -107,9 +111,9 @@ describe('BOQ and PR approval workspace', () => {
     fireEvent.click(within(row).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"BOQ"})) }));
     expect(screen.getByText('BOQ Details: PR-001')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.sourceBOQ)).parentElement).toHaveTextContent('BOQ-01 (R2)');
-    expect(screen.getByText('Cable tray')).toBeInTheDocument();
-    expect(screen.getByText('Hot dip galvanized')).toBeInTheDocument();
-    expect(screen.getByText('Copper strip')).toBeInTheDocument();
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    expect(await screen.findByText('Hot dip galvanized')).toBeInTheDocument();
+    expect(await screen.findByText('Copper strip')).toBeInTheDocument();
     expect(screen.getByText(/4,000/)).toBeInTheDocument();
     expect(screen.getByText(/750/)).toBeInTheDocument();
 
@@ -117,7 +121,7 @@ describe('BOQ and PR approval workspace', () => {
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');
     expect(screen.getByTestId('approval-chat')).toHaveTextContent('PR-001');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Queue' }));
-    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=PR');
+    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=PR&page=1&pageSize=25');
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
     expect(screen.queryByTestId('approval-chat')).not.toBeInTheDocument();
 
@@ -132,7 +136,7 @@ describe('BOQ and PR approval workspace', () => {
     fireEvent.click(within(screen.getByRole('row', { name: /PR-002/ })).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"BOQ"})) }));
     expect(screen.getByText('BOQ Details: PR-002')).toBeInTheDocument();
     expect(screen.getByText('(R0)')).toBeInTheDocument();
-    expect(screen.getAllByText('Other item').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Other item')).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/50/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Chat","toLocaleString":"with Requester"})) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'false');
@@ -147,6 +151,117 @@ describe('BOQ and PR approval workspace', () => {
     fireEvent.click(within(screen.getByRole('row', { name: /PR-002/ })).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"BOQ"})) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
     expect(screen.queryByText('BOQ Details: PR-002')).not.toBeInTheDocument();
+  });
+
+  it('loads the next PR line page from the review modal', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail,
+        lines: [primaryPrDetail.lines[0]],
+        linePagination: { hasMore: true, nextCursor: 'cursor-1', pageSize: 25 },
+      }));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor-1') return Promise.resolve(response({
+        lines: [primaryPrDetail.lines[1]],
+        linePagination: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }));
+      return Promise.resolve(response({}));
+    });
+
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Grounding strip')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-1/lines?cursor=cursor-1');
+  });
+
+  it('shows a safe error when PR review details cannot be loaded', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({ error: 'database details' }, false));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests))).toBeInTheDocument();
+  });
+
+  it('reports a failed PR line page and preserves the original lines', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail, lines: [primaryPrDetail.lines[0]],
+        linePagination: { hasMore: true, nextCursor: 'cursor-fail', pageSize: 25 },
+      }));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor-fail') return Promise.resolve(response({ error: 'database details' }, false));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests))).toBeInTheDocument();
+    expect(screen.queryByText('Grounding strip')).not.toBeInTheDocument();
+  });
+
+  it('ignores a late line page after switching the approval review to another PR', async () => {
+    type MockResponse = ReturnType<typeof response>;
+    let resolvePage: ((value: MockResponse) => void) | undefined;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr, sparsePr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail, lines: [primaryPrDetail.lines[0]],
+        linePagination: { hasMore: true, nextCursor: 'cursor-old', pageSize: 25 },
+      }));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor-old') return new Promise<MockResponse>((resolve) => { resolvePage = resolve; });
+      if (url === '/api/pr/pr-2') return Promise.resolve(response({
+        ...sparsePr, lines: [{ id: 'new-line', itemDescription: 'Current PR line', quantity: 1 }],
+      }));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const firstRow = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(firstRow).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    const secondRow = screen.getByRole('row', { name: /PR-002/ });
+    fireEvent.click(within(secondRow).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect((await screen.findAllByText('Current PR line')).length).toBeGreaterThan(0);
+    resolvePage?.(response({ lines: [{ id: 'stale-line', itemDescription: 'Stale PR line' }] }));
+    await waitFor(() => expect(screen.queryByText('Stale PR line')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Current PR line').length).toBeGreaterThan(0);
+  });
+
+  it('does not issue a line-page request when the review cursor is missing', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/approvals?type=PR')) return Promise.resolve(response({ prQueue: [primaryPr] }));
+      if (url === '/api/pr/pr-1') return Promise.resolve(response({
+        ...primaryPrDetail, linePagination: { hasMore: true, nextCursor: null, pageSize: 25 },
+      }));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    const row = await screen.findByRole('row', { name: /PR-001/ });
+    fireEvent.click(within(row).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/lines?'))).toBe(false);
   });
 
   it('approves from the queue and review modal with errors and status dismissal', async () => {
@@ -258,5 +373,20 @@ describe('BOQ and PR approval workspace', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsBoqPrPage.noBOQsAwaitingProjectApproverDecision))).toBeInTheDocument();
     consoleError.mockRestore();
+  });
+
+  it('loads additional PR approval queue pages without replacing the first page', async () => {
+    const secondPagePr = { ...sparsePr, id: 'pr-4', prNumber: 'PR-004', title: 'Mechanical package' };
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('page=1')) return Promise.resolve(response({ prQueue: [primaryPr], pagination: { page: 1, queues: { pr: { total: 2, totalPages: 2 } } }, totals: { prPendingAmount: 25100 } }));
+      if (url.includes('page=2')) return Promise.resolve(response({ prQueue: [secondPagePr], pagination: { page: 2, queues: { pr: { total: 2, totalPages: 2 } } }, totals: { prPendingAmount: 25100 } }));
+      return Promise.resolve(response({}));
+    });
+    render(<BoqPrApprovalPage />);
+    expect(await screen.findByRole('row', { name: /PR-001/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByRole('row', { name: /PR-004/ })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /PR-001/ })).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=PR&page=2&pageSize=25');
   });
 });

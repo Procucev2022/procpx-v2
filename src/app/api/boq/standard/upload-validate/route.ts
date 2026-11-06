@@ -6,6 +6,8 @@ import * as XLSX from 'xlsx';
 import type { ValidationIssue } from "@app-types/app/api/boq/standard/upload-validate/route.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { MAX_BOQ_IMPORT_COLUMNS, MAX_BOQ_IMPORT_SHEET_ROWS, MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
+import { MAX_BOQ_BATCH_LINES } from '@/lib/d1-batch.constants';
 
 export type { ValidationIssue };
 
@@ -15,17 +17,24 @@ export async function POST(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   try {
+    const contentLength = Number(req.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_BOQ_UPLOAD_BYTES + 64 * 1024) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqUploadRoute.boqUploadFileMustBeBetweenOneByteAndMaxBytes, { maxBytes: MAX_BOQ_UPLOAD_BYTES }), 413);
+    }
     const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    const file = formData.get('file');
     const projectId = (formData.get('projectId') as string) || '';
     const costCentreId = (formData.get('costCentreId') as string) || '';
 
-    if (!file) {
-      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.pleaseSelectOrUploadACompletedStandardBOQExcelFile, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
+    if (!file || typeof file === 'string' || typeof file.arrayBuffer !== 'function') {
+      return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.pleaseSelectOrUploadACompletedStandardBOQExcelFile, 400);
+    }
+    if (file.size <= 0 || file.size > MAX_BOQ_UPLOAD_BYTES) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqUploadRoute.boqUploadFileMustBeBetweenOneByteAndMaxBytes, { maxBytes: MAX_BOQ_UPLOAD_BYTES }), 413);
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { type: 'buffer', sheetRows: MAX_BOQ_IMPORT_SHEET_ROWS });
 
     // Look for Sheet 'BOQ' or sheet containing 'boq', 'data', 'sheet', or fallback to first sheet
     let sheetName = workbook.SheetNames.find(s => s.toLowerCase() === 'boq') ||
@@ -39,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Read as 2D array to intelligently identify header row (handles title rows or subtitles)
-    const rawMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    const rawMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', blankrows: false });
     if (!rawMatrix || rawMatrix.length === 0) {
       return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.theUploadedFileDoesNotContainAnyDataRows, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
     }
@@ -66,6 +75,9 @@ export async function POST(req: NextRequest) {
     }
 
     const headerRow = rawMatrix[headerRowIdx].map(h => String(h).trim());
+    if (headerRow.length > MAX_BOQ_IMPORT_COLUMNS) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
     const rows: any[] = [];
     for (let i = headerRowIdx + 1; i < rawMatrix.length; i++) {
       const rowArr = rawMatrix[i];
@@ -80,6 +92,7 @@ export async function POST(req: NextRequest) {
     if (rows.length === 0) {
       return apiError(UI_STRINGS.appApiBoqStandardUploadValidateRoute.noDataRowsFoundBelowHeadersInTheSpreadsheet, 400, { route: '/api/boq/standard/upload-validate', method: 'POST' });
     }
+    if (rows.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
 
     // Load reference taxonomy from DB
     const uoms = await prisma.uomMaster.findMany({

@@ -1,19 +1,39 @@
 // src/app/api/boq/create-pr/route.ts - Create Procurement Request (PR) from BOQ
-import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import {
+  MAX_PR_BATCH_LINES,
+  PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
+  PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
+  PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
+  PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
+  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+} from '@/lib/d1-batch.constants';
+import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('PR_CREATE');
   if (!isApiContext(ctx)) return ctx;
 
+  const startedAt = Date.now();
+  let requestBoqRevisionId: string | undefined;
+  let requestBoqId: string | undefined;
   try {
-    const body = await req.json();
+    let parsedBody: unknown;
+    try {
+      parsedBody = await req.json();
+    } catch {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    const body = parsedBody as Record<string, unknown>;
     const {
       boqRevisionId,
       boqId,
@@ -23,10 +43,23 @@ export async function POST(req: NextRequest) {
       requiredDate,
       selectedLineIds,
       autoSubmit,
-    } = body;
+    } = body as Record<string, any>;
+    requestBoqRevisionId = typeof boqRevisionId === 'string' ? boqRevisionId : undefined;
+    requestBoqId = typeof boqId === 'string' ? boqId : undefined;
 
+    if ((boqRevisionId !== undefined && typeof boqRevisionId !== 'string')
+      || (boqId !== undefined && typeof boqId !== 'string')
+      || (projectId !== undefined && typeof projectId !== 'string')
+      || (costCentreId !== undefined && typeof costCentreId !== 'string')
+      || (title !== undefined && title !== null && typeof title !== 'string')
+      || (requiredDate !== undefined && requiredDate !== null && typeof requiredDate !== 'string')) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
     if (!boqRevisionId && !boqId) {
       return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400, { route: '/api/boq/create-pr', method: 'POST' });
+    }
+    if (selectedLineIds !== undefined && (!Array.isArray(selectedLineIds) || selectedLineIds.some((id) => typeof id !== 'string'))) {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
     }
 
     // Resolve revision
@@ -77,6 +110,9 @@ export async function POST(req: NextRequest) {
     }
 
     const targetProjectId = projectId || revision.boq.projectId;
+    if (targetProjectId !== revision.boq.projectId) {
+      return apiError(UI_STRINGS.appApiBoqCreatePrRoute.projectMustMatchTheProjectLinkedToThisBOQ, 400);
+    }
     const targetCostCentreId = costCentreId || revision.costCentreId || revision.boq.costCentreId;
 
     if (!targetCostCentreId) {
@@ -97,6 +133,12 @@ export async function POST(req: NextRequest) {
 
     if (targetLines.length === 0) {
       return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/boq/create-pr', method: 'POST' });
+    }
+    const maxLinesPerAtomicWrite = MAX_PR_BATCH_LINES;
+    if (targetLines.length > maxLinesPerAtomicWrite) {
+      return apiError(interpolateUiString(UI_STRINGS.common.prExceedsAtomicWriteLimitMaxLines, {
+        maxLines: maxLinesPerAtomicWrite,
+      }), 400);
     }
 
     // Section 9: Commercial PR Rule - block if any line has pending/blank/invalid quantity
@@ -121,9 +163,6 @@ export async function POST(req: NextRequest) {
         409, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
-    // Generate unique PR Number
-    const prNumber = await nextRecordCode(prisma.procurementRequest, 'prNumber', ctx.tenantId, `PR-${new Date().getFullYear()}-`, 6);
-
     let totalEstimatedPRValue = 0;
     for (const l of targetLines) {
       const unitRate = l.aiUnitCost || (l as any).benchmarkRate || 100;
@@ -133,107 +172,115 @@ export async function POST(req: NextRequest) {
     }
 
     const prTitle = title || `${revision.boq.title || revision.boq.boqCode} - Procurement Package`;
-    const initialStatus = autoSubmit ? 'PR_PENDING_PROJECT_APPROVAL' : 'PR_DRAFT';
+    const initialStatus = autoSubmit === true ? 'PR_PENDING_PROJECT_APPROVAL' : 'PR_DRAFT';
+    const requestedAt = new Date();
+    const requiredAt = requiredDate ? new Date(requiredDate) : new Date(requestedAt.getTime() + 30 * 86400000);
+    if (!Number.isFinite(requiredAt.getTime())) {
+      return apiError(UI_STRINGS.common.invalidDate, 400);
+    }
+    const createdAt = requestedAt.toISOString();
+    const prId = crypto.randomUUID();
+    const roundedTotal = Math.round(totalEstimatedPRValue * 100) / 100;
+    const batch = [{
+      sql: PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
+      values: [
+        prId, ctx.tenantId, String(requestedAt.getFullYear()), ctx.tenantId, String(requestedAt.getFullYear()),
+        targetProjectId, targetCostCentreId, revision.boqId, revision.id, prTitle,
+        roundedTotal, targetLines.length, initialStatus, ctx.userId, createdAt, requiredAt.toISOString(), createdAt, createdAt,
+        revision.id, ctx.tenantId, revision.boqId,
+        revision.boqId, ctx.tenantId, targetProjectId,
+        targetCostCentreId, ctx.tenantId, targetProjectId,
+        ctx.tenantId, revision.id,
+      ],
+    }];
 
-    // 1. Create Procurement Request
-    const pr = await prisma.procurementRequest.create({
-      data: {
-        tenantId: ctx.tenantId,
-        prNumber,
-        projectId: targetProjectId,
-        costCentreId: targetCostCentreId,
-        boqId: revision.boqId,
-        boqRevisionId: revision.id,
-        title: prTitle,
-        purpose: 'PROCUREMENT_SOURCING',
-        totalEstimatedValue: Math.round(totalEstimatedPRValue * 100) / 100,
-        totalLines: targetLines.length,
-        status: initialStatus,
-        requestedBy: ctx.userId,
-        requestedDate: new Date(),
-        requiredDate: requiredDate ? new Date(requiredDate) : new Date(Date.now() + 30 * 86400000),
-      },
-    });
-
-    // 2. Create PR Lines with end-to-end line item traceability
-    for (const l of targetLines) {
+    // Create PR lines with end-to-end BOQ line traceability in the same D1 batch.
+    for (const [index, l] of targetLines.entries()) {
       const unitRate = l.aiUnitCost || (l as any).benchmarkRate || 100;
       const qty = l.quantity as number;
       const lineVal = l.aiTotalCost || Math.round(unitRate * qty * 100) / 100;
-
-      await prisma.pRLine.create({
-        data: {
-          tenantId: ctx.tenantId,
-          prId: pr.id,
-          projectId: targetProjectId,
-          costCentreId: targetCostCentreId,
-          boqId: revision.boqId,
-          boqRevisionId: revision.id,
-          boqLineId: l.id,
-          lineNumber: l.lineNumber || '1',
-          itemDescription: l.standardDescription || l.originalDescription || 'Line Item',
-          specification: l.specification || null,
-          category: l.category?.name || 'General',
-          subcategory: l.subcategory?.name || null,
-          uom: l.uom?.code || l.uomRaw || 'NOS',
-          quantity: qty,
-          estimatedRate: unitRate,
-          estimatedValue: lineVal,
-          drawingReference: l.drawingReference || null,
-          costCentre: costCentre.code,
-        },
+      batch.push({
+        sql: PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
+        values: [
+          crypto.randomUUID(), ctx.tenantId, prId, targetProjectId, targetCostCentreId,
+          revision.boqId, revision.id, l.id, l.lineNumber || String(index + 1),
+          l.standardDescription || l.originalDescription || 'Line Item', l.specification || null,
+          l.category?.name || 'General', l.subcategory?.name || null, l.uom?.code || l.uomRaw || 'NOS',
+          qty, unitRate, lineVal, l.drawingReference || null, requiredAt.toISOString(), costCentre.code, createdAt,
+        ],
       });
     }
 
-    // 3. Update BOQ Revision & BOQ
-    const newPrStatus = autoSubmit ? 'PR_PENDING_PROJECT_APPROVAL' : 'PR_DRAFT';
-    await prisma.boqRevision.update({
-      where: { id: revision.id },
-      data: {
-        prStatus: newPrStatus,
-      },
+    batch.push({
+      sql: PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+      values: [targetCostCentreId, initialStatus, createdAt, revision.id, ctx.tenantId],
     });
-
-    await prisma.boq.update({
-      where: { id: revision.boqId },
-      data: {
-        costCentreId: targetCostCentreId,
-        purpose: 'PR',
-      },
+    batch.push({
+      sql: PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
+      values: [targetCostCentreId, createdAt, revision.boqId, ctx.tenantId],
     });
-
-    // 4. Audit Log
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: targetProjectId,
-        entityType: 'PR',
-        entityId: pr.id,
-        action: 'PR_CREATED_FROM_BOQ',
-        description: interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.procurementRequestPrNumberCreatedFromBOQBoqCodeLengthLinesValueToLocaleString, { "prNumber": prNumber, "boqCode": revision.boq.boqCode, "length": targetLines.length, "toLocaleString": totalEstimatedPRValue.toLocaleString(I18N_CONFIG.defaultLocale) }),
-        newValue: JSON.stringify({
-          prNumber,
+    batch.push({
+      sql: PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
+      values: [
+        crypto.randomUUID(), ctx.tenantId, ctx.userId, targetProjectId, revision.boq.boqCode,
+        targetLines.length,
+        JSON.stringify({
           boqCode: revision.boq.boqCode,
           revisionCode: revision.revisionCode,
           totalLines: targetLines.length,
-          totalEstimatedPRValue,
+          totalEstimatedPRValue: roundedTotal,
           status: initialStatus,
         }),
-      },
+        createdAt, prId, ctx.tenantId,
+      ],
     });
+
+    if (!isD1BatchWithinLimits(batch)) {
+      return apiError(interpolateUiString(UI_STRINGS.common.prExceedsAtomicWriteLimitMaxLines, { maxLines: maxLinesPerAtomicWrite }), 400);
+    }
+    const writeResults = await writeD1BatchAtomically(batch);
+    const createdPr = writeResults[0]?.results?.[0] as { id?: string; prNumber?: string } | undefined;
+    if (!createdPr?.id || !createdPr.prNumber) {
+      const competingPr = await prisma.procurementRequest.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          boqRevisionId: revision.id,
+          status: { notIn: ['PR_REJECTED', 'CANCELLED'] },
+        },
+        select: { prNumber: true },
+      });
+      if (competingPr) {
+        return apiError(interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.anActiveProcurementRequestPrNumberAlreadyExistsForThisBOQRevisionDuplicatePRCreationIsPrevented, {
+          prNumber: competingPr.prNumber,
+        }), 409);
+      }
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
 
     return apiSuccess({
       success: true,
-      prId: pr.id,
-      prNumber: pr.prNumber,
+      prId: createdPr.id,
+      prNumber: createdPr.prNumber,
       totalLines: targetLines.length,
-      totalValue: totalEstimatedPRValue,
+      totalValue: roundedTotal,
       status: initialStatus,
-      message: interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.procurementRequestPrNumberCreatedWithLengthItems, { "prNumber": prNumber, "length": targetLines.length }),
+      message: interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.procurementRequestPrNumberCreatedWithLengthItems, {
+        prNumber: createdPr.prNumber,
+        length: targetLines.length,
+      }),
     }, 201);
-  } catch (err: any) {
-    console.error('Error creating PR from BOQ:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToCreateProcurementRequestFromBoq }), 500, { route: '/api/boq/create-pr', method: 'POST', error: err });
+  } catch (error) {
+    await writeStructuredLog('error', 'purchase_request.creation_failed', {
+      operation: 'create_from_boq',
+      route: '/api/boq/create-pr',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      boqRevisionId: requestBoqRevisionId,
+      boqId: requestBoqId,
+      durationMs: Date.now() - startedAt,
+      error,
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToCreateProcurementRequestFromBoq, 500);
   }
 }

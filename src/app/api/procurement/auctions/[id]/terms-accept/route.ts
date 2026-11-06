@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
+import { runAuditedD1UpdateAtomically } from '@/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -67,25 +67,28 @@ export async function POST(
     }
 
     const now = new Date();
-    await prisma.auctionVendor.update({
-      where: { id: participant.id },
+    await runAuditedD1UpdateAtomically({
+      table: 'auctionVendor',
+      id: participant.id,
+      tenantId: ctx.tenantId,
       data: {
         termsAccepted: true,
         termsAcceptedAt: now,
       },
-    });
-
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: auction.rfq.projectId,
-      entityType: 'AUCTION',
-      entityId: auction.id,
-      action: 'AUCTION_TERMS_ACCEPTED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.nameAcceptedTermsConditionsForAuctionAuctionNumber, { "name": participant.vendor.name, "auctionNumber": auction.auctionNumber }),
-      newValue: {
-        vendorId,
-        termsAcceptedAt: now.toISOString(),
+      route: '/api/procurement/auctions/[id]/terms-accept',
+      requestId: req.headers.get('x-request-id'),
+      audit: {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        projectId: auction.rfq.projectId,
+        entityType: 'AUCTION',
+        entityId: auction.id,
+        action: 'AUCTION_TERMS_ACCEPTED',
+        description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdTermsAcceptRoute.nameAcceptedTermsConditionsForAuctionAuctionNumber, { "name": participant.vendor.name, "auctionNumber": auction.auctionNumber }),
+        newValue: {
+          vendorId,
+          termsAcceptedAt: now.toISOString(),
+        },
       },
     });
 

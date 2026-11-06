@@ -4,8 +4,12 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { MAX_D1_BATCH_STATEMENTS } from '@/lib/d1-batch.constants';
+import { writeRfqVendorInvitationsAtomically } from '@/lib/d1-batch';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function POST(
@@ -16,12 +20,20 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
+  const startedAt = Date.now();
 
   try {
-    const { vendorIds = [] } = await req.json();
+    const body = await req.json() as { vendorIds?: unknown } | null;
+    const vendorIds = Array.isArray(body?.vendorIds)
+      ? [...new Set(body.vendorIds.filter((vendorId): vendorId is string => typeof vendorId === 'string').map((vendorId) => vendorId.trim()).filter(Boolean))]
+      : [];
 
     if (!vendorIds.length) {
       return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
+    }
+
+    if (vendorIds.length > MAX_D1_BATCH_STATEMENTS) {
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.maximumVendorInviteBatchLimit, 400);
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -33,41 +45,26 @@ export async function POST(
     }
 
     // Verify vendors belong to this tenant and are not blacklisted
-    const eligibleVendors = await prisma.vendor.findMany({
+    const eligibleVendors = await readByD1FilterChunks(vendorIds, (vendorIdChunk) => prisma.vendor.findMany({
       where: {
-        id: { in: vendorIds },
+        id: { in: vendorIdChunk },
         tenantId: ctx.tenantId,
         isBlacklisted: false,
       },
-    });
+    }));
 
     if (eligibleVendors.length === 0) {
       return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     // Create RFQ vendor invitations
-    const invitationRecords = await prisma.$transaction(
-      eligibleVendors.map((v) =>
-        prisma.rfqVendor.upsert({
-          where: {
-            rfqId_vendorId: {
-              rfqId: id,
-              vendorId: v.id,
-            },
-          },
-          update: {
-            invitationStatus: rfq.status === 'DRAFT' ? 'PENDING' : 'INVITED',
-          },
-          create: {
-            tenantId: ctx.tenantId,
-            rfqId: id,
-            vendorId: v.id,
-            invitationStatus: rfq.status === 'DRAFT' ? 'PENDING' : 'INVITED',
-            submissionStatus: 'PENDING',
-          },
-        })
-      )
-    );
+    const invitationStatus = rfq.status === 'DRAFT' ? 'PENDING' : 'INVITED';
+    const invitedCount = await writeRfqVendorInvitationsAtomically({
+      tenantId: ctx.tenantId,
+      rfqId: id,
+      vendorIds: eligibleVendors.map((vendor) => vendor.id),
+      invitationStatus,
+    });
 
     await createAuditLog({
       tenantId: ctx.tenantId,
@@ -81,12 +78,20 @@ export async function POST(
     });
 
     return apiSuccess({
-      invited: invitationRecords.length,
+      invited: invitedCount,
       vendors: eligibleVendors,
       message: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.successfullyInvitedLengthVendors, { "length": eligibleVendors.length }),
     });
-  } catch (error: any) {
-    console.error('Error inviting vendors to RFQ:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToInviteVendors }), 500, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST', error: error });
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'procurement.rfq_vendor_invites_failed', {
+      operation: 'invite_vendors',
+      route: '/api/procurement/rfqs/[id]/vendors',
+      requestId: crypto.randomUUID(),
+      tenantId: ctx.tenantId,
+      rfqId: id,
+      durationMs: Date.now() - startedAt,
+      error,
+    }, 'application');
+    return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors, 500);
   }
 }

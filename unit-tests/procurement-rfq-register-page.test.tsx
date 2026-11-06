@@ -43,7 +43,7 @@ describe('RFQ sourcing register page', () => {
     global.fetch = originalFetch;
   });
 
-  it('renders rows for every persisted workflow stage and uses the documented fallbacks', async () => {
+  it('renders workflow stages and uses a clear empty value when reference data is missing', async () => {
     const rows = [
       rfq('ppo-list', 'DRAFT', { ppos: [{}] }),
       rfq('ppo-flag', 'PPO_ISSUED'),
@@ -103,8 +103,11 @@ describe('RFQ sourcing register page', () => {
     expect(document.body).toHaveTextContent(interpolateUiString(UI_STRINGS.common.currencyAmount, { currency: UI_STRINGS.common.indianRupeeSymbol, amount: '5,000' }));
     expect(screen.getByText('2 Vendors')).toBeInTheDocument();
     expect(screen.getByText('Fallback trade')).toBeInTheDocument();
-    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.india)).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('BOQ-R1').length).toBeGreaterThan(0);
+    expect(screen.queryByText('BOQ-R1')).not.toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.india))).not.toBeInTheDocument();
+    expect(screen.queryByText('CC45 - Fitout')).not.toBeInTheDocument();
+    expect(screen.queryByText('Civil & Interior Package')).not.toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.rERFQ))).toBeInTheDocument();
     expect(screen.getByText('21')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.allSourcingPackages))).toBeInTheDocument();
@@ -122,18 +125,18 @@ describe('RFQ sourcing register page', () => {
 
     render(<RfqsListPage />);
     await screen.findByText('RFQ-marked');
-    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs?search=&status=active');
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs?search=&page=1&pageSize=50&status=active');
 
     fireEvent.change(screen.getByPlaceholderText(/Search by RFQ number/), { target: { value: 'pump & motor' } });
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith(
-      '/api/procurement/rfqs?search=pump%20%26%20motor&status=active',
+      '/api/procurement/rfqs?search=pump%20%26%20motor&page=1&pageSize=50&status=active',
     ));
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.reRFQs) }));
     expect(await screen.findByText('RFQ-marked')).toBeInTheDocument();
     expect(screen.getByText('RFQ-named')).toBeInTheDocument();
     expect(screen.queryByText('RFQ-ordinary')).not.toBeInTheDocument();
-    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/procurement/rfqs?search=pump%20%26%20motor'));
+    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/procurement/rfqs?search=pump%20%26%20motor&page=1&pageSize=50'));
   });
 
   it('builds a status filter for non-default tabs and handles missing rows and request errors', async () => {
@@ -142,7 +145,7 @@ describe('RFQ sourcing register page', () => {
     await screen.findByText(uiStringPattern(UI_STRINGS.common.noRFQsFound));
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsPage.underComparison) }));
-    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/procurement/rfqs?search=&status=COMPARISON'));
+    await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/procurement/rfqs?search=&page=1&pageSize=50&status=COMPARISON'));
     await screen.findByText(uiStringPattern(UI_STRINGS.common.noRFQsFound));
 
     const error = new Error('network unavailable');
@@ -153,5 +156,21 @@ describe('RFQ sourcing register page', () => {
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.noRFQsFound))).toBeInTheDocument();
     consoleError.mockRestore();
     unmount();
+  });
+
+  it('appends later RFQ pages and keeps server totals and stage aggregates', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      const pageTwo = url.includes('page=2');
+      const rows = pageTwo ? [rfq('two', 'DRAFT')] : [rfq('one', 'DRAFT')];
+      return Promise.resolve({ json: async () => ({
+        rfqs: rows, total: 51, page: pageTwo ? 2 : 1, pageSize: 50, totalPages: 2, statusCounts: { DRAFT: 51 },
+      }) });
+    });
+    render(<RfqsListPage />);
+    expect(await screen.findByText('RFQ-one')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('RFQ-two')).toBeInTheDocument();
+    expect(screen.getByText('RFQ-one')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenLastCalledWith('/api/procurement/rfqs?search=&page=2&pageSize=50');
   });
 });

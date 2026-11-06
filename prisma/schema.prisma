@@ -43,6 +43,7 @@ model Tenant {
   actualCosts         ActualCostTransaction[]
   rateCards           VendorRateCard[]
   notifications       Notification[]
+  notificationOutbox  NotificationOutbox[]
 
   @@map("tenants")
 }
@@ -74,6 +75,7 @@ model User {
 
   @@unique([tenantId, email])
   @@index([vendorId], map: "users_vendorId_idx")
+  @@index([tenantId, vendorId, role, status, id])
   @@map("users")
 }
 
@@ -141,7 +143,7 @@ model ProjectTeam {
   user        User     @relation(fields: [userId], references: [id])
 
   @@unique([projectId, userId])
-  @@index([userId], map: "project_teams_userId_idx")
+  @@index([userId, active, projectId], map: "project_teams_user_active_project_idx")
   @@map("project_teams")
 }
 
@@ -305,7 +307,8 @@ model BoqLine {
   ppoLines            PpoLine[]
   actualCosts         ActualCostTransaction[]
 
-  @@index([boqRevisionId], map: "boq_lines_boqRevisionId_idx")
+  @@unique([boqRevisionId, lineNumber])
+  @@index([tenantId, boqRevisionId, isDeleted, categoryId, aiUnitCost])
   @@map("boq_lines")
 }
 
@@ -348,8 +351,10 @@ model Category {
   linesAsCategory     BoqLine[] @relation("LineCategory")
   linesAsSubcategory  BoqLine[] @relation("LineSubcategory")
 
+  // Migrations also add root/child partial unique indexes because parentId is nullable in D1.
   @@unique([tenantId, name, parentId])
   @@index([parentId], map: "categories_parentId_idx")
+  @@unique([tenantId, code])
   @@map("categories")
 }
 
@@ -375,9 +380,9 @@ model AuditLog {
   user        User?    @relation(fields: [userId], references: [id])
   project     Project? @relation(fields: [projectId], references: [id])
 
-  @@index([tenantId, createdAt], map: "audit_logs_tenantId_createdAt_idx")
   @@index([entityType, entityId], map: "audit_logs_entityType_entityId_idx")
   @@index([projectId], map: "audit_logs_projectId_idx")
+  @@index([tenantId, createdAt, id], map: "audit_logs_tenant_created_idx")
   @@map("audit_logs")
 }
 
@@ -531,9 +536,9 @@ model RfqLine {
   ppoLines        PpoLine[]
   actualCosts     ActualCostTransaction[]
 
-  @@index([rfqId], map: "rfq_lines_rfqId_idx")
   @@index([prLineId], map: "rfq_lines_prLineId_idx")
   @@index([boqLineId], map: "rfq_lines_boqLineId_idx")
+  @@unique([rfqId, lineNumber])
   @@map("rfq_lines")
 }
 
@@ -551,6 +556,7 @@ model RfqVendor {
 
   @@unique([rfqId, vendorId])
   @@index([vendorId], map: "rfq_vendors_vendorId_idx")
+  @@index([tenantId, rfqId, invitedAt, id], map: "rfq_vendors_tenant_rfq_invited_order_idx")
   @@map("rfq_vendors")
 }
 
@@ -584,8 +590,9 @@ model Quote {
   lines               QuoteLine[]
 
   @@unique([rfqId, vendorId, quoteVersion])
-  @@index([tenantId], map: "quotes_tenantId_idx")
   @@index([vendorId], map: "quotes_vendorId_idx")
+  @@index([tenantId, quoteNumber])
+  @@index([tenantId, createdAt, id], map: "quotes_tenant_created_id_idx")
   @@map("quotes")
 }
 
@@ -603,8 +610,8 @@ model QuoteLine {
   quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   rfqLine         RfqLine  @relation(fields: [rfqLineId], references: [id], onDelete: Cascade)
 
-  @@index([quoteId], map: "quote_lines_quoteId_idx")
   @@index([rfqLineId], map: "quote_lines_rfqLineId_idx")
+  @@unique([quoteId, rfqLineId])
   @@map("quote_lines")
 }
 
@@ -626,8 +633,8 @@ model Negotiation {
   rfq                  Rfq                @relation(fields: [rfqId], references: [id], onDelete: Cascade)
   rounds               NegotiationRound[]
 
-  @@index([tenantId], map: "negotiations_tenantId_idx")
   @@index([rfqId], map: "negotiations_rfqId_idx")
+  @@unique([tenantId, rfqId])
   @@map("negotiations")
 }
 
@@ -659,8 +666,10 @@ model NegotiationRound {
   negotiation         Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
   vendor              Vendor      @relation(fields: [vendorId], references: [id])
 
-  @@index([negotiationId], map: "negotiation_rounds_negotiationId_idx")
   @@index([vendorId], map: "negotiation_rounds_vendorId_idx")
+  @@unique([negotiationId, vendorId, roundNumber])
+  @@index([tenantId, negotiationId, createdAt, id], map: "negotiation_rounds_tenant_negotiation_created_idx")
+  @@index([tenantId, negotiationId, vendorId, createdAt, id], map: "negotiation_rounds_tenant_neg_vendor_created_idx")
   @@map("negotiation_rounds")
 }
 
@@ -780,6 +789,8 @@ model AuctionBid {
 
   @@index([auctionId], map: "auction_bids_auctionId_idx")
   @@index([auctionItemId], map: "auction_bids_auctionItemId_idx")
+  @@index([tenantId, auctionId, timestamp, id])
+  @@index([tenantId, auctionId, vendorId, timestamp, id])
   @@map("auction_bids")
 }
 
@@ -814,6 +825,7 @@ model AwardRecommendation {
 
   @@index([tenantId], map: "award_recommendations_tenantId_idx")
   @@index([rfqId], map: "award_recommendations_rfqId_idx")
+  // Migrations enforce one pending recommendation per RFQ while retaining award history.
   @@map("award_recommendations")
 }
 
@@ -865,12 +877,15 @@ model Ppo {
   actualCosts           ActualCostTransaction[]
   vendorRating          PpoVendorRating?
 
+  @@unique([awardRecommendationId])
   @@unique([tenantId, ppoNumber])
   @@index([projectId], map: "ppos_projectId_idx")
   @@index([rfqId], map: "ppos_rfqId_idx")
   @@index([vendorId], map: "ppos_vendorId_idx")
   @@index([prId], map: "ppos_prId_idx")
   @@index([rateCardId], map: "ppos_rateCardId_idx")
+  @@index([tenantId, vendorId, createdAt], map: "ppos_tenant_vendor_created_idx")
+  // Migration-managed partial index prevents duplicate active RFQ/vendor PPOs while allowing cancelled history.
   @@map("ppos")
 }
 
@@ -949,6 +964,8 @@ model ActualCostTransaction {
   source               String   // PO_COMPLETION, PPO_COMPLETION, GRN, INVOICE, MANUAL_ADJUSTMENT, ERP_ACTUAL
   status               String   @default("APPROVED") // DRAFT, SUBMITTED, VERIFIED, APPROVED, REJECTED
   completionReference  String?  // Reference/Invoice/GRN Number
+  completionRequestId String?  // Idempotency key shared by one PPO completion request
+  completionFingerprint String? // Hash of the normalized request payload for safe replay
   externalReference    String?  // ERP integration ref
   erpDocumentNumber    String?
   erpDate              DateTime?
@@ -974,6 +991,8 @@ model ActualCostTransaction {
   @@index([projectId], map: "actual_cost_transactions_projectId_idx")
   @@index([costCentreId], map: "actual_cost_transactions_costCentreId_idx")
   @@index([ppoId], map: "actual_cost_transactions_ppoId_idx")
+  @@index([tenantId, completionRequestId])
+    @@index([tenantId, projectId, costCentreId, status, category])
   @@map("actual_cost_transactions")
 }
 
@@ -1063,6 +1082,7 @@ model Budget {
 
   @@index([tenantId, projectId], map: "budgets_tenantId_projectId_idx")
   @@index([costCentreId], map: "budgets_costCentreId_idx")
+  @@unique([tenantId, costCentreId])
   @@map("budgets")
 }
 
@@ -1097,10 +1117,11 @@ model BudgetContribution {
   transactions           BudgetTransaction[]
   approvals              BudgetApproval[]
 
-  @@index([tenantId, status], map: "budget_contributions_tenantId_status_idx")
   @@index([boqRevisionId], map: "budget_contributions_boqRevisionId_idx")
   @@index([costCentreId], map: "budget_contributions_costCentreId_idx")
   @@index([projectId], map: "budget_contributions_projectId_idx")
+  @@unique([tenantId, boqRevisionId])
+    @@index([tenantId, projectId, costCentreId, status])
   @@map("budget_contributions")
 }
 
@@ -1141,6 +1162,9 @@ model BudgetTransaction {
   @@index([costCentreId], map: "budget_transactions_costCentreId_idx")
   @@index([contributionId], map: "budget_transactions_contributionId_idx")
   @@index([boqRevisionId], map: "budget_transactions_boqRevisionId_idx")
+  @@unique([reversedTransactionId])
+    @@index([tenantId, projectId, costCentreId, status, category])
+    @@index([tenantId, budgetDate, id])
   @@map("budget_transactions")
 }
 
@@ -1234,8 +1258,8 @@ model PRLine {
   ppoLines         PpoLine[]
   actualCosts      ActualCostTransaction[]
 
-  @@index([prId], map: "pr_lines_prId_idx")
   @@index([boqLineId], map: "pr_lines_boqLineId_idx")
+  @@unique([prId, lineNumber])
   @@map("pr_lines")
 }
 
@@ -1324,6 +1348,8 @@ model PpoVendorRating {
 
   @@index([tenantId, vendorId], map: "ppo_vendor_ratings_tenantId_vendorId_idx")
   @@map("ppo_vendor_ratings")
+  @@index([tenantId, status, vendorId], map: "ppo_vendor_ratings_tenant_status_vendor_idx")
+  @@index([vendorId, status], map: "ppo_vendor_ratings_vendor_status_idx")
 }
 
 // ============================================================
@@ -1370,6 +1396,7 @@ model VendorRateCard {
 
   @@unique([tenantId, rateCardNumber])
   @@index([vendorId], map: "vendor_rate_cards_vendorId_idx")
+  @@index([tenantId, status, validFrom, validTo], map: "vendor_rate_cards_tenant_status_validity_idx")
   @@map("vendor_rate_cards")
 }
 
@@ -1399,6 +1426,8 @@ model VendorRateCardItem {
   rateCard          VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
 
   @@index([rateCardId], map: "vendor_rate_card_items_rateCardId_idx")
+  @@index([tenantId, isActive, rateCardId], map: "vendor_rate_card_items_tenant_active_card_idx")
+  @@index([tenantId, rateCardId], map: "vendor_rate_card_items_tenant_card_idx")
   @@map("vendor_rate_card_items")
 }
 
@@ -1417,6 +1446,7 @@ model RateCardApproval {
   rateCard      VendorRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
 
   @@index([rateCardId], map: "rate_card_approvals_rateCardId_idx")
+  @@index([tenantId, rateCardId, timestamp, id], map: "rate_card_approvals_tenant_card_timestamp_idx")
   @@map("rate_card_approvals")
 }
 
@@ -1428,6 +1458,7 @@ model Notification {
   tenantId     String
   userId       String?   // Target user ID or null for role broadcast
   targetRole   String?   // Target role: e.g. PROCUREMENT_USER, FINANCE_USER, PROJECT_APPROVER
+  vendorId     String?   // Vendor-scoped notification visible to mapped portal users
   title        String
   message      String
   type         String    @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
@@ -1446,6 +1477,27 @@ model Notification {
   @@map("notifications")
 }
 
+model NotificationOutbox {
+  id            String   @id
+  tenantId      String
+  payload       String
+  status        String   @default("PENDING")
+  attemptCount  Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedAt      DateTime?
+  lockToken     String?
+  deliveredAt   DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt, lockedAt, createdAt], map: "notification_outbox_dispatch_idx")
+  @@index([tenantId, createdAt], map: "notification_outbox_tenant_created_idx")
+  @@map("notification_outbox")
+}
+
 model RfqMessage {
   id           String   @id @default(uuid())
   tenantId     String
@@ -1462,6 +1514,8 @@ model RfqMessage {
   rfq          Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
 
   @@index([rfqId, createdAt], map: "rfq_messages_rfqId_createdAt_idx")
+  @@index([tenantId, rfqId, createdAt, id])
+  @@index([tenantId, rfqId, vendorId, createdAt, id])
   @@map("rfq_messages")
 }
 

@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { VENDOR_RFQ_DEFAULT_PAGE_SIZE, VENDOR_RFQ_MAX_PAGE_NUMBER, VENDOR_RFQ_MAX_PAGE_SIZE } from './route.constants';
 
 
 export async function GET(req: NextRequest) {
@@ -20,15 +22,39 @@ export async function GET(req: NextRequest) {
     return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rfqs', method: 'GET' });
   }
 
+  const { searchParams } = new URL(req.url);
+  const requestedPage = Number(searchParams.get('page'));
+  const requestedPageSize = Number(searchParams.get('pageSize'));
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0
+    ? Math.min(requestedPage, VENDOR_RFQ_MAX_PAGE_NUMBER)
+    : 1;
+  const pageSize = Number.isSafeInteger(requestedPageSize) && requestedPageSize > 0
+    ? Math.min(requestedPageSize, VENDOR_RFQ_MAX_PAGE_SIZE)
+    : VENDOR_RFQ_DEFAULT_PAGE_SIZE;
+  const cursor = (searchParams.get('cursor') || '').slice(0, 100) || null;
+  const search = (searchParams.get('search') || '').trim();
+  const where: Record<string, unknown> = {
+    tenantId: ctx.tenantId,
+    invitedVendors: { some: { vendorId } },
+  };
+  if (search) {
+    where.OR = [
+      { rfqNumber: { contains: search } },
+      { title: { contains: search } },
+      { packageName: { contains: search } },
+      { project: { name: { contains: search } } },
+    ];
+  }
+
   try {
-    const rfqs = await prisma.rfq.findMany({
-      where: {
-        tenantId: ctx.tenantId,
-        invitedVendors: {
-          some: { vendorId },
-        },
-      },
+    const [total, rfqs] = await Promise.all([
+      prisma.rfq.count({ where }),
+      prisma.rfq.findMany({
+      where,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : { skip: (page - 1) * pageSize }),
+      take: pageSize,
       include: {
+        _count: { select: { lines: true } },
         tenant: { select: { id: true, name: true, slug: true } },
         project: { select: { id: true, name: true, projectCode: true } },
         boqRevision: {
@@ -36,18 +62,6 @@ export async function GET(req: NextRequest) {
             id: true,
             revisionNumber: true,
             boq: { select: { id: true, title: true, boqCode: true } },
-          },
-        },
-        lines: {
-          select: {
-            id: true,
-            lineNumber: true,
-            description: true,
-            quantity: true,
-            uom: true,
-            specification: true,
-            category: true,
-            benchmarkRate: true,
           },
         },
         invitedVendors: {
@@ -63,6 +77,7 @@ export async function GET(req: NextRequest) {
         quotes: {
           where: { vendorId },
           orderBy: { quoteVersion: 'desc' },
+          take: 1,
           select: {
             id: true,
             vendorId: true,
@@ -76,19 +91,28 @@ export async function GET(req: NextRequest) {
             updatedAt: true,
             validUntil: true,
             commercialTerms: true,
-            lines: true,
           },
         },
         negotiations: {
+          where: { tenantId: ctx.tenantId },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
           include: {
             rounds: {
               where: { vendorId },
               orderBy: { roundNumber: 'desc' },
+              take: 1,
+              select: {
+                roundNumber: true, buyerDecision: true, isFinalOffer: true, counterOfferAmount: true,
+                revisedQuoteAmount: true, nextResponsibleParty: true, createdAt: true, updatedAt: true,
+              },
             },
           },
         },
         ppos: {
           where: { vendorId },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           select: {
             id: true,
             ppoNumber: true,
@@ -104,10 +128,12 @@ export async function GET(req: NextRequest) {
             OR: [{ vendorId }, { vendorId: null }],
           },
           orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
-      orderBy: { createdAt: 'desc' },
-    });
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }),
+    ]);
 
     const enrichedRfqs = rfqs.map((r) => {
       const invitation = r.invitedVendors[0] || null;
@@ -222,6 +248,7 @@ export async function GET(req: NextRequest) {
 
       return {
         ...r,
+        lineCount: r._count?.lines || 0,
         rfqReceivedDate,
         clientTenant: r.tenant?.name || 'Enterprise Client',
         projectPackage: `${r.project?.name || 'Project'} / ${r.packageName || 'Main Package'}`,
@@ -238,9 +265,17 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return apiSuccess({ rfqs: enrichedRfqs, total: enrichedRfqs.length });
-  } catch (error: any) {
-    console.error('Error fetching vendor RFQs:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRfqs }), 500, { route: '/api/vendor-portal/rfqs', method: 'GET', error: error });
+    return apiSuccess({
+      rfqs: enrichedRfqs, total, page, pageSize, totalPages: Math.ceil(total / pageSize),
+      hasMore: cursor ? rfqs.length === pageSize : page * pageSize < total,
+      nextCursor: rfqs.length === pageSize ? rfqs[rfqs.length - 1]?.id || null : null,
+    });
+  } catch (error) {
+    await writeStructuredLog('error', 'vendor_portal.rfqs_fetch_failed', {
+      operation: 'list_vendor_rfqs', route: '/api/vendor-portal/rfqs', requestId: req.headers.get('x-request-id'),
+      tenantId: ctx.tenantId, vendorId, page, pageSize,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqs, 500);
   }
 }

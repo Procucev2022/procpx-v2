@@ -9,9 +9,10 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     vendor: { findFirst: jest.fn() },
-    rfq: { findMany: jest.fn() },
-    ppo: { findMany: jest.fn() },
-    vendorRateCard: { findMany: jest.fn() },
+    rfq: { findMany: jest.fn(), count: jest.fn() },
+    rfqMessage: { groupBy: jest.fn() },
+    ppo: { findMany: jest.fn(), count: jest.fn() },
+    vendorRateCard: { findMany: jest.fn(), count: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -21,15 +22,18 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/permissions', () => ({ hasPermission: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ getD1BatchDatabase: jest.fn(() => ({})), runD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const permission = hasPermission as jest.Mock;
 const errorResult = apiError as jest.Mock;
+const { runD1BatchAtomically } = jest.requireMock('../src/lib/d1-batch') as { runD1BatchAtomically: jest.Mock };
 const context = { tenantId: 'tenant-1', userId: 'user-1', role: 'PROCUREMENT_USER', vendorId: null };
 const params = (id = 'vendor-1') => ({ params: Promise.resolve({ id }) });
-const request = () => new NextRequest('http://localhost/api/procurement/vendors/vendor-1/dashboard');
+const request = (query = '') => new NextRequest(`http://localhost/api/procurement/vendors/vendor-1/dashboard${query}`);
 const nowPlusDay = () => new Date(Date.now() + 86_400_000);
 
 function rfq(id: string, extra: Record<string, any> = {}) {
@@ -57,8 +61,16 @@ describe('vendor dashboard API', () => {
     permission.mockReturnValue(true);
     db.vendor.findFirst.mockResolvedValue({ id: 'vendor-1', tenantId: 'tenant-1', code: 'V-1', name: 'Northwind', email: 'vendor@example.test', phone: '123', categories: 'Electrical', status: 'ACTIVE' });
     db.rfq.findMany.mockResolvedValue([]);
+    db.rfq.count.mockResolvedValue(0);
+    db.rfqMessage.groupBy.mockResolvedValue([]);
     db.ppo.findMany.mockResolvedValue([]);
+    db.ppo.count.mockResolvedValue(0);
     db.vendorRateCard.findMany.mockResolvedValue([]);
+    db.vendorRateCard.count.mockResolvedValue(0);
+    runD1BatchAtomically.mockResolvedValue([{ results: [{
+      newRfqs: 0, quotesDueSoon: 0, quotesSubmitted: 0, negotiationsAwaitingVendor: 0,
+      finalOffersAwaitingBuyer: 0, quotesAcceptedPpoAwaited: 0, pposAwaitingAcceptance: 0, acceptedPpos: 0,
+    }] }]);
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -84,7 +96,36 @@ describe('vendor dashboard API', () => {
     permission.mockReturnValue(true);
     db.vendor.findFirst.mockResolvedValueOnce(null);
     await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied, status: 404 });
-    expect(db.vendor.findFirst).toHaveBeenCalledWith({ where: { id: 'missing', tenantId: 'tenant-1' } });
+    expect(db.vendor.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'missing', tenantId: 'tenant-1' } }));
+  });
+
+  it('validates sections and returns independently paginated dashboard sections', async () => {
+    await expect(GET(request('?section=unknown'), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+
+    const rfqs = await GET(request('?section=rfqs&pageSize=999&rfqPage=2'), params());
+    expect(rfqs).toMatchObject({ ok: true, data: {
+      counts: undefined,
+      pagination: { rfqs: { page: 2, pageSize: 50, total: 0, hasMore: false } },
+    } });
+    expect(db.rfq.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 50, take: 50 }));
+    expect(db.ppo.findMany).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.findMany).not.toHaveBeenCalled();
+    expect(runD1BatchAtomically).not.toHaveBeenCalled();
+
+    const ppos = await GET(request('?section=ppos&pageSize=0&ppoPage=10001'), params());
+    expect(ppos).toMatchObject({ ok: true, data: {
+      pagination: { ppos: { page: 10000, pageSize: 25, total: 0, hasMore: false } },
+    } });
+    expect(db.ppo.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 249975, take: 25 }));
+    expect(db.rfq.findMany).toHaveBeenCalledTimes(1);
+
+    const rateCards = await GET(request('?section=rateCards&rateCardPage=invalid'), params());
+    expect(rateCards).toMatchObject({ ok: true, data: {
+      pagination: { rateCards: { page: 1, pageSize: 25, total: 0, hasMore: false } },
+    } });
+    expect(db.vendorRateCard.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0, take: 25 }));
   });
 
   it('maps quote, negotiation, decision, PPO, counts, dates, and permitted commercial details', async () => {
@@ -114,7 +155,15 @@ describe('vendor dashboard API', () => {
       { id: 'p3', vendorStatus: 'ACCEPTED_BY_VENDOR', status: 'DRAFT', vendorAcceptedAt: new Date() },
       { id: 'p4', vendorStatus: 'OTHER', status: 'CONFIRMED', vendorAcceptedAt: new Date() },
     ]);
-    db.vendorRateCard.findMany.mockResolvedValue([{ id: 'rate-1', items: [{ id: 'item-1' }] }]);
+    db.rfq.count.mockResolvedValue(13);
+    db.rfqMessage.groupBy.mockResolvedValue([{ rfqId: 'counter', _count: { _all: 1 } }]);
+    db.ppo.count.mockResolvedValue(4);
+    db.vendorRateCard.count.mockResolvedValue(1);
+    db.vendorRateCard.findMany.mockResolvedValue([{ id: 'rate-1', _count: { items: 1 } }]);
+    runD1BatchAtomically.mockResolvedValue([{ results: [{
+      newRfqs: 10, quotesDueSoon: 1, quotesSubmitted: 3, negotiationsAwaitingVendor: 1,
+      finalOffersAwaitingBuyer: 2, quotesAcceptedPpoAwaited: 1, pposAwaitingAcceptance: 2, acceptedPpos: 2,
+    }] }]);
 
     const result = await GET(request(), params());
     expect(consoleError).not.toHaveBeenCalled();
@@ -127,6 +176,11 @@ describe('vendor dashboard API', () => {
       rateCards: [{ id: 'rate-1' }],
     } });
     const data = (result as any).data;
+    expect(data.pagination).toEqual({
+      rfqs: { page: 1, pageSize: 25, total: 13, hasMore: false },
+      ppos: { page: 1, pageSize: 25, total: 4, hasMore: false },
+      rateCards: { page: 1, pageSize: 25, total: 1, hasMore: false },
+    });
     const byId = Object.fromEntries(data.rfqRegister.map((item: any) => [item.id, item]));
     expect(byId.new).toMatchObject({
       clientTenant: 'Procucev Client', projectPackage: 'Project / Main Package', category: 'General Works',
@@ -167,14 +221,12 @@ describe('vendor dashboard API', () => {
     await expect(GET(request(), params())).resolves.toMatchObject({ ok: true });
 
     db.rfq.findMany.mockRejectedValueOnce(new Error('RFQ lookup failed'));
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'RFQ lookup failed', status: 500 });
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData, status: 500 });
     db.ppo.findMany.mockRejectedValueOnce({});
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'Failed to fetch vendor dashboard data', status: 500 });
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData, status: 500 });
     db.vendorRateCard.findMany.mockRejectedValueOnce(new Error('rate card lookup failed'));
-    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: 'rate card lookup failed', status: 500 });
-    expect(errorResult).toHaveBeenCalledWith('RFQ lookup failed', 500, expect.objectContaining({ route: expect.any(String) }));
-    expect(errorResult).toHaveBeenCalledWith('Failed to fetch vendor dashboard data', 500, expect.objectContaining({ route: expect.any(String) }));
-    expect(errorResult).toHaveBeenCalledWith('rate card lookup failed', 500, expect.objectContaining({ route: expect.any(String) }));
-    expect(consoleError).toHaveBeenCalledTimes(3);
+    await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData, status: 500 });
+    expect(errorResult).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData, 500);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

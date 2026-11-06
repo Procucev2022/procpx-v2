@@ -1,7 +1,7 @@
 'use client';
 // app/(app)/procurement/rfqs/[id]/page.tsx
 // proCPX Consolidated Procurement Workspace: RFQ -> Negotiation -> Awarding -> PPO
-import { useEffect, useState, useMemo, use, Suspense } from 'react';
+import { useEffect, useState, useMemo, use, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { I18N_CONFIG } from '@/lib/i18n.constants';
@@ -55,6 +55,7 @@ import RfqChatDrawer from '@/components/RfqChatDrawer';
 import ProcurementCommercialWorkspace from '@/components/ProcurementCommercialWorkspace';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { RateCardMatchResponse } from '@app-types/app/(app)/procurement/rfqs/[id]/page.types';
 
 
 function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
@@ -90,6 +91,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [activeTab, setActiveTab] = useState<'quotes' | 'negotiation' | 'awarding'>(resolveTab(initialTabParam));
   const [viewingQuote, setViewingQuote] = useState<any | null>(null);
   const [rfq, setRfq] = useState<any>(null);
+  const negotiationHistoryRequestedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState<any>(null);
   const [loadingCompare, setLoadingCompare] = useState(false);
@@ -97,8 +99,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Rate card comparison state
-  const [rateCardMatch, setRateCardMatch] = useState<any>(null);
+  const [rateCardMatch, setRateCardMatch] = useState<RateCardMatchResponse | null>(null);
   const [loadingRateCard, setLoadingRateCard] = useState(false);
+  const [loadingMoreRateCardMatches, setLoadingMoreRateCardMatches] = useState(false);
   const [showRateCardModal, setShowRateCardModal] = useState(false);
 
   // Filter to only quotations actually received from vendors
@@ -194,7 +197,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       setLoadingRateCard(false);
       return;
     }
-    fetchRfq();
+    negotiationHistoryRequestedRef.current = activeTab !== 'quotes';
+    fetchRfq(activeTab !== 'quotes');
     fetchComparison();
     fetchRateCardMatch();
   }, [id, isDemoMode, searchParams]);
@@ -223,22 +227,40 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     });
   };
 
-  const fetchRfq = async () => {
-    setLoading(true);
+  const fetchRfq = async (
+    includeNegotiationHistory = negotiationHistoryRequestedRef.current,
+    showLoading = true,
+  ) => {
+    if (showLoading) setLoading(true);
     try {
-      const res = await fetch(`/api/procurement/rfqs/${id}`);
+      const historyQuery = includeNegotiationHistory ? '?includeNegotiationHistory=true' : '';
+      const res = await fetch(`/api/procurement/rfqs/${id}${historyQuery}`);
       const data = await res.json();
       if (data.rfq) {
+        if (includeNegotiationHistory) {
+          negotiationHistoryRequestedRef.current = true;
+        }
         setRfq(data.rfq);
         if (data.rfq.quotes?.length > 0 && !awardVendorId) {
           setAwardVendorId(data.rfq.quotes[0].vendorId);
           setQuoteVendorId(data.rfq.quotes[0].vendorId);
         }
+      } else if (includeNegotiationHistory) {
+        negotiationHistoryRequestedRef.current = false;
       }
     } catch (err) {
+      if (includeNegotiationHistory) negotiationHistoryRequestedRef.current = false;
       console.error('Failed to load RFQ:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  const changeActiveTab = (tab: 'quotes' | 'negotiation' | 'awarding') => {
+    setActiveTab(tab);
+    if (tab !== 'quotes' && !negotiationHistoryRequestedRef.current && !isDemoMode) {
+      negotiationHistoryRequestedRef.current = true;
+      void fetchRfq(true, false);
     }
   };
 
@@ -260,16 +282,36 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  const fetchRateCardMatch = async () => {
-    setLoadingRateCard(true);
+  const fetchRateCardMatch = async (page = 1, append = false) => {
+    if (append) setLoadingMoreRateCardMatches(true);
+    else setLoadingRateCard(true);
     try {
-      const res = await fetch(`/api/procurement/rate-cards/match?rfqId=${id}`);
+      const query = new URLSearchParams({ rfqId: id, page: String(page) });
+      const res = await fetch(`/api/procurement/rate-cards/match?${query.toString()}`);
       const data = await res.json();
-      setRateCardMatch(data);
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.common.userMessages.failedToMatchRateCards);
+      const responseData = data as RateCardMatchResponse;
+      setRateCardMatch((current) => {
+        if (!append || !current) return responseData;
+        const existing = new Set((current.matchedRateCards || []).map((card) => card.rateCardId));
+        return {
+          ...responseData,
+          matchedRateCards: [
+            ...(current.matchedRateCards || []),
+            ...(responseData.matchedRateCards || []).filter((card) => !existing.has(card.rateCardId)),
+          ],
+          eligibleCount: Number(current.eligibleCount || 0) + Number(responseData.eligibleCount || 0),
+        };
+      });
     } catch (err) {
       console.error('Failed to load rate card matches:', err);
+      setMsg({
+        text: err instanceof Error ? err.message : UI_STRINGS.common.userMessages.failedToMatchRateCards,
+        type: 'error',
+      });
     } finally {
-      setLoadingRateCard(false);
+      if (append) setLoadingMoreRateCardMatches(false);
+      else setLoadingRateCard(false);
     }
   };
 
@@ -1031,7 +1073,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       <div className="tabs" style={{ marginBottom: 16, display: 'flex', gap: 8, borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
         <button
           type="button"
-          onClick={() => setActiveTab('quotes')}
+          onClick={() => changeActiveTab('quotes')}
           className={`tab-btn ${activeTab === 'quotes' ? 'active' : ''}`}
           style={{
             fontSize: 13,
@@ -1065,7 +1107,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
         <button
           type="button"
-          onClick={() => setActiveTab('negotiation')}
+          onClick={() => changeActiveTab('negotiation')}
           className={`tab-btn ${activeTab === 'negotiation' ? 'active' : ''}`}
           style={{
             fontSize: 13,
@@ -1101,7 +1143,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
 
         <button
           type="button"
-          onClick={() => setActiveTab('awarding')}
+          onClick={() => changeActiveTab('awarding')}
           className={`tab-btn ${activeTab === 'awarding' ? 'active' : ''}`}
           style={{
             fontSize: 13,
@@ -1206,7 +1248,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     <Plus size={13} />{UI_STRINGS.appAppProcurementRfqsIdPage.recordNewQuote}</button>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('negotiation')}
+                    onClick={() => changeActiveTab('negotiation')}
                     className="btn btn-secondary btn-sm"
                     style={{
                       background: '#ffffff',
@@ -1431,7 +1473,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     const sortedQuotes = [...vQuotes].sort((a: any, b: any) => b.quoteVersion - a.quoteVersion);
                     const latestQuote = sortedQuotes[0];
                     const latestVersion = latestQuote?.quoteVersion || 1;
-                    const quoteCount = vQuotes.length || 1;
+                    const quoteCount = Number(latestQuote?.versionCount || vQuotes.length || 1);
 
                     // Existing PPO for this vendor
                     const existingPpo = (rfq.ppos || []).find((p: any) => p.vendorId === v.vendorId);
@@ -2110,7 +2152,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ fontSize: 13, color: '#475569' }}>{UI_STRINGS.appAppProcurementRfqsIdPage.comparePreNegotiatedCorporateRateCardsAgainstTheCurrentRFQRequirementsDirectPPOCreationIsOnlyPermittedWhenTheRateCardIsApprovedCurrentlyValidAndProvidesCompleteItemCoverage}</div>
 
-            {!rateCardMatch?.matchedRateCards?.length ? (
+            {loadingRateCard ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#64748b' }}>{UI_STRINGS.common.loading}</div>
+            ) : !rateCardMatch?.matchedRateCards?.length ? (
               <EmptyState
                 icon={<Tag size={36} color="#94a3b8" strokeWidth={1.5} />}
                 title={UI_STRINGS.appAppProcurementRfqsIdPage.noApplicableRateCards}
@@ -2154,7 +2198,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                       <div>{UI_STRINGS.appAppProcurementRfqsIdPage.validity2}<strong>{rc.validFrom}{UI_STRINGS.appAppProcurementRfqsIdPage.to}{rc.validTo}</strong></div>
                       <div>{UI_STRINGS.appAppProcurementRfqsIdPage.itemCoverage}<strong>{rc.matchedItemsCount}{UI_STRINGS.common.copybo0mse}{rc.totalItemsCount}{UI_STRINGS.appAppProcurementRfqsIdPage.items}{rc.coveragePercent}{UI_STRINGS.common.copy1y4e1t7}</strong></div>
                       <div>{UI_STRINGS.appAppProcurementRfqsIdPage.vendorQualification}<strong>{rc.vendor?.qualificationStatus || UI_STRINGS.common.qUALIFIED}</strong></div>
-                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.performanceScore}<strong>{rc.vendor?.performanceScore || 88}{UI_STRINGS.appAppProcurementRfqsIdPage.copy1gy72o5}</strong></div>
+                      <div>{UI_STRINGS.appAppProcurementRfqsIdPage.performanceScore}<strong>{rc.vendor?.performanceScore ?? UI_STRINGS.common.notAvailable}{rc.vendor?.performanceScore === null || rc.vendor?.performanceScore === undefined ? '' : UI_STRINGS.appAppProcurementRfqsIdPage.copy1gy72o5}</strong></div>
                     </div>
 
                     {/* Block reasons if ineligible */}
@@ -2178,6 +2222,18 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            {rateCardMatch?.hasMore && (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={loadingMoreRateCardMatches}
+                  onClick={() => void fetchRateCardMatch(Number(rateCardMatch.page || 1) + 1, true)}
+                >
+                  {loadingMoreRateCardMatches ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
               </div>
             )}
           </div>

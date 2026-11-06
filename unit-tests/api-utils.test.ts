@@ -6,10 +6,12 @@ import {
   apiSuccess,
   isApiContext,
   paginate,
+  getListPageWindow,
   requireAuth,
   setTestAuthContext,
 } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { logEvent } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/auth', () => ({ auth: jest.fn() }));
@@ -17,6 +19,8 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: { user: { findFirst: jest.fn(), findUnique: jest.fn() } },
 }));
 jest.mock('next/headers', () => ({ headers: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
+const structuredLog = logEvent as jest.Mock;
 
 const authMock = auth as jest.Mock;
 const headersMock = headers as jest.Mock;
@@ -50,6 +54,16 @@ describe('API response helpers', () => {
     await expect(responseJson(apiSuccess({ created: true }, 201))).resolves.toEqual({ status: 201, body: { created: true } });
     await expect(responseJson(apiError('invalid'))).resolves.toEqual({ status: 400, body: { error: 'invalid' } });
     await expect(responseJson(apiError('denied', 403))).resolves.toEqual({ status: 403, body: { error: 'denied' } });
+    await expect(responseJson(apiError('internal failure', 500))).resolves.toEqual({
+      status: 500, body: { error: UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred },
+    });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'http.api_error_response', {
+      operation: 'api_error_response', status: 500,
+      publicError: UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred, error: 'internal failure',
+    });
+    await expect(responseJson(apiError(UI_STRINGS.common.userMessages.failedToCreatePr, 500))).resolves.toEqual({
+      status: 500, body: { error: UI_STRINGS.common.userMessages.failedToCreatePr },
+    });
   });
 
   it('paginates a list and empty pages', () => {
@@ -57,6 +71,16 @@ describe('API response helpers', () => {
       data: ['c', 'd'], total: 5, page: 2, pageSize: 2, totalPages: 3,
     });
     expect(paginate([], 1, 10)).toEqual({ data: [], total: 0, page: 1, pageSize: 10, totalPages: 0 });
+  });
+
+  it('bounds database list windows and falls back on invalid pagination values', () => {
+    expect(getListPageWindow(new URLSearchParams())).toEqual({ page: 1, pageSize: 50, skip: 0 });
+    expect(getListPageWindow(new URLSearchParams('page=3&pageSize=25'))).toEqual({ page: 3, pageSize: 25, skip: 50 });
+    expect(getListPageWindow(new URLSearchParams('page=2&pageSize=1000'))).toEqual({ page: 2, pageSize: 100, skip: 100 });
+    expect(getListPageWindow(new URLSearchParams('page=-3&pageSize=0'))).toEqual({ page: 1, pageSize: 50, skip: 0 });
+    expect(getListPageWindow(new URLSearchParams('page=2.5&pageSize=abc'))).toEqual({ page: 1, pageSize: 50, skip: 0 });
+    expect(getListPageWindow(new URLSearchParams('page=9007199254740992&pageSize=9007199254740992')))
+      .toEqual({ page: 1, pageSize: 50, skip: 0 });
   });
 });
 
@@ -185,6 +209,7 @@ describe('requireAuth', () => {
     userModel.findUnique.mockRejectedValueOnce(new Error('lookup failed'));
     authMock.mockResolvedValueOnce({ user: { id: 'vendor', tenantId: 'tenant-1', role: 'VENDOR' } });
     await expect(requireAuth()).resolves.toMatchObject({ vendorId: undefined });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'auth.vendor_lookup_failed', expect.objectContaining({ userId: 'vendor', tenantId: 'tenant-1' }));
 
     userModel.findUnique.mockResolvedValueOnce(null);
     authMock.mockResolvedValueOnce({ user: { id: 'vendor', tenantId: 'tenant-1', role: 'VENDOR' } });

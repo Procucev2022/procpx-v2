@@ -2,9 +2,11 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeRateCardTransitionAtomically } from '@/lib/d1-batch';
+import { RATE_CARD_REVERT_UPDATE_SQL } from '@/lib/d1-batch.constants';
+import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
 
 
 export async function POST(
@@ -18,15 +20,19 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const reason = body.reason || body.remarks;
+    const reason = body.reason ?? body.remarks;
 
-    if (!reason || !reason.trim()) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.remarksReasonForReturningForCorrectionIsMandatory, 400, { route: '/api/procurement/rate-cards/[id]/revert', method: 'POST' });
+    if (typeof reason !== 'string' || !reason.trim()) {
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.remarksReasonForReturningForCorrectionIsMandatory, 400);
     }
 
-    const rateCard = await prisma.vendorRateCard.findUnique({
-      where: { id },
-      include: { vendor: true },
+    const rateCard = await prisma.vendorRateCard.findFirst({
+      where: { id, tenantId: ctx.tenantId },
+      include: { vendor: true, items: true, approvals: {
+        orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+        take: RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE,
+        select: { id: true, level: true, approverName: true, action: true, remarks: true, timestamp: true },
+      } },
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
@@ -42,42 +48,26 @@ export async function POST(
     const approverName = ctx.userName || ctx.userEmail || ctx.role;
     const currentLevel = rateCard.status === 'PENDING_FINANCE_APPROVAL' ? 'LEVEL_2_FINANCE' : 'LEVEL_1_PROJECT';
 
-    const updated = await prisma.vendorRateCard.update({
-      where: { id },
-      data: {
-        status: 'RETURNED_FOR_CORRECTION',
-        revertReason: reason.trim(),
-        approvals: {
-          create: {
-            tenantId: ctx.tenantId,
-            level: currentLevel,
-            approverId: ctx.userId,
-            approverName,
-            approverEmail: ctx.userEmail || null,
-            action: 'RETURNED_FOR_CORRECTION',
-            remarks: reason.trim(),
-            timestamp: now,
-          },
-        },
-      },
-      include: {
-        vendor: true,
-        items: true,
-        approvals: {
-          orderBy: { timestamp: 'desc' },
-        },
-      },
+    const approvalId = crypto.randomUUID();
+    const correctionReason = reason.trim();
+    const changed = await writeRateCardTransitionAtomically({
+      updateSql: RATE_CARD_REVERT_UPDATE_SQL,
+      updateValues: [correctionReason, now.toISOString(), id, ctx.tenantId, rateCard.status, rateCard.approvalLevel ?? null],
+      approvalValues: [approvalId, ctx.tenantId, id, currentLevel, ctx.userId, approverName, ctx.userEmail || null, 'RETURNED_FOR_CORRECTION', correctionReason, now.toISOString()],
+      auditValues: [crypto.randomUUID(), ctx.tenantId, ctx.userId, null, 'VENDOR', rateCard.vendorId,
+        'RATE_CARD_RETURNED_FOR_CORRECTION', interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.rateCardRateCardNumberReturnedForCorrectionByApproverNameTrim, { "rateCardNumber": rateCard.rateCardNumber, "approverName": approverName, "trim": correctionReason }),
+        null, JSON.stringify({ status: 'RETURNED_FOR_CORRECTION', reason: correctionReason }), null, null, now.toISOString()],
     });
+    if (!changed) return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
 
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      entityType: 'VENDOR',
-      entityId: rateCard.vendorId,
-      action: 'RATE_CARD_RETURNED_FOR_CORRECTION',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRevertRoute.rateCardRateCardNumberReturnedForCorrectionByApproverNameTrim, { "rateCardNumber": rateCard.rateCardNumber, "approverName": approverName, "trim": reason.trim() }),
-      newValue: { status: 'RETURNED_FOR_CORRECTION', reason: reason.trim() },
-    });
+    const approval = {
+      id: approvalId, tenantId: ctx.tenantId, rateCardId: id, level: currentLevel, approverId: ctx.userId,
+      approverName, approverEmail: ctx.userEmail || null, action: 'RETURNED_FOR_CORRECTION', remarks: correctionReason, timestamp: now,
+    };
+    const updated = {
+      ...rateCard, status: 'RETURNED_FOR_CORRECTION', revertReason: correctionReason, updatedAt: now,
+      approvals: [approval, ...(rateCard.approvals || [])].slice(0, RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE),
+    };
 
     return apiSuccess({
       rateCard: updated,

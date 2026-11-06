@@ -1,7 +1,8 @@
 import { uiStringPattern } from '@/lib/i18n';
 import { GET } from '../src/app/api/dashboard/route';
 import { prisma } from '../src/lib/prisma';
-import { apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
+import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -11,14 +12,16 @@ jest.mock('../src/lib/prisma', () => {
     aggregate: jest.fn().mockResolvedValue({ _sum: {} }),
     findMany: jest.fn().mockResolvedValue([]),
     findUnique: jest.fn().mockResolvedValue(null),
+    groupBy: jest.fn().mockResolvedValue([]),
   });
   return {
     prisma: {
       tenant: model(), user: model(), project: model(), auditLog: model(),
       boqRevision: model(), procurementRequest: model(), rfq: model(),
       awardRecommendation: model(), vendorRateCard: model(), boqLine: model(),
-      category: model(), uomMaster: model(), boq: model(),
+      category: model(), uomMaster: model(), boq: model(), pRLine: model(),
       budgetContribution: model(), budgetTransaction: model(),
+      $queryRaw: jest.fn().mockResolvedValue([{ total: 0 }]),
     },
   };
 });
@@ -27,12 +30,25 @@ jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ data, status })),
+  apiError: jest.fn((message: string, status = 400) => ({ message, status })),
+  getListPageWindow: (searchParams: URLSearchParams) => {
+    const rawPage = Number(searchParams.get('page'));
+    const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 1_000_000) : 1;
+    const rawPageSize = Number(searchParams.get('pageSize'));
+    const pageSize = Number.isSafeInteger(rawPageSize) && rawPageSize > 0 ? Math.min(rawPageSize, 100) : 50;
+    return { page, pageSize, skip: (page - 1) * pageSize };
+  },
+}));
+
+jest.mock('../src/lib/observability/server-logger', () => ({
+  writeStructuredLog: jest.fn().mockResolvedValue(undefined),
 }));
 
 const db = prisma as any;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const success = apiSuccess as jest.Mock;
+const failure = apiError as jest.Mock;
 const baseContext = { tenantId: 'tenant-1', userId: 'user-1', role: 'PROJECT_USER' };
 
 function rfq(id: string, status: string, extra: Record<string, any> = {}) {
@@ -58,17 +74,23 @@ function revision(id: string, boqId: string, rfqs: any[] = [], overrides: Record
 }
 
 function resetDatabase() {
-  for (const delegate of Object.values(db) as any[]) {
+  for (const [name, delegate] of Object.entries(db) as Array<[string, any]>) {
+    if (name === '$queryRaw') continue;
     for (const method of Object.values(delegate) as jest.Mock[]) {
       method.mockReset();
       if (method.getMockName() === 'jest.fn()') method.mockResolvedValue(undefined);
     }
   }
   for (const name of Object.keys(db)) {
+    if (name === '$queryRaw') {
+      db.$queryRaw.mockReset().mockResolvedValue([{ total: 0 }]);
+      continue;
+    }
     db[name].count?.mockResolvedValue(0);
     db[name].aggregate?.mockResolvedValue({ _sum: {} });
     db[name].findMany?.mockResolvedValue([]);
     db[name].findUnique?.mockResolvedValue(null);
+    db[name].groupBy?.mockResolvedValue([]);
   }
 }
 
@@ -103,9 +125,25 @@ describe('dashboard API role responses', () => {
 
     expect(success).toHaveBeenCalledWith(expect.objectContaining({
       role: 'SUPER_ADMIN', tenants: 2, users: 7, projects: 4,
+      tenantListPage: 1, tenantListPageSize: 50, tenantListTotal: 2, tenantListTotalPages: 1,
       tenantList: [{ id: 'tenant-1', name: UI_STRINGS.appLoginPageConstants.buyer, slug: 'buyer', status: UI_STRINGS.common.aCTIVE, projectCount: 3, userCount: 5 }],
     }));
     expect(db.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 }));
+    expect(db.tenant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: 0, take: 50,
+    }));
+  });
+
+  it('uses a bounded stable tenant window for later super administrator pages', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'SUPER_ADMIN' });
+    db.tenant.count.mockResolvedValue(123);
+    await GET(new Request('http://localhost/api/dashboard?page=3&pageSize=25'));
+    expect(db.tenant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: 50, take: 25,
+    }));
+    expect(success).toHaveBeenCalledWith(expect.objectContaining({
+      tenantListPage: 3, tenantListPageSize: 25, tenantListTotal: 123, tenantListTotalPages: 5,
+    }));
   });
 
   it('returns tenant scoped client administrator metrics and activity', async () => {
@@ -143,6 +181,11 @@ describe('dashboard API role responses', () => {
 
     await GET();
 
+    expect(db.procurementRequest.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      take: 5,
+      orderBy: [{ requestedDate: 'desc' }, { id: 'desc' }],
+    }));
+
     expect(success).toHaveBeenCalledWith(expect.objectContaining({
       pending: 2, recentApproved: 4, recentRejected: 1,
       pendingPrs: [
@@ -152,8 +195,24 @@ describe('dashboard API role responses', () => {
     }));
   });
 
+  it('skips requester lookups when pending requests have no requester IDs', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'PROJECT_APPROVER' });
+    db.procurementRequest.findMany
+      .mockResolvedValueOnce([{ id: 'pr-no-requester', requestedBy: null, lines: [], boq: null, approvals: [] }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await GET();
+
+    expect(db.user.findMany).not.toHaveBeenCalled();
+    expect(success).toHaveBeenCalledWith(expect.objectContaining({
+      pendingPrs: [expect.objectContaining({ requesterName: null, requesterEmail: '', categories: ['Standard'] })],
+    }));
+  });
+
   it('returns procurement counts and maps approved revisions, deduplicated RFQs, and sourcing stages', async () => {
     auth.mockResolvedValue({ ...baseContext, role: 'PROCUREMENT_USER' });
+    db.boq.count.mockResolvedValueOnce(10).mockResolvedValueOnce(3);
     db.vendorRateCard.count.mockResolvedValue(1);
     const firstRevision = {
       id: 'rev-1', revisionNumber: 1, revisionCode: 'R1', totalLines: 2, createdAt: new Date('2026-01-01'),
@@ -214,10 +273,60 @@ describe('dashboard API role responses', () => {
     expect(mapped.rfqs.find((item: any) => item.id === 'draft')).toEqual(expect.objectContaining({ quotationStage: UI_STRINGS.common.draft, awardStatus: 'Not Prepared' }));
     expect(mapped.rfqs.find((item: any) => item.id === 'ppo')).toEqual(expect.objectContaining({ ppoStatus: 'PPO-1 (ACCEPTED)' }));
     expect(db.boqRevision.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1' }) }));
+    expect(db.boqRevision.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: 50,
+      include: expect.objectContaining({
+        rfqs: expect.objectContaining({ take: 5 }),
+        prs: expect.objectContaining({ take: 1 }),
+      }),
+    }));
+    expect(db.boqLine.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      by: ['boqRevisionId', 'aiUnitCost'],
+      where: expect.objectContaining({ tenantId: 'tenant-1', isDeleted: false }),
+    }));
+  });
+
+  it('uses grouped BOQ costs and exact RFQ relation counts for procurement previews', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'PROCUREMENT_USER' });
+    const linkedRfq = rfq('rfq-summary', 'NEGOTIATION', {
+      _count: { invitedVendors: 4, quotes: 3 },
+      invitedVendors: [],
+      quotes: [],
+      negotiations: [{ rounds: [{ roundNumber: 7, status: 'ROUND_ACTIVE' }] }],
+    });
+    db.boqRevision.findMany.mockResolvedValue([revision('rev-summary', 'boq-summary', [linkedRfq], {
+      _count: { rfqs: 6 },
+      lines: undefined,
+      prs: [],
+    })]);
+    db.boq.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    db.boqLine.groupBy.mockResolvedValueOnce([{
+      boqRevisionId: 'rev-summary', aiUnitCost: 25, _sum: { quantity: 8 }, _count: { _all: 2 },
+    }]);
+
+    await GET();
+
+    const payload = success.mock.calls.at(-1)[0];
+    expect(payload.boqRegister[0]).toEqual(expect.objectContaining({ amount: 200, itemCount: 2, rfqCount: 6, canCreateRfq: false }));
+    expect(payload.boqRegister[0].rfqs[0]).toEqual(expect.objectContaining({
+      quotesCount: 3, invitedCount: 4, negotiationStage: 'Round 7 (ROUND ACTIVE)',
+    }));
+  });
+
+  it('returns an empty procurement preview without issuing line aggregates', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'PROCUREMENT_USER' });
+    await GET();
+    expect(success).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'PROCUREMENT_USER', boqRegister: [], registerHasMore: false,
+      summaryCards: expect.objectContaining({ approvedBoqs: 0, boqsReceived: 0 }),
+    }));
+    expect(db.boqLine.groupBy).not.toHaveBeenCalled();
   });
 
   it('serves finance summaries and safely sums missing project budgets as zero', async () => {
     auth.mockResolvedValue({ ...baseContext, role: 'FINANCE_USER' });
+    db.project.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+    db.project.aggregate.mockResolvedValueOnce({ _sum: { budget: 100 } });
     db.project.findMany.mockResolvedValue([
       { id: 'p1', budget: 100, status: 'BOQ_APPROVED' },
       { id: 'p2', budget: null, status: 'DRAFT' },
@@ -225,7 +334,27 @@ describe('dashboard API role responses', () => {
 
     await GET();
 
-    expect(success).toHaveBeenCalledWith({ role: 'FINANCE_USER', projects: expect.any(Array), totalBudget: 100, totalProjects: 2, approvedProjects: 1 });
+    expect(success).toHaveBeenCalledWith({
+      role: 'FINANCE_USER', projects: expect.any(Array), totalBudget: 100, totalProjects: 2, approvedProjects: 1,
+      projectPreviewLimit: 20,
+    });
+    expect(db.project.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: 20,
+      select: expect.objectContaining({ projectCode: true, budget: true, status: true }),
+    }));
+    expect(db.project.findMany.mock.calls.at(-1)[0]).not.toHaveProperty('include');
+    expect(db.project.aggregate).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1' }, _sum: { budget: true } });
+  });
+
+  it('returns a zero finance budget when the aggregate has no sum', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'FINANCE_USER' });
+    db.project.aggregate.mockResolvedValueOnce({ _sum: {} });
+
+    await GET();
+
+    expect(success).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'FINANCE_USER', totalBudget: 0, projects: [], totalProjects: 0, approvedProjects: 0,
+    }));
   });
 
   it('returns category manager taxonomy, exception, and approved procurement summaries', async () => {
@@ -264,9 +393,10 @@ describe('dashboard API role responses', () => {
     fallbackPr.boqRevision = { revisionCode: 'R7' };
     fallbackPr.totalEstimatedValue = 0;
     db.category.findMany.mockResolvedValue([
-      { id: 'cat-1', name: 'Civil', parentId: null, children: [] },
-      { id: 'cat-2', name: 'Concrete', parentId: 'cat-1', children: [] },
+      { id: 'cat-1', name: 'Civil', parentId: null, children: [{ id: 'cat-2', name: 'Concrete', parentId: 'cat-1' }] },
     ]);
+    db.boqRevision.count.mockResolvedValueOnce(1);
+    db.boq.count.mockResolvedValueOnce(10).mockResolvedValueOnce(3);
     db.uomMaster.findMany.mockResolvedValue([{ id: 'uom-1', code: 'EA' }]);
     db.boqRevision.findMany
       .mockResolvedValueOnce([{ id: 'exception-1', warningLines: 1, boq: { project: { name: 'Project' } } }])
@@ -287,6 +417,7 @@ describe('dashboard API role responses', () => {
           costCentre: index === 1 ? { id: 'cc-1', code: 'CC', name: 'Main' } : null,
         },
       })),
+      ...Array.from({ length: 33 }, (_, index) => revision(`overflow-${index}`, `boq-overflow-${index}`)),
     ]);
     db.procurementRequest.findMany.mockResolvedValue([
       approvedPr('pr-1', [rfq('pr-rfq', 'DRAFT'), lifecycleRfqs[0]], 'rev-1'),
@@ -303,7 +434,7 @@ describe('dashboard API role responses', () => {
     const payload = success.mock.calls.at(-1)[0];
     expect(payload).toEqual(expect.objectContaining({
       role: 'CATEGORY_MANAGER', categoryCount: 1, subcategoryCount: 1, uomCount: 1, totalLines: 12,
-      categories: [{ id: 'cat-1', name: 'Civil', parentId: null, children: [] }],
+      categories: [{ id: 'cat-1', name: 'Civil', parentId: null, children: [{ id: 'cat-2', name: 'Concrete', parentId: 'cat-1' }] }],
       summaryCards: expect.objectContaining({ approvedBoqs: expect.any(Number), rfqsInProgress: 4, negotiationsPending: 2, awardsPpoPending: 3 }),
     }));
     expect(payload.boqRegister).toEqual(expect.arrayContaining([
@@ -312,20 +443,138 @@ describe('dashboard API role responses', () => {
       expect.objectContaining({ id: 'standalone-1', costCentre: 'CC - Main' }),
     ]));
     expect(payload.revisionsWithExceptions).toHaveLength(1);
+    expect(payload.exceptionTotalCount).toBe(1);
+    expect(payload.registerHasMore).toBe(true);
+    expect(db.boqRevision.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 }));
+    expect(db.boqRevision.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 51 }));
+    expect(db.procurementRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 51 }));
+    expect(db.category.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: 101,
+      include: { children: expect.objectContaining({ take: 51 }) },
+    }));
   });
 
-  it('returns viewer projects with only the latest BOQ revision', async () => {
+  it('aggregates category manager previews and bounds large taxonomy lists', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'CATEGORY_MANAGER' });
+    const children = Array.from({ length: 51 }, (_, index) => ({ id: `child-${index}`, name: `Child ${index}`, parentId: 'cat-1' }));
+    db.category.findMany
+      .mockResolvedValueOnce([{ id: 'cat-1', name: 'Civil', parentId: null, children }])
+      .mockResolvedValueOnce([{ id: 'cat-labor', name: 'Labor' }]);
+    db.uomMaster.findMany.mockResolvedValueOnce(Array.from({ length: 101 }, (_, index) => ({ id: `uom-${index}`, code: `U${index}` })));
+    const aggregateRfq = rfq('rfq-aggregate', 'COMPARISON', {
+      _count: { invitedVendors: 2, quotes: 4 },
+      invitedVendors: [],
+      quotes: [{ totalQuoteAmount: 125, vendor: { name: 'Lowest' } }],
+    });
+    const revisionOnlyRfq = rfq('rfq-revision-only', 'DRAFT');
+    db.boqRevision.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        revision('rev-aggregate', 'boq-aggregate', [aggregateRfq, revisionOnlyRfq], {
+          _count: { rfqs: 6 },
+          lines: undefined,
+          boq: { id: 'boq-aggregate', boqCode: 'B-AGG', title: 'Aggregate', project: { id: 'p-1', name: 'Project', projectCode: 'P-1' }, costCentre: null },
+        }),
+        revision('rev-standalone', 'boq-standalone', [], { lines: undefined }),
+      ]);
+    db.procurementRequest.findMany.mockResolvedValueOnce([{
+      id: 'pr-aggregate', prNumber: 'PR-AGG', title: 'Aggregate PR', boqId: 'boq-aggregate', boqRevisionId: 'rev-aggregate',
+      projectId: 'p-1', costCentreId: null, project: { name: 'Project', projectCode: 'P-1' }, costCentre: null,
+      boq: { boqCode: 'B-AGG', title: 'Aggregate' }, boqRevision: { id: 'rev-aggregate', revisionCode: 'R1' },
+      totalEstimatedValue: 175, totalLines: 7, lines: undefined, _count: { lines: 7, rfqs: 5 }, rfqs: [aggregateRfq],
+      projectApprovedAt: null, releasedAt: null, updatedAt: new Date(), createdAt: new Date(),
+    }]);
+    db.boqLine.groupBy.mockResolvedValueOnce([
+      { boqRevisionId: 'rev-aggregate', categoryId: 'cat-labor', aiUnitCost: 25, _sum: { quantity: 8 }, _count: { _all: 2 } },
+      { boqRevisionId: 'rev-standalone', categoryId: 'cat-labor', aiUnitCost: 25, _sum: { quantity: 8 }, _count: { _all: 2 } },
+    ]);
+    db.pRLine.groupBy.mockResolvedValueOnce([{ prId: 'pr-aggregate', category: 'Labor', _count: { _all: 2 } }]);
+    db.boq.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+
+    await GET();
+
+    const payload = success.mock.calls.at(-1)[0];
+    expect(payload.taxonomyHasMore).toBe(true);
+    expect(payload.categories[0].children).toHaveLength(50);
+    expect(payload.uoms).toHaveLength(100);
+    expect(payload.boqRegister).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'pr-aggregate', category: 'Labor', totalLines: 7, rfqCount: 6 }),
+      expect.objectContaining({ id: 'rev-standalone', category: 'Labor', amount: 200, totalLines: 2, rfqCount: 0 }),
+    ]));
+    expect(payload.boqRegister[0].rfqs.map((item: { id: string }) => item.id)).toContain('rfq-revision-only');
+  });
+
+  it('returns empty category manager previews without running line group queries', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'CATEGORY_MANAGER' });
+    await GET();
+    expect(success).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'CATEGORY_MANAGER', boqRegister: [], taxonomyHasMore: false, exceptionTotalCount: 0,
+    }));
+    expect(db.boqLine.groupBy).not.toHaveBeenCalled();
+    expect(db.pRLine.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('returns a bounded viewer project preview with deterministic latest BOQs', async () => {
     auth.mockResolvedValue({ ...baseContext, role: 'VIEWER' });
     db.project.findMany.mockResolvedValue([{ id: 'p1', boqs: [{ id: 'b1' }] }]);
+    db.project.count.mockResolvedValueOnce(51);
     await GET();
-    expect(success).toHaveBeenCalledWith({ role: 'VIEWER', projects: [{ id: 'p1', boqs: [{ id: 'b1' }] }], totalProjects: 1 });
+    expect(success).toHaveBeenCalledWith({
+      role: 'VIEWER', projects: [{ id: 'p1', boqs: [{ id: 'b1' }] }], totalProjects: 51,
+      projectPreviewLimit: 50, projectsHasMore: true,
+    });
+    expect(db.project.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: 50,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      select: expect.objectContaining({
+        boqs: expect.objectContaining({ take: 1, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }] }),
+      }),
+    }));
+  });
+
+  it('reports a complete viewer project list when the tenant fits within the preview', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'VIEWER' });
+
+    await GET();
+
+    expect(success).toHaveBeenCalledWith({
+      role: 'VIEWER', projects: [], totalProjects: 0, projectPreviewLimit: 50, projectsHasMore: false,
+    });
+  });
+
+  it('logs dashboard read failures with request and tenant context', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'FINANCE_USER' });
+    db.project.findMany.mockRejectedValueOnce(new Error('query unavailable'));
+    const request = new Request('https://example.test/api/dashboard', { headers: { 'x-request-id': 'req-dashboard-1' } });
+
+    await GET(request);
+
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'dashboard.read_failed', expect.objectContaining({
+      operation: 'load_role_dashboard', route: '/api/dashboard', requestId: 'req-dashboard-1',
+      tenantId: 'tenant-1', userId: 'user-1', role: 'FINANCE_USER',
+      error: { name: 'Error', message: 'query unavailable' },
+    }));
+    expect(failure).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToFetchDashboardData, 500);
+  });
+
+  it('logs non-Error dashboard failures without a request ID', async () => {
+    auth.mockResolvedValue({ ...baseContext, role: 'FINANCE_USER' });
+    db.project.findMany.mockRejectedValueOnce('offline');
+
+    await GET();
+
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'dashboard.read_failed', expect.objectContaining({
+      requestId: null,
+      error: { type: 'string' },
+    }));
+    expect(failure).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.failedToFetchDashboardData, 500);
   });
 
   it('computes project user budget fallbacks, recent BOQs, and rejected versus draft actions', async () => {
     db.boq.count.mockResolvedValueOnce(5).mockResolvedValueOnce(2).mockResolvedValueOnce(1).mockResolvedValueOnce(2);
     db.budgetContribution.aggregate.mockResolvedValueOnce({ _sum: { totalEstimatedValue: 0 } }).mockResolvedValueOnce({ _sum: { acceptedEstimatedValue: 0 } });
+    db.$queryRaw.mockResolvedValueOnce([{ total: 50 }]);
     db.boq.findMany
-      .mockResolvedValueOnce([{ revisions: [{ lines: [{ aiTotalCost: 30 }, { quantity: 2, aiUnitCost: 10 }, { quantity: 4, aiUnitCost: 0 }] }] }])
       .mockResolvedValueOnce([{
         id: 'b1', boqCode: 'B-1', description: '', status: 'REJECTED', updatedAt: new Date(),
         costCentre: { name: 'Main', code: 'CC' }, budgetContributions: [],
@@ -355,6 +604,9 @@ describe('dashboard API role responses', () => {
         expect.objectContaining({ id: 'b2', title: 'Ready', actionText: 'Complete and submit draft BOQ', severity: UI_STRINGS.componentsUiToast.warning }),
       ]),
     }));
+    const [sqlTemplate, tenantId] = db.$queryRaw.mock.calls[0];
+    expect(sqlTemplate.join(' ')).toContain('MAX(latest.revisionNumber)');
+    expect(tenantId).toBe('tenant-1');
   });
 
   it('uses approved contribution totals and returns no pending actions for an unhandled role', async () => {

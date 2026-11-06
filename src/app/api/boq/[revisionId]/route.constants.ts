@@ -1,0 +1,1 @@
+export const BOQ_DETAIL_LATEST_REVISION_LIMIT = 1;

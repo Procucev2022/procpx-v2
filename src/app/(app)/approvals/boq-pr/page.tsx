@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/approvals/boq-pr/page.tsx - PR Approvals Workspace for Project Approver
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   FileText,
@@ -28,14 +28,26 @@ import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { PrLinePaginationMetadata } from '@app-types/lib/pr-line-pagination.types';
 
 
 export default function BoqPrApprovalPage() {
   const toast = useToast();
   const [queue, setQueue] = useState<any[]>([]);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [totalPendingValue, setTotalPendingValue] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedPr, setSelectedPr] = useState<any | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [linePagination, setLinePagination] = useState<PrLinePaginationMetadata | null>(null);
+  const [loadingMoreLines, setLoadingMoreLines] = useState(false);
+  const [lineLoadError, setLineLoadError] = useState('');
+  const reviewRequestSequence = useRef(0);
   const [revertModalOpen, setRevertModalOpen] = useState(false);
   const [revertReason, setRevertReason] = useState('');
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -53,18 +65,79 @@ export default function BoqPrApprovalPage() {
     loadQueue();
   }, []);
 
-  const loadQueue = async () => {
-    setLoading(true);
+  const loadQueue = async (nextPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/approvals?type=PR');
+      const res = await fetch(`/api/approvals?type=PR&page=${nextPage}&pageSize=25`);
       if (res.ok) {
         const data = await res.json();
-        setQueue(data.prQueue || []);
+        const items = data.prQueue || [];
+        setQueue((current) => append ? [...current, ...items] : items);
+        setQueueTotal(Number(data.pagination?.queues?.pr?.total ?? items.length));
+        setTotalPendingValue(Number(data.totals?.prPendingAmount ?? items.reduce((sum: number, item: { totalEstimatedValue?: number | null }) => sum + Number(item.totalEstimatedValue || 0), 0)));
+        setPage(Number(data.pagination?.page ?? nextPage));
+        setTotalPages(Number(data.pagination?.queues?.pr?.totalPages ?? 1));
       }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadPrReview = async (pr: { id: string }) => {
+    const sequence = ++reviewRequestSequence.current;
+    setSelectedPr(pr);
+    setReviewModalOpen(true);
+    setReviewLoading(true);
+    setReviewError('');
+    setLinePagination(null);
+    setLoadingMoreLines(false);
+    setLineLoadError('');
+    try {
+      const response = await fetch(`/api/pr/${pr.id}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      if (sequence !== reviewRequestSequence.current) return;
+      const detail = body.data ?? body;
+      setSelectedPr({ ...pr, ...detail });
+      setLinePagination(detail.linePagination || null);
+    } catch (error) {
+      if (sequence === reviewRequestSequence.current) {
+        console.error('Failed to load purchase request review details', error);
+        setReviewError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      }
+    } finally {
+      if (sequence === reviewRequestSequence.current) setReviewLoading(false);
+    }
+  };
+
+  const loadMorePrLines = async () => {
+    const prId = selectedPr?.id;
+    const cursor = linePagination?.nextCursor;
+    if (!prId || !cursor || loadingMoreLines) return;
+    const sequence = reviewRequestSequence.current;
+    setLoadingMoreLines(true);
+    setLineLoadError('');
+    try {
+      const response = await fetch(`/api/pr/${prId}/lines?cursor=${encodeURIComponent(cursor)}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      if (sequence !== reviewRequestSequence.current) return;
+      const page = body.data ?? body;
+      setSelectedPr((current: typeof selectedPr) => current?.id === prId
+        ? { ...current, lines: [...(current.lines || []), ...(page.lines || [])] }
+        : current);
+      setLinePagination(page.linePagination || null);
+    } catch {
+      if (sequence === reviewRequestSequence.current) {
+        console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
+        setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      }
+    } finally {
+      if (sequence === reviewRequestSequence.current) setLoadingMoreLines(false);
     }
   };
 
@@ -158,7 +231,6 @@ export default function BoqPrApprovalPage() {
     setChatDrawerOpen(true);
   };
 
-  const totalValue = queue.reduce((sum, item) => sum + (item.totalEstimatedValue || 0), 0);
   const pendingClarifications = queue.filter(item => item.hasEnquiry).length;
 
   return (
@@ -177,14 +249,14 @@ export default function BoqPrApprovalPage() {
       <SummaryCardGrid columns={3} className="mb-6">
         <SummaryCard
           label={UI_STRINGS.common.pendingQueue}
-          value={loading ? '—' : `${queue.length} BOQs`}
+          value={loading ? '—' : `${queueTotal} BOQs`}
           secondary={UI_STRINGS.common.awaitingProjectApproverSignOff}
           icon={<Clock size={16} />}
           accent="amber"
         />
         <SummaryCard
           label={UI_STRINGS.appAppApprovalsBoqPrPage.totalValueUnderReview}
-          value={loading ? '—' : `₹ ${totalValue.toLocaleString(I18N_CONFIG.defaultLocale)}`}
+          value={loading ? '—' : `₹ ${totalPendingValue.toLocaleString(I18N_CONFIG.defaultLocale)}`}
           secondary={UI_STRINGS.appAppApprovalsBoqPrPage.aggregateEstimatedCommitment}
           icon={<FileSpreadsheet size={16} />}
           accent="emerald"
@@ -266,6 +338,9 @@ export default function BoqPrApprovalPage() {
                   <td style={{ padding: '0 16px' }}>
                     <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: '#f1f5f9', color: '#334155', fontWeight: 500 }}>
                       {(pr.categories || []).join(', ') || UI_STRINGS.common.standard}
+                      {pr.remainingCategoryCount > 0 && (
+                        <span style={{ marginLeft: 4 }}>{interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: pr.remainingCategoryCount })}</span>
+                      )}
                     </span>
                   </td>
                   <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(pr.totalEstimatedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
@@ -292,10 +367,7 @@ export default function BoqPrApprovalPage() {
                         className="btn btn-secondary btn-sm"
                         style={{ height: 28, padding: '0 8px', fontSize: 11 }}
                         title={UI_STRINGS.common.reviewCompleteBOQDetailsAndLineItems}
-                        onClick={() => {
-                          setSelectedPr(pr);
-                          setReviewModalOpen(true);
-                        }}
+                        onClick={() => { void loadPrReview(pr); }}
                       >
                         <Eye size={12} />{UI_STRINGS.common.reviewBOQ}</button>
                       <button
@@ -356,6 +428,15 @@ export default function BoqPrApprovalPage() {
         </table>
       </div>
 
+      {page < totalPages && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: '16px 0' }}>
+          <span style={{ color: '#64748b', fontSize: 12 }}>{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: String(page), value2: String(totalPages) })}</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={loadingMore} onClick={() => loadQueue(page + 1, true)}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+        </div>
+      )}
+
       {/* REVIEW PR MODAL */}
       {reviewModalOpen && selectedPr && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -367,7 +448,7 @@ export default function BoqPrApprovalPage() {
                 <div style={{ fontSize: 12, color: '#64748b' }}>
                   {selectedPr.title}{UI_STRINGS.common.costCentre}{selectedPr.costCentre?.code}{UI_STRINGS.common.copy1b3t0c5}{selectedPr.costCentre?.name}{UI_STRINGS.common.copyc7zu6c}</div>
               </div>
-              <button type="button" onClick={() => setReviewModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+              <button type="button" onClick={() => { reviewRequestSequence.current += 1; setReviewModalOpen(false); setReviewLoading(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={18} />
               </button>
             </div>
@@ -384,7 +465,7 @@ export default function BoqPrApprovalPage() {
               </div>
               <div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.totalLineItems}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.lines?.length || 0}{UI_STRINGS.common.lines}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{selectedPr.totalLines ?? selectedPr.lines?.length ?? 0}{UI_STRINGS.common.lines}</div>
               </div>
               <div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.requestedValue}</div>
@@ -408,7 +489,11 @@ export default function BoqPrApprovalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(selectedPr.lines || []).map((line: any, idx: number) => (
+                  {reviewLoading ? (
+                    <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center' }}>{UI_STRINGS.common.loading}</td></tr>
+                  ) : reviewError ? (
+                    <tr><td colSpan={8} role="alert" style={{ padding: 20, textAlign: 'center' }}>{reviewError}</td></tr>
+                  ) : (selectedPr.lines || []).map((line: any, idx: number) => (
                     <tr key={line.id || idx} style={{ borderBottom: '1px solid #f1f5f9', height: 40 }}>
                       <td style={{ padding: '0 10px', color: '#64748b' }}>{line.lineNumber || idx + 1}</td>
                       <td style={{ padding: '0 10px', fontWeight: 600, color: '#0f172a' }}>{line.itemDescription}</td>
@@ -432,6 +517,14 @@ export default function BoqPrApprovalPage() {
                 </tbody>
               </table>
             </div>
+            {lineLoadError && <p role="alert" style={{ marginBottom: 12, color: '#b91c1c' }}>{lineLoadError}</p>}
+            {linePagination?.hasMore && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={loadMorePrLines} disabled={loadingMoreLines}>
+                  {loadingMoreLines ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
+              </div>
+            )}
 
             {/* Modal actions */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

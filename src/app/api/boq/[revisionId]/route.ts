@@ -5,6 +5,7 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { BOQ_DETAIL_LATEST_REVISION_LIMIT } from './route.constants';
 
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
@@ -86,6 +87,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
         },
         revisions: {
           orderBy: { revisionNumber: 'desc' },
+          take: BOQ_DETAIL_LATEST_REVISION_LIMIT,
           include: {
             lines: {
               where: { isDeleted: false },

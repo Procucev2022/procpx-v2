@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { PR_APPROVAL_INSERT_AFTER_STATUS_UPDATE_SQL, PR_AUDIT_INSERT_AFTER_TRANSITION_SQL, PR_REJECT_STATUS_UPDATE_SQL, PR_REVISION_STATUS_UPDATE_AFTER_APPROVAL_SQL } from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -14,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const body = await req.json();
-    const { reason } = body;
+    const reason = body && typeof body === 'object' && typeof body.reason === 'string' ? body.reason : undefined;
 
     if (!reason || !reason.trim()) {
       return apiError(UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, 400, { route: '/api/pr/[id]/reject', method: 'POST' });
@@ -25,46 +28,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { costCentre: true },
     });
 
-    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/reject', method: 'POST' });
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+    if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdRejectRoute.cannotRejectPRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { status: pr.status }), 400);
+    }
 
-    const updated = await prisma.procurementRequest.update({
-      where: { id },
-      data: {
-        status: 'PR_REJECTED',
-        rejectionReason: reason.trim(),
+    const rejectedAt = new Date().toISOString();
+    const trimmedReason = reason.trim();
+    const updated = { ...pr, status: 'PR_REJECTED', rejectionReason: trimmedReason };
+    const batch: Array<{ sql: string; values: unknown[] }> = [
+      { sql: PR_REJECT_STATUS_UPDATE_SQL, values: [trimmedReason, rejectedAt, id, ctx.tenantId] },
+      {
+        sql: PR_APPROVAL_INSERT_AFTER_STATUS_UPDATE_SQL,
+        values: [crypto.randomUUID(), ctx.tenantId, id, ctx.userId, 'REJECTED', trimmedReason, rejectedAt],
       },
-    });
-
-    await prisma.pRApproval.create({
-      data: {
-        tenantId: ctx.tenantId,
-        prId: id,
-        approverId: ctx.userId,
-        status: 'REJECTED',
-        remarks: reason.trim(),
-        timestamp: new Date(),
+      {
+        sql: PR_REVISION_STATUS_UPDATE_AFTER_APPROVAL_SQL,
+        values: ['PR_REJECTED', rejectedAt, pr.boqRevisionId, ctx.tenantId],
       },
-    });
-
-    await prisma.boqRevision.update({
-      where: { id: pr.boqRevisionId },
-      data: { prStatus: 'PR_REJECTED' },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: pr.projectId,
-        entityType: 'PR',
-        entityId: pr.id,
-        action: 'PR_REJECTED',
-        description: interpolateUiString(UI_STRINGS.appApiPrIdRejectRoute.procurementRequestPrNumberREJECTEDByProjectApproverReasonTrim, { "prNumber": pr.prNumber, "trim": reason.trim() }),
+      {
+        sql: PR_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+        values: [
+          crypto.randomUUID(), ctx.tenantId, ctx.userId, pr.projectId, 'PR', pr.id, 'PR_REJECTED',
+          interpolateUiString(UI_STRINGS.appApiPrIdRejectRoute.procurementRequestPrNumberREJECTEDByProjectApproverReasonTrim, {
+            prNumber: pr.prNumber, trim: trimmedReason,
+          }), null, null, null, null, rejectedAt,
+        ],
       },
-    });
+    ];
+    const results = await writeD1BatchAtomically(batch);
+    if (Number(results[0]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
 
     return apiSuccess({ pr: updated, status: 'PR_REJECTED' });
-  } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.prRejectionFailed }), 500, { route: '/api/pr/[id]/reject', method: 'POST', error: err });
+  } catch (error) {
+    await writeStructuredLog('error', 'purchase_request.rejection_failed', {
+      operation: 'reject', route: '/api/pr/[id]/reject', tenantId: ctx.tenantId,
+      userId: ctx.userId, prId: id, requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      error,
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.prRejectionFailed, 500);
   }
 }

@@ -1,0 +1,2 @@
+export const LOCKABLE_RFQ_STATUSES = Object.freeze(['RESPONSE_CLOSED', 'COMPARISON', 'NEGOTIATION'] as const);
+export const MAX_LOCK_RATES_REMARKS_LENGTH = 1000;

@@ -33,8 +33,6 @@ export interface VendorData {
   status: string;
   createdAt: string;
   evaluations: any[];
-  ppoRatings: any[];
-  ppos: any[];
 }
 
 export interface PerformanceSummary {
@@ -45,5 +43,6 @@ export interface PerformanceSummary {
   avgCommercial: number | null;
   avgResponsiveness: number | null;
   avgDocumentation: number | null;
-  mostRecentRating: any | null;
+  ppoCount: number;
+  completedPpoCount: number;
 }

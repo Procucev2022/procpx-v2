@@ -3,16 +3,18 @@ import { GET } from '../src/app/api/procurement/rate-cards/match/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     procurementRequest: { findFirst: jest.fn() },
     rfq: { findFirst: jest.fn() },
-    vendorRateCard: { findMany: jest.fn() },
+    vendorRateCard: { findMany: jest.fn(), count: jest.fn() },
     ppoLine: { findMany: jest.fn() },
   },
 }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -52,6 +54,7 @@ describe('rate card match API', () => {
     db.procurementRequest.findFirst.mockResolvedValue(null);
     db.rfq.findFirst.mockResolvedValue(null);
     db.vendorRateCard.findMany.mockResolvedValue([]);
+    db.vendorRateCard.count.mockResolvedValue(0);
     db.ppoLine.findMany.mockResolvedValue([]);
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
@@ -91,8 +94,8 @@ describe('rate card match API', () => {
         },
         {
           id: 'line-2', lineNumber: '2', itemDescription: 'Switch', specification: null,
-          category: null, subcategory: null, uom: 'EA', quantity: 0, estimatedRate: 0,
-          boqLine: { aiUnitCost: 0, specification: null },
+          category: null, subcategory: null, uom: 'EA', quantity: 1, estimatedRate: 100,
+          boqLine: { aiUnitCost: null, specification: null },
         },
       ],
     });
@@ -125,7 +128,7 @@ describe('rate card match API', () => {
       reference: { type: 'PR', number: 'PR-001' }, baselineBenchmarkTotal: 300,
       lines: [
         { id: 'line-1', specification: '2 core XLPE', quantity: 2, aiUnitCost: 100, aiTotalCost: 200 },
-        { id: 'line-2', specification: null, category: null, quantity: 1, aiUnitCost: 100, aiTotalCost: 100 },
+        { id: 'line-2', specification: null, category: null, quantity: 1, aiUnitCost: 100, aiTotalCost: 100, quantityValid: true },
       ],
       eligibleCount: 1,
     } });
@@ -143,7 +146,7 @@ describe('rate card match API', () => {
       id: 'rfq-1', rfqNumber: 'RFQ-001', title: 'Furniture', status: 'OPEN', project: { name: 'East Office' },
       lines: [{
         id: 'rfq-line-1', lineNumber: '1', description: 'Office Chair', specification: 'Fabric', category: '', subcategory: '',
-        uom: 'EA', quantity: null, benchmarkRate: 0, boqLine: { aiUnitCost: 0, specification: 'Mesh chair' },
+        uom: 'EA', quantity: 1, benchmarkRate: 100, boqLine: { aiUnitCost: null, specification: 'Mesh chair' },
       }],
     });
     db.vendorRateCard.findMany.mockResolvedValueOnce([card({
@@ -157,7 +160,43 @@ describe('rate card match API', () => {
     } });
   });
 
-  it('handles legacy RFQ lines with non-positive quantities without dividing negative totals', async () => {
+  it('pages rate-card candidates with stable ordering and returns an explicit continuation state', async () => {
+    db.rfq.findFirst.mockResolvedValueOnce({
+      id: 'rfq-1', rfqNumber: 'RFQ-001', title: 'Furniture', status: 'OPEN', project: null,
+      lines: [{ id: 'line-1', lineNumber: '1', description: 'Chair', specification: null, category: 'Furniture',
+        subcategory: null, uom: 'EA', quantity: 1, benchmarkRate: 100, boqLine: null }],
+    });
+    db.vendorRateCard.findMany.mockResolvedValueOnce([card()]);
+    db.vendorRateCard.count.mockResolvedValueOnce(21);
+
+    const result = await GET(request('?rfqId=rfq-1&page=2'));
+    expect(result).toMatchObject({ ok: true, data: { page: 2, pageSize: 10, total: 21, hasMore: true } });
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1' }, skip: 10, take: 10,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    }));
+    expect(db.vendorRateCard.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1' } });
+  });
+
+  it('rejects oversized sourcing scopes before loading candidate cards', async () => {
+    db.procurementRequest.findFirst.mockResolvedValueOnce({
+      id: 'pr-large', prNumber: 'PR-LARGE', title: 'Large scope', status: 'PR_RELEASED_TO_PROCUREMENT',
+      project: null, costCentre: null,
+      lines: Array.from({ length: 201 }, (_, index) => ({
+        id: `line-${index}`, lineNumber: String(index + 1), itemDescription: 'Line', specification: null,
+        category: 'General', subcategory: null, uom: 'EA', quantity: 1, estimatedRate: 1, boqLine: null,
+      })),
+    });
+    await expect(GET(request('?prId=pr-large'))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiProcurementRateCardsMatchRoute.rateCardMatchingSupportsAtMostLengthLinesPerProcurementRequestOrRFQ.replace('{{length}}', '200'),
+      status: 400,
+    });
+    expect(db.vendorRateCard.findMany).not.toHaveBeenCalled();
+    expect(db.ppoLine.findMany).not.toHaveBeenCalled();
+  });
+
+  it('blocks direct PPO matching for legacy RFQ lines with non-positive quantities', async () => {
     db.rfq.findFirst.mockResolvedValueOnce({
       id: 'rfq-negative', rfqNumber: 'RFQ-NEG', title: 'Legacy quantity', status: 'OPEN', project: null,
       lines: [{
@@ -170,18 +209,67 @@ describe('rate card match API', () => {
     })]);
 
     await expect(GET(request('?rfqId=rfq-negative'))).resolves.toMatchObject({ ok: true, data: {
-      baselineBenchmarkTotal: -100,
-      lines: [{ quantity: -1, aiTotalCost: -100, specification: null }],
-      matchedRateCards: [{ rateCardId: 'negative-card', directPpoEligible: true, savingsPercent: 0,
+      baselineBenchmarkTotal: 0,
+      lines: [{ quantity: 0, quantityValid: false, aiTotalCost: 0, specification: null }],
+      matchedRateCards: [{ rateCardId: 'negative-card', directPpoEligible: false, savingsPercent: 0,
+        blockReasons: [UI_STRINGS.appApiProcurementRateCardsMatchRoute.sourcingLinesRequirePositiveQuantitiesForDirectPPO],
         lines: [{ variancePercent: 0, historicalPpoRate: null, historicalPpoNumber: null, historicalPpoDate: null }] }],
     } });
   });
 
+  it('normalizes zero-cost PR lines, empty UOMs, and mixed candidate ordering', async () => {
+    db.procurementRequest.findFirst.mockResolvedValueOnce({
+      id: 'pr-zero', prNumber: 'PR-ZERO', title: 'Unpriced chairs', status: 'PR_RELEASED_TO_PROCUREMENT',
+      project: null, costCentre: null,
+      lines: [{
+        id: 'line-zero', lineNumber: '1', itemDescription: 'Chair', specification: '', category: 'Furniture',
+        subcategory: null, uom: '', quantity: 1, estimatedRate: null, boqLine: null,
+      }],
+    });
+    db.vendorRateCard.findMany.mockResolvedValueOnce([
+      card({ id: 'blocked-first', status: 'PENDING', items: [
+        { description: '', rate: 1, uom: '' }, { description: 'Chair', rate: 10, uom: '' },
+      ] }),
+      card({ id: 'eligible-second', items: [
+        { description: '', rate: 1, uom: '' }, { description: 'Chair', rate: 8, uom: '' },
+      ] }),
+    ]);
+
+    const result = await GET(request('?prId=pr-zero&page=2&pageSize=5'));
+    expect(result).toMatchObject({ ok: true, data: {
+      baselineBenchmarkTotal: 0,
+      lines: [{ id: 'line-zero', aiUnitCost: 0, aiTotalCost: 0, specification: null, uom: '' }],
+      matchedRateCards: [
+        { rateCardId: 'eligible-second', directPpoEligible: true },
+        { rateCardId: 'blocked-first', directPpoEligible: false },
+      ],
+    } });
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 5, take: 5 }));
+  });
+
+  it('falls back when RFQ benchmark and specification values are missing', async () => {
+    db.rfq.findFirst.mockResolvedValueOnce({
+      id: 'rfq-zero', rfqNumber: 'RFQ-ZERO', title: 'Unpriced chair', status: 'OPEN', project: null,
+      lines: [{
+        id: 'rfq-line-zero', lineNumber: '1', description: 'Chair', specification: '', category: '', subcategory: '',
+        uom: '', quantity: 1, benchmarkRate: null, boqLine: { aiUnitCost: null, specification: null },
+      }],
+    });
+    db.vendorRateCard.findMany.mockResolvedValueOnce([]);
+
+    const result = await GET(request('?rfqId=rfq-zero&page=2&pageSize=5'));
+    expect(result).toMatchObject({ ok: true, data: {
+      lines: [{ id: 'rfq-line-zero', aiUnitCost: 0, specification: null, category: 'General', quantityValid: true }],
+      matchedRateCards: [],
+    } });
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 5, take: 5 }));
+  });
+
   it('returns clear failures when matching queries throw', async () => {
     db.procurementRequest.findFirst.mockRejectedValueOnce(new Error('matching query failed'));
-    await expect(GET(request('?prId=pr-1'))).resolves.toEqual({ ok: false, error: 'matching query failed', status: 500 });
+    await expect(GET(request('?prId=pr-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToMatchRateCards, status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
-    await expect(GET(request('?rfqId=rfq-1'))).resolves.toEqual({ ok: false, error: 'Failed to match rate cards', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    await expect(GET(request('?rfqId=rfq-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToMatchRateCards, status: 500 });
+    expect(writeStructuredLog).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,100 +1,97 @@
-// src/app/api/budgets/reverse/route.ts - Budget Transaction Reversal API
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { nextRecordCode } from '@/lib/record-codes';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
-
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  BUDGET_AGGREGATE_REVERSE_UPDATE_SQL,
+  BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+  BUDGET_REVERSAL_INSERT_AFTER_STATUS_SQL,
+  BUDGET_TRANSACTION_REVERSE_CAS_SQL,
+} from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_REVERSE');
   if (!isApiContext(ctx)) return ctx;
 
+  const startedAt = Date.now();
+  let transactionId: string | undefined;
   try {
     const body = await req.json();
-    const { transactionId, reversalReason } = body;
+    transactionId = typeof body?.transactionId === 'string' ? body.transactionId : undefined;
+    const reversalReason = typeof body?.reversalReason === 'string' ? body.reversalReason.trim() : '';
+    if (!transactionId) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.transactionIDIsRequired, 400);
+    if (!reversalReason) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.mandatoryReversalReasonMustBeProvided, 400);
 
-    if (!transactionId) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.transactionIDIsRequired, 400, { route: '/api/budgets/reverse', method: 'POST' });
-    if (!reversalReason || !reversalReason.trim()) {
-      return apiError(UI_STRINGS.appApiBudgetsReverseRoute.mandatoryReversalReasonMustBeProvided, 400, { route: '/api/budgets/reverse', method: 'POST' });
-    }
+    const tx = await prisma.budgetTransaction.findFirst({ where: { id: transactionId, tenantId: ctx.tenantId } });
+    if (!tx) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.budgetTransactionNotFound, 404);
+    if (tx.isReversal) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.cannotReverseATransactionThatIsAlreadyAReversal, 400);
+    if (tx.status !== 'APPROVED') return apiError(UI_STRINGS.appApiBudgetsReverseRoute.onlyApprovedBudgetTransactionsCanBeReversed, 400);
 
-    const tx = await prisma.budgetTransaction.findFirst({
-      where: { id: transactionId, tenantId: ctx.tenantId },
+    const now = new Date();
+    const reversalId = crypto.randomUUID();
+    const auditId = crypto.randomUUID();
+    const reversedAmount = -Math.abs(tx.amount);
+    const reversedQuantity = tx.quantity ? -Math.abs(tx.quantity) : null;
+    const reference = `REVERSAL of ${tx.transactionCode}: ${reversalReason}`;
+    const description = interpolateUiString(UI_STRINGS.common.budgetTransactionReversedForAmountReason, {
+      transactionCode: tx.transactionCode,
+      amount: Math.abs(tx.amount).toLocaleString(I18N_CONFIG.defaultLocale),
+      reason: reversalReason,
     });
-
-    if (!tx) return apiError(UI_STRINGS.appApiBudgetsReverseRoute.budgetTransactionNotFound, 404, { route: '/api/budgets/reverse', method: 'POST' });
-    if (tx.isReversal) {
-      return apiError(UI_STRINGS.appApiBudgetsReverseRoute.cannotReverseATransactionThatIsAlreadyAReversal, 400, { route: '/api/budgets/reverse', method: 'POST' });
-    }
-    if (tx.status !== 'APPROVED') {
-      return apiError(UI_STRINGS.appApiBudgetsReverseRoute.onlyApprovedBudgetTransactionsCanBeReversed, 400, { route: '/api/budgets/reverse', method: 'POST' });
-    }
-
-    // Generate reversal code
-    const reversalTxCode = await nextRecordCode(prisma.budgetTransaction, 'transactionCode', ctx.tenantId, `BTX-REV-`, 5);
-
-    // Create negative reversal transaction
-    const reversalTx = await prisma.budgetTransaction.create({
-      data: {
-        tenantId: ctx.tenantId,
-        transactionCode: reversalTxCode,
-        projectId: tx.projectId,
-        costCentreId: tx.costCentreId,
-        boqId: tx.boqId,
-        boqRevisionId: tx.boqRevisionId,
-        boqLineId: tx.boqLineId,
-        contributionId: tx.contributionId,
-        category: tx.category,
-        subcategory: tx.subcategory,
-        amount: -Math.abs(tx.amount), // negative amount
-        quantity: tx.quantity ? -Math.abs(tx.quantity) : null,
-        rate: tx.rate,
-        budgetDate: new Date(),
-        status: 'APPROVED',
-        isReversal: true,
-        reversalReason: reversalReason.trim(),
-        reversedTransactionId: tx.id,
-        reference: `REVERSAL of ${tx.transactionCode}: ${reversalReason.trim()}`,
-        createdBy: ctx.userId,
+    const results = await writeD1BatchAtomically([
+      { sql: BUDGET_TRANSACTION_REVERSE_CAS_SQL, values: [tx.id, ctx.tenantId, ctx.tenantId, tx.id] },
+      {
+        sql: BUDGET_REVERSAL_INSERT_AFTER_STATUS_SQL,
+        values: [reversalId, ctx.tenantId, ctx.tenantId, tx.projectId, tx.costCentreId, tx.boqId, tx.boqRevisionId,
+          tx.boqLineId, tx.contributionId, tx.category, tx.subcategory, tx.uom, reversedAmount, reversedQuantity,
+          tx.rate, now, ctx.userId, reversalReason, tx.id, reference, now],
       },
-    });
-
-    // Update aggregate Budget record
-    const budgetRecord = await prisma.budget.findFirst({
-      where: { costCentreId: tx.costCentreId, tenantId: ctx.tenantId },
-    });
-
-    if (budgetRecord) {
-      await prisma.budget.update({
-        where: { id: budgetRecord.id },
-        data: {
-          approvedAmount: Math.max(0, budgetRecord.approvedAmount - Math.abs(tx.amount)),
-          totalAmount: Math.max(0, budgetRecord.totalAmount - Math.abs(tx.amount)),
-        },
-      });
+      {
+        sql: BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+        values: [auditId, ctx.tenantId, ctx.userId, tx.projectId, 'BUDGET_TRANSACTION', reversalId,
+          'BUDGET_TRANSACTION_REVERSED', description, JSON.stringify({ status: 'APPROVED' }),
+          JSON.stringify({ status: 'APPROVED', isReversal: true, reversedTransactionId: tx.id }), null, null, now],
+      },
+      {
+        sql: BUDGET_AGGREGATE_REVERSE_UPDATE_SQL,
+        values: [Math.abs(tx.amount), Math.abs(tx.amount), now, ctx.tenantId, tx.projectId, tx.costCentreId, auditId, ctx.tenantId],
+      },
+    ]);
+    if (Number(results[0]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.budgetTransactionChangedPleaseRefresh, 409);
     }
 
-    await prisma.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        projectId: tx.projectId,
-        entityType: 'BUDGET_TRANSACTION',
-        entityId: reversalTx.id,
-        action: 'BUDGET_TRANSACTION_REVERSED',
-        description: interpolateUiString(UI_STRINGS.appApiBudgetsReverseRoute.budgetTransactionTransactionCodeReversedWithReversalTxCodeToLocaleStringReasonTrim, { "transactionCode": tx.transactionCode, "reversalTxCode": reversalTxCode, "toLocaleString": Math.abs(tx.amount).toLocaleString(I18N_CONFIG.defaultLocale), "trim": reversalReason.trim() }),
-      },
-    });
-
+    const inserted = results[1]?.results?.[0];
+    const reversalTransaction = {
+      ...tx,
+      id: reversalId,
+      transactionCode: inserted?.transactionCode,
+      amount: reversedAmount,
+      quantity: reversedQuantity,
+      status: 'APPROVED',
+      isReversal: true,
+      reversalReason,
+      reversedTransactionId: tx.id,
+      reference,
+      createdBy: ctx.userId,
+      budgetDate: now,
+      createdAt: now,
+    };
     return apiSuccess({
-      originalTransaction: tx,
-      reversalTransaction: reversalTx,
-      reversedAmount: -Math.abs(tx.amount),
+      originalTransaction: { ...tx, status: 'REVERSED' },
+      reversalTransaction,
+      reversedAmount,
     }, 201);
-  } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.transactionReversalFailed }), 500, { route: '/api/budgets/reverse', method: 'POST', error: err });
+  } catch (error) {
+    await writeStructuredLog('error', 'budget_transaction.reversal_failed', {
+      operation: 'reverse_budget_transaction', route: '/api/budgets/reverse', requestId: req.headers.get('x-request-id'),
+      tenantId: ctx.tenantId, userId: ctx.userId, transactionId, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.transactionReversalFailed, 500);
   }
 }

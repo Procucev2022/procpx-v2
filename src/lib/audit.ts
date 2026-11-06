@@ -1,6 +1,5 @@
 // lib/audit.ts - Audit log helper
 import { prisma } from './prisma';
-import { logEvent } from './observability/server-logger';
 import type { AuditParams } from "@app-types/lib/audit.types";
 
 
@@ -22,14 +21,14 @@ export async function createAuditLog(params: AuditParams) {
       },
     });
   } catch (err) {
-    // Never throw — audit failure must not break business flow, but a missing audit row must be traceable.
-    logEvent('error', 'audit_log.create_failed', {
+    console.error('audit.write_failed', {
+      operation: 'create',
       tenantId: params.tenantId,
-      projectId: params.projectId,
       entityType: params.entityType,
       entityId: params.entityId,
       action: params.action,
       error: err,
     });
+    // Never throw — audit failure must not break business flow
   }
 }

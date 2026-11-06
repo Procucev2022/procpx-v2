@@ -3,9 +3,7 @@
 // Procurement User: Approved PR Queue -> Sourcing & RFQ Creation
 
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -14,42 +12,59 @@ import PrDetailModal from '@/components/PrDetailModal';
 import {
   FileCheck,
   Search,
-  Building2,
-  Layers,
-  Calendar,
   IndianRupee,
-  ArrowRight,
-  ExternalLink,
-  Tag,
   CheckCircle2,
   RefreshCw,
   ShoppingBag,
-  ListChecks,
   Eye,
 } from 'lucide-react';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { ApprovedPrSummary } from '@app-types/app/api/procurement/approved-prs.types';
 
 
 export default function ApprovedPrsPage() {
-  const router = useRouter();
   const [prs, setPrs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedPr, setSelectedPr] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [totalEstimatedValue, setTotalEstimatedValue] = useState(0);
+  const [sourcingActiveCount, setSourcingActiveCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const requestVersionRef = useRef(0);
 
-  const fetchPrs = async () => {
-    setLoading(true);
+  const fetchPrs = async (options: { page?: number; append?: boolean; search?: string } = {}) => {
+    const requestedPage = options.page || 1;
+    const append = Boolean(options.append);
+    const requestVersion = append ? null : ++requestVersionRef.current;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch(`/api/procurement/approved-prs?search=${encodeURIComponent(search)}`);
+      const query = new URLSearchParams({ search: options.search ?? search, page: String(requestedPage), pageSize: '50' });
+      const res = await fetch(`/api/procurement/approved-prs?${query.toString()}`);
+      if (requestVersion !== null && requestVersion !== requestVersionRef.current) return;
       const data = await res.json();
-      const list = Array.isArray(data) ? data : (data?.data || []);
-      setPrs(list);
+      const list: ApprovedPrSummary[] = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      setPrs((current) => append ? [...current, ...list] : list);
+      setTotal(Number.isFinite(data?.total) ? data.total : list.length);
+      setTotalEstimatedValue(Number.isFinite(data?.totalEstimatedValue)
+        ? data.totalEstimatedValue
+        : list.reduce((sum, pr) => sum + (pr.totalEstimatedValue || 0), 0));
+      setSourcingActiveCount(Number.isFinite(data?.sourcingActiveCount)
+        ? data.sourcingActiveCount
+        : list.filter((pr) => (pr.rfqCount || 0) > 0).length);
+      setPage(requestedPage);
+      setHasMore(Boolean(data?.hasMore));
     } catch (err) {
+      if (requestVersion !== null && requestVersion !== requestVersionRef.current) return;
       console.error('Failed to load approved PRs', err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else if (requestVersion === requestVersionRef.current) setLoading(false);
     }
   };
 
@@ -57,9 +72,8 @@ export default function ApprovedPrsPage() {
     fetchPrs();
   }, [search]);
 
-  const totalValue = prs.reduce((acc, p) => acc + (p.totalEstimatedValue || 0), 0);
-  const sourcingActiveCount = prs.filter((p) => p.rfqs && p.rfqs.length > 0).length;
-  const readyToSourceCount = prs.length - sourcingActiveCount;
+  const totalValue = totalEstimatedValue;
+  const readyToSourceCount = Math.max(0, total - sourcingActiveCount);
 
   return (
     <div className="space-y-6">
@@ -72,7 +86,7 @@ export default function ApprovedPrsPage() {
         ]}
         actions={
           <button
-            onClick={fetchPrs}
+            onClick={() => void fetchPrs()}
             className="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
@@ -83,7 +97,7 @@ export default function ApprovedPrsPage() {
       <SummaryCardGrid columns={4}>
         <SummaryCard
           label={UI_STRINGS.appAppProcurementApprovedPrsPage.totalApprovedPRs}
-          value={prs.length}
+          value={total}
           secondary={UI_STRINGS.common.releasedToProcurement}
           icon={<FileCheck size={16} />}
           accent="default"
@@ -154,8 +168,9 @@ export default function ApprovedPrsPage() {
                 </tr>
               ) : (
                 prs.map((pr) => {
-                  const hasRfq = pr.rfqs && pr.rfqs.length > 0;
-                  const itemCount = pr.lines?.length || 0;
+                  const rfqCount = pr.rfqCount ?? pr.rfqs?.length ?? 0;
+                  const hasRfq = rfqCount > 0;
+                  const itemCount = pr.lineCount ?? pr.lines?.length ?? 0;
                   const costCentreCode = pr.costCentre?.code || '—';
 
                   return (
@@ -219,7 +234,7 @@ export default function ApprovedPrsPage() {
                       {/* 8. RFQ Count */}
                       <td className="py-3 px-4 text-center">
                         <span className={`badge ${hasRfq ? 'badge-info' : 'badge-draft'}`}>
-                          {pr.rfqs?.length || 0} {(pr.rfqs?.length || 0) === 1 ? UI_STRINGS.common.rFQ : UI_STRINGS.common.rFQs}
+                          {rfqCount} {rfqCount === 1 ? UI_STRINGS.common.rFQ : UI_STRINGS.common.rFQs}
                         </span>
                       </td>
 
@@ -245,6 +260,14 @@ export default function ApprovedPrsPage() {
           </table>
         </div>
       </Card>
+
+      {hasMore && !loading && (
+        <div className="flex justify-center">
+          <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => fetchPrs({ page: page + 1, append: true, search })}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
+        </div>
+      )}
 
       {/* Standardised Reusable PR Detail Modal */}
       {showDetailModal && selectedPr && (

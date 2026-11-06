@@ -11,7 +11,8 @@ jest.mock('next/link', () => {
   return { __esModule: true, default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => React.createElement('a', { href, ...props }, children) };
 });
 
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+let mockSearchParams = new URLSearchParams();
+jest.mock('next/navigation', () => ({ useSearchParams: () => mockSearchParams }));
 
 const originalFetch = global.fetch;
 const mockFetch = jest.fn();
@@ -68,7 +69,10 @@ function setupFetch() {
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
     if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
     if (url === '/api/budgets/reverse') return Promise.resolve(response(reverseResponse.body, reverseResponse.ok));
-    if (url.startsWith('/api/budgets')) return Promise.resolve(response({ transactions, costCentres }));
+    if (url.startsWith('/api/budgets/transactions')) return Promise.resolve(response({
+      transactions, costCentres, categories: ['Electrical', 'Civil', 'Mechanical', 'Safety', 'Other'],
+      pagination: { total: transactions.length, page: 1, pageSize: 50, totalPages: 1 },
+    }));
     return Promise.resolve(response({}));
   });
   global.fetch = mockFetch as typeof fetch;
@@ -77,6 +81,7 @@ function setupFetch() {
 describe('budget transaction ledger page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
     reverseResponse = { body: { success: true }, ok: true };
     setupFetch();
   });
@@ -130,9 +135,132 @@ describe('budget transaction ledger page', () => {
     fireEvent.change(search, { target: { value: '' } });
 
     fireEvent.change(selects[0], { target: { value: 'project-1' } });
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=project-1'));
+    await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/api/budgets/transactions?') && String(url).includes('projectId=project-1'))).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/budgets?projectId=project-1'));
+    await waitFor(() => expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('/api/budgets/transactions?') && String(url).includes('projectId=project-1')).length).toBeGreaterThan(1));
+  });
+
+  it('loads the next server page and appends rows without replacing the first page', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
+      if (url.startsWith('/api/budgets/transactions')) {
+        const page = Number(new URL(url, 'http://localhost').searchParams.get('page'));
+        return Promise.resolve(response({ transactions: page === 1 ? [transactions[0]] : [transactions[1]], costCentres,
+          categories: ['Electrical', 'Civil'], pagination: { total: 2, page, pageSize: 1, totalPages: 2 } }));
+      }
+      return Promise.resolve(response({}));
+    });
+    render(<BudgetTransactionsPage />);
+    expect(await screen.findByText('TX-100')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('TX-200')).toBeInTheDocument();
+    expect(screen.getByText('TX-100')).toBeInTheDocument();
+  });
+
+  it('loads more cost-centre filter options without reloading transaction rows', async () => {
+    const extraCostCentre = { id: 'cc-3', projectId: 'project-1', code: 'CC-03', name: 'Finishes' };
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
+      const params = new URL(url, 'http://localhost').searchParams;
+      if (params.get('onlyCostCentres') === 'true') {
+        return Promise.resolve(response({
+          costCentres: [extraCostCentre],
+          costCentrePagination: { total: 3, page: 2, pageSize: 2, hasMore: false },
+        }));
+      }
+      return Promise.resolve(response({
+        transactions: [transactions[0]], costCentres: costCentres.slice(0, 2), categories: ['Electrical'],
+        costCentrePagination: { total: 3, page: 1, pageSize: 2, hasMore: true },
+        pagination: { total: 1, page: 1, pageSize: 50, totalPages: 1 },
+      }));
+    });
+
+    render(<BudgetTransactionsPage />);
+    expect(await screen.findByText('TX-100')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) }));
+
+    expect(await screen.findByRole('option', { name: /CC-03/ })).toBeInTheDocument();
+    const optionRequest = mockFetch.mock.calls.find(([url]) => String(url).includes('onlyCostCentres=true'));
+    expect(optionRequest).toBeDefined();
+    expect(new URL(String(optionRequest?.[0]), 'http://localhost').searchParams.get('costCentrePage')).toBe('2');
+    expect(screen.getByText('TX-100')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) })).not.toBeInTheDocument();
+  });
+
+  it('recovers from a failed cost-centre page and accepts a response without pagination metadata', async () => {
+    let optionRequestCount = 0;
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
+      const params = new URL(url, 'http://localhost').searchParams;
+      if (params.get('onlyCostCentres') === 'true') {
+        optionRequestCount += 1;
+        return Promise.resolve(optionRequestCount === 1
+          ? response({ error: 'temporary failure' }, false)
+          : response({}));
+      }
+      return Promise.resolve(response({
+        transactions: [transactions[0]], costCentres: costCentres.slice(0, 2), categories: ['Electrical'],
+        costCentrePagination: { total: 3, page: 1, pageSize: 2, hasMore: true },
+        pagination: { total: 1, page: 1, pageSize: 50, totalPages: 1 },
+      }));
+    });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    render(<BudgetTransactionsPage />);
+    expect(await screen.findByText('TX-100')).toBeInTheDocument();
+    const loadMore = () => screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) });
+    fireEvent.click(loadMore());
+    await waitFor(() => expect(loadMore()).toBeEnabled());
+    expect(consoleError).toHaveBeenCalled();
+
+    fireEvent.click(loadMore());
+    await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) })).not.toBeInTheDocument());
+    expect(screen.getByText('TX-100')).toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+
+  it('ignores cost-centre options that arrive after a ledger refresh supersedes the request', async () => {
+    let resolveOptions!: (value: ReturnType<typeof response>) => void;
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
+      const params = new URL(url, 'http://localhost').searchParams;
+      if (params.get('onlyCostCentres') === 'true') {
+        return new Promise((resolve) => { resolveOptions = resolve; });
+      }
+      return Promise.resolve(response({
+        transactions: [transactions[0]], costCentres: costCentres.slice(0, 2), categories: ['Electrical'],
+        costCentrePagination: { total: 3, page: 1, pageSize: 2, hasMore: true },
+        pagination: { total: 1, page: 1, pageSize: 50, totalPages: 1 },
+      }));
+    });
+
+    render(<BudgetTransactionsPage />);
+    expect(await screen.findByText('TX-100')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
+    await waitFor(() => expect(mockFetch.mock.calls.filter(([url]) => String(url).startsWith('/api/budgets/transactions?')).length).toBeGreaterThan(1));
+    resolveOptions(response({
+      costCentres: [{ id: 'cc-late', projectId: 'project-1', code: 'CC-99', name: 'Stale option' }],
+      costCentrePagination: { total: 4, page: 2, pageSize: 2, hasMore: false },
+    }));
+    await waitFor(() => expect(screen.queryByRole('option', { name: /CC-99/ })).not.toBeInTheDocument());
+    expect(screen.getByText('TX-100')).toBeInTheDocument();
+  });
+
+  it('loads a valid project deep link and handles a rejected transaction request', async () => {
+    mockSearchParams = new URLSearchParams('projectId=project-1');
+    mockFetch.mockImplementation((url: string) => url === '/api/projects'
+      ? Promise.resolve(response({ data: projects }))
+      : Promise.reject(new Error('ledger unavailable')));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    render(<BudgetTransactionsPage />);
+
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound))).toBeInTheDocument();
+    expect(screen.getAllByRole('combobox')[0]).toHaveValue('project-1');
+    expect(mockFetch.mock.calls.some(([url]) => String(url).includes('projectId=project-1'))).toBe(true);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('validates, reports failures, cancels, and successfully reverses an approved transaction', async () => {
@@ -171,8 +299,8 @@ describe('budget transaction ledger page', () => {
   it('shows empty results when project and budget requests fail or return no transactions', async () => {
     mockFetch.mockImplementation((url: string) => url === '/api/projects'
       ? Promise.reject(new Error('projects unavailable'))
-      : url === '/api/budgets'
-        ? Promise.resolve(response({ transactions: [], costCentres: [] }))
+      : url.startsWith('/api/budgets/transactions')
+        ? Promise.resolve(response({ transactions: [], costCentres: [], categories: [], pagination: { total: 0, page: 1, pageSize: 50, totalPages: 0 } }))
         : Promise.resolve(response({})));
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     render(<BudgetTransactionsPage />);

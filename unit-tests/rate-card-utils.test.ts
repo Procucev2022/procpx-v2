@@ -1,5 +1,6 @@
 import {
   getRateCardStatusLabel,
+  parseStoredJsonObject,
   parseItemMeta,
   parseRateCardNegotiation,
   serializeItemMeta,
@@ -64,6 +65,18 @@ describe('item negotiation metadata', () => {
       exclusionReason: '',
     });
     expect(parseItemMeta({ rate: 5, rateCard: { status: 'DRAFT' } }).finalAgreedRate).toBeNull();
+  });
+});
+
+describe('stored JSON object parsing', () => {
+  it('distinguishes absent data, valid objects, malformed JSON, and non-object JSON', () => {
+    expect(parseStoredJsonObject(null)).toEqual({});
+    expect(parseStoredJsonObject(JSON.stringify({ agreement: { required: true } })))
+      .toEqual({ agreement: { required: true } });
+    expect(parseStoredJsonObject('{broken')).toBeNull();
+    expect(parseStoredJsonObject('[]')).toBeNull();
+    expect(parseStoredJsonObject('null')).toBeNull();
+    expect(parseStoredJsonObject(12)).toBeNull();
   });
 });
 

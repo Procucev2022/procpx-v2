@@ -178,6 +178,28 @@ describe('vendor portal auction detail page', () => {
     await waitFor(() => expect(mockError).toHaveBeenCalledWith({ title: UI_STRINGS.common.error, message: 'telemetry offline' }));
   });
 
+  it('loads older vendor bids and appends them to the polled history', async () => {
+    const olderBid = { id: 'bid-old', bidAmount: 19000, bidNumber: 0, timestamp: '2026-10-28T10:00:00Z', rank: 3 };
+    global.fetch = jest.fn().mockImplementation(async (url: string) => {
+      const isOlderPage = url.includes('beforeId=bid-1');
+      return ok({
+        auction: { ...reverseAuction, bids: isOlderPage ? [olderBid] : reverseAuction.bids.slice(0, 1) },
+        currentVendorParticipation: { termsAcceptedAt: '2026-10-28', bidCount: 4, lastBidAmount: 20000, bestRank: 1 },
+        bidHistory: isOlderPage
+          ? { total: 4, pageSize: 1, hasMore: false, nextCursor: null }
+          : { total: 4, pageSize: 1, hasMore: true, nextCursor: { beforeId: 'bid-1', beforeTimestamp: reverseAuction.bids[0].timestamp } },
+      });
+    });
+
+    renderRoom();
+    await flush();
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalAuctionsIdPage.loadOlderBids) }));
+
+    expect(await screen.findByText('INR 19,000')).toBeInTheDocument();
+    expect((global.fetch as jest.Mock).mock.calls.some(([url]) => String(url).includes('beforeId=bid-1'))).toBe(true);
+    expect(screen.getAllByText('INR 20,000').length).toBeGreaterThan(0);
+  });
+
   it('calculates forward bids, handles the default bid rejection message, and formats dates', async () => {
     const forward = {
       ...reverseAuction, auctionType: 'FORWARD_AUCTION', auctionCategory: 'TOTAL', currentLeadingBid: null,

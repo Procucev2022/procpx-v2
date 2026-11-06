@@ -1,18 +1,31 @@
-// Cloudflare Workers deployment for proCPX (Next.js via OpenNext)
-// Docs: https://opennext.js.org/cloudflare
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "procpx",
   "account_id": "13a0babc81814551cad074685a88e2f9",
-  "main": ".open-next/worker.js",
+  "main": "./custom-worker.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  "limits": {
+    "cpu_ms": 300000
+  },
+
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
   "observability": {
-    "enabled": true
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
   },
   "vars": {
     "UPLOAD_DIR": "r2"
@@ -22,13 +35,16 @@
       "binding": "DB",
       "database_name": "procpx-dev",
       "database_id": "12bf5e7f-4e82-43d2-9f85-52e861545367",
-      "migrations_dir": "migrations",
-      // Local `next dev` with DATABASE_PROVIDER=d1 talks to this real database.
-      "remote": true
+      "migrations_dir": "migrations"
     }
-  ]
-  // Uploads: enable R2 in the Cloudflare dashboard, run
-  //   npx wrangler r2 bucket create procpx-uploads
-  // then add this block:
-  // "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "procpx-uploads" }]
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "procpx-uploads"
+    }
+  ],
+  "triggers": {
+    "crons": ["* * * * *"]
+  }
 }

@@ -20,3 +20,18 @@ export interface ApiErrorDetails {
   error?: unknown;
   [key: string]: unknown;
 }
+export type AuthenticatedSessionUser = {
+  id: string;
+  tenantId: string;
+  tenantName?: string;
+  role: UserRole;
+  name?: string | null;
+  email?: string | null;
+  vendorId?: string | null;
+};
+
+export type ListPageWindow = {
+  page: number;
+  pageSize: number;
+  skip: number;
+};

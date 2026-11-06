@@ -1,88 +1,93 @@
 // src/lib/notifications.ts - Enterprise Workflow Notification & Communication Helper
-import { prisma } from './prisma';
-import { logEvent } from './observability/server-logger';
-import type { WorkflowNotificationParams } from "@app-types/lib/notifications.types";
+import type {
+  NotifyNextResponsiblePartyInput,
+  WorkflowNotificationParams,
+  WorkflowNotificationPreparationOptions,
+} from "@app-types/lib/notifications.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { getD1BatchDatabase } from './d1-batch';
+import { dispatchNotificationOutbox, enqueueNotificationOutbox } from './notification-outbox';
+import { writeStructuredLog } from './observability/server-logger';
 
 export type { WorkflowNotificationParams };
 
+export async function dispatchPreparedWorkflowNotification(
+  outboxId: string,
+  now = new Date(),
+  context: { tenantId?: string; entityType?: string; entityId?: string; route?: string } = {},
+): Promise<void> {
+  try {
+    await dispatchNotificationOutbox(getD1BatchDatabase(), { onlyId: outboxId, now, batchSize: 1 });
+  } catch (error) {
+    await writeStructuredLog('warn', 'workflow_notification.dispatch_deferred', {
+      operation: 'dispatch_notification_outbox', tenantId: context.tenantId,
+      entityType: context.entityType, entityId: context.entityId, outboxId,
+      route: context.route,
+      error: error instanceof Error ? { name: error.name } : { type: typeof error },
+    }, 'application');
+  }
+}
+
 
 export async function createWorkflowNotification(params: WorkflowNotificationParams) {
+  const createdAt = new Date();
+  const payload: WorkflowNotificationParams = {
+    tenantId: params.tenantId,
+    userId: params.userId || null,
+    targetRole: params.targetRole || null,
+    title: params.title,
+    message: params.message,
+    type: params.type || 'INFO',
+    entityType: params.entityType || undefined,
+    entityId: params.entityId || undefined,
+    recordNumber: params.recordNumber || undefined,
+    link: params.link || undefined,
+  };
   try {
-    return await prisma.notification.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId || null,
-        targetRole: params.targetRole || null,
-        title: params.title,
-        message: params.message,
-        type: params.type || 'INFO',
-        entityType: params.entityType || null,
-        entityId: params.entityId || null,
-        recordNumber: params.recordNumber || null,
-        link: params.link || null,
-      },
+    const id = await enqueueNotificationOutbox(payload, createdAt);
+    await dispatchPreparedWorkflowNotification(id, createdAt, {
+      tenantId: params.tenantId, entityType: params.entityType, entityId: params.entityId,
     });
-  } catch (err) {
-    // Notification creation failure should never crash the parent transaction
-    logEvent('error', 'notification.create_failed', {
+    return { id, ...payload, isRead: false, createdAt };
+  } catch (error) {
+    await writeStructuredLog('error', 'workflow_notification.enqueue_failed', {
+      operation: 'create',
       tenantId: params.tenantId,
       entityType: params.entityType,
       entityId: params.entityId,
       recordNumber: params.recordNumber,
-      error: err,
-    });
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    }, 'application');
+    // Notification creation failure should never crash the parent transaction
     return null;
   }
 }
 
+type CreatedWorkflowNotification = Awaited<ReturnType<typeof createWorkflowNotification>>;
+
+export function notifyNextResponsibleParty(
+  input: NotifyNextResponsiblePartyInput,
+  options: { prepareOnly: true },
+): Promise<WorkflowNotificationParams | undefined>;
+export function notifyNextResponsibleParty(
+  input: NotifyNextResponsiblePartyInput,
+  options?: { prepareOnly?: false },
+): Promise<CreatedWorkflowNotification | undefined>;
+
 /**
  * Notifies the next responsible actor/role in the procurement sequence
  */
-export async function notifyNextResponsibleParty({
-  tenantId,
-  event,
-  recordNumber,
-  entityId,
-  actorName,
-  details,
-}: {
-  tenantId: string;
-  event:
-    | 'PR_RELEASED'
-    | 'RFQ_RELEASED'
-    | 'QUOTE_SUBMITTED'
-    | 'COUNTER_OFFER_SENT'
-    | 'REVISED_QUOTE_RECEIVED'
-    | 'FINAL_RATES_LOCKED'
-    | 'AWARD_RECOMMENDED'
-    | 'AWARD_APPROVED'
-    | 'AWARD_REJECTED'
-    | 'PPO_CREATED'
-    | 'ENQUIRY_SENT'
-    | 'FINAL_OFFER_SUBMITTED'
-    | 'COMMERCIAL_AWARD_APPROVED'
-    | 'NEGOTIATION_CLOSED'
-    | 'PPO_ACCEPTED_BY_VENDOR'
-    | 'PPO_ISSUE_RAISED';
-  recordNumber: string;
-  entityId: string;
-  actorName?: string;
-  details?: {
-    vendorName?: string;
-    amount?: number;
-    roundNumber?: number;
-    link?: string;
-    isFinalOffer?: boolean;
-    decision?: string;
-    acceptedAt?: Date;
-    issueRemarks?: string;
-  };
-}) {
+export async function notifyNextResponsibleParty(
+  { tenantId, event, recordNumber, entityId, actorName, details }: NotifyNextResponsiblePartyInput,
+  options: WorkflowNotificationPreparationOptions = {},
+): Promise<WorkflowNotificationParams | CreatedWorkflowNotification | undefined> {
+  const notificationWriter = options.prepareOnly
+    ? async (params: WorkflowNotificationParams) => params
+    : createWorkflowNotification;
   switch (event) {
     case 'PR_RELEASED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.pRRecordNumberReadyForSourcing, { "recordNumber": recordNumber }),
@@ -95,7 +100,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'RFQ_RELEASED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.rFQRecordNumberReleasedToVendors, { "recordNumber": recordNumber }),
@@ -108,7 +113,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'QUOTE_SUBMITTED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.newQuotationForRecordNumber, { "recordNumber": recordNumber }),
@@ -121,7 +126,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'COUNTER_OFFER_SENT':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.counterOfferDispatchedRecordNumber, { "recordNumber": recordNumber }),
@@ -134,7 +139,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'REVISED_QUOTE_RECEIVED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.revisedQuoteReceivedRecordNumber, { "recordNumber": recordNumber }),
@@ -147,7 +152,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'FINAL_RATES_LOCKED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.commercialRatesLockedRecordNumber, { "recordNumber": recordNumber }),
@@ -160,7 +165,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'AWARD_RECOMMENDED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'FINANCE_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.awardSignOffRequiredRecordNumber, { "recordNumber": recordNumber }),
@@ -173,7 +178,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'AWARD_APPROVED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.awardApprovedForRecordNumber, { "recordNumber": recordNumber }),
@@ -186,7 +191,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'AWARD_REJECTED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.awardReturnedRecordNumber, { "recordNumber": recordNumber }),
@@ -199,7 +204,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'PPO_CREATED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'FINANCE_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.pPORecordNumberGenerated, { "recordNumber": recordNumber }),
@@ -212,7 +217,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'ENQUIRY_SENT':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         title: interpolateUiString(UI_STRINGS.libNotifications.clarificationEnquiryOnRecordNumber, { "recordNumber": recordNumber }),
         message: interpolateUiString(UI_STRINGS.libNotifications.value1SentAMessageEnquiryOnRecordNumber, { "value1": actorName || UI_STRINGS.common.user, "recordNumber": recordNumber }),
@@ -224,7 +229,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'FINAL_OFFER_SUBMITTED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.bindingFinalOfferOnRecordNumber, { "recordNumber": recordNumber }),
@@ -237,7 +242,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'COMMERCIAL_AWARD_APPROVED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.offerAcceptedForRecordNumber, { "recordNumber": recordNumber }),
@@ -250,7 +255,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'NEGOTIATION_CLOSED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.negotiationConcludedForRecordNumber, { "recordNumber": recordNumber }),
@@ -263,7 +268,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'PPO_ACCEPTED_BY_VENDOR':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.pPORecordNumberAcceptedByVendor, { "recordNumber": recordNumber }),
@@ -276,7 +281,7 @@ export async function notifyNextResponsibleParty({
       });
 
     case 'PPO_ISSUE_RAISED':
-      return createWorkflowNotification({
+      return notificationWriter({
         tenantId,
         targetRole: 'PROCUREMENT_USER',
         title: interpolateUiString(UI_STRINGS.libNotifications.issueRaisedOnPPORecordNumber, { "recordNumber": recordNumber }),

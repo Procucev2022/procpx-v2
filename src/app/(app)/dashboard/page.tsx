@@ -39,6 +39,7 @@ import PrDetailModal from '@/components/PrDetailModal';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { DashboardRegisterRfqLinkItem } from "@app-types/app/(app)/dashboard/page.types";
 
 
 function StatusBadge({ status }: { status: string }) {
@@ -56,6 +57,16 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${cls[status] || 'badge-draft'}`}>{status?.replace(/_/g, ' ')}</span>;
 }
 
+function getRegisterRfqHref(item: DashboardRegisterRfqLinkItem) {
+  if (typeof item.createRfqUrl === 'string' && item.createRfqUrl) return item.createRfqUrl;
+  const params = new URLSearchParams();
+  const revisionId = item.boqRevisionId || item.revisionId || item.id;
+  const projectId = item.projectId || item.project?.id;
+  if (revisionId) params.set('revisionId', revisionId);
+  if (projectId) params.set('projectId', projectId);
+  return `/procurement/rfqs/new${params.size ? `?${params.toString()}` : ''}`;
+}
+
 export default function DashboardPage() {
   const toast = useToast();
   const [data, setData] = useState<any>(null);
@@ -65,6 +76,7 @@ export default function DashboardPage() {
   const [activeCardFilter, setActiveCardFilter] = useState<string | null>(null);
   const [expandedPrs, setExpandedPrs] = useState<Record<string, boolean>>({});
   const [showCategoryGovernance, setShowCategoryGovernance] = useState(false);
+  const [loadingMoreTenants, setLoadingMoreTenants] = useState(false);
 
   // PROJECT_APPROVER actions state
   const [approverSelectedPr, setApproverSelectedPr] = useState<any | null>(null);
@@ -121,6 +133,27 @@ export default function DashboardPage() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreTenants = async () => {
+    const nextPage = Number(data.tenantListPage) + 1;
+    setLoadingMoreTenants(true);
+    try {
+      const res = await fetch(`/api/dashboard?page=${nextPage}&pageSize=${data.tenantListPageSize}`);
+      const nextData = await res.json();
+      if (!res.ok || !Array.isArray(nextData.tenantList)) {
+        throw new Error(UI_STRINGS.common.userMessages.failedToFetchDashboardData);
+      }
+      setData({
+        ...data,
+        ...nextData,
+        tenantList: [...data.tenantList, ...nextData.tenantList],
+      });
+    } catch {
+      toast.error({ title: UI_STRINGS.common.error, message: UI_STRINGS.common.userMessages.failedToFetchDashboardData });
+    } finally {
+      setLoadingMoreTenants(false);
     }
   };
 
@@ -288,6 +321,13 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+          {(data.tenantListPage || 1) < (data.tenantListTotalPages || 1) && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+              <button type="button" className="btn btn-secondary" onClick={loadMoreTenants} disabled={loadingMoreTenants}>
+                {loadingMoreTenants ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Platform Audit Logs */}
@@ -958,7 +998,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Link
-              href="/procurement/rfqs/RFQ-DEMO-001"
+              href="/procurement/rfqs/RFQ-DEMO-001?demo=true"
               className="btn btn-sm btn-secondary"
               style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
             >
@@ -1166,6 +1206,16 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {data.registerHasMore && (
+            <div className="alert alert-info" style={{ margin: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span>{interpolateUiString(UI_STRINGS.appAppDashboardPage.dashboardRegisterPreviewNotice, { limit: data.registerPreviewLimit })}</span>
+              <span style={{ display: 'flex', gap: 8 }}>
+                <Link className="btn btn-sm btn-secondary" href="/procurement/approved-boqs">{UI_STRINGS.common.approvedBOQs}</Link>
+                <Link className="btn btn-sm btn-secondary" href="/procurement/approved-prs">{UI_STRINGS.appAppProcurementApprovedPrsPage.approvedPRs}</Link>
+              </span>
+            </div>
+          )}
+
           {filteredRegister.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">
@@ -1210,11 +1260,14 @@ export default function DashboardPage() {
                     const isExpanded = !!expandedPrs[item.id];
                     const rfqCount = item.rfqs?.length || 0;
                     const stage = item.sourcingStage || item.currentStage || 'Awaiting RFQ';
-                    const itemCount = item.itemCount || item.lines?.length || item.totalLines || 1;
+                    const itemCount = item.itemCount ?? item.totalLines ?? item.lines?.length ?? 0;
                     const costCentreCode = item.costCentreCode || (item.costCentre ? item.costCentre.split(' - ')[0] : '—');
                     const boqDisplayCode = item.boqCode || item.boqNumber || item.code || '—';
                     const dateFormatted = formatBoqDate(item.date || item.createdAt || item.updatedAt);
-                    const amountFormatted = (item.requestedValue || item.benchmarkTotal || 0).toLocaleString(I18N_CONFIG.defaultLocale);
+                    const registerAmount = item.requestedValue ?? item.benchmarkTotal;
+                    const amountFormatted = registerAmount === null || registerAmount === undefined
+                      ? UI_STRINGS.common.notAvailable
+                      : Number(registerAmount).toLocaleString(I18N_CONFIG.defaultLocale);
 
                     return (
                       <Fragment key={item.id}>
@@ -1309,7 +1362,11 @@ export default function DashboardPage() {
 
                           {/* 6. BOQ Amount */}
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                            <span className="font-mono">{UI_STRINGS.common.copytfdhmk}{amountFormatted}</span>
+                            <span className="font-mono">
+                              {registerAmount === null || registerAmount === undefined
+                                ? amountFormatted
+                                : <>{UI_STRINGS.common.copytfdhmk}{amountFormatted}</>}
+                            </span>
                           </td>
 
                           {/* 7. Procurement Stage */}
@@ -1585,6 +1642,7 @@ export default function DashboardPage() {
           <div className="card-header">
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Briefcase size={18} />{UI_STRINGS.appAppDashboardPage.projectFinancialCostCentreMaster}</span>
+            <Link href="/projects" className="btn btn-sm btn-secondary">{UI_STRINGS.common.allProjects}</Link>
           </div>
           <div className="table-wrapper">
             <table className="data-table">
@@ -1635,65 +1693,7 @@ export default function DashboardPage() {
       awardsPpoPending: data.awardsPendingCount || 0,
     };
 
-    const demoPrRecord = {
-      id: 'PR-DEMO-001',
-      prId: 'PR-DEMO-001',
-      boqId: 'BOQ-KND-001',
-      boqCode: 'BOQ-KND-001',
-      prNumber: 'PR-DEMO-001',
-      title: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
-      description: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
-      projectName: 'Kundanahalli Retail Project',
-      projectCode: 'KND-RET-01',
-      costCentre: 'CC45 - Civil & Interior Fitout',
-      costCentreCode: 'CC45',
-      category: 'Civil & Interior',
-      benchmarkValue: 1133150,
-      requestedValue: 1133150,
-      approvedRevision: 'R1 (APPROVED)',
-      revisionCode: 'R1',
-      sourcingStage: 'Negotiation',
-      currentStage: 'Negotiation',
-      overallStage: 'Negotiation',
-      rfqCount: 1,
-      canCreateRfq: false,
-      hasRateCardMatch: true,
-      isExample: true,
-      lastUpdated: new Date().toISOString(),
-      rfqs: [
-        {
-          id: 'RFQ-DEMO-001',
-          rfqNumber: 'RFQ-DEMO-001',
-          title: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
-          description: UI_STRINGS.appAppDashboardPage.civilFinishingInteriorFitoutPackage8Items,
-          packageName: 'Kundanahalli Retail Store — CC45 Fitout',
-          status: 'NEGOTIATION',
-          stage: 'Negotiation',
-          vendorInvitationProgress: '3 submitted / 3 invited',
-          invitedCount: 3,
-          quotesCount: 3,
-          quoteStatus: '3 Quotes Recorded',
-          comparisonStatus: 'L1: Acme Infra Solutions (₹8,80,000)',
-          quotationStage: '3 Quotes Recorded',
-          negotiationRound: 'Round 1 (Revised ₹8,50,000)',
-          negotiationStage: 'Round 1 (Revised ₹8,50,000)',
-          pendingAction: 'Commercial Negotiation Active',
-          nextResponsibleParty: 'BUYER',
-          awardStatus: 'Pending Approval',
-          ppoStatus: 'Ready for PPO',
-          orderStatus: 'PENDING_AWARD',
-          estimatedBenchmarkValue: 1133150,
-          lastUpdated: new Date().toISOString(),
-          openUrl: '/procurement/rfqs/RFQ-DEMO-001',
-          negotiationUrl: '/procurement/rfqs/RFQ-DEMO-001?tab=negotiation',
-          awardingUrl: '/procurement/rfqs/RFQ-DEMO-001?tab=awarding',
-          ppoUrl: '/procurement/rfqs/RFQ-DEMO-001?tab=awarding',
-          isExample: true,
-        },
-      ],
-    };
-
-    const register: any[] = [demoPrRecord, ...(data.boqRegister || data.prRegister || data.consolidatedRegister || [])];
+    const register: any[] = data.boqRegister || data.prRegister || data.consolidatedRegister || [];
     const searchLower = (searchTerm || '').toLowerCase();
 
     // Filter logic supporting text search, stage select, and clickable card filter
@@ -2068,6 +2068,16 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {data.registerHasMore && (
+            <div className="alert alert-info" style={{ margin: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span>{interpolateUiString(UI_STRINGS.appAppDashboardPage.dashboardRegisterPreviewNotice, { limit: data.registerPreviewLimit })}</span>
+              <span style={{ display: 'flex', gap: 8 }}>
+                <Link className="btn btn-sm btn-secondary" href="/procurement/approved-boqs">{UI_STRINGS.common.approvedBOQs}</Link>
+                <Link className="btn btn-sm btn-secondary" href="/procurement/approved-prs">{UI_STRINGS.appAppProcurementApprovedPrsPage.approvedPRs}</Link>
+              </span>
+            </div>
+          )}
+
           {filteredRegister.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">
@@ -2100,9 +2110,10 @@ export default function DashboardPage() {
                   {filteredRegister.map((item: any) => {
                     const isExpanded = !!expandedPrs[item.id];
                     const rfqCount = item.rfqs?.length || 0;
-                    const stage = item.sourcingStage || item.currentStage || item.overallStage;
-                    const itemCount = item.itemCount || item.totalLines || item.lines?.length || (item.isExample ? 8 : 1);
-                    const costCentreCode = item.costCentreCode || (item.costCentre ? item.costCentre.split(' - ')[0] : '—');
+                    const stage = item.sourcingStage || item.currentStage || item.overallStage || UI_STRINGS.common.notAvailable;
+                    const itemCount = item.itemCount ?? item.totalLines ?? item.lines?.length ?? 0;
+                    const costCentreCode = item.costCentreCode || (item.costCentre ? item.costCentre.split(' - ')[0] : UI_STRINGS.common.notAvailable);
+                    const registerAmount = item.benchmarkValue ?? item.requestedValue;
 
                     return (
                       <Fragment key={item.id}>
@@ -2128,25 +2139,7 @@ export default function DashboardPage() {
                                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                 </button>
                               )}
-                              <span
-                                style={{ cursor: 'pointer', textDecoration: 'none' }}
-                                onClick={() => handleOpenPrDetails(item)}
-                                title={UI_STRINGS.common.clickToViewDetails}
-                              >
-                                {item.prNumber || item.boqCode}
-                              </span>
-                              {item.isExample && (
-                                <span
-                                  className="badge"
-                                  style={{
-                                    fontSize: 9,
-                                    padding: '1px 4px',
-                                    background: '#dcfce7',
-                                    color: '#15803d',
-                                    fontWeight: 700,
-                                  }}
-                                >{UI_STRINGS.appAppDashboardPage.sAMPLE}</span>
-                              )}
+                              <span>{item.prNumber || item.boqCode || UI_STRINGS.common.notAvailable}</span>
                             </div>
                           </td>
 
@@ -2160,9 +2153,9 @@ export default function DashboardPage() {
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                               }}
-                              title={interpolateUiString(UI_STRINGS.common.value1, { "value1": item.title || item.description })}
+                              title={interpolateUiString(UI_STRINGS.common.value1, { "value1": item.title || item.description || UI_STRINGS.common.notAvailable })}
                             >
-                              {item.title || item.description}
+                              {item.title || item.description || UI_STRINGS.common.notAvailable}
                             </div>
                           </td>
 
@@ -2191,12 +2184,15 @@ export default function DashboardPage() {
                           </td>
 
                           {/* 5. PR Amount */}
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.common.copy1g8b5tg}{(item.benchmarkValue || item.requestedValue || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                            {registerAmount === null || registerAmount === undefined
+                              ? UI_STRINGS.common.notAvailable
+                              : <>{UI_STRINGS.common.copy1g8b5tg}{Number(registerAmount).toLocaleString(I18N_CONFIG.defaultLocale)}</>}
                           </td>
 
                           {/* 6. Approval Status */}
                           <td>
-                            <StatusBadge status={item.prApprovalStatus || 'APPROVED'} />
+                            <StatusBadge status={item.prApprovalStatus || UI_STRINGS.common.notAvailable} />
                           </td>
 
                           {/* 7. Procurement Stage */}
@@ -2256,7 +2252,7 @@ export default function DashboardPage() {
                                     </span>
                                   </div>
                                   <Link
-                                    href={item.createRfqUrl || `/procurement/rfqs/new?revisionId=${item.id}&projectId=${item.projectId}`}
+                                    href={getRegisterRfqHref(item)}
                                     className="btn btn-sm btn-primary"
                                     style={{ fontSize: 11, padding: '4px 10px', fontWeight: 600 }}
                                   >
@@ -2276,7 +2272,7 @@ export default function DashboardPage() {
                                     <p style={{ margin: 0, fontSize: 13, color: '#475569', fontWeight: 600 }}>{UI_STRINGS.appAppDashboardPage.noRFQPackagesCreatedForThisCommercialBaselineYet}</p>
                                     <p style={{ margin: '4px 0 12px', fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppDashboardPage.approvedBOQLineItemsAndBenchmarkRatesAreLockedAndReadyForPackagingAndVendorQuotationDispatch}</p>
                                     <Link
-                                      href={item.createRfqUrl || `/procurement/rfqs/new?revisionId=${item.id}&projectId=${item.projectId}`}
+                                      href={getRegisterRfqHref(item)}
                                       className="btn btn-sm btn-primary"
                                       style={{ fontWeight: 700, fontSize: 12 }}
                                     >{UI_STRINGS.appAppDashboardPage.createFirstRFQPackage}</Link>
@@ -2451,7 +2447,7 @@ export default function DashboardPage() {
           >
             <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Folder size={18} color="#2563eb" />{UI_STRINGS.appAppDashboardPage.categoryMastersSpecificationQualityHealth}<span className="badge badge-draft" style={{ fontSize: 11, marginLeft: 8 }}>
-                {data.categoryCount ?? 0}{UI_STRINGS.appAppDashboardPage.taxonomyTrees}{data.revisionsWithExceptions?.length ?? 0}{UI_STRINGS.appAppDashboardPage.exceptions}</span>
+                {data.categoryCount ?? 0}{UI_STRINGS.appAppDashboardPage.taxonomyTrees}{data.exceptionTotalCount ?? data.revisionsWithExceptions?.length ?? 0}{UI_STRINGS.appAppDashboardPage.exceptions}</span>
             </span>
             <button
               type="button"
@@ -2464,6 +2460,11 @@ export default function DashboardPage() {
 
           {showCategoryGovernance && (
             <div className="card-body" style={{ borderTop: '1px solid #e2e8f0', background: '#fafafa' }}>
+              {data.taxonomyHasMore && (
+                <div className="alert alert-info" style={{ marginBottom: 12 }}>
+                  {UI_STRINGS.appAppDashboardPage.categoryTaxonomyPreviewNotice}
+                </div>
+              )}
               {/* Category taxonomy cards */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -2624,6 +2625,12 @@ export default function DashboardPage() {
 
         <div className="card">
           <div className="card-header"><span className="card-title">{UI_STRINGS.appAppDashboardPage.permittedProjects}{data.totalProjects ?? 0}{UI_STRINGS.common.copyc7zu6c}</span></div>
+          {data.projectsHasMore && (
+            <div className="alert alert-info" role="status">
+              {interpolateUiString(UI_STRINGS.appAppDashboardPage.dashboardViewerProjectPreviewNotice, { "limit": data.projectPreviewLimit ?? 50 })}{' '}
+              <Link href="/projects">{UI_STRINGS.common.allProjects}</Link>
+            </div>
+          )}
           <div className="table-wrapper">
             <table className="data-table">
               <thead>

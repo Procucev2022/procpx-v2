@@ -1,9 +1,10 @@
 // app/api/admin/users/route.ts
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiError, apiSuccess, getListPageWindow } from '@/lib/api-utils';
 import { hashPassword } from '@/lib/password';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function GET(req: NextRequest) {
@@ -11,27 +12,37 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   const { searchParams } = new URL(req.url);
-  const page = parseInt(searchParams.get('page') || '1');
-  const pageSize = parseInt(searchParams.get('pageSize') || '20');
-  const search = searchParams.get('search') || '';
+  const { page, pageSize, skip } = getListPageWindow(searchParams);
+  const search = (searchParams.get('search') || '').trim().slice(0, 200);
 
   const where: any = { tenantId: ctx.tenantId };
   if (search) {
     where.OR = [{ name: { contains: search } }, { email: { contains: search } }];
   }
 
-  const [total, users] = await Promise.all([
-    prisma.user.count({ where }),
-    prisma.user.findMany({
-      where,
-      select: { id: true, email: true, name: true, role: true, status: true, lastLoginAt: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
+  const startedAt = Date.now();
+  try {
+    const [total, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        select: { id: true, email: true, name: true, role: true, status: true, lastLoginAt: true, createdAt: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: pageSize,
+      }),
+    ]);
 
-  return apiSuccess({ data: users, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+    return apiSuccess({ data: users, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'admin.user_list_read_failed', {
+      operation: 'list_users', route: '/api/admin/users',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      page, pageSize, searchLength: search.length, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.appApiAdminUsersRoute.failedToFetchUsers, 500);
+  }
 }
 
 export async function POST(req: NextRequest) {

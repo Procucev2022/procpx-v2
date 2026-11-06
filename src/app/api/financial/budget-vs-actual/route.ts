@@ -2,10 +2,93 @@
 // Comprehensive Budget vs Commitment vs Actual Cost Analysis Engine
 
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import type { BudgetVsActualLineSource, BudgetVsActualSummaryGroup } from '@app-types/app/api/financial/budget-vs-actual/route.types';
+
+function loadBudgetVsActualSummaryGroups(input: {
+  tenantId: string;
+  projectId: string;
+  costCentreId: string | null;
+  categoryFilter: string | null;
+}) {
+  const lineCostCentreFilter = input.costCentreId
+    ? Prisma.sql`AND revision."costCentreId" = ${input.costCentreId}`
+    : Prisma.empty;
+  const transactionCostCentreFilter = input.costCentreId
+    ? Prisma.sql`AND "costCentreId" = ${input.costCentreId}`
+    : Prisma.empty;
+  const lineCategoryFilter = input.categoryFilter === UI_STRINGS.common.general
+    ? Prisma.sql`AND (line."categoryId" IS NULL OR category."name" = ${input.categoryFilter})`
+    : input.categoryFilter
+      ? Prisma.sql`AND category."name" = ${input.categoryFilter}`
+      : Prisma.empty;
+  const transactionCategoryFilter = input.categoryFilter
+    ? Prisma.sql`AND "category" = ${input.categoryFilter}`
+    : Prisma.empty;
+
+  return prisma.$queryRaw<BudgetVsActualSummaryGroup[]>(Prisma.sql`
+    WITH line_summary AS (
+      SELECT line."id" AS "boqLineId", line."aiTotalCost" AS "aiTotalCost",
+        revision."costCentreId" AS "costCentreId",
+        COALESCE(category."name", 'General') AS "category"
+      FROM "boq_lines" AS line
+      INNER JOIN "boq_revisions" AS revision
+        ON revision."id" = line."boqRevisionId" AND revision."tenantId" = line."tenantId"
+      INNER JOIN "boqs" AS boq
+        ON boq."id" = revision."boqId" AND boq."tenantId" = revision."tenantId"
+      LEFT JOIN "categories" AS category
+        ON category."id" = line."categoryId" AND category."tenantId" = line."tenantId"
+      WHERE line."tenantId" = ${input.tenantId}
+        AND line."isDeleted" = 0
+        AND boq."projectId" = ${input.projectId}
+        ${lineCostCentreFilter}
+        ${lineCategoryFilter}
+    ),
+    budget_by_line AS (
+      SELECT "boqLineId", SUM("amount") AS "amount"
+      FROM "budget_transactions"
+      WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
+        AND "status" IN ('APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED')
+        AND "boqLineId" IS NOT NULL
+        ${transactionCostCentreFilter}
+        ${transactionCategoryFilter}
+      GROUP BY "boqLineId"
+    ),
+    commitment_by_line AS (
+      SELECT "boqLineId", SUM("orderedAmount") AS "amount"
+      FROM "ppo_lines"
+      WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
+        AND "status" != 'CANCELLED' AND "boqLineId" IS NOT NULL
+        ${transactionCostCentreFilter}
+        ${transactionCategoryFilter}
+      GROUP BY "boqLineId"
+    ),
+    actual_by_line AS (
+      SELECT "boqLineId", SUM("actualAmount") AS "amount"
+      FROM "actual_cost_transactions"
+      WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
+        AND "status" IN ('APPROVED', 'VERIFIED') AND "boqLineId" IS NOT NULL
+        ${transactionCostCentreFilter}
+        ${transactionCategoryFilter}
+      GROUP BY "boqLineId"
+    )
+    SELECT line_summary."costCentreId" AS "costCentreId",
+      line_summary."category" AS "category",
+      SUM(COALESCE(NULLIF(budget_by_line."amount", 0), line_summary."aiTotalCost", 0)) AS "budgetAmount",
+      SUM(COALESCE(commitment_by_line."amount", 0)) AS "committedAmount",
+      SUM(COALESCE(actual_by_line."amount", 0)) AS "actualAmount"
+    FROM line_summary
+    LEFT JOIN budget_by_line ON budget_by_line."boqLineId" = line_summary."boqLineId"
+    LEFT JOIN commitment_by_line ON commitment_by_line."boqLineId" = line_summary."boqLineId"
+    LEFT JOIN actual_by_line ON actual_by_line."boqLineId" = line_summary."boqLineId"
+    GROUP BY line_summary."costCentreId", line_summary."category"
+    ORDER BY line_summary."category" ASC, line_summary."costCentreId" ASC
+  `);
+}
 
 
 export async function GET(req: NextRequest) {
@@ -15,7 +98,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get('projectId');
   const costCentreId = searchParams.get('costCentreId');
-  const categoryFilter = searchParams.get('category');
+  const categoryFilter = searchParams.get('category')?.trim() || null;
+  const pageWindow = getListPageWindow(searchParams);
+  const startedAt = Date.now();
 
   if (!projectId) {
     return apiError(UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, 400, { route: '/api/financial/budget-vs-actual', method: 'GET' });
@@ -24,8 +109,14 @@ export async function GET(req: NextRequest) {
   try {
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId: ctx.tenantId },
-      include: {
-        costCentres: true,
+      select: {
+        id: true,
+        projectCode: true,
+        name: true,
+        costCentres: {
+          select: { id: true, code: true, name: true, areaSqFt: true },
+          orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        },
       },
     });
 
@@ -33,7 +124,9 @@ export async function GET(req: NextRequest) {
       return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/financial/budget-vs-actual', method: 'GET' });
     }
 
-    // 1. Fetch all Budget Transactions for this project
+    // Detail aggregates only need to cover the requested line page. Project-wide
+    // totals are calculated in SQL below so D1 does not return one aggregate row
+    // per BOQ line to the Worker for every report page.
     const budgetTxWhere: any = {
       tenantId: ctx.tenantId,
       projectId,
@@ -42,14 +135,7 @@ export async function GET(req: NextRequest) {
     if (costCentreId) budgetTxWhere.costCentreId = costCentreId;
     if (categoryFilter) budgetTxWhere.category = categoryFilter;
 
-    const budgetTransactions = await prisma.budgetTransaction.findMany({
-      where: budgetTxWhere,
-      include: {
-        costCentre: { select: { id: true, code: true, name: true, areaSqFt: true } },
-      },
-    });
-
-    // 2. Fetch all PPO Lines (Committed) for this project
+    // 2. Committed PPO-line filters
     const ppoLineWhere: any = {
       tenantId: ctx.tenantId,
       projectId,
@@ -58,14 +144,7 @@ export async function GET(req: NextRequest) {
     if (costCentreId) ppoLineWhere.costCentreId = costCentreId;
     if (categoryFilter) ppoLineWhere.category = categoryFilter;
 
-    const ppoLines = await prisma.ppoLine.findMany({
-      where: ppoLineWhere,
-      include: {
-        ppo: { select: { id: true, ppoNumber: true, title: true, vendor: { select: { id: true, name: true } } } },
-      },
-    });
-
-    // 3. Fetch all Actual Cost Transactions for this project
+    // 3. Actual-cost filters
     const actualTxWhere: any = {
       tenantId: ctx.tenantId,
       projectId,
@@ -74,15 +153,7 @@ export async function GET(req: NextRequest) {
     if (costCentreId) actualTxWhere.costCentreId = costCentreId;
     if (categoryFilter) actualTxWhere.category = categoryFilter;
 
-    const actualTransactions = await prisma.actualCostTransaction.findMany({
-      where: actualTxWhere,
-      include: {
-        vendor: { select: { id: true, name: true } },
-        ppo: { select: { id: true, ppoNumber: true } },
-      },
-    });
-
-    // 4. Fetch all BOQ Lines for this project
+    // 4. BOQ line filters and the bounded line-detail page
     const boqLineWhere: any = {
       tenantId: ctx.tenantId,
       isDeleted: false,
@@ -96,9 +167,20 @@ export async function GET(req: NextRequest) {
         costCentreId,
       };
     }
+    if (categoryFilter === UI_STRINGS.common.general) {
+      boqLineWhere.OR = [
+        { categoryId: null },
+        { category: { is: { name: categoryFilter } } },
+      ];
+    } else if (categoryFilter) {
+      boqLineWhere.category = { is: { name: categoryFilter } };
+    }
 
-    const boqLines = await prisma.boqLine.findMany({
+    const pageLines = await prisma.boqLine.findMany({
       where: boqLineWhere,
+      orderBy: [{ boqRevisionId: 'asc' }, { lineNumber: 'asc' }, { id: 'asc' }],
+      skip: pageWindow.skip,
+      take: pageWindow.pageSize,
       include: {
         revision: {
           include: {
@@ -110,54 +192,85 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // 5. Line-Level Matrix
-    // Group all commitments and actuals by boqLineId
-    const committedByBoqLine = new Map<string, typeof ppoLines>();
-    for (const pl of ppoLines) {
-      if (pl.boqLineId) {
-        const arr = committedByBoqLine.get(pl.boqLineId) || [];
-        arr.push(pl);
-        committedByBoqLine.set(pl.boqLineId, arr);
-      }
+    const pageLineIds = pageLines.map((line) => line.id);
+    const lineCountPromise = prisma.boqLine.count({ where: boqLineWhere });
+    const summaryRowsPromise = loadBudgetVsActualSummaryGroups({
+      tenantId: ctx.tenantId,
+      projectId,
+      costCentreId,
+      categoryFilter,
+    });
+    const [totalLineCount, summaryRows, budgetGroups, commitmentGroups, actualGroups] = pageLineIds.length > 0
+      ? await Promise.all([
+        lineCountPromise,
+        summaryRowsPromise,
+        prisma.budgetTransaction.groupBy({
+          by: ['boqLineId'],
+          where: { ...budgetTxWhere, boqLineId: { in: pageLineIds } },
+          _sum: { amount: true, quantity: true },
+          _count: { _all: true },
+        }),
+        prisma.ppoLine.groupBy({
+          by: ['boqLineId'],
+          where: { ...ppoLineWhere, boqLineId: { in: pageLineIds } },
+          _sum: { orderedQuantity: true, orderedAmount: true },
+          _count: { _all: true },
+        }),
+        prisma.actualCostTransaction.groupBy({
+          by: ['boqLineId'],
+          where: { ...actualTxWhere, boqLineId: { in: pageLineIds } },
+          _sum: { actualQuantity: true, actualAmount: true },
+          _count: { _all: true },
+        }),
+      ])
+      : [await lineCountPromise, await summaryRowsPromise, [], [], []];
+
+    // 5. Aggregate-backed line matrix
+    const budgetByBoqLine = new Map<string, { amount: number; quantity: number; count: number }>();
+    for (const group of budgetGroups) {
+      if (group.boqLineId) budgetByBoqLine.set(group.boqLineId, {
+        amount: group._sum.amount || 0,
+        quantity: group._sum.quantity || 0,
+        count: group._count._all,
+      });
     }
 
-    const actualsByBoqLine = new Map<string, typeof actualTransactions>();
-    for (const at of actualTransactions) {
-      if (at.boqLineId) {
-        const arr = actualsByBoqLine.get(at.boqLineId) || [];
-        arr.push(at);
-        actualsByBoqLine.set(at.boqLineId, arr);
-      }
+    const committedByBoqLine = new Map<string, { amount: number; quantity: number; count: number }>();
+    for (const group of commitmentGroups) {
+      if (group.boqLineId) committedByBoqLine.set(group.boqLineId, {
+        amount: group._sum.orderedAmount || 0,
+        quantity: group._sum.orderedQuantity || 0,
+        count: group._count._all,
+      });
     }
 
-    const budgetByBoqLine = new Map<string, typeof budgetTransactions>();
-    for (const bt of budgetTransactions) {
-      if (bt.boqLineId) {
-        const arr = budgetByBoqLine.get(bt.boqLineId) || [];
-        arr.push(bt);
-        budgetByBoqLine.set(bt.boqLineId, arr);
-      }
+    const actualsByBoqLine = new Map<string, { amount: number; quantity: number; count: number }>();
+    for (const group of actualGroups) {
+      if (group.boqLineId) actualsByBoqLine.set(group.boqLineId, {
+        amount: group._sum.actualAmount || 0,
+        quantity: group._sum.actualQuantity || 0,
+        count: group._count._all,
+      });
     }
 
-    // Build consolidated line-item reports
-    const lineReports = boqLines.map((line) => {
-      const lineBudgetTxs = budgetByBoqLine.get(line.id) || [];
-      const linePpoLines = committedByBoqLine.get(line.id) || [];
-      const lineActuals = actualsByBoqLine.get(line.id) || [];
+    const buildLineReport = (line: BudgetVsActualLineSource) => {
+      const budgetGroup = budgetByBoqLine.get(line.id);
+      const commitmentGroup = committedByBoqLine.get(line.id);
+      const actualGroup = actualsByBoqLine.get(line.id);
 
       // Budget
-      const budgetQuantity = lineBudgetTxs.reduce((sum, b) => sum + (b.quantity || 0), 0) || (line.quantity || 0);
-      const budgetAmount = lineBudgetTxs.reduce((sum, b) => sum + (b.amount || 0), 0) || (line.aiTotalCost || 0);
+      const budgetQuantity = budgetGroup?.quantity || (line.quantity || 0);
+      const budgetAmount = budgetGroup?.amount || (line.aiTotalCost || 0);
       const budgetRate = budgetQuantity > 0 ? budgetAmount / budgetQuantity : (line.aiUnitCost || 0);
 
       // Committed
-      const committedQuantity = linePpoLines.reduce((sum, p) => sum + p.orderedQuantity, 0);
-      const committedAmount = linePpoLines.reduce((sum, p) => sum + p.orderedAmount, 0);
+      const committedQuantity = commitmentGroup?.quantity || 0;
+      const committedAmount = commitmentGroup?.amount || 0;
       const committedRate = committedQuantity > 0 ? committedAmount / committedQuantity : 0;
 
       // Actual
-      const actualQuantity = lineActuals.reduce((sum, a) => sum + a.actualQuantity, 0);
-      const actualAmount = lineActuals.reduce((sum, a) => sum + a.actualAmount, 0);
+      const actualQuantity = actualGroup?.quantity || 0;
+      const actualAmount = actualGroup?.amount || 0;
       const actualRate = actualQuantity > 0 ? actualAmount / actualQuantity : 0;
 
       // Variances
@@ -208,19 +321,18 @@ export async function GET(req: NextRequest) {
         status,
 
         // Lineage Counts
-        posCount: linePpoLines.length,
-        actualTransactionsCount: lineActuals.length,
-        linePpoLines,
-        lineActuals,
-        lineBudgetTxs,
+        posCount: commitmentGroup?.count || 0,
+        actualTransactionsCount: actualGroup?.count || 0,
       };
-    });
+    };
 
-    // 6. Aggregations
-    // Total Project KPIs
-    const totalBudget = lineReports.reduce((acc, l) => acc + l.budgetAmount, 0);
-    const totalCommitted = lineReports.reduce((acc, l) => acc + l.committedAmount, 0);
-    const totalActual = lineReports.reduce((acc, l) => acc + l.actualAmount, 0);
+    const lineReports = pageLines.map(buildLineReport);
+
+    // The SQL query returns only category/cost-centre groups while still
+    // accounting for every matching BOQ line in the selected project.
+    const totalBudget = summaryRows.reduce((sum, row) => sum + Number(row.budgetAmount || 0), 0);
+    const totalCommitted = summaryRows.reduce((sum, row) => sum + Number(row.committedAmount || 0), 0);
+    const totalActual = summaryRows.reduce((sum, row) => sum + Number(row.actualAmount || 0), 0);
     const totalRemaining = totalBudget - totalActual;
     const totalBudgetVariance = totalBudget - totalActual;
     const totalVariancePercent = totalBudget > 0 ? ((totalBudget - totalActual) / totalBudget) * 100 : 0;
@@ -242,13 +354,13 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    for (const l of lineReports) {
-      const ccId = l.costCentre?.id;
+    for (const row of summaryRows) {
+      const ccId = row.costCentreId;
       if (ccId && costCentreMap.has(ccId)) {
         const item = costCentreMap.get(ccId);
-        item.budgetAmount += l.budgetAmount;
-        item.committedAmount += l.committedAmount;
-        item.actualAmount += l.actualAmount;
+        item.budgetAmount += Number(row.budgetAmount || 0);
+        item.committedAmount += Number(row.committedAmount || 0);
+        item.actualAmount += Number(row.actualAmount || 0);
         item.budgetVariance = item.budgetAmount - item.actualAmount;
         if (item.areaSqFt > 0) {
           item.costPerSqFtBudget = item.budgetAmount / item.areaSqFt;
@@ -261,8 +373,8 @@ export async function GET(req: NextRequest) {
 
     // Category Level Aggregations
     const categoryMap = new Map<string, any>();
-    for (const l of lineReports) {
-      const cat = l.category || 'General';
+    for (const row of summaryRows) {
+      const cat = row.category || UI_STRINGS.common.general;
       const existing = categoryMap.get(cat) || {
         category: cat,
         budgetAmount: 0,
@@ -271,9 +383,9 @@ export async function GET(req: NextRequest) {
         budgetVariance: 0,
         variancePercent: 0,
       };
-      existing.budgetAmount += l.budgetAmount;
-      existing.committedAmount += l.committedAmount;
-      existing.actualAmount += l.actualAmount;
+      existing.budgetAmount += Number(row.budgetAmount || 0);
+      existing.committedAmount += Number(row.committedAmount || 0);
+      existing.actualAmount += Number(row.actualAmount || 0);
       existing.budgetVariance = existing.budgetAmount - existing.actualAmount;
       existing.variancePercent = existing.budgetAmount > 0
         ? ((existing.budgetAmount - existing.actualAmount) / existing.budgetAmount) * 100
@@ -300,9 +412,23 @@ export async function GET(req: NextRequest) {
       costCentresSummary,
       categoriesSummary,
       lineReports,
+      lineReportsPagination: {
+        page: pageWindow.page,
+        pageSize: pageWindow.pageSize,
+        total: totalLineCount,
+        totalPages: Math.ceil(totalLineCount / pageWindow.pageSize),
+        hasMore: pageWindow.skip + lineReports.length < totalLineCount,
+      },
     });
   } catch (err: any) {
-    console.error('Error fetching budget vs actual report:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToGenerateBudgetVsActualAnalysis }), 500, { route: '/api/financial/budget-vs-actual', method: 'GET', error: err });
+    await writeStructuredLog('error', 'financial.budget_vs_actual.failed', {
+      operation: 'read_budget_vs_actual',
+      route: '/api/financial/budget-vs-actual',
+      tenantId: ctx.tenantId,
+      projectId,
+      durationMs: Date.now() - startedAt,
+      error: err,
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToGenerateBudgetVsActualAnalysis, 500);
   }
 }

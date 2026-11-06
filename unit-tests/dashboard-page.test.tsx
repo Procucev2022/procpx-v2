@@ -97,6 +97,50 @@ describe('role-aware dashboard', () => {
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.fullAuditTrail) })).toHaveAttribute('href', '/audit');
   });
 
+  it('loads the next bounded tenant page without replacing the first page', async () => {
+    const firstPage = {
+      role: 'SUPER_ADMIN', tenants: 2, projects: 2, users: 2,
+      tenantListPage: 1, tenantListPageSize: 50, tenantListTotalPages: 2,
+      tenantList: [{ id: 'tenant-1', name: 'Buyer A', slug: 'buyer-a', status: 'ACTIVE', projectCount: 1, userCount: 1 }],
+      recentLogs: [],
+    };
+    const secondPage = {
+      ...firstPage, tenantListPage: 2, tenantListTotalPages: 2,
+      tenantList: [{ id: 'tenant-2', name: 'Buyer B', slug: 'buyer-b', status: 'ACTIVE', projectCount: 1, userCount: 1 }],
+    };
+    mockFetch.mockImplementation((url: string) => Promise.resolve(reply(url.includes('page=2') ? secondPage : firstPage)));
+    const page = render(<DashboardPage />);
+    expect(await screen.findByText('Buyer A')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Buyer B')).toBeInTheDocument();
+    expect(screen.getByText('Buyer A')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/dashboard?page=2&pageSize=50');
+    page.unmount();
+  });
+
+  it('keeps the tenant register intact and reports a failed later page', async () => {
+    const firstPage = {
+      role: 'SUPER_ADMIN', tenants: 2, projects: 2, users: 2,
+      tenantListPage: 1, tenantListPageSize: 50, tenantListTotalPages: 2,
+      tenantList: [{ id: 'tenant-1', name: 'Buyer A', slug: 'buyer-a', status: 'ACTIVE', projectCount: 1, userCount: 1 }],
+      recentLogs: [],
+    };
+    mockFetch.mockImplementation((url: string) => Promise.resolve(reply(
+      url.includes('page=2') ? { error: 'Unavailable' } : firstPage,
+      !url.includes('page=2'),
+      url.includes('page=2') ? 503 : 200,
+    )));
+    render(<DashboardPage />);
+    expect(await screen.findByText('Buyer A')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(mockToast.error).toHaveBeenCalledWith({
+      title: UI_STRINGS.common.error,
+      message: UI_STRINGS.common.userMessages.failedToFetchDashboardData,
+    }));
+    expect(screen.getByText('Buyer A')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).toBeEnabled();
+  });
+
   it('lets an approver inspect a BOQ, ask a question, chat, approve, and report API errors', async () => {
     dashboardData = { role: 'PROJECT_APPROVER', pending: 1, recentApproved: 3, recentRejected: 1, pendingPrs: [pendingPr()], recentlyApprovedList: [], recentlyRejectedList: [] };
     configureFetch();
@@ -205,6 +249,7 @@ describe('role-aware dashboard', () => {
     };
     renderForData(data);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.categoryManagerSourcingGateway))).toBeInTheDocument();
+    expect(screen.queryByText('PR-DEMO-001')).not.toBeInTheDocument();
     expect(screen.getByText('PR-2026-1')).toBeInTheDocument();
     expect(screen.getByText('RFQ-1')).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppDashboardPage.searchBOQCodeRFQPackageProjectCostCentre)), { target: { value: 'east plant' } });
@@ -225,6 +270,9 @@ describe('role-aware dashboard', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Negotiation' } });
     expect(screen.getByText('PR-2026-1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.clearAllFilters) }));
+    if (screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.collapseAllBOQs) })) {
+      fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.collapseAllBOQs) }));
+    }
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.expandAllBOQs) }));
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.collapseAllBOQs) })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.collapseAllBOQs) }));
@@ -244,15 +292,43 @@ describe('role-aware dashboard', () => {
     expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"BOQs","toLocaleString":"Requiring Category Specification Quality Attention"})))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.manageCategoryMasters) }));
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.manageCategoryMasters) })).toHaveAttribute('href', '/masters/categories');
-    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.clickToViewDetails))[1]);
-    expect(screen.getByRole('dialog', { name: 'PR details' })).toHaveTextContent('PR-2026-1:CATEGORY_MANAGER');
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }));
     const categoryViewDetails = screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewDetails) }).find((button) =>
       button.closest('tr')?.textContent?.includes('PR-2026-1')
     )!;
     fireEvent.click(categoryViewDetails);
     expect(screen.getByRole('dialog', { name: 'PR details' })).toHaveTextContent('PR-2026-1:CATEGORY_MANAGER');
     fireEvent.click(screen.getByRole('button', { name: 'Close details' }));
+  });
+
+  it('builds RFQ creation links from explicit URLs, revision IDs, project IDs, and nested project fallbacks', async () => {
+    renderForData({
+      role: 'CATEGORY_MANAGER',
+      tenant: { name: 'Link Test Tenant' },
+      summaryCards: {},
+      boqRegister: [
+        { id: 'boq-explicit', title: 'Explicit URL', createRfqUrl: '/procurement/rfqs/new?source=dashboard', rfqs: [] },
+        { id: 'boq-revision', title: 'Revision URL', boqRevisionId: 'revision-1', projectId: 'project-1', rfqs: [] },
+        { id: 'boq-fallback', title: 'Fallback URL', revisionId: 'revision-2', project: { id: 'project-2' }, rfqs: [] },
+      ],
+      categories: [],
+      revisionsWithExceptions: [],
+    });
+
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.categoryManagerSourcingGateway))).toBeInTheDocument();
+    screen.getAllByTitle(uiStringPattern(UI_STRINGS.appAppDashboardPage.clickToToggleAssociatedRFQPackages)).forEach((button) => fireEvent.click(button));
+
+    const createLinks = screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.createRFQPackage) });
+    expect(createLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/procurement/rfqs/new?source=dashboard',
+      '/procurement/rfqs/new?revisionId=revision-1&projectId=project-1',
+      '/procurement/rfqs/new?revisionId=revision-2&projectId=project-2',
+    ]);
+    expect(screen.getAllByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.createFirstRFQPackage) })
+      .map((link) => link.getAttribute('href'))).toEqual([
+      '/procurement/rfqs/new?source=dashboard',
+      '/procurement/rfqs/new?revisionId=revision-1&projectId=project-1',
+      '/procurement/rfqs/new?revisionId=revision-2&projectId=project-2',
+    ]);
   });
 
   it('filters procurement BOQs by search, stage, and every summary card and toggles associated RFQs', async () => {
@@ -332,9 +408,11 @@ describe('role-aware dashboard', () => {
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.newProject) })).toHaveAttribute('href', '/projects/new');
     client.unmount();
 
-    const viewer = renderForData({ role: 'VIEWER', totalProjects: 1, projects: [{ id: 'p2', projectCode: 'P-2', name: 'South Plant', sector: 'RETAIL', status: 'APPROVED', boqs: [] }] });
+    const viewer = renderForData({ role: 'VIEWER', totalProjects: 51, projectPreviewLimit: 50, projectsHasMore: true, projects: [{ id: 'p2', projectCode: 'P-2', name: 'South Plant', sector: 'RETAIL', status: 'APPROVED', boqs: [] }] });
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.projectBOQViewerReadOnly))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.noBOQ))).toBeInTheDocument();
+    expect(viewer.container).toHaveTextContent(interpolateUiString(UI_STRINGS.appAppDashboardPage.dashboardViewerProjectPreviewNotice, { "limit": 50 }));
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.allProjects) })).toHaveAttribute('href', '/projects');
     viewer.unmount();
 
     renderForData({ role: 'PROJECT_USER', pendingActions: [{ id: 'a1', boqCode: 'BOQ-4', title: 'Review draft', status: 'DRAFT', actionText: 'Submit BOQ', link: '/boq/4' }], totalBoqsRaised: 2, totalProposedBudget: 1500, totalApprovedBudget: 1000, recentBoqs: [{ id: 'b1', boqNumber: 'BOQ-5', boqDescription: 'Electrical work', costCentre: 'CC-2', estimatedValue: 400, status: 'APPROVED', lastUpdated: null }] });

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 
 
 export async function GET(req: NextRequest) {
@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const vendorId = searchParams.get('vendorId');
   const category = searchParams.get('category');
   const subcategory = searchParams.get('subcategory');
+  const startedAt = Date.now();
 
   if (!vendorId) {
     return apiError(UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, 400, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET' });
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     // 1. Selected Vendor Info
     const vendor = await prisma.vendor.findUnique({
-      where: { id: vendorId },
+      where: { id: vendorId, tenantId: ctx.tenantId },
       select: {
         id: true,
         code: true,
@@ -239,8 +240,28 @@ export async function GET(req: NextRequest) {
       historicalPpoRates: formattedHistoricalPpos,
       benchmarkRates: formattedBenchmarks,
     });
-  } catch (error: any) {
-    console.error('Error in rate card compare-workspace:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData }), 500, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET', error: error });
+  } catch (error) {
+    const errorRecord = error && typeof error === 'object'
+      ? error as { name?: unknown; code?: unknown }
+      : null;
+    const errorName = typeof errorRecord?.name === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(errorRecord.name)
+      ? errorRecord.name
+      : 'Error';
+    const errorCode = typeof errorRecord?.code === 'string' && /^[A-Z0-9_]{2,32}$/.test(errorRecord.code)
+      ? errorRecord.code
+      : undefined;
+    await writeStructuredLog('error', 'procurement.rate_card_comparison_workspace_read_failed', {
+      operation: 'read_rate_card_comparison_workspace',
+      route: '/api/procurement/rate-cards/compare-workspace',
+      requestId: req.headers.get('x-request-id'),
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      vendorId,
+      durationMs: Date.now() - startedAt,
+      error: errorRecord
+        ? { name: errorName, ...(errorCode ? { code: errorCode } : {}) }
+        : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchComparisonWorkspaceData, 500);
   }
 }

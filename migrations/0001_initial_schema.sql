@@ -1,0 +1,1 @@
+-- No-op: the complete schema is created by 0001_init.sql. Retained as a migration ID for compatibility with existing D1 migration histories.

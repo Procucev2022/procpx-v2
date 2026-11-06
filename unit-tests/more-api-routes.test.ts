@@ -10,11 +10,13 @@ import { GET as getApprovedPrs } from '../src/app/api/procurement/approved-prs/r
 import { POST as releasePr } from '../src/app/api/pr/[id]/release-to-procurement/route';
 import { GET as getBoqLine } from '../src/app/api/boq/lines/[id]/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { PR_AUDIT_INSERT_AFTER_TRANSITION_SQL, PR_RELEASE_STATUS_UPDATE_SQL } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    procurementRequest: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    procurementRequest: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), count: jest.fn(), aggregate: jest.fn() },
     auditLog: { create: jest.fn() },
     boqLine: { findFirst: jest.fn() },
   },
@@ -24,12 +26,21 @@ jest.mock('../src/lib/boq-cost-breakdown', () => ({ computeLineCostBreakdown: je
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
+  getListPageWindow: (params: URLSearchParams) => {
+    const rawPage = Number(params.get('page'));
+    const rawSize = Number(params.get('pageSize'));
+    const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 1_000_000) : 1;
+    const pageSize = Number.isSafeInteger(rawSize) && rawSize > 0 ? Math.min(rawSize, 100) : 50;
+    return { page, pageSize, skip: (page - 1) * pageSize };
+  },
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as {
-  procurementRequest: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
+  procurementRequest: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock; count: jest.Mock; aggregate: jest.Mock };
   auditLog: { create: jest.Mock };
   boqLine: { findFirst: jest.Mock };
 };
@@ -37,6 +48,7 @@ const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const notify = notifyNextResponsibleParty as jest.Mock;
 const computeBreakdown = computeLineCostBreakdown as jest.Mock;
+const writeBatch = writeD1BatchAtomically as jest.Mock;
 const ctx = { tenantId: 'tenant-1', userId: 'user-1', userName: 'Buyer' };
 
 const makeRequest = (url: string, body?: unknown) => new NextRequest(new URL(url, 'http://localhost'), {
@@ -49,6 +61,10 @@ describe('spreadsheet and procurement API routes', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(ctx);
     isContext.mockReturnValue(true);
+    db.procurementRequest.findMany.mockResolvedValue([]);
+    db.procurementRequest.count.mockResolvedValue(1);
+    db.procurementRequest.aggregate.mockResolvedValue({ _sum: { totalEstimatedValue: 100 } });
+    writeBatch.mockReset().mockImplementation((statements: Array<{ sql: string }>) => Promise.resolve(statements.map(() => ({ meta: { changes: 1 } }))));
   });
 
   it('validates and generates a downloadable BOQ error workbook', async () => {
@@ -110,11 +126,20 @@ describe('spreadsheet and procurement API routes', () => {
     isContext.mockReturnValueOnce(false);
     await expect(getApprovedPrs(makeRequest('/api/procurement/approved-prs'))).resolves.toBe(denied);
 
-    db.procurementRequest.findMany.mockResolvedValueOnce([{ id: 'pr-1' }]);
-    await expect(getApprovedPrs(makeRequest('/api/procurement/approved-prs'))).resolves.toEqual({ ok: true, data: [{ id: 'pr-1' }], status: 200 });
+    db.procurementRequest.findMany.mockResolvedValueOnce([{
+      id: 'pr-1', prNumber: 'PR-001', title: 'Package', status: 'PR_RELEASED_TO_PROCUREMENT', totalEstimatedValue: 100,
+      releasedAt: new Date(), project: null, costCentre: null, _count: { lines: 2, rfqs: 1 },
+    }]);
+    await expect(getApprovedPrs(makeRequest('/api/procurement/approved-prs'))).resolves.toMatchObject({
+      ok: true, data: {
+        data: [{ id: 'pr-1', lineCount: 2, rfqCount: 1 }], total: 1, page: 1, pageSize: 50, totalPages: 1,
+        hasMore: false, totalEstimatedValue: 100, sourcingActiveCount: 1,
+      }, status: 200,
+    });
     expect(db.procurementRequest.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', status: { in: ['PR_RELEASED_TO_PROCUREMENT', 'PR_APPROVED'] } },
-      orderBy: { releasedAt: 'desc' },
+      orderBy: [{ releasedAt: 'desc' }, { id: 'desc' }],
+      skip: 0, take: 50,
     }));
 
     await getApprovedPrs(makeRequest('/api/procurement/approved-prs?search=Central'));
@@ -129,6 +154,16 @@ describe('spreadsheet and procurement API routes', () => {
         ],
       }),
     }));
+
+    db.procurementRequest.aggregate.mockResolvedValueOnce({ _sum: { totalEstimatedValue: null } });
+    await expect(getApprovedPrs(makeRequest('/api/procurement/approved-prs'))).resolves.toMatchObject({
+      ok: true, data: { totalEstimatedValue: 0 },
+    });
+
+    db.procurementRequest.findMany.mockRejectedValueOnce({ cause: 'unavailable' });
+    await expect(getApprovedPrs(makeRequest('/api/procurement/approved-prs'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovedPrs, status: 500,
+    });
   });
 
   it('releases an approved PR and rejects missing or ineligible PRs', async () => {
@@ -148,19 +183,24 @@ describe('spreadsheet and procurement API routes', () => {
 
     const pr = { id: 'pr-1', prNumber: 'PR-001', status: 'PR_APPROVED', projectId: 'project-1' };
     db.procurementRequest.findFirst.mockResolvedValueOnce(pr);
-    db.procurementRequest.update.mockResolvedValue({ ...pr, status: 'PR_RELEASED_TO_PROCUREMENT' });
     await expect(releasePr(makeRequest('/api/pr/pr-1'), routeParams('pr-1'))).resolves.toEqual({
-      ok: true, data: { pr: { ...pr, status: 'PR_RELEASED_TO_PROCUREMENT' }, status: 'PR_RELEASED_TO_PROCUREMENT' }, status: 200,
+      ok: true, data: {
+        pr: { ...pr, status: 'PR_RELEASED_TO_PROCUREMENT', releasedAt: expect.any(Date), releasedBy: 'user-1' },
+        status: 'PR_RELEASED_TO_PROCUREMENT',
+      }, status: 200,
     });
-    expect(db.procurementRequest.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'pr-1' }, data: expect.objectContaining({ status: 'PR_RELEASED_TO_PROCUREMENT', releasedBy: 'user-1', releasedAt: expect.any(Date) }),
-    }));
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityId: 'pr-1', action: 'PR_RELEASED_TO_PROCUREMENT' }) });
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'PR_RELEASED', recordNumber: 'PR-001', actorName: UI_STRINGS.appLoginPageConstants.buyer }));
+    expect(writeBatch.mock.calls[0][0].map((statement: { sql: string }) => statement.sql)).toEqual([
+      PR_RELEASE_STATUS_UPDATE_SQL, PR_AUDIT_INSERT_AFTER_TRANSITION_SQL,
+    ]);
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'PR_RELEASED', recordNumber: 'PR-001', actorName: UI_STRINGS.appLoginPageConstants.buyer }),
+      { prepareOnly: true },
+    );
 
     db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, status: 'PR_RELEASED_TO_PROCUREMENT' });
     await releasePr(makeRequest('/api/pr/pr-1'), routeParams('pr-1'));
-    expect(db.procurementRequest.update).toHaveBeenCalledTimes(2);
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
   });
 
   it('looks up tenant BOQ lines and adds the cost breakdown', async () => {

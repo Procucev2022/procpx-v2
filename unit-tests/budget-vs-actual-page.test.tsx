@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { uiStringPattern } from '@/lib/i18n';
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useSearchParams } from 'next/navigation';
@@ -106,6 +106,35 @@ describe('budget versus actual page', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/financial/budget-vs-actual?projectId=project-2&category=Electrical%20%26%20Controls'));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(mockFetch).toHaveBeenLastCalledWith('/api/financial/budget-vs-actual?projectId=project-2&category=Electrical%20%26%20Controls'));
+  });
+
+  it('appends a requested detail page while retaining project summary values', async () => {
+    const firstPage = {
+      ...report,
+      lineReports: [report.lineReports[0]],
+      lineReportsPagination: { page: 1, pageSize: 1, total: 2, totalPages: 2, hasMore: true },
+    };
+    const secondPage = {
+      ...report,
+      lineReports: [report.lineReports[1]],
+      lineReportsPagination: { page: 2, pageSize: 1, total: 2, totalPages: 2, hasMore: false },
+    };
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/projects') return Promise.resolve(response({ data: projects }));
+      return Promise.resolve(response({ data: url.includes('&page=2') ? secondPage : firstPage }));
+    });
+
+    render(<BudgetVsActualPage />);
+    expect(await screen.findByText('Power conduit')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.showingLineReportsOfTotal, { shown: '1', total: '2' })))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.loadMoreLineReports) }));
+    expect(await screen.findByText('Pump bearing')).toBeInTheDocument();
+    expect(screen.getByText('Power conduit')).toBeInTheDocument();
+    expect(screen.getAllByText(/1,500/).length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.showingLineReportsOfTotal, { shown: '2', total: '2' })))).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/financial/budget-vs-actual?projectId=project-1&costCentreId=cc-1&page=2&pageSize=50');
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.loadMoreLineReports) })).not.toBeInTheDocument();
   });
 
   it('uses defaults for empty reports and handles initial selection and request failures', async () => {

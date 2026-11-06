@@ -36,11 +36,15 @@ export default function ApprovalChatDrawer({
 }: ApprovalChatDrawerProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [olderMessagesCursor, setOlderMessagesCursor] = useState<{ id: string; timestamp: string } | null>(null);
   const [inputText, setInputText] = useState('');
   const [isEnquiry, setIsEnquiry] = useState(initialEnquiryMode);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const skipNextAutoScrollRef = useRef(false);
 
   useEffect(() => {
     if (isOpen && entityId) {
@@ -50,20 +54,34 @@ export default function ApprovalChatDrawer({
   }, [isOpen, entityId, initialEnquiryMode]);
 
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
-  const loadMessages = async () => {
-    setLoading(true);
+  const loadMessages = async (
+    cursor?: { id: string; timestamp: string },
+    prepend = false,
+  ) => {
+    if (prepend) setLoadingOlder(true);
+    else setLoading(true);
     setError('');
     try {
       const param = entityType === 'PR' ? `prId=${entityId}` : `contributionId=${entityId}`;
-      const res = await fetch(`/api/approvals/messages?${param}`);
+      const cursorParams = cursor
+        ? `&beforeId=${encodeURIComponent(cursor.id)}&beforeTimestamp=${encodeURIComponent(cursor.timestamp)}`
+        : '';
+      const res = await fetch(`/api/approvals/messages?${param}${cursorParams}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        const pageMessages = data.messages || [];
+        setMessages((current) => prepend ? [...pageMessages, ...current] : pageMessages);
+        setHasOlderMessages(Boolean(data.hasMore));
+        setOlderMessagesCursor(data.nextCursor || null);
       } else {
         const err = await res.json();
         setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory }));
@@ -71,8 +89,15 @@ export default function ApprovalChatDrawer({
     } catch (e: any) {
       setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
     } finally {
-      setLoading(false);
+      if (prepend) setLoadingOlder(false);
+      else setLoading(false);
     }
+  };
+
+  const loadOlderMessages = async () => {
+    if (!olderMessagesCursor || loadingOlder) return;
+    skipNextAutoScrollRef.current = true;
+    await loadMessages(olderMessagesCursor, true);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -225,7 +250,18 @@ export default function ApprovalChatDrawer({
               <p style={{ fontSize: 12, maxWidth: 300, margin: 0 }}>{UI_STRINGS.componentsApprovalChatDrawer.useTheBoxBelowToAskTheRequesterOrSubmitterForClarificationsOrToLogCommunicationNotes}</p>
             </div>
           ) : (
-            messages.map((m, idx) => {
+            <>
+              {hasOlderMessages && (
+                <button
+                  type="button"
+                  onClick={loadOlderMessages}
+                  disabled={loadingOlder}
+                  style={{ alignSelf: 'center', border: '1px solid #cbd5e1', borderRadius: 6, background: '#ffffff', color: '#334155', padding: '6px 10px', cursor: loadingOlder ? 'wait' : 'pointer' }}
+                >
+                  {loadingOlder ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
+              )}
+              {messages.map((m, idx) => {
               const isEnquiryMsg = m.type === 'ENQUIRY';
               const isDecisionMsg = m.type === 'APPROVED' || m.type === 'REJECTED';
 
@@ -292,7 +328,8 @@ export default function ApprovalChatDrawer({
                   </div>
                 </div>
               );
-            })
+              })}
+            </>
           )}
           <div ref={messagesEndRef} />
         </div>

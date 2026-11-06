@@ -2,17 +2,19 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '../src/app/api/procurement/auctions/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
-import { createAuditLog } from '../src/lib/audit';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { MAX_NOTIFICATION_MESSAGE_LENGTH } from '../src/lib/notification-outbox.constants';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    auction: { updateMany: jest.fn(), count: jest.fn(), findMany: jest.fn(), create: jest.fn() },
-    vendor: { findFirst: jest.fn() },
+    auction: { count: jest.fn(), findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
+    vendor: { findFirst: jest.fn(), count: jest.fn() },
     rfq: { findFirst: jest.fn() },
-    auctionVendor: { createMany: jest.fn() },
-    auctionItem: { createMany: jest.fn() },
+    quote: { findFirst: jest.fn() },
+    rfqLine: { findMany: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -21,12 +23,17 @@ jest.mock('../src/lib/api-utils', () => ({
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
-jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({
+  ...jest.requireActual('../src/lib/d1-batch'),
+  writeD1BatchAtomically: jest.fn(),
+}));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
-const audit = createAuditLog as jest.Mock;
+const d1Batch = writeD1BatchAtomically as jest.Mock;
+const log = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', role: 'PROCUREMENT_MANAGER' };
 const getRequest = (query = '') => new NextRequest(`http://localhost/api/procurement/auctions${query}`);
 const postRequest = (body: unknown) => new NextRequest('http://localhost/api/procurement/auctions', {
@@ -52,26 +59,27 @@ const auction = (overrides: Record<string, any> = {}) => ({
 });
 
 describe('auction register API', () => {
-  let consoleError: jest.SpyInstance;
-
   beforeEach(() => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
-    db.auction.updateMany.mockReset().mockResolvedValue({ count: 0 });
     db.auction.count.mockReset().mockResolvedValue(2);
     db.auction.findMany.mockReset().mockResolvedValue([auction()]);
     db.auction.create.mockReset().mockResolvedValue({ id: 'auction-new' });
+    db.auction.findUnique.mockReset().mockResolvedValue(null);
     db.vendor.findFirst.mockReset().mockResolvedValue({ id: 'v-1' });
-    db.rfq.findFirst.mockReset().mockResolvedValue({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1',
-      quotes: [], invitedVendors: [] });
-    db.auctionVendor.createMany.mockReset().mockResolvedValue({ count: 1 });
-    db.auctionItem.createMany.mockReset().mockResolvedValue({ count: 1 });
-    audit.mockReset().mockResolvedValue(undefined);
-    consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    db.vendor.count.mockReset().mockResolvedValue(1);
+    db.rfq.findFirst.mockReset().mockResolvedValue({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
+    db.quote.findFirst.mockReset().mockResolvedValue(null);
+    db.rfqLine.findMany.mockReset().mockResolvedValue([{ id: 'line-2' }]);
+    d1Batch.mockReset().mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => statements.map((_, index) => ({
+      meta: { changes: 1 },
+      ...(index === 0 ? {
+        results: [{ id: statements[0].values[0], auctionNumber: `${String(statements[0].values[3])}000003`, status: statements[0].values[25] }],
+      } : {}),
+    })));
+    log.mockReset().mockResolvedValue(undefined);
   });
-
-  afterEach(() => consoleError.mockRestore());
 
   it('filters and formats auction listings, applies privacy scope, and handles auth and data errors', async () => {
     const denied = { status: 401 };
@@ -132,11 +140,29 @@ describe('auction register API', () => {
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'v-1' });
     db.auction.findMany.mockRejectedValueOnce(new Error('auction query failed'));
     await expect(GET(getRequest('?tab=UPCOMING&type=FORWARD_AUCTION&category=ITEM_WISE'))).resolves.toEqual({
-      ok: false, error: 'auction query failed', status: 500,
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAuctions, status: 500,
     });
-    db.auction.updateMany.mockRejectedValueOnce({});
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Failed to fetch auctions', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    db.auction.count.mockRejectedValueOnce(new Error('auction count failed'));
+    await expect(GET(getRequest())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAuctions, status: 500,
+    });
+    expect(log).toHaveBeenCalledWith('error', 'auction.register_read_failed', expect.any(Object));
+    expect(d1Batch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the list error response when optional log persistence also fails', async () => {
+    db.auction.findMany.mockRejectedValueOnce(new Error('auction list unavailable'));
+    log.mockRejectedValueOnce(new Error('log sink unavailable'));
+    const request = new NextRequest('http://localhost/api/procurement/auctions', {
+      headers: { 'cf-ray': 'ray-auction-list' },
+    });
+
+    await expect(GET(request)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAuctions, status: 500,
+    });
+    expect(log).toHaveBeenCalledWith('error', 'auction.register_read_failed', expect.objectContaining({
+      requestId: 'ray-auction-list', tenantId: 'tenant-1',
+    }));
   });
 
   it('validates auction creation inputs and quoted vendor exclusions', async () => {
@@ -152,19 +178,19 @@ describe('auction register API', () => {
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, status: 404,
     });
 
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [{ vendorId: 'quoted-vendor', status: 'SUBMITTED' }] });
+    db.quote.findFirst.mockResolvedValueOnce({ id: 'quote-excluded' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: [] }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.mandatoryJustificationIsRequiredWhenExcludingQuotedVendorsFromTheInvitedList, status: 400,
     });
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: [] }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.atLeastOneVendorMustBeInvitedToScheduleAnAuction, status: 400,
     });
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: ['v-1'], startTime: 'invalid' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.pleaseProvideValidStartAndEndDateTime, status: 400,
     });
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: ['v-1'],
       startTime: '2026-11-01T10:00:00Z', endTime: '2026-11-01T09:00:00Z' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, status: 400,
@@ -181,66 +207,102 @@ describe('auction register API', () => {
         uom: 'EA', quantity: 3, startPrice: '400' }], documents: [{ name: 'spec.pdf' }, null], inviteProjectUser: true,
       projectUserId: 'project-user', nonInvitedJustification: 'Existing vendors retained',
     }));
-    expect(created).toMatchObject({ ok: true, status: 201, data: { message: expect.stringContaining('FWD-') } });
-    expect(db.auction.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      auctionNumber: expect.stringMatching(/^FWD-/), title: 'Forward event', status: 'SCHEDULED', refreshIntervalSeconds: 300,
-      scrollingText: 'Bid now', startingPrice: 1200, currentLowestBid: 1200, currentLeadingBid: 1200,
-      projectUserId: 'project-user', bidVisibility: 'LEADERBOARD', documents: '[{"name":"spec.pdf"},null]',
-      startTime: new Date(futureStart), endTime: new Date(futureEnd),
-    }) });
-    expect(db.auctionVendor.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ vendorId: 'v-1', auctionId: 'auction-new' })] });
-    expect(db.auctionItem.createMany).toHaveBeenCalledWith({ data: [
-      expect.objectContaining({ itemCode: 'ITEM-1', description: 'Auction Item', category: UI_STRINGS.common.general, uom: 'EA', quantity: 1, startPrice: null }),
-      expect.objectContaining({ itemCode: 'PUMP', subcategory: 'Water', quantity: 3, startPrice: 400, currentLeadingBid: 400 }),
-    ] });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'AUCTION_SCHEDULED', projectId: 'project-1' }));
+    expect(created).toMatchObject({ ok: true, status: 201, data: { message: UI_STRINGS.common.userMessages.auctionScheduled } });
+    expect(d1Batch).toHaveBeenCalledTimes(1);
+    const auctionBatch = d1Batch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(auctionBatch).toHaveLength(6);
+    expect(auctionBatch[0].sql).toContain('MAX(CAST(substr(existing."auctionNumber"');
+    expect(auctionBatch[0].values).toContain('FWD-2026-');
+    expect(auctionBatch[1].sql).toContain('INSERT INTO "audit_logs"');
+    expect(auctionBatch[1].values).toContain('AUCTION_SCHEDULED');
+    expect(auctionBatch[2].sql).toContain('INSERT INTO "auction_vendors"');
+    expect(auctionBatch[3].sql).toContain('INSERT INTO "notification_outbox"');
+    expect(JSON.parse(String(auctionBatch[3].values[2]))).toMatchObject({
+      tenantId: 'tenant-1', vendorId: 'v-1', entityType: 'AUCTION', entityId: expect.any(String),
+    });
+    expect(auctionBatch[4].sql).toContain('INSERT INTO "auction_items"');
+    expect(auctionBatch[5].sql).toContain('INSERT INTO "auction_items"');
+    expect(db.auction.count).not.toHaveBeenCalled();
+    expect(db.auction.create).not.toHaveBeenCalled();
+    expect(db.quote.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: { notIn: ['v-1'] } }),
+      select: { id: true },
+    }));
 
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [{ vendorId: 'excluded', status: 'SUBMITTED' }] });
     const draft = await POST(postRequest({ rfqId: 'rfq-1', title: 'Sealed draft', auctionType: 'SEALED_BID', isDraft: true,
       invitedVendorIds: [], termsAndConditions: '   ', hasMinBidReduction: false,
       refreshIntervalSeconds: 0, maxBidsPerParticipant: 20, inviteProjectUser: false, documents: null }));
-    expect(draft).toMatchObject({ ok: true, data: { message: expect.stringContaining('Draft auction SLD-') } });
-    expect(db.auction.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({
-      auctionNumber: expect.stringMatching(/^SLD-/), status: 'DRAFT', hasLeadingPrice: false, maxBidsPerParticipant: 1,
-      minDecrement: 0, refreshIntervalSeconds: 15, projectUserId: null,
-      termsAndConditions: 'Standard ProCPX Auction Terms & Conditions apply. Bids submitted are binding.', documents: '[]',
-    }) });
-    expect(db.auctionVendor.createMany).toHaveBeenCalledTimes(1);
-    expect(db.auctionItem.createMany).toHaveBeenCalledTimes(1);
-    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'AUCTION_DRAFT_CREATED' }));
+    expect(draft).toMatchObject({ ok: true, data: { message: expect.stringContaining('Auction SLD-') } });
+    const draftBatch = d1Batch.mock.calls[1][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(draftBatch).toHaveLength(2);
+    expect(draftBatch[0].values).toContain('SLD-2026-');
+    expect(draftBatch[0].values).toContain('DRAFT');
+    expect(draftBatch[0].values).toContain('[]');
+    expect(draftBatch[1].values).toContain('AUCTION_DRAFT_CREATED');
   });
 
   it('maps database and request failures to API errors and schedules live or past events', async () => {
     db.rfq.findFirst.mockRejectedValueOnce(new Error('RFQ lookup failed'));
-    await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction' }))).resolves.toEqual({ ok: false, error: 'RFQ lookup failed', status: 500 });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCreateAuction, status: 500,
+    });
 
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
-    db.auction.create.mockResolvedValueOnce({ id: 'live' });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Live auction', invitedVendorIds: ['v-1'],
       startTime: new Date(Date.now() - 1000).toISOString(), endTime: new Date(Date.now() + 60_000).toISOString(),
       auctionType: 'REVERSE_AUCTION', hasLeadingPrice: false, hasStartPrice: false, hasMinBidReduction: false,
       startingPrice: 0, inviteProjectUser: true, projectUserId: null, termsAndConditions: '  ',
-    }))).resolves.toMatchObject({ ok: true, data: { message: expect.stringContaining('AUC-') } });
-    expect(db.auction.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ status: 'LIVE', bidVisibility: 'RANK_ONLY',
-      currentLowestBid: null, currentLeadingBid: null, projectUserId: null, minDecrement: 0,
-      termsAndConditions: 'Standard ProCPX Auction Terms & Conditions apply. Bids submitted are binding.' }) });
+    }))).resolves.toMatchObject({ ok: true, data: { auction: { id: expect.any(String) }, message: UI_STRINGS.common.userMessages.auctionScheduled } });
+    const liveBatch = d1Batch.mock.calls[0][0] as Array<{ values: unknown[] }>;
+    expect(liveBatch[0].values).toContain('LIVE');
+    expect(liveBatch[0].values).toContain('RANK_ONLY');
+    expect(liveBatch[0].values).toContain(null);
 
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
-    db.auction.create.mockResolvedValueOnce({ id: 'closed' });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Past auction', invitedVendorIds: ['v-1'],
       startTime: '2026-10-01T10:00:00Z', endTime: '2026-10-01T11:00:00Z', refreshIntervalSeconds: 1,
       minDecrement: 0, autoExtensionMinutes: 0, maxBidsPerParticipant: 0, documents: [],
-    }))).resolves.toMatchObject({ ok: true, data: { message: expect.stringContaining('AUC-') } });
-    expect(db.auction.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ status: 'CLOSED', refreshIntervalSeconds: 5,
-      minDecrement: 5000, autoExtensionMinutes: 3, maxBidsPerParticipant: 10 }) });
+    }))).resolves.toMatchObject({ ok: true, data: { auction: { id: expect.any(String) } } });
+    const closedBatch = d1Batch.mock.calls[1][0] as Array<{ values: unknown[] }>;
+    expect(closedBatch[0].values).toContain('CLOSED');
+    expect(closedBatch[0].values).toContain(5000);
+    expect(closedBatch[0].values).toContain(3);
+    expect(closedBatch[0].values).toContain(10);
 
-    db.rfq.findFirst.mockResolvedValueOnce({ quotes: [] });
-    db.auction.findMany.mockRejectedValueOnce({});
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
+    d1Batch.mockRejectedValueOnce({});
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Broken count', isDraft: true }))).resolves.toEqual({
       ok: false, error: 'Failed to create auction', status: 500,
     });
+    expect(log).toHaveBeenCalledWith('error', 'auction.creation_failed', expect.objectContaining({
+      operation: 'create_auction', tenantId: 'tenant-1', rfqId: 'rfq-1', itemCount: 0, invitedVendorCount: 0,
+    }));
     const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid JSON')) } as unknown as NextRequest;
-    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: 'invalid JSON', status: 500 });
-    expect(consoleError).toHaveBeenCalledTimes(3);
+    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateAuction, status: 500 });
+    expect(log).toHaveBeenCalledWith('error', 'auction.creation_failed', expect.objectContaining({ operation: 'create_auction' }));
+  });
+
+  it('rejects an auction whose combined invitation and item writes exceed the safe D1 binding budget', async () => {
+    db.vendor.count.mockResolvedValueOnce(100);
+    const invitedVendorIds = Array.from({ length: 100 }, (_, index) => `vendor-${index}`);
+    const items = Array.from({ length: 200 }, (_, index) => ({ itemCode: `item-${index}` }));
+
+    await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Large auction', invitedVendorIds, items }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.auctionExceedsSafeAtomicWriteLimit, status: 400,
+    });
+    expect(d1Batch).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith('warn', 'auction.creation_rejected_batch_limit', expect.objectContaining({
+      violation: 'batch_bindings', invitedVendorCount: 100, itemCount: 200,
+    }));
+  });
+
+  it('keeps long auction names within the notification payload limit', async () => {
+    await POST(postRequest({ rfqId: 'rfq-1', title: 'A'.repeat(MAX_NOTIFICATION_MESSAGE_LENGTH + 50), invitedVendorIds: ['v-1'] }));
+
+    const statements = d1Batch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    const notificationStatement = statements.find(({ sql }) => sql.includes('notification_outbox'));
+    expect(notificationStatement).toBeDefined();
+    const payload = JSON.parse(String(notificationStatement?.values[2])) as { message: string };
+    expect(payload.message.length).toBe(MAX_NOTIFICATION_MESSAGE_LENGTH);
   });
 });

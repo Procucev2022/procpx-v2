@@ -132,7 +132,7 @@ export async function writeDebugSnapshot(
  */
 function emitLine(level: LogLevel, line: string): void {
   if (isCloudflareWorker()) {
-    const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+    const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
     const write = originalConsoleMethods[method] ?? console[method].bind(console);
     write(line.trimEnd());
     return;

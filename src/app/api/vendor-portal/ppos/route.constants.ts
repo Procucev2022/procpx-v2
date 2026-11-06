@@ -1,0 +1,3 @@
+export const VENDOR_PPO_PAGE_SIZE = 50;
+export const VENDOR_PPO_MAX_PAGE_SIZE = 100;
+export const VENDOR_PPO_MAX_SEARCH_LENGTH = 120;

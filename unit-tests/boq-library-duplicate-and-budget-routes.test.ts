@@ -1,25 +1,27 @@
-import { existingCodes } from './test-helpers/existing-codes';
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { POST as createFromLibrary } from '../src/app/api/boq/from-standard-library/route';
 import { POST as duplicateBoq } from '../src/app/api/boq/duplicate/route';
 import { POST as addBoqToBudget } from '../src/app/api/budgets/add-boq/route';
+import { POST as canonicalBudgetPost } from '../src/app/api/boq/add-to-budget/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     project: { findFirst: jest.fn() },
     costCentre: { findFirst: jest.fn() },
-    boq: { findMany: jest.fn(), count: jest.fn(), create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    boq: { count: jest.fn(), create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     boqRevision: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     boqLine: { create: jest.fn() },
     category: { findMany: jest.fn() },
     uomMaster: { findMany: jest.fn() },
     auditLog: { create: jest.fn() },
     budgetContribution: { create: jest.fn() },
-    budgetTransaction: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
+    budgetTransaction: { count: jest.fn(), create: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -28,10 +30,14 @@ jest.mock('../src/lib/api-utils', () => ({
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
+jest.mock('../src/app/api/boq/add-to-budget/route', () => ({ POST: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue({}) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
+const d1Batch = writeD1BatchAtomically as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', userEmail: 'user@example.test', role: 'CLIENT_ADMIN' };
 const post = (body: unknown) => new NextRequest('http://localhost/api/test', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -42,6 +48,10 @@ describe('BOQ generation from the standard library', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
+    d1Batch.mockReset().mockImplementation(async (statements: Array<{ sql: string }>) => statements.map((_, index) => ({
+      meta: { changes: 1 },
+      ...(index === 0 ? { results: [{ id: 'boq-1', boqCode: 'BOQ-P1-009' }] } : {}),
+    })));
   });
 
   it('checks permission, required input, project, and optional cost centre', async () => {
@@ -52,55 +62,79 @@ describe('BOQ generation from the standard library', () => {
     await expect(createFromLibrary(post({ projectId: 'project-1', items: [] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqFromStandardLibraryRoute.projectIDAndAListOfSelectedStandardItemsAreRequired, status: 400 });
     await expect(createFromLibrary(post({ projectId: 'project-1', items: 'not-an-array' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqFromStandardLibraryRoute.projectIDAndAListOfSelectedStandardItemsAreRequired, status: 400 });
     db.project.findFirst.mockResolvedValueOnce(null);
-    await expect(createFromLibrary(post({ projectId: 'missing', items: [{}] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404 });
+    await expect(createFromLibrary(post({ projectId: 'missing', items: [{ standardDescription: 'Cable' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404 });
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.costCentre.findFirst.mockResolvedValueOnce(null);
-    await expect(createFromLibrary(post({ projectId: 'project-1', costCentreId: 'bad-cc', items: [{}] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404 });
-    expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'bad-cc', projectId: 'project-1', tenantId: 'tenant-1' } });
+    await expect(createFromLibrary(post({ projectId: 'project-1', costCentreId: 'bad-cc', items: [{ standardDescription: 'Cable' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404 });
+    expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'bad-cc', projectId: 'project-1', tenantId: 'tenant-1' }, select: { id: true } });
   });
 
   it('creates a draft BOQ and maps standard item categories, UOMs, quantities, and costs', async () => {
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.costCentre.findFirst.mockResolvedValueOnce({ id: 'cc-1' });
-    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-', 6, 8));
-    db.boq.create.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'BOQ-000009' });
-    db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-1', revisionCode: 'R0' });
     db.category.findMany.mockResolvedValueOnce([{ id: 'cat-1', name: 'Electrical' }]);
     db.uomMaster.findMany.mockResolvedValueOnce([{ id: 'uom-1', code: 'MTR' }]);
-    db.boqLine.create.mockResolvedValue({ id: 'line' });
     const items = [
       { category: 'electrical', uom: 'mtr', itemCode: 'WIRE-1', standardDescription: 'Cable', detailedSpecification: 'Copper', quantity: '3.5', benchmarkRate: '10', brandMake: 'Acme' },
       { category: 'Unknown', uom: '', standardDescription: 'Other', quantity: 'invalid', benchmarkRate: 0 },
     ];
-    await expect(createFromLibrary(post({ projectId: 'project-1', costCentreId: 'cc-1', items }))).resolves.toEqual({
-      ok: true, data: { boqId: 'boq-1', revisionId: 'revision-1', boqCode: 'BOQ-000009', revisionCode: UI_STRINGS.common.r0, totalLines: 2, qualityScore: 100 }, status: 201,
+    await expect(createFromLibrary(post({ projectId: 'project-1', costCentreId: 'cc-1', items }))).resolves.toMatchObject({
+      ok: true, data: { boqId: expect.any(String), revisionId: expect.any(String), boqCode: 'BOQ-P1-009', revisionCode: UI_STRINGS.common.r0, totalLines: 2, qualityScore: 100 }, status: 201,
     });
-    expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({ tenantId: 'tenant-1', projectId: 'project-1', costCentreId: 'cc-1', boqCode: 'BOQ-000009', status: 'DRAFT', createdBy: 'user-1' }) });
-    expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({ boqId: 'boq-1', revisionCode: UI_STRINGS.common.r0, totalLines: 2, validLines: 2, sourceType: 'STANDARD_BOQ' }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      lineNumber: UI_STRINGS.common.copyefwnq4, itemCode: 'WIRE-1', categoryId: 'cat-1', uomId: 'uom-1', quantity: 3.5, aiUnitCost: 10, aiTotalCost: 35, brand: 'Acme',
-    }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      lineNumber: UI_STRINGS.common.copyf9vgt1, itemCode: 'STD-ITEM-2', categoryId: null, uomId: null, quantity: null, aiUnitCost: null, aiTotalCost: null, brand: null, uomRaw: UI_STRINGS.common.nOS,
-    }) });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'BOQ_GENERATED_FROM_STANDARD_LIBRARY', entityId: 'boq-1', projectId: 'project-1' }) });
+    const statements = d1Batch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(statements).toHaveLength(6);
+    expect(statements[0].sql).toContain('INSERT INTO "boqs"');
+    expect(statements[0].values).toEqual(expect.arrayContaining(['tenant-1', 'project-1', 'cc-1', 'user-1']));
+    expect(statements[0].values).toHaveLength(statements[0].sql.split('?').length - 1);
+    expect(statements[1].sql).toContain('INSERT INTO "boq_revisions"');
+    expect(statements[1].values).toEqual(expect.arrayContaining(['R0', 'STANDARD_BOQ']));
+    expect(statements[1].values).toHaveLength(statements[1].sql.split('?').length - 1);
+    expect(statements[2].values).toEqual(expect.arrayContaining(['Cable', 'cat-1', 'uom-1', 3.5, 10, 35, 'Acme']));
+    expect(statements[2].values).toHaveLength(statements[2].sql.split('?').length - 1);
+    expect(statements[3].values).toEqual(expect.arrayContaining(['Other', 'NOS', null]));
+    expect(statements[4].sql).toContain('SET "totalLines" = ?, "validLines" = ?');
+    expect(statements[5].values).toEqual(expect.arrayContaining(['BOQ_GENERATED_FROM_STANDARD_LIBRARY']));
   });
 
   it('allows creation without a cost centre and reports generation failures', async () => {
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
-    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-', 6, 0));
-    db.boq.create.mockResolvedValueOnce({ id: 'boq-2', boqCode: 'BOQ-000001' });
-    db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-2', revisionCode: 'R0' });
     db.category.findMany.mockResolvedValueOnce([]);
     db.uomMaster.findMany.mockResolvedValueOnce([]);
-    db.boqLine.create.mockResolvedValueOnce({ id: 'line-1' });
-    await createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }));
-    expect(db.boq.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ costCentreId: null }) });
+    await createFromLibrary(post({ projectId: 'project-1', items: [
+      { standardDescription: 'Item' },
+      { standardDescription: 'Blank quantities', quantity: ' ', benchmarkRate: null },
+    ] }));
+    expect(d1Batch.mock.calls[0][0][0].values).toContain(null);
 
     db.project.findFirst.mockRejectedValueOnce(new Error('BOQ setup failed'));
-    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{}] }))).resolves.toEqual({ ok: false, error: 'BOQ setup failed', status: 500 });
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.standardBoqGenerationFailed, status: 500 });
     db.project.findFirst.mockRejectedValueOnce({});
-    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{}] }))).resolves.toEqual({ ok: false, error: 'Standard BOQ generation failed.', status: 500 });
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.standardBoqGenerationFailed, status: 500 });
+  });
+
+  it('rejects malformed input and oversized item lists and detects partial D1 writes', async () => {
+    const malformed = new NextRequest('http://localhost/api/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid',
+    });
+    await expect(createFromLibrary(malformed)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createFromLibrary(post({ items: [{ standardDescription: 'Missing project' }] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [null] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, () => ({ standardDescription: 'Valid line' })) }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    d1Batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    d1Batch.mockResolvedValueOnce([
+      { meta: { changes: 1 }, results: [{ boqCode: 'BOQ-1' }] },
+      { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } },
+    ]);
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toMatchObject({ ok: false, status: 409 });
   });
 });
 
@@ -109,6 +143,10 @@ describe('BOQ duplication', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
+    d1Batch.mockReset().mockImplementation(async (statements: Array<{ sql: string }>) => statements.map((_, index) => ({
+      meta: { changes: 1 },
+      ...(index === 0 ? { results: [{ id: 'boq-2', boqCode: 'BOQ-P-1-003' }] } : {}),
+    })));
   });
 
   it('validates access and source BOQ before cloning', async () => {
@@ -132,37 +170,65 @@ describe('BOQ duplication', () => {
       id: 'boq-1', boqCode: 'SOURCE', projectId: 'project-1', costCentreId: 'cc-1', title: null, category: 'Electrical', scope: 'Wiring', purpose: 'PR',
       project: { projectCode: 'P-1' }, revisions: [{ sourceType: null, notes: null, validLines: 1, lines: [line] }],
     });
-    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-P-1-', 3, 2));
-    const createdBoq = { id: 'boq-2', boqCode: 'BOQ-P-1-003', title: 'SOURCE (Copy)' };
-    db.boq.create.mockResolvedValueOnce(createdBoq);
-    db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-2', revisionCode: 'R0' });
-    db.boqLine.create.mockResolvedValueOnce({ id: 'line-copy' });
-    db.boqRevision.update.mockResolvedValueOnce({ id: 'revision-2', totalLines: 1 });
-
-    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({
-      ok: true, data: { success: true, boq: createdBoq, boqId: 'boq-2', boqCode: 'BOQ-P-1-003', message: 'BOQ successfully duplicated as BOQ-P-1-003' }, status: 201,
+    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toMatchObject({
+      ok: true, data: { success: true, boq: { id: expect.any(String), boqCode: 'BOQ-P-1-003', title: 'SOURCE (Copy)' },
+        boqId: expect.any(String), boqCode: 'BOQ-P-1-003', message: 'BOQ successfully duplicated as BOQ-P-1-003' }, status: 201,
     });
-    expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({ boqCode: 'BOQ-P-1-003', title: 'SOURCE (Copy)', purpose: 'PR', createdBy: 'user@example.test', status: 'DRAFT' }) });
-    expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({ revisionCode: UI_STRINGS.common.r0, budgetStatus: 'NOT_ADDED_TO_BUDGET', prStatus: 'PR_DRAFT', sourceType: 'MANUAL', notes: null }) });
-    expect(db.boqLine.create).toHaveBeenCalledWith({ data: expect.objectContaining({ boqRevisionId: 'revision-2', lineNumber: UI_STRINGS.common.copyefwnq4, itemCode: 'ITEM-1', aiTotalCost: 300, remarks: 'Keep' }) });
-    expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-2' }, data: { totalLines: 1, validLines: 1 } });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'BOQ_DUPLICATED', entityId: 'boq-2' }) });
+    const statements = d1Batch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(statements).toHaveLength(5);
+    expect(statements[0].sql).toContain("'BOQ-' || project.\"projectCode\"");
+    expect(statements[0].values).toEqual(expect.arrayContaining(['tenant-1', 'project-1', 'cc-1', 'SOURCE (Copy)', 'user@example.test']));
+    expect(statements[1].values).toEqual(expect.arrayContaining(['R0', 'NOT_ADDED_TO_BUDGET', 'PR_DRAFT', 'MANUAL']));
+    expect(statements[2].values).toEqual(expect.arrayContaining(['Original', 'Standard', 'Spec', 'ITEM-1', 'AI spec', 300, 'Keep']));
+    expect(statements[2].values).toHaveLength(statements[2].sql.split('?').length - 1);
+    expect(statements[3].values).toEqual([1, 1, expect.any(Date), expect.any(String), 'tenant-1']);
+    expect(statements[4].sql).toContain('replace(replace(replace');
+    expect(statements[4].values).toEqual(expect.arrayContaining(['BOQ_DUPLICATED', UI_STRINGS.appApiBoqDuplicateRoute.duplicatedBOQBoqCodeIntoBoqCode2Title]));
   });
 
-  it('creates a blank copy when the source has no revisions and tolerates audit failures', async () => {
+  it('creates a blank copy when the source has no revisions and rolls back if its audit cannot be written', async () => {
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-1', boqCode: 'SOURCE', projectId: 'project-1', costCentreId: null, title: 'Title', purpose: 'BUDGET', project: { projectCode: 'P-1' }, revisions: [] });
-    db.boq.findMany.mockResolvedValueOnce(existingCodes('boqCode', 'BOQ-P-1-', 3, 0));
-    db.boq.create.mockResolvedValueOnce({ id: 'boq-2', boqCode: 'BOQ-P-1-001' });
-    db.boqRevision.create.mockResolvedValueOnce({ id: 'revision-2' });
-    db.auditLog.create.mockRejectedValueOnce(new Error('audit offline'));
-    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toMatchObject({ ok: true, status: 201 });
-    expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({ budgetStatus: 'BUDGET_DRAFT', prStatus: 'PR_NOT_CREATED', sourceType: 'MANUAL' }) });
-    expect(db.boqRevision.update).not.toHaveBeenCalled();
-    expect(db.boqLine.create).not.toHaveBeenCalled();
+    d1Batch.mockRejectedValueOnce(new Error('D1 batch unavailable'));
+    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToDuplicateBoq, status: 500 });
     db.boq.findFirst.mockRejectedValueOnce(new Error('duplicate failed'));
-    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: 'duplicate failed', status: 500 });
+    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToDuplicateBoq, status: 500 });
     db.boq.findFirst.mockRejectedValueOnce({});
-    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: 'Failed to duplicate BOQ', status: 500 });
+    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToDuplicateBoq, status: 500 });
+  });
+
+  it('rejects malformed and oversized source records and detects each D1 clone conflict', async () => {
+    const malformed = new NextRequest('http://localhost/api/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid',
+    });
+    await expect(duplicateBoq(malformed)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(duplicateBoq(post([]))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.boq.findFirst.mockResolvedValueOnce({
+      id: 'boq-large', projectId: 'project-1', boqCode: 'LARGE', project: { projectCode: 'P-1' },
+      revisions: [{ lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, () => ({})) }],
+    });
+    await expect(duplicateBoq(post({ boqId: 'boq-large' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const source = {
+      id: 'boq-1', boqCode: 'SOURCE', projectId: 'project-1', costCentreId: null, title: null,
+      purpose: 'OTHER', project: { projectCode: 'P-1' },
+      revisions: [{ validLines: null, lines: [{ id: 'line-1', lineNumber: '1', originalDescription: 'Cable' }] }],
+    };
+    auth.mockResolvedValueOnce({ ...context, userEmail: '' });
+    db.boq.findFirst.mockResolvedValueOnce(source);
+    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toMatchObject({ ok: true, status: 201 });
+    expect(d1Batch.mock.calls[0][0][0].values).toContain('user-1');
+
+    const conflicts = [
+      [{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 }, results: [{ boqCode: '' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 }, results: [{ boqCode: 'COPY-1' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 }, results: [{ boqCode: 'COPY-1' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }],
+    ];
+    for (const result of conflicts) {
+      db.boq.findFirst.mockResolvedValueOnce(source);
+      d1Batch.mockResolvedValueOnce(result);
+      await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toMatchObject({ ok: false, status: 409 });
+    }
   });
 });
 
@@ -174,67 +240,10 @@ describe('add BOQ to budget', () => {
   });
 
   it('validates permission, revision, and target cost centre', async () => {
-    const denied = { status: 401 };
-    auth.mockResolvedValueOnce(denied);
-    isContext.mockReturnValueOnce(false);
-    await expect(addBoqToBudget(post({ boqRevisionId: 'rev', costCentreId: 'cc' }))).resolves.toBe(denied);
-    await expect(addBoqToBudget(post({ boqRevisionId: 'rev' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionIDAndCostCentreIDAreMandatory, status: 400 });
-    db.boqRevision.findFirst.mockResolvedValueOnce(null);
-    await expect(addBoqToBudget(post({ boqRevisionId: 'missing', costCentreId: 'cc' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
-    db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'rev', boq: { projectId: 'project-1' }, lines: [] });
-    db.costCentre.findFirst.mockResolvedValueOnce(null);
-    await expect(addBoqToBudget(post({ boqRevisionId: 'rev', costCentreId: 'cc' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404 });
-  });
-
-  it('creates pending category contributions and preserves PR status while adding budget', async () => {
-    const revision = {
-      id: 'revision-1', boqId: 'boq-1', revisionNumber: 2,
-      boq: { projectId: 'project-1', boqCode: 'BOQ-1', purpose: 'PR' },
-      lines: [
-        { aiTotalCost: 30, aiUnitCost: 10, quantity: 3, category: { name: 'Electrical' } },
-        { aiTotalCost: 0, aiUnitCost: 10, quantity: 2, category: { name: 'Electrical' } },
-        { aiTotalCost: null, aiUnitCost: 5, quantity: 0, category: null },
-        { aiTotalCost: null, aiUnitCost: 2, quantity: -1, category: { name: 'Credit' } },
-      ],
-    };
-    const costCentre = { id: 'cc-1', code: 'CC-1', name: 'Ground Floor', areaSqFt: 1000 };
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision);
-    db.costCentre.findFirst.mockResolvedValueOnce(costCentre);
-    db.budgetContribution.create.mockResolvedValueOnce({ id: 'contribution-1' });
-    db.budgetTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', 'BTX-', 6, 4));
-    db.budgetTransaction.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => data);
-
-    await expect(addBoqToBudget(post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', autoSubmit: true }))).resolves.toMatchObject({
-      ok: true, status: 201, data: { contributionId: 'contribution-1', costCentre, totalEstimatedValue: 53, status: 'PENDING_PROJECT_APPROVAL', categoriesCount: 3 },
-    });
-    expect(db.costCentre.findFirst).toHaveBeenCalledWith({ where: { id: 'cc-1', projectId: 'project-1', tenantId: 'tenant-1' } });
-    expect(db.budgetContribution.create).toHaveBeenCalledWith({ data: expect.objectContaining({ projectId: 'project-1', totalEstimatedValue: 53, acceptedEstimatedValue: 53, status: 'PENDING_PROJECT_APPROVAL', submittedBy: 'user-1' }) });
-    expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ transactionCode: 'BTX-000005', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, amount: 50, quantity: 5, rate: 10, status: 'PENDING_PROJECT_APPROVAL' }) });
-    expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ category: UI_STRINGS.common.general, amount: 5, quantity: 1, rate: 5 }) });
-    expect(db.budgetTransaction.create).toHaveBeenNthCalledWith(3, { data: expect.objectContaining({ category: 'Credit', amount: -2, quantity: -1, rate: null }) });
-    expect(db.boqRevision.update).toHaveBeenCalledWith({ where: { id: 'revision-1' }, data: { costCentreId: 'cc-1', budgetStatus: 'BUDGET_PENDING_PROJECT_APPROVAL' } });
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-1' }, data: { costCentreId: 'cc-1', purpose: 'BOTH' } });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'BOQ_ADDED_TO_BUDGET', entityId: 'contribution-1', projectId: 'project-1' }) });
-  });
-
-  it('creates a draft contribution with a project override and handles write failures', async () => {
-    const revision = { id: 'revision-1', boqId: 'boq-1', revisionNumber: 0, boq: { projectId: 'old-project', boqCode: 'BOQ-1', purpose: 'BUDGET' }, lines: [] };
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision);
-    db.costCentre.findFirst.mockResolvedValueOnce({ id: 'cc-1', code: 'CC-1', name: 'Office' });
-    db.budgetContribution.create.mockResolvedValueOnce({ id: 'contribution-2' });
-    db.budgetTransaction.findMany.mockResolvedValueOnce(existingCodes('transactionCode', 'BTX-', 6, 0));
-    db.boqRevision.update.mockResolvedValueOnce({ id: 'revision-1' });
-    db.boq.update.mockResolvedValueOnce({ id: 'boq-1' });
-    await expect(addBoqToBudget(post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', projectId: 'new-project', autoSubmit: false }))).resolves.toMatchObject({
-      ok: true, data: { totalEstimatedValue: 0, status: 'DRAFT', transactions: [], categoriesCount: 0 },
-    });
-    expect(db.costCentre.findFirst).toHaveBeenLastCalledWith({ where: { id: 'cc-1', projectId: 'new-project', tenantId: 'tenant-1' } });
-    expect(db.budgetContribution.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ projectId: 'new-project', submittedAt: null, submittedBy: null, status: 'DRAFT' }) });
-    expect(db.boq.update).toHaveBeenLastCalledWith({ where: { id: 'boq-1' }, data: { costCentreId: 'cc-1', purpose: UI_STRINGS.componentsSidebar.bUDGET } });
-
-    db.boqRevision.findFirst.mockRejectedValueOnce(new Error('budget write failed'));
-    await expect(addBoqToBudget(post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({ ok: false, error: 'budget write failed', status: 500 });
-    db.boqRevision.findFirst.mockRejectedValueOnce({});
-    await expect(addBoqToBudget(post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({ ok: false, error: 'Failed to add BOQ to budget.', status: 500 });
+    const request = post({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' });
+    const response = { ok: true, data: { contributionId: 'contribution-1' }, status: 201 };
+    (canonicalBudgetPost as jest.Mock).mockResolvedValueOnce(response);
+    await expect(addBoqToBudget(request)).resolves.toBe(response);
+    expect(canonicalBudgetPost).toHaveBeenCalledWith(request);
   });
 });
