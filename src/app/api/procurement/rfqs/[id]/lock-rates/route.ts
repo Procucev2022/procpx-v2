@@ -49,7 +49,7 @@ export async function POST(
     }
 
     if (!vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.winningVendorIDIsRequiredToLockRates, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdLockRatesRoute.winningVendorIDIsRequiredToLockRates, 400, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({
@@ -65,7 +65,7 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST' });
     }
     if (!LOCKABLE_RFQ_STATUSES.includes(rfq.status as typeof LOCKABLE_RFQ_STATUSES[number])) {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
@@ -77,7 +77,7 @@ export async function POST(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFound, 404);
+      return apiError(UI_STRINGS.common.vendorNotFound, 404, { route: '/api/procurement/rfqs/[id]/lock-rates', method: 'POST' });
     }
 
     const [invitation, latestQuote] = await Promise.all([

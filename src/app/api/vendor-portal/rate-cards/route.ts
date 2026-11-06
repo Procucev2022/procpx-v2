@@ -24,12 +24,12 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rate-cards', method: 'GET' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rate-cards', method: 'GET' });
   }
 
   const startedAt = Date.now();
@@ -122,12 +122,12 @@ export async function POST(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
   }
 
   const startedAt = Date.now();
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
     const action = typeof input.action === 'string' ? input.action : undefined;
 
     if (!rateCardId) {
-      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
     }
 
     const rateCard = await prisma.vendorRateCard.findFirst({
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rateCard) {
-      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, 404, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
     }
 
     const now = new Date();
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     // ── CASE 1: VENDOR_ACCEPT (Accept Final Rate Card Version & Terms) ──
     if (action === 'VENDOR_ACCEPT') {
       if (rateCard.status !== 'CATEGORY_MANAGER_ACCEPTED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorAcceptanceRequiresPriorCategoryManagerAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorAcceptanceRequiresPriorCategoryManagerAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
       }
 
       const signature = input.signature && typeof input.signature === 'object' && !Array.isArray(input.signature)

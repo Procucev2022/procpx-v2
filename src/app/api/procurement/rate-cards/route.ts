@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
     const validTo = typeof input.validTo === 'string' && input.validTo.trim() || input.validTo instanceof Date ? new Date(input.validTo) : null;
 
     if (!vendorId || !title || !category || !validFrom || !validTo) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsRoute.vendorIDTitleCategoryValidFromAndValidToAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsRoute.vendorIDTitleCategoryValidFromAndValidToAreRequired, 400, { route: '/api/procurement/rate-cards', method: 'POST' });
     }
     if (!validFrom.getTime() || !validTo.getTime() || validTo < validFrom
       || !RATE_CARD_CREATE_STATUSES.includes(status as typeof RATE_CARD_CREATE_STATUSES[number])) {

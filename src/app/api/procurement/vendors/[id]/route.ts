@@ -88,7 +88,7 @@ export async function GET(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]', method: 'GET' });
     }
 
     // Fetch audit history for this vendor
@@ -145,7 +145,7 @@ export async function PUT(
   const isVendorSelf = ctx.role === 'VENDOR' && hasPermission(ctx.role, 'VENDOR_PROFILE_EDIT') && ctx.vendorId === id;
 
   if (!isInternalManager && !isVendorSelf) {
-    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/vendors/[id]', method: 'PUT' });
   }
 
   try {
@@ -160,7 +160,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404, { route: '/api/procurement/vendors/[id]', method: 'PUT' });
     }
     originalUpdatedAt = existing.updatedAt;
 

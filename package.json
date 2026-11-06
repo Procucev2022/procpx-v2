@@ -16,6 +16,8 @@
     "lint:full": "eslint",
     "db:integrity": "node scripts/check-d1-integrity.cjs",
     "db:integrity:remote": "node scripts/check-d1-integrity.cjs --remote",
+    "db:quality": "node scripts/report-d1-data-quality.cjs",
+    "db:quality:remote": "node scripts/report-d1-data-quality.cjs --remote",
     "db:migrate:safe": "node scripts/apply-d1-migrations.cjs --local",
     "db:d1:migrate:remote": "node scripts/apply-d1-migrations.cjs --remote",
     "db:seed:test": "node scripts/seed-d1-test-fixtures.cjs",

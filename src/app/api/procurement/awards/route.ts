@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     const recommendedVendorId = typeof body.recommendedVendorId === 'string' ? body.recommendedVendorId : undefined;
     const justification = typeof body.justification === 'string' ? body.justification.trim() : '';
     if (!rfqId || !recommendedVendorId || !justification) {
-      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.rFQIDRecommendedVendorAndJustificationAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementAwardsRoute.rFQIDRecommendedVendorAndJustificationAreRequired, 400, { route: '/api/procurement/awards', method: 'POST' });
     }
 
     const rfq = await prisma.rfq.findFirst({ where: { id: rfqId, tenantId: ctx.tenantId } });

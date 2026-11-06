@@ -33,10 +33,10 @@ export async function POST(req: NextRequest) {
     const remarks = typeof body?.remarks === 'string' ? body.remarks.trim() : '';
 
     if (!roundId || !decision) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.roundIDAndDecisionAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.roundIDAndDecisionAreRequired, 400, { route: '/api/procurement/negotiations/decision', method: 'POST' });
     }
     if (!['ACCEPTED', 'REJECTED', 'FINAL_ACCEPTANCE_PENDING'].includes(decision)) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.decisionMustBeACCEPTEDREJECTEDOrFINALACCEPTANCEPENDING, 400);
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsDecisionRoute.decisionMustBeACCEPTEDREJECTEDOrFINALACCEPTANCEPENDING, 400, { route: '/api/procurement/negotiations/decision', method: 'POST' });
     }
 
     const round = await prisma.negotiationRound.findFirst({

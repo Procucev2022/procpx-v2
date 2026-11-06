@@ -30,7 +30,7 @@ export async function POST(
 
   try {
     if (ctx.role === 'PROJECT_USER' || ctx.role === 'PROJECT_APPROVER') {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.projectUsersHaveReadOnlyObserverAccessAndCannotSubmitBids, 403);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.projectUsersHaveReadOnlyObserverAccessAndCannotSubmitBids, 403, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
 
     let body: Record<string, unknown>;
@@ -56,12 +56,12 @@ export async function POST(
       });
 
       if (!vendorRecord) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorProfileNotFoundForThisAccount, 403);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorProfileNotFoundForThisAccount, 403, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
       }
       vendorId = vendorRecord.id;
     } else {
       if (!vendorId) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIDIsRequired, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIDIsRequired, 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
       }
       vendorRecord = await prisma.vendor.findFirst({ where: { tenantId: ctx.tenantId, id: vendorId } });
       if (!vendorRecord) {
@@ -85,22 +85,22 @@ export async function POST(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionNotFoundOrAccessDenied, 404, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
 
     const now = new Date();
 
     if (auction.status === 'PAUSED') {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.biddingIsTemporarilyPausedByTheAuctionAdministrator, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.biddingIsTemporarilyPausedByTheAuctionAdministrator, 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
     if (auction.status === 'CLOSED' || auction.status === 'COMPLETED') {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasConcludedFurtherBidsCannotBeAccepted, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasConcludedFurtherBidsCannotBeAccepted, 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
     if (auction.status === 'CANCELLED') {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasBeenCancelled, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasBeenCancelled, 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
     if (auction.status === 'SCHEDULED' && now < auction.startTime) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionHasNotStartedYetStartsAtToISOString, { "toISOString": auction.startTime.toISOString() }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionHasNotStartedYetStartsAtToISOString, { "toISOString": auction.startTime.toISOString() }), 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
     if (now >= auction.endTime) {
       await writeD1BatchAtomically([{
@@ -116,7 +116,7 @@ export async function POST(
 
     const participantRecord = auction.vendors[0];
     if (!participantRecord) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, 403);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, 403, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
 
     if (!participantRecord.isEligible) {
@@ -124,7 +124,7 @@ export async function POST(
     }
 
     if (!participantRecord.termsAcceptedAt) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.youMustReviewAndAcceptTheAuctionTermsConditionsBeforePlacingYourFirstBid, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.youMustReviewAndAcceptTheAuctionTermsConditionsBeforePlacingYourFirstBid, 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
     }
 
     const isItemWise = auction.auctionCategory === 'ITEM_WISE';
@@ -132,11 +132,11 @@ export async function POST(
 
     if (isItemWise) {
       if (!auctionItemId) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.itemIDIsRequiredForAnItemWiseAuctionBid, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.itemIDIsRequiredForAnItemWiseAuctionBid, 400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
       }
       targetItem = auction.items.find((i) => i.id === auctionItemId) || null;
       if (!targetItem) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.selectedAuctionItemWasNotFound, 404);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.selectedAuctionItemWasNotFound, 404, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
       }
     } else if (auctionItemId) {
       targetItem = auction.items.find((i) => i.id === auctionItemId) || null;
@@ -189,8 +189,7 @@ export async function POST(
         if (numericBid > currentReference) {
           return apiError(
             interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.firstBidCannotExceedTheConfiguredStartingCeilingPriceOfCurrencyToLocaleString, { "currency": auction.currency, "toLocaleString": currentReference.toLocaleString(I18N_CONFIG.defaultLocale) }),
-            400
-          );
+            400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
         }
       } else if (!isFirstBid && currentReference > 0) {
         const minDec = auction.hasMinBidReduction ? Number(auction.minDecrement || 0) : 1;
@@ -198,8 +197,7 @@ export async function POST(
         if (numericBid > maxAllowed) {
           return apiError(
             interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidCurrencyToLocaleStringMustBeAtLeastCurrency2ToLocaleString2LowerThanCurrentLeadingBidCurrency3ToLocaleString3MaximumAllowedCurrency4ToLocaleString4, { "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "currency2": auction.currency, "toLocaleString2": minDec.toLocaleString(I18N_CONFIG.defaultLocale), "currency3": auction.currency, "toLocaleString3": currentReference.toLocaleString(I18N_CONFIG.defaultLocale), "currency4": auction.currency, "toLocaleString4": maxAllowed.toLocaleString(I18N_CONFIG.defaultLocale) }),
-            400
-          );
+            400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
         }
       }
     } else if (auction.auctionType === 'FORWARD_AUCTION') {
@@ -207,8 +205,7 @@ export async function POST(
         if (numericBid < currentReference) {
           return apiError(
             interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.firstBidCannotBeLowerThanTheConfiguredStartingFloorPriceOfCurrencyToLocaleString, { "currency": auction.currency, "toLocaleString": currentReference.toLocaleString(I18N_CONFIG.defaultLocale) }),
-            400
-          );
+            400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
         }
       } else if (!isFirstBid && currentReference > 0) {
         const minInc = auction.hasMinBidReduction ? Number(auction.minDecrement || 0) : 1;
@@ -216,8 +213,7 @@ export async function POST(
         if (numericBid < minAllowed) {
           return apiError(
             interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidCurrencyToLocaleStringMustBeAtLeastCurrency2ToLocaleString2HigherThanCurrentLeadingBidCurrency3ToLocaleString3MinimumAllowedCurrency4ToLocaleString4, { "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "currency2": auction.currency, "toLocaleString2": minInc.toLocaleString(I18N_CONFIG.defaultLocale), "currency3": auction.currency, "toLocaleString3": currentReference.toLocaleString(I18N_CONFIG.defaultLocale), "currency4": auction.currency, "toLocaleString4": minAllowed.toLocaleString(I18N_CONFIG.defaultLocale) }),
-            400
-          );
+            400, { route: '/api/procurement/auctions/[id]/bid', method: 'POST' });
         }
       }
     }

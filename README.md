@@ -31,6 +31,12 @@ npm run db:integrity:remote
 
 Migrations never seed or import data; existing D1 records are preserved.
 
+Read-only data-quality report (duplicates, orphans, summary totals that disagree with their lines):
+```bash
+npm run db:quality          # local D1
+npm run db:quality:remote   # remote D1
+```
+
 To create the schema and add the repeatable, clearly labelled fixture to the isolated local regression D1:
 ```bash
 npm run db:seed:test
@@ -65,6 +71,8 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 | Database | Local Wrangler D1 state | D1 database bound as `DB` (via `@prisma/adapter-d1`) |
 | Uploads | `uploads/` folder | R2 bucket bound as `UPLOADS` |
 | Logs | `logs/` JSONL files | Workers Logs (console) |
+
+**Logs and errors:** every `apiError` response is logged (`http.api_error_response` for 5xx with the caught error, `api.request_rejected` for 4xx), Prisma failures and slow queries are logged as `db.query_failed` / `db.query_slow`, and browser crashes and failed API calls are posted to `/api/observability/client` (`browser.*` events). In Cloudflare, open Workers Logs for the `procpx` worker and filter on these event names; locally use `npm run logs:search -- --level error --since 24h`.
 
 **Database provider:** application runtime always uses D1. `npm run dev` selects Wrangler's local D1 binding; `npm start` runs the Cloudflare Worker preview. Do not configure `DATABASE_URL` or Prisma SQLite for application runtime. Remote D1 migrations and integrity checks require the explicit `npm run db:d1:migrate:remote` and `npm run db:integrity:remote` commands.
 

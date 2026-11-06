@@ -47,7 +47,7 @@ export async function POST(
       return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.forbiddenYouCanOnlyAcceptPurchaseOrdersIssuedToYourCompany, 403);
     }
     if (ppo.vendorStatus === 'ACCEPTED_BY_VENDOR') {
-      return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.thisPurchaseOrderHasAlreadyBeenAccepted, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdVendorAcceptRoute.thisPurchaseOrderHasAlreadyBeenAccepted, 400, { route: '/api/procurement/ppos/[id]/vendor-accept', method: 'POST' });
     }
     if (ppo.status !== 'ISSUED') {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);

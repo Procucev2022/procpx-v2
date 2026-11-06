@@ -36,7 +36,7 @@ export async function GET(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
     let isInvited;
     try {
@@ -54,11 +54,11 @@ export async function GET(
       return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqDetail, 500);
     }
     if (!isInvited) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.forbiddenYouAreNotInvitedToThisRFQ, 403, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
     if (includeNegotiationHistory && !hasPermission(ctx.role, 'NEGOTIATION_VIEW')) {
       return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
@@ -186,7 +186,7 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]', method: 'GET' });
     }
 
     const vendorScope = ctx.role === 'VENDOR' ? Prisma.sql`AND q."vendorId" = ${ctx.vendorId}` : Prisma.empty;
@@ -341,7 +341,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
     }
 
     const updateData: any = {};
@@ -350,7 +350,7 @@ export async function PUT(
 
     if (action === 'RELEASE' || status === 'RELEASED') {
       if (existing.status !== 'DRAFT' && existing.status !== 'UNDER_REVIEW') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdRoute.cannotReleaseRFQInStatusStatus, { "status": existing.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdRoute.cannotReleaseRFQInStatusStatus, { "status": existing.status }), 400, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
       }
       updateData.status = 'RELEASED';
       updateData.releasedAt = new Date();
@@ -358,7 +358,7 @@ export async function PUT(
       auditDesc = `RFQ ${existing.rfqNumber} released to ${existing._count.invitedVendors} vendors`;
     } else if (action === 'CANCEL' || status === 'CANCELLED') {
       if (!reason) {
-        return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400);
+        return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
       }
       updateData.status = 'CANCELLED';
       auditAction = 'RFQ_CANCELLED';

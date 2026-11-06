@@ -42,13 +42,13 @@ export async function GET(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET' });
     }
     // Force vendorId to authenticated vendor
     vendorId = ctx.vendorId;
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET' });
     }
   }
 
@@ -63,7 +63,7 @@ export async function GET(
       },
     });
 
-    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/messages', method: 'GET' });
 
     const where: Record<string, unknown> = {
       tenantId: ctx.tenantId,
@@ -126,11 +126,11 @@ export async function POST(
 
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId) {
-      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403);
+      return apiError(UI_STRINGS.common.forbiddenUnmappedVendorAccount, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
     }
   } else {
     if (!hasPermission(ctx.role, 'RFQ_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
     }
   }
 
@@ -152,7 +152,7 @@ export async function POST(
       },
     });
 
-    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+    if (!rfq) return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
 
     const effectiveVendorId = ctx.role === 'VENDOR' ? ctx.vendorId! : (typeof vendorId === 'string' ? vendorId : null);
     if (effectiveVendorId && ctx.role !== 'VENDOR') {

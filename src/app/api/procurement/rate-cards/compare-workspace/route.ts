@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const startedAt = Date.now();
 
   if (!vendorId) {
-    return apiError(UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, 400);
+    return apiError(UI_STRINGS.appApiProcurementRateCardsCompareWorkspaceRoute.vendorIdQueryParameterIsRequired, 400, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET' });
   }
 
   try {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFound, 404);
+      return apiError(UI_STRINGS.common.vendorNotFound, 404, { route: '/api/procurement/rate-cards/compare-workspace', method: 'GET' });
     }
 
     // 2. Selected Vendor's Past Quotations

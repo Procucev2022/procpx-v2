@@ -363,7 +363,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, 404, { route: '/api/procurement/auctions', method: 'POST' });
     }
 
     if (!isDraft) {
@@ -419,7 +419,7 @@ export async function POST(req: NextRequest) {
     }
     if (!isDraft) {
       if (end <= start) {
-        return apiError(UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, 400);
+        return apiError(UI_STRINGS.common.auctionEndTimeMustBeLaterThanStartTime, 400, { route: '/api/procurement/auctions', method: 'POST' });
       }
     }
 

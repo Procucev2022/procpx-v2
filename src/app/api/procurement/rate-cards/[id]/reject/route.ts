@@ -36,12 +36,12 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/reject', method: 'POST' });
     }
 
     const pendingStatuses = ['PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL'];
     if (!pendingStatuses.includes(rateCard.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRejectRoute.cannotRejectRateCardInStatusStatus, { "status": rateCard.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRejectRoute.cannotRejectRateCardInStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]/reject', method: 'POST' });
     }
 
     const now = new Date();
@@ -75,6 +75,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Error rejecting rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRejectRateCard2 }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToRejectRateCard2 }), 500, { route: '/api/procurement/rate-cards/[id]/reject', method: 'POST', error: error });
   }
 }

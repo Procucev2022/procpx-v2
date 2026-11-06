@@ -4,6 +4,7 @@ jest.mock('@prisma/client', () => ({
 jest.mock('@opennextjs/cloudflare', () => ({ getCloudflareContext: jest.fn() }));
 jest.mock('@prisma/adapter-d1', () => ({ PrismaD1: jest.fn().mockImplementation((db) => ({ db })) }));
 jest.mock('../src/lib/d1-compat', () => ({ withD1Compat: jest.fn((client) => client) }));
+jest.mock('../src/lib/observability/query-logging', () => ({ withQueryLogging: jest.fn((client) => client) }));
 import { PrismaClient } from '@prisma/client';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { PrismaD1 } from '@prisma/adapter-d1';

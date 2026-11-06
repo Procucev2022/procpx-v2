@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const reason = body && typeof body === 'object' && typeof body.reason === 'string' ? body.reason : undefined;
 
     if (!reason || !reason.trim()) {
-      return apiError(UI_STRINGS.appApiPrIdRevertRoute.mandatoryReasonForRevertingForCorrectionMustBeProvided, 400);
+      return apiError(UI_STRINGS.appApiPrIdRevertRoute.mandatoryReasonForRevertingForCorrectionMustBeProvided, 400, { route: '/api/pr/[id]/revert', method: 'POST' });
     }
 
     const pr = await prisma.procurementRequest.findFirst({
@@ -34,10 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
-    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/revert', method: 'POST' });
 
     if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.cannotRevertBOQInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdRevertRoute.cannotRevertBOQInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400, { route: '/api/pr/[id]/revert', method: 'POST' });
     }
 
     const trimmedReason = reason.trim();

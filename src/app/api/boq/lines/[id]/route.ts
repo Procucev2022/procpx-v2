@@ -15,7 +15,7 @@ export async function GET(
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
-  if (!id) return apiError(UI_STRINGS.appApiBoqLinesIdRoute.lineIDIsRequired, 400);
+  if (!id) return apiError(UI_STRINGS.appApiBoqLinesIdRoute.lineIDIsRequired, 400, { route: '/api/boq/lines/[id]', method: 'GET' });
 
   const line = await prisma.boqLine.findFirst({
     where: {
@@ -43,7 +43,7 @@ export async function GET(
   });
 
   if (!line) {
-    return apiError(UI_STRINGS.appApiBoqLinesIdRoute.bOQLineItemNotFound, 404);
+    return apiError(UI_STRINGS.appApiBoqLinesIdRoute.bOQLineItemNotFound, 404, { route: '/api/boq/lines/[id]', method: 'GET' });
   }
 
   const enrichedLine = {

@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
       where: { id: normalizedProjectId, tenantId: ctx.tenantId },
     });
     if (!project) {
-      return apiError(UI_STRINGS.appApiCostCentresRoute.projectNotFoundOrInaccessible, 404);
+      return apiError(UI_STRINGS.appApiCostCentresRoute.projectNotFoundOrInaccessible, 404, { route: '/api/cost-centres', method: 'POST' });
     }
 
     // Check duplicate code within project

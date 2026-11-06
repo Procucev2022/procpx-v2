@@ -27,7 +27,7 @@ export async function POST(
     const { message } = body;
 
     if (!message || !message.trim()) {
-      return apiError(UI_STRINGS.common.messageTextIsRequired, 400);
+      return apiError(UI_STRINGS.common.messageTextIsRequired, 400, { route: '/api/procurement/rate-cards/[id]/message', method: 'POST' });
     }
 
     const rateCard = await prisma.vendorRateCard.findUnique({
@@ -35,7 +35,7 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/message', method: 'POST' });
     }
 
     const currentLevel = rateCard.approvalLevel || 'LEVEL_1_PROJECT';
@@ -91,7 +91,7 @@ export async function GET(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/message', method: 'GET' });
     }
 
     const approvals = await prisma.rateCardApproval.findMany({

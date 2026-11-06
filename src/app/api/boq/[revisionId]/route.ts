@@ -109,7 +109,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
   }
 
   if (!boq && !revision) {
-    return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQOrRevisionNotFound, 404);
+    return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQOrRevisionNotFound, 404, { route: '/api/boq/[revisionId]', method: 'GET' });
   }
 
   const rawLines = revision?.lines || [];
@@ -174,7 +174,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
     }
 
     if (!boq) {
-      return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQNotFound, 404);
+      return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQNotFound, 404, { route: '/api/boq/[revisionId]', method: 'PATCH' });
     }
 
     const updatedBoq = await prisma.boq.update({
@@ -191,7 +191,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
 
     return apiSuccess({ success: true, boq: updatedBoq });
   } catch (err: any) {
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateBoq }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.failedToUpdateBoq }), 500, { route: '/api/boq/[revisionId]', method: 'PATCH', error: err });
   }
 }
 

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/ppos', method: 'GET' });
   }
 
   const { searchParams } = new URL(req.url);

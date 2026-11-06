@@ -4,6 +4,7 @@ import { createAuditLog } from '../src/lib/audit';
 import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { isApiContext, requireAuth } from '../src/lib/api-utils';
 import bcrypt from 'bcryptjs';
+import { PASSWORD_HASH_ROUNDS } from '../src/lib/password.constants';
 import { GET as listUsers, POST as createUser } from '../src/app/api/admin/users/route';
 import { PUT } from '../src/app/api/admin/users/[id]/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -124,7 +125,7 @@ describe('admin user update route', () => {
     await expect(create({ email: ' ADA@EXAMPLE.TEST ', name: ' Ada Lovelace ', role: 'BUYER', password: 'long-password' })).resolves.toEqual({
       ok: true, data: { id: 'new-user', email: 'ada@example.test' }, status: 201,
     });
-    expect(passwordHash).toHaveBeenCalledWith('long-password', 12);
+    expect(passwordHash).toHaveBeenCalledWith('long-password', PASSWORD_HASH_ROUNDS);
     expect(userDb.create).toHaveBeenCalledWith({
       data: {
         tenantId: 'tenant-1', email: 'ada@example.test', name: 'Ada Lovelace', role: 'BUYER',

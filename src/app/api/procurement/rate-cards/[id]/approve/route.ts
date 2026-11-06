@@ -32,7 +32,7 @@ export async function POST(
     });
 
     if (!rateCard || rateCard.tenantId !== ctx.tenantId) {
-      return apiError(UI_STRINGS.common.rateCardNotFound, 404);
+      return apiError(UI_STRINGS.common.rateCardNotFound, 404, { route: '/api/procurement/rate-cards/[id]/approve', method: 'POST' });
     }
 
     let remarks = '';
@@ -51,7 +51,7 @@ export async function POST(
       // Level 1: Project Approver
       const allowedRoles = ['PROJECT_APPROVER', 'SUPER_ADMIN', 'CLIENT_ADMIN'];
       if (!allowedRoles.includes(ctx.role)) {
-        return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyProjectApproversOrAdminsCanPerformLevel1Approval, 403);
+        return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyProjectApproversOrAdminsCanPerformLevel1Approval, 403, { route: '/api/procurement/rate-cards/[id]/approve', method: 'POST' });
       }
 
       const approvalId = crypto.randomUUID();
@@ -84,7 +84,7 @@ export async function POST(
       // Level 2: Finance Approver
       const allowedRoles = ['FINANCE_APPROVER', 'FINANCE_USER', 'SUPER_ADMIN', 'CLIENT_ADMIN'];
       if (!allowedRoles.includes(ctx.role)) {
-        return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyFinanceApproversOrAdminsCanPerformLevel2Approval, 403);
+        return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.forbiddenOnlyFinanceApproversOrAdminsCanPerformLevel2Approval, 403, { route: '/api/procurement/rate-cards/[id]/approve', method: 'POST' });
       }
 
       // Requirement 5: Enforce that an agreement awaiting mandatory signatures cannot be activated
@@ -106,7 +106,7 @@ export async function POST(
           ? agreement.signature as Record<string, unknown> : null;
         const isSigned = signature?.verified === true;
         if (!isSigned) {
-          return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.activationBlockedThisRateCardRequiresAnExecutedBilateralAgreementWithValidDigitalSignatureEvidenceUnsignedAgreementsCannotBeActivatedWithoutVerifiedSignatureEvidence, 400);
+          return apiError(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.activationBlockedThisRateCardRequiresAnExecutedBilateralAgreementWithValidDigitalSignatureEvidenceUnsignedAgreementsCannotBeActivatedWithoutVerifiedSignatureEvidence, 400, { route: '/api/procurement/rate-cards/[id]/approve', method: 'POST' });
         }
       }
 
@@ -137,7 +137,7 @@ export async function POST(
         message: UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.level2FinanceApprovalCompletedRateCardIsNowActiveAndApproved,
       });
     } else {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.rateCardIsNotInAPendingApprovalStateCurrentStatusStatus, { "status": rateCard.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdApproveRoute.rateCardIsNotInAPendingApprovalStateCurrentStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]/approve', method: 'POST' });
     }
   } catch (error: unknown) {
     await writeStructuredLog('error', 'rate_card.approval_failed', {

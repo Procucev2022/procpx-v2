@@ -126,7 +126,7 @@ export async function GET(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET' });
     }
 
     // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.invalidRequestBody, 400);
     }
     if (!boqRevisionId && !boqId) {
-      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400);
+      return apiError(UI_STRINGS.common.bOQRevisionIDOrBOQIDIsRequired, 400, { route: '/api/boq/create-pr', method: 'POST' });
     }
     if (selectedLineIds !== undefined && (!Array.isArray(selectedLineIds) || selectedLineIds.some((id) => typeof id !== 'string'))) {
       return apiError(UI_STRINGS.common.invalidRequestBody, 400);
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!revision) {
-      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+      return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
     const targetProjectId = projectId || revision.boq.projectId;
@@ -116,14 +116,14 @@ export async function POST(req: NextRequest) {
     const targetCostCentreId = costCentreId || revision.costCentreId || revision.boq.costCentreId;
 
     if (!targetCostCentreId) {
-      return apiError(UI_STRINGS.appApiBoqCreatePrRoute.aValidCostCentreIsRequiredToCreateAPR, 400);
+      return apiError(UI_STRINGS.appApiBoqCreatePrRoute.aValidCostCentreIsRequiredToCreateAPR, 400, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: targetCostCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
     if (!costCentre) {
-      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+      return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
     // Filter lines if specific line selection was provided
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
       : revision.lines;
 
     if (targetLines.length === 0) {
-      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400);
+      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/boq/create-pr', method: 'POST' });
     }
     const maxLinesPerAtomicWrite = MAX_PR_BATCH_LINES;
     if (targetLines.length > maxLinesPerAtomicWrite) {
@@ -146,8 +146,7 @@ export async function POST(req: NextRequest) {
     if (missingQtyLines.length > 0) {
       return apiError(
         interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.quantityRequiredForLengthItemValue2BeforeCreatingPR, { "length": missingQtyLines.length, "value2": missingQtyLines.length > 1 ? 's' : '' }),
-        400
-      );
+        400, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
     // Prevent duplicate PR creation (Correction 6)
@@ -161,8 +160,7 @@ export async function POST(req: NextRequest) {
     if (existingActivePr) {
       return apiError(
         interpolateUiString(UI_STRINGS.appApiBoqCreatePrRoute.anActiveProcurementRequestPrNumberAlreadyExistsForThisBOQRevisionDuplicatePRCreationIsPrevented, { "prNumber": existingActivePr.prNumber }),
-        409
-      );
+        409, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
     let totalEstimatedPRValue = 0;

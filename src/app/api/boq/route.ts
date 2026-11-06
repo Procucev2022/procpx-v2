@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.appApiBoqRoute.bOQCategoryIsRequired, 400);
     }
     if (!purpose || !['BUDGET', 'PR'].includes(purpose)) {
-      return apiError(UI_STRINGS.appApiBoqRoute.bOQPurposeBUDGETOrPRIsRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqRoute.bOQPurposeBUDGETOrPRIsRequired, 400, { route: '/api/boq', method: 'POST' });
     }
     if ([body.description, body.scope, body.sector, body.projectType, body.floorZone, body.requiredDate, body.referenceDrawing, body.remarks]
       .some((value) => value !== undefined && value !== null && typeof value !== 'string')) {

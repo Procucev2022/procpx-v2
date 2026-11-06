@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   const session = await auth();
   if (!session?.user) {
-    return apiError(UI_STRINGS.appApiAuthMeRoute.unauthorized, 401);
+    return apiError(UI_STRINGS.appApiAuthMeRoute.unauthorized, 401, { route: '/api/auth/me', method: 'GET' });
   }
 
   return apiSuccess({
