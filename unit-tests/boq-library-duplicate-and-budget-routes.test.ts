@@ -7,6 +7,7 @@ import { POST as addBoqToBudget } from '../src/app/api/budgets/add-boq/route';
 import { POST as canonicalBudgetPost } from '../src/app/api/boq/add-to-budget/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -99,13 +100,41 @@ describe('BOQ generation from the standard library', () => {
     db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
     db.category.findMany.mockResolvedValueOnce([]);
     db.uomMaster.findMany.mockResolvedValueOnce([]);
-    await createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }));
+    await createFromLibrary(post({ projectId: 'project-1', items: [
+      { standardDescription: 'Item' },
+      { standardDescription: 'Blank quantities', quantity: ' ', benchmarkRate: null },
+    ] }));
     expect(d1Batch.mock.calls[0][0][0].values).toContain(null);
 
     db.project.findFirst.mockRejectedValueOnce(new Error('BOQ setup failed'));
     await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.standardBoqGenerationFailed, status: 500 });
     db.project.findFirst.mockRejectedValueOnce({});
     await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.standardBoqGenerationFailed, status: 500 });
+  });
+
+  it('rejects malformed input and oversized item lists and detects partial D1 writes', async () => {
+    const malformed = new NextRequest('http://localhost/api/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid',
+    });
+    await expect(createFromLibrary(malformed)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createFromLibrary(post({ items: [{ standardDescription: 'Missing project' }] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [null] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, () => ({ standardDescription: 'Valid line' })) }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    d1Batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    d1Batch.mockResolvedValueOnce([
+      { meta: { changes: 1 }, results: [{ boqCode: 'BOQ-1' }] },
+      { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } },
+    ]);
+    await expect(createFromLibrary(post({ projectId: 'project-1', items: [{ standardDescription: 'Item' }] }))).resolves.toMatchObject({ ok: false, status: 409 });
   });
 });
 
