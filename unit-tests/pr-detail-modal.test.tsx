@@ -2,7 +2,7 @@
 import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PrDetailModal from '../src/components/PrDetailModal';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -89,6 +89,34 @@ describe('purchase request detail modal', () => {
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.viewBOQRevision) })).toHaveAttribute('href', '/boq/rev-3');
     expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).not.toBeInTheDocument();
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('uses safe display fallbacks for incomplete legacy PR and RFQ fields', () => {
+    render(<PrDetailModal isOpen onClose={jest.fn()} pr={{
+      id: 'pr-legacy-fallbacks',
+      prNumber: 'PR-LEGACY-FALLBACKS',
+      status: 'PR_APPROVED',
+      requestedValue: 'not-a-number',
+      totalLines: 'unknown',
+      costCentre: {},
+      lines: [{ ...fullLine, id: '', quantity: null, estimatedRate: ' ', estimatedValue: 'bad-value', itemCode: 'LEGACY-CODE', itemDescription: '' }],
+      rfqs: [{
+        id: 'rfq-legacy',
+        rfqNumber: 'RFQ-LEGACY',
+        status: 'CANCELLED',
+        description: '',
+        packageName: '',
+        title: 'Legacy package title',
+        quotesCount: 0,
+        vendorInvitationProgress: '',
+      }],
+    }} />);
+
+    expect(screen.getByText('Legacy package title')).toBeInTheDocument();
+    expect(screen.getByText('RFQ-LEGACY')).toBeInTheDocument();
+    expect(screen.getByText('LEGACY-CODE')).toBeInTheDocument();
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.notAvailable)).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsPrDetailModal.createRFQForThisPR) })).toHaveAttribute('href', '/procurement/rfqs/new?prId=pr-legacy-fallbacks');
   });
 
   it('hydrates incomplete line data without fabricating missing master data', async () => {
@@ -206,6 +234,38 @@ describe('purchase request detail modal', () => {
     }) });
     await waitFor(() => expect(screen.queryByText('Stale PR line')).not.toBeInTheDocument());
     expect(screen.getByText('New PR line')).toBeInTheDocument();
+  });
+
+  it('ignores an older detail response after the modal switches to another PR', async () => {
+    type MockResponse = { ok: boolean; json: () => Promise<unknown> };
+    let resolveOldDetail: ((value: MockResponse) => void) | undefined;
+    let resolveNewDetail: ((value: MockResponse) => void) | undefined;
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/pr/pr-detail-old') {
+        return new Promise<MockResponse>((resolve) => { resolveOldDetail = resolve; });
+      }
+      if (url === '/api/pr/pr-detail-new') {
+        return new Promise<MockResponse>((resolve) => { resolveNewDetail = resolve; });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    const { rerender } = render(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-detail-old', prNumber: 'PR-DETAIL-OLD' }} />);
+    rerender(<PrDetailModal isOpen onClose={jest.fn()} pr={{ id: 'pr-detail-new', prNumber: 'PR-DETAIL-NEW' }} />);
+    await act(async () => {
+      resolveNewDetail?.({ ok: true, json: async () => ({
+        id: 'pr-detail-new', lines: [{ ...fullLine, id: 'fresh-line', itemDescription: 'Fresh detail line' }],
+      }) });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+    expect(await screen.findByText('Fresh detail line')).toBeInTheDocument();
+    await act(async () => {
+      resolveOldDetail?.({ ok: true, json: async () => ({
+        id: 'pr-detail-old', lines: [{ ...fullLine, id: 'stale-detail-line', itemDescription: 'Stale detail line' }],
+      }) });
+    });
+    await waitFor(() => expect(screen.queryByText('Stale detail line')).not.toBeInTheDocument());
+    expect(screen.getByText('Fresh detail line')).toBeInTheDocument();
   });
 
   it('uses explicit unavailable values for sparse API lines and supports legacy revision links', async () => {
