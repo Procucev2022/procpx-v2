@@ -712,5 +712,23 @@ describe('procurement vendor profile', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsIdPage.loadMoreEligiblePpos) }));
     expect(await screen.findByRole('option', { name: /PPO-ELIGIBLE-2/ })).toBeInTheDocument();
   });
+
+  it('loads nested vendor response envelopes and defaults incomplete evaluation fields', async () => {
+    vendorRecord = {
+      ...fullVendor(),
+      evaluations: [{
+        businessProfileScore: null, financialStrengthScore: null, previousClientsScore: null,
+        referencesScore: null, technicalCapabilityScore: null, complianceRiskScore: null,
+        status: '', qualificationOutcome: '', decisionRemarks: '',
+      }],
+    };
+    profileBody = { data: { vendor: vendorRecord, auditLogs: [] }, eligiblePposToRate: [] };
+    authBody = { data: { user: { role: 'FINANCE' } } };
+    setupFetch();
+    renderProfile('evaluation');
+
+    expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appLoginPageConstants.apexInfrastructure) })).toBeInTheDocument();
+    expect(screen.getAllByRole('spinbutton').map((input) => (input as HTMLInputElement).value)).toEqual(['70', '65', '70', '65', '75', '70']);
+  });
 });
 
