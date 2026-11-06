@@ -8,6 +8,11 @@ import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { RATE_CARD_AUDIT_INSERT_AFTER_CREATE_SQL, RATE_CARD_INSERT_IF_VENDOR_VALID_SQL, RATE_CARD_ITEMS_INSERT_JSON_AFTER_CARD_SQL } from '../src/lib/d1-batch.constants';
 import { MAX_RATE_CARD_ITEMS } from '../src/lib/d1-batch.constants';
 import { UI_STRINGS } from '../src/lib/ui-strings.constants';
+import {
+  MAX_RATE_CARD_NOTES_LENGTH,
+  MAX_RATE_CARD_TERMS_LENGTH,
+  MAX_RATE_CARD_TEXT_LENGTH,
+} from '../src/app/api/procurement/rate-cards/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -170,6 +175,35 @@ describe('procurement rate cards route', () => {
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCards, status: 500 });
   });
 
+  it('applies each approval queue, caps pagination, rejects oversized search, and logs non-Error failures', async () => {
+    for (const [queue, expectedStatus] of [
+      ['ALL_PENDING', { in: ['PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL'] }],
+      ['LEVEL_1', 'PENDING_PROJECT_APPROVAL'],
+      ['LEVEL_2', 'PENDING_FINANCE_APPROVAL'],
+      ['CONCLUDED', { in: ['APPROVED', 'RETURNED_FOR_CORRECTION', 'REJECTED'] }],
+    ] as const) {
+      await GET(getRequest(`?queue=${queue}&page=20000&pageSize=100`));
+      expect(db.vendorRateCard.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: { tenantId: 'tenant-1', status: expectedStatus }, skip: 9_999 * 50, take: 50,
+      }));
+      expect(db.vendorRateCard.groupBy).toHaveBeenLastCalledWith(expect.objectContaining({
+        where: { tenantId: 'tenant-1' },
+      }));
+    }
+
+    await GET(getRequest('?queue=LEVEL_1&status=DRAFT&page=2&limit=3'));
+    expect(db.vendorRateCard.groupBy).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', status: 'DRAFT' },
+    }));
+    await expect(GET(getRequest(`?search=${'x'.repeat(MAX_RATE_CARD_TEXT_LENGTH + 1)}`))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.vendorRateCard.count.mockRejectedValueOnce('database unavailable');
+    await expect(GET(getRequest())).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'rate_card.list_read_failed', expect.objectContaining({
+      error: { type: 'string' },
+    }));
+  });
+
   it('creates draft cards with normalized defaults and all item comparison fallbacks', async () => {
     const items = [
       { itemCode: 'CBL-1', standardBoqItemId: 'standard-1', description: 'Copper cable', buyerOffer1: 100, rate: 90, vendorQuote1: '120', previousPpoRate: '80', referenceQty: '5', proposedRate: '110', benchmarkRate: '95', maxQuantity: '10', remarks: 'first' },
@@ -247,5 +281,48 @@ describe('procurement rate cards route', () => {
     await expect(POST(postRequest({ ...requiredBody, validFrom: 'bad-date' }))).resolves.toMatchObject({ ok: false, status: 400 });
     await expect(POST(postRequest({ ...requiredBody, status: 'UNRECOGNIZED' }))).resolves.toMatchObject({ ok: false, status: 400 });
     expect(batch).not.toHaveBeenCalled();
+  });
+
+  it('validates malformed bodies, text limits, optional field types, and valid Date objects', async () => {
+    for (const body of [null, [], 'not-an-object']) {
+      await expect(POST(postRequest(body))).resolves.toMatchObject({ ok: false, status: 400 });
+    }
+    await expect(POST(postRequest({ ...requiredBody, terms: 'x'.repeat(MAX_RATE_CARD_TERMS_LENGTH + 1) }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...requiredBody, notes: 'x'.repeat(MAX_RATE_CARD_NOTES_LENGTH + 1) }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...requiredBody, subcategory: 'x'.repeat(MAX_RATE_CARD_TEXT_LENGTH + 1) }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...requiredBody, title: 42 }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...requiredBody, items: {} }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...requiredBody, items: [null] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...requiredBody, items: [{ description: 42 }] }))).resolves.toMatchObject({ ok: false, status: 400 });
+    expect(batch).not.toHaveBeenCalled();
+
+    await expect(POST(postRequest({
+      ...requiredBody,
+      validFrom: new Date('2026-01-01'), validTo: new Date('2027-01-01'),
+      subcategory: 7, scope: false, location: null, version: 2.8,
+      terms: 12, notes: false, justification: 5, comparisonNotes: {},
+      items: [{
+        description: 'Cable', rate: 10, specification: '4C x 25mm', category: 'Wire',
+        subcategory: 'Power', uom: 'm', location: 'Pune', buyerOffer1: 10,
+        proposedRate: 12, benchmarkRate: 'not-a-number', previousPpoRate: '',
+        historicalRate: '', vendorQuote1: '', referenceQty: '2', maxQuantity: 'bad',
+      }],
+    }))).resolves.toMatchObject({ ok: true, status: 201 });
+    const item = JSON.parse(batch.mock.calls[0][0][1].values[0] as string)[0];
+    expect(item).toMatchObject({ specification: '4C x 25mm', category: 'Wire', subcategory: 'Power', uom: 'm', location: 'Pune', benchmarkRate: null, maxQuantity: null });
+  });
+
+  it('handles conditional write failures and non-Error creation exceptions', async () => {
+    batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+    await expect(POST(postRequest({ ...requiredBody, items: [] }))).resolves.toMatchObject({ ok: false, status: 500 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
+    await expect(POST(postRequest(requiredBody))).resolves.toMatchObject({ ok: false, status: 500 });
+
+    batch.mockRejectedValueOnce('write unavailable');
+    await expect(POST(postRequest(requiredBody))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.creation_failed', expect.objectContaining({
+      error: { type: 'string' },
+    }));
   });
 });
