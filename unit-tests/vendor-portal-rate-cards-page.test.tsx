@@ -208,6 +208,39 @@ describe('vendor portal rate cards page', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToAcceptRateCard))).toBeInTheDocument();
   });
 
+  it('appends another rate-card page and validates missing quote values', async () => {
+    const firstPageCard = { ...rateCards[0], items: [{ id: 'blank-r1', description: 'Round one blank quote', itemCode: '', specification: '', uom: 'EA' }] };
+    const secondPageCard = {
+      id: 'round2-blank', rateCardNumber: 'RC-ROUND-2-BLANK', status: 'ROUND_2_BUYER_OFFER', category: 'General',
+      items: [{ id: 'blank-r2', description: 'Round two blank quote', itemCode: '', specification: '', uom: 'EA', buyerOffer1: 100 }],
+    };
+    global.fetch = jest.fn((requestUrl: string | URL | Request) => {
+      const page = new URL(String(requestUrl), 'http://localhost').searchParams.get('page');
+      return Promise.resolve(page === '2'
+        ? response({ rateCards: [secondPageCard], total: 2, hasMore: false })
+        : response({ rateCards: [firstPageCard], total: 2, hasMore: true }));
+    }) as unknown as typeof fetch;
+
+    render(<VendorRateCardsPage />);
+    await flush();
+    const quoteOne = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote1));
+    expect(quoteOne).toHaveValue(null);
+    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.copy4s9bsz)).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadMoreRateCards) }));
+    await flush();
+    expect(screen.getByText('RC-ROUND-2-BLANK')).toBeInTheDocument();
+    const roundTwoCard = screen.getByText('RC-ROUND-2-BLANK').closest('.card') as HTMLElement;
+    fireEvent.click(roundTwoCard.firstElementChild as HTMLElement);
+    const quoteTwo = within(roundTwoCard).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.quote2));
+    expect(quoteTwo).toHaveValue(null);
+    fireEvent.click(within(roundTwoCard).getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Submit', toLocaleString: 'Vendor RC Quote-2' })),
+    }));
+    expect(screen.getByText(/valid rate greater than zero/)).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('enters the full-window negotiation view from a URL id or case-insensitive rate card number', async () => {
     window.history.replaceState({}, '', '/vendor-portal/rate-cards?negotiate=rc-round-2');
     render(<VendorRateCardsPage />);
