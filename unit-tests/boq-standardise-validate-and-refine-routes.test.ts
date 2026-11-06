@@ -122,6 +122,36 @@ describe('BOQ revision standardisation', () => {
     expect(db.boqRevision.update).not.toHaveBeenCalled();
     expect(audit).not.toHaveBeenCalled();
   });
+
+  it('enforces the standardisation batch limit and detects partial atomic writes', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-large', status: 'DRAFT', lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, () => ({})),
+    });
+    await expect(standardiseRevision(request(), params)).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const revisionWithMissingOptionalFields = {
+      id: 'revision-null-uom', status: 'DRAFT', revisionCode: 'R1', updatedAt: new Date(), boq: { projectId: 'project-1' },
+      lines: [{ id: 'line-1', originalDescription: 'unknown item', standardDescription: null, uomRaw: null, uomId: null, categoryId: null, subcategoryId: null, quantity: 1 }],
+    };
+    db.boqRevision.findFirst.mockResolvedValueOnce(revisionWithMissingOptionalFields);
+    standardiseDesc.mockReturnValueOnce({ matched: false });
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(standardiseRevision(request(), params)).resolves.toMatchObject({ ok: true });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(revisionWithMissingOptionalFields);
+    standardiseDesc.mockReturnValueOnce({ matched: false });
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+    await expect(standardiseRevision(request(), params)).resolves.toMatchObject({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(revisionWithMissingOptionalFields);
+    standardiseDesc.mockReturnValueOnce({ matched: false });
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    await expect(standardiseRevision(request(), params)).resolves.toMatchObject({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+  });
 });
 
 describe('BOQ validation route', () => {
@@ -292,5 +322,30 @@ describe('AI BOQ refinement route', () => {
       boqRevisionId: 'revision-3',
       error: { name: 'Error', message: 'D1 batch unavailable' },
     }));
+  });
+
+  it('bounds loaded lines, handles blank descriptions, and tolerates diagnostic storage failure', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-large', revisionNumber: 1, updatedAt: new Date(), boq: { projectId: 'project-1', boqCode: 'BOQ-1' },
+      lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, (_, index) => ({
+        id: `line-${index}`, lineNumber: String(index + 1), originalDescription: 'Cable',
+      })),
+    });
+    await expect(refineRevision(request('http://localhost/api/test', { boqRevisionId: 'revision-large' }))).resolves.toMatchObject({
+      ok: false, status: 400,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-blank', revisionNumber: 1, updatedAt: new Date(), boq: { projectId: 'project-1', boqCode: 'BOQ-1' },
+      lines: [{ id: 'line-blank', lineNumber: '1', originalDescription: '', standardDescription: null }],
+    });
+    writeBatch.mockResolvedValueOnce([
+      { meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } },
+    ]);
+    writeLog.mockRejectedValueOnce(new Error('local log storage unavailable'));
+    await expect(refineRevision(request('http://localhost/api/test', { boqRevisionId: 'revision-blank' }))).resolves.toMatchObject({
+      ok: false, status: 500,
+    });
+    expect(writeLog).toHaveBeenLastCalledWith('error', 'boq.refinement_failed', expect.objectContaining({ boqRevisionId: 'revision-blank' }));
   });
 });
