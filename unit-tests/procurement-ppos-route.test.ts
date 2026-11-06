@@ -188,6 +188,13 @@ describe('procurement PPO collection API', () => {
     expect(db.ppo.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', projectId: 'project-query' },
     }));
+
+    const scopedFilterWithoutProject = { team: { some: { userId: 'user-1' } } };
+    projectAccessFilter.mockResolvedValueOnce(scopedFilterWithoutProject);
+    await expect(GET(getRequest())).resolves.toMatchObject({ ok: true });
+    expect(db.ppo.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', project: { is: scopedFilterWithoutProject } },
+    }));
   });
 
   it('captures GET provider errors and returns a safe fallback', async () => {
@@ -243,6 +250,45 @@ describe('procurement PPO collection API', () => {
     });
   });
 
+  it('rejects malformed PPO payloads, unauthorized projects, and inconsistent award references', async () => {
+    const malformedJson = new NextRequest('http://localhost/api/procurement/ppos', { method: 'POST', body: '{' });
+    await expect(POST(malformedJson)).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(postRequest(null))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', action: 5 }))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', deliveryTerms: 5 }))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+
+    projectAuthorized.mockResolvedValueOnce(false);
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 403, error: UI_STRINGS.common.forbiddenInsufficientPermissions });
+    db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({ status: 'DRAFT' }));
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 409, error: UI_STRINGS.appApiProcurementPposRoute.rFQMustHaveAnApprovedAwardBeforePpoCreation });
+    db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({ awards: [
+      { id: 'award-a', recommendedVendorId: 'vendor-1', finalNegotiatedAmount: 60, status: 'APPROVED' },
+      { id: 'award-b', recommendedVendorId: 'vendor-2', finalNegotiatedAmount: 60, status: 'APPROVED' },
+    ] }));
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiProcurementPposRoute.awardRecommendationIdRequiredWhenMultipleApprovedAwardsExist,
+    });
+    db.rfq.findFirst.mockResolvedValueOnce(rfqRecord());
+    await expect(POST(postRequest({ rfqId: 'rfq-1', targetVendorId: 'vendor-2' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.appApiProcurementPposRoute.selectedVendorMustMatchApprovedAwardRecommendation,
+    });
+    db.awardRecommendation.findFirst.mockResolvedValueOnce({ id: 'award-pending', rfqId: 'rfq-1', status: 'PENDING_APPROVAL' });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', awardRecommendationId: 'award-pending' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.appApiProcurementPposRoute.awardRecommendationMustBeApprovedBeforeCreatingPpo,
+    });
+    db.awardRecommendation.findFirst.mockResolvedValueOnce({ id: 'award-selected', rfqId: 'rfq-1', recommendedVendorId: 'vendor-1', status: 'APPROVED' });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', awardRecommendationId: 'award-selected', targetVendorId: 'vendor-2' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.appApiProcurementPposRoute.selectedVendorMustMatchApprovedAwardRecommendation,
+    });
+    db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({ awards: [{ id: 'award-empty-vendor', recommendedVendorId: '', status: 'APPROVED' }] }));
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 409, error: UI_STRINGS.common.invalidRequestBody });
+
+    db.vendor.findFirst.mockResolvedValueOnce(null);
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 404, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied });
+    db.rfqVendor.findFirst.mockResolvedValueOnce(null);
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 409, error: UI_STRINGS.appApiProcurementAwardsRoute.recommendedVendorWasNotInvitedToThisRFQ });
+  });
+
   it('issues an L1 PPO from an approved award with matched quote lines and atomic audit', async () => {
     const result = await POST(postRequest({ rfqId: 'rfq-1' }));
     expect(result).toMatchObject({ ok: true, status: 201, data: {
@@ -293,6 +339,30 @@ describe('procurement PPO collection API', () => {
     expect(auditValues?.[9]).toContain('PPO-2026-000002');
     const outboxValues = retryStatements.find(({ sql }) => sql.includes('notification_outbox'))?.values;
     expect(JSON.parse(String(outboxValues?.[2])).recordNumber).toBe('PPO-2026-000002');
+  });
+
+  it('retries exhausted number collisions and handles optional notification outboxes', async () => {
+    notify.mockResolvedValueOnce(undefined);
+    const success = await POST(postRequest({ rfqId: 'rfq-1' }));
+    expect(success).toMatchObject({ ok: true, status: 201 });
+    expect(writeBatch.mock.calls[0][0]).toHaveLength(5);
+    expect(dispatchPrepared).not.toHaveBeenCalled();
+
+    db.ppo.findFirst.mockReset().mockResolvedValue(null);
+    writeBatch.mockReset()
+      .mockRejectedValueOnce(new Error('UNIQUE constraint failed: ppos.tenantId, ppos.ppoNumber'))
+      .mockRejectedValueOnce(new Error('UNIQUE constraint failed: ppos.tenantId, ppos.ppoNumber'))
+      .mockRejectedValueOnce(new Error('UNIQUE constraint failed: ppos.tenantId, ppos.ppoNumber'));
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
+
+    db.ppo.findFirst.mockReset().mockResolvedValue(null);
+    writeBatch.mockReset().mockRejectedValueOnce(new Error('UNIQUE constraint failed: ppos.tenantId, ppos.status'));
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.ppo_create_conflict', expect.objectContaining({ vendorId: 'vendor-1' }));
   });
 
   it('raises a draft PPO for an approved non-L1 award and reuses supplied commercial terms', async () => {
