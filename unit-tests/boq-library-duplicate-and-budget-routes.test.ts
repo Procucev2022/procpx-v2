@@ -195,6 +195,41 @@ describe('BOQ duplication', () => {
     db.boq.findFirst.mockRejectedValueOnce({});
     await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToDuplicateBoq, status: 500 });
   });
+
+  it('rejects malformed and oversized source records and detects each D1 clone conflict', async () => {
+    const malformed = new NextRequest('http://localhost/api/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{invalid',
+    });
+    await expect(duplicateBoq(malformed)).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(duplicateBoq(post([]))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.boq.findFirst.mockResolvedValueOnce({
+      id: 'boq-large', projectId: 'project-1', boqCode: 'LARGE', project: { projectCode: 'P-1' },
+      revisions: [{ lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, () => ({})) }],
+    });
+    await expect(duplicateBoq(post({ boqId: 'boq-large' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const source = {
+      id: 'boq-1', boqCode: 'SOURCE', projectId: 'project-1', costCentreId: null, title: null,
+      purpose: 'OTHER', project: { projectCode: 'P-1' },
+      revisions: [{ validLines: null, lines: [{ id: 'line-1', lineNumber: '1', originalDescription: 'Cable' }] }],
+    };
+    auth.mockResolvedValueOnce({ ...context, userEmail: '' });
+    db.boq.findFirst.mockResolvedValueOnce(source);
+    await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toMatchObject({ ok: true, status: 201 });
+    expect(d1Batch.mock.calls[0][0][0].values).toContain('user-1');
+
+    const conflicts = [
+      [{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 }, results: [{ boqCode: '' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 }, results: [{ boqCode: 'COPY-1' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }],
+      [{ meta: { changes: 1 }, results: [{ boqCode: 'COPY-1' }] }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } }],
+    ];
+    for (const result of conflicts) {
+      db.boq.findFirst.mockResolvedValueOnce(source);
+      d1Batch.mockResolvedValueOnce(result);
+      await expect(duplicateBoq(post({ boqId: 'boq-1' }))).resolves.toMatchObject({ ok: false, status: 409 });
+    }
+  });
 });
 
 describe('add BOQ to budget', () => {
