@@ -158,4 +158,42 @@ describe('approved BOQ and PR queues', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to load approved PRs', expect.any(Error));
     consoleError.mockRestore();
   });
+
+  it('appends approved BOQ pages and reports an invalid scope response', async () => {
+    const summary = (id: string, projectName: string) => ({
+      id, projectId: `project-${id}`, projectName, projectCode: id, location: '', approvedRevisionCode: 'R1',
+      approvedAt: null, approvedBy: 'Approver', categories: [], totalLines: 0, estimatedBenchmarkValue: 0, rfqCount: 0,
+    });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ approvedBoqs: [summary('one', 'First')], total: 26, hasMore: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ approvedBoqs: [summary('two', 'Second')], total: 26, hasMore: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ approvedBoqs: [{ id: 'one', lines: null }] }) });
+    render(<ApprovedBoqsPage />);
+
+    expect(await screen.findByText('First')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Second')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/procurement/approved-boqs?search=&page=2&pageSize=25');
+
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) })[0]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+  });
+
+  it('uses approved PR summary fallbacks and appends a second register page', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        data: [{ id: 'pr-page-1', prNumber: 'PR-PAGE-1', title: 'First page', totalEstimatedValue: 20, lines: [{ id: 'l1' }], rfqs: [{ id: 'r1' }] }],
+        total: 26, hasMore: true,
+      }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        data: [{ id: 'pr-page-2', prNumber: 'PR-PAGE-2', title: 'Second page', totalEstimatedValue: 30, lines: [], rfqs: [] }],
+        total: 26, totalEstimatedValue: 50, sourcingActiveCount: 1, hasMore: false,
+      }) });
+    render(<ApprovedPrsPage />);
+
+    expect(await screen.findByText('PR-PAGE-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('PR-PAGE-2')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/procurement/approved-prs?search=&page=2&pageSize=50');
+  });
 });

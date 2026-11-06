@@ -179,6 +179,12 @@ describe('approval communication API', () => {
     await expect(GET(getRequest('?prId=pr-1&beforeId=m1'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
     });
+    await expect(GET(getRequest('?prId=pr-1&beforeTimestamp=2026-01-01T00%3A00%3A00.000Z'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    await expect(GET(getRequest('?prId=pr-1&beforeId=m1&beforeTimestamp=invalid'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
     db.pRApproval.findMany.mockResolvedValueOnce([
       { id: 'older-2', approverId: 'approver-1', status: 'MESSAGE', remarks: 'Second oldest', timestamp: new Date('2026-01-01T00:00:00.000Z') },
       { id: 'older-1', approverId: 'approver-1', status: 'MESSAGE', remarks: 'Oldest', timestamp: new Date('2025-12-31T00:00:00.000Z') },
@@ -198,6 +204,37 @@ describe('approval communication API', () => {
       ] },
       take: 2,
     }));
+  });
+
+  it('returns a budget cursor for a full page and rejects non-object POST payloads', async () => {
+    db.budgetApproval.findMany.mockResolvedValueOnce([
+      { id: 'budget-newest', approverId: 'approver-1', status: 'MESSAGE', reason: 'new', timestamp: new Date('2026-02-02') },
+      { id: 'budget-older', approverId: 'approver-1', status: 'MESSAGE', reason: 'old', timestamp: new Date('2026-02-01') },
+    ]);
+    db.budgetApproval.count.mockResolvedValueOnce(2);
+    await expect(GET(getRequest('?contributionId=contribution-1&pageSize=1'))).resolves.toMatchObject({
+      ok: true, data: { hasMore: true, messages: [{ id: 'budget-newest' }], nextCursor: { id: 'budget-newest' } },
+    });
+
+    await expect(POST(postRequest(null))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+    await expect(POST(postRequest(['not', 'an', 'object']))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+  });
+
+  it('supports optional notification delivery and detects incomplete D1 message writes', async () => {
+    notify.mockReturnValueOnce(undefined);
+    await expect(POST(postRequest({ prId: 'pr-1', message: 'No notification required' }))).resolves.toMatchObject({
+      ok: true, status: 201,
+    });
+    const noNotificationBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as unknown[];
+    expect(noNotificationBatch).toHaveLength(2);
+    expect(dispatchPrepared).not.toHaveBeenCalled();
+
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([
+      { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } },
+    ]);
+    await expect(POST(postRequest({ prId: 'pr-1', message: 'Notification write did not persist' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
+    });
   });
 
   it('checks auth, nonblank message text, and an entity ID before sending', async () => {

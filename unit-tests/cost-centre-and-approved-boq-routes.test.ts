@@ -156,6 +156,46 @@ describe('cost centre and approved BOQ APIs', () => {
     }));
   });
 
+  it('handles empty paged summaries, non-Error reads, and atomic creation conflicts', async () => {
+    db.costCentre.findMany.mockResolvedValueOnce([]);
+    db.costCentre.count.mockResolvedValueOnce(0);
+    db.costCentre.aggregate.mockResolvedValueOnce({ _sum: { areaSqFt: null } });
+    db.budget.aggregate.mockResolvedValueOnce({ _sum: { totalAmount: null, approvedAmount: null, pendingAmount: null } });
+    await expect(listCostCentres(request('http://localhost/api/cost-centres?page=1&pageSize=20'))).resolves.toMatchObject({
+      ok: true, data: { costCentres: [], pagination: { total: 0, hasMore: false }, summary: { totalAreaSqFt: 0, totalBudget: 0, approvedBudget: 0, pendingBudget: 0 } },
+    });
+    expect(db.budget.groupBy).not.toHaveBeenCalled();
+
+    db.costCentre.findMany.mockRejectedValueOnce({ database: 'offline' });
+    await expect(listCostCentres(request())).resolves.toMatchObject({ ok: false, status: 500 });
+    db.costCentre.findMany.mockRejectedValueOnce(new Error('cost centre read failed'));
+    await expect(listCostCentres(request('http://localhost/api/cost-centres?costCentreId=cc-1'))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'cost_centre.list_read_failed', expect.objectContaining({
+      projectId: null, error: { name: 'Error', message: 'cost centre read failed' },
+    }));
+
+    await expect(createCostCentre(request('http://localhost/api/cost-centres', []))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    await expect(createCostCentre(request('http://localhost/api/cost-centres', {
+      projectId: 'project-1', code: 'CC-BAD', name: 'Invalid area', areaSqFt: -1,
+    }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.costCentre.findUnique.mockResolvedValueOnce(null);
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    await expect(createCostCentre(request('http://localhost/api/cost-centres', {
+      projectId: 'project-1', code: 'CC-RACE', name: 'Race',
+    }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.costCentre.findUnique.mockResolvedValueOnce(null);
+    writeBatch.mockRejectedValueOnce(new Error('Unique constraint failed for project cost-centre code'));
+    await expect(createCostCentre(request('http://localhost/api/cost-centres', {
+      projectId: 'project-1', code: 'CC-DUP', name: 'Duplicate',
+    }))).resolves.toMatchObject({ ok: false, status: 409 });
+  });
+
   it('validates cost centre creation, checks tenant project and duplicate codes, and records the new centre', async () => {
     const denied = { status: 403 };
     auth.mockResolvedValueOnce(denied);

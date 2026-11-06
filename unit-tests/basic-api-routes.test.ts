@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { auth } from '../src/lib/auth';
 import { prisma } from '../src/lib/prisma';
-import { isApiContext, requireAuth } from '../src/lib/api-utils';
+import { getListPageWindow, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { GET as getAudit } from '../src/app/api/audit/route';
 import { GET as getAuditDetail } from '../src/app/api/audit/[id]/route';
 import { GET as getUoms, POST as createUom } from '../src/app/api/masters/uom/route';
@@ -29,13 +29,13 @@ jest.mock('../src/lib/api-utils', () => ({
   isApiContext: jest.fn(),
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
-  getListPageWindow: (params: URLSearchParams) => {
+  getListPageWindow: jest.fn((params: URLSearchParams) => {
     const rawPage = Number(params.get('page'));
     const rawSize = Number(params.get('pageSize'));
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 1_000_000) : 1;
     const pageSize = Number.isSafeInteger(rawSize) && rawSize > 0 ? Math.min(rawSize, 100) : 50;
     return { page, pageSize, skip: (page - 1) * pageSize };
-  },
+  }),
 }));
 
 const prismaMock = prisma as unknown as {
@@ -48,6 +48,7 @@ const prismaMock = prisma as unknown as {
 const authMock = auth as jest.Mock;
 const requireAuthMock = requireAuth as jest.Mock;
 const isApiContextMock = isApiContext as unknown as jest.Mock;
+const listPageWindowMock = getListPageWindow as unknown as jest.Mock;
 const baseContext = { tenantId: 'tenant-1', role: 'ADMIN', vendorId: 'vendor-1' };
 const request = (url: string, init?: ConstructorParameters<typeof NextRequest>[1]) => new NextRequest(new URL(url, 'http://localhost'), init);
 
@@ -258,6 +259,10 @@ describe('basic API routes', () => {
   });
 
   it('enforces vendor PPO account mapping and handles listing failures', async () => {
+    requireAuthMock.mockResolvedValueOnce({ status: 401 });
+    isApiContextMock.mockReturnValueOnce(false);
+    await expect(getVendorPpos(request('/api/vendor-portal/ppos'))).resolves.toEqual({ status: 401 });
+
     requireAuthMock.mockResolvedValue({ tenantId: 'tenant-1', role: 'BUYER' });
     await expect(getVendorPpos(request('/api/vendor-portal/ppos'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, status: 403,
@@ -282,6 +287,15 @@ describe('basic API routes', () => {
         total: 1, page: 1, pageSize: 50, totalPages: 1, hasMore: false,
         summary: { total: 1, totalValue: 100, pendingCount: 1 },
       }, status: 200,
+    });
+
+    listPageWindowMock.mockReturnValueOnce({ page: 1, pageSize: 0, skip: 0 });
+    prismaMock.ppo.findMany.mockResolvedValueOnce([]);
+    prismaMock.ppo.count.mockResolvedValueOnce(0);
+    prismaMock.ppo.count.mockResolvedValueOnce(0);
+    prismaMock.ppo.aggregate.mockResolvedValueOnce({ _sum: { totalValue: null } });
+    await expect(getVendorPpos(request('/api/vendor-portal/ppos'))).resolves.toMatchObject({
+      ok: true, data: { pageSize: 50, totalPages: 0 },
     });
     expect(prismaMock.ppo.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', vendorId: 'vendor-1' },
@@ -322,6 +336,11 @@ describe('basic API routes', () => {
     expect(prismaMock.ppo.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'ppo-1', tenantId: 'tenant-1', vendorId: 'vendor-1' } }));
 
     prismaMock.ppo.findFirst.mockRejectedValueOnce(new Error('detail unavailable'));
+    await expect(getVendorPpos(request('/api/vendor-portal/ppos?ppoId=ppo-1'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders, status: 500,
+    });
+
+    prismaMock.ppo.findFirst.mockRejectedValueOnce({ database: 'offline' });
     await expect(getVendorPpos(request('/api/vendor-portal/ppos?ppoId=ppo-1'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders, status: 500,
     });

@@ -21,9 +21,7 @@ const isContext = isApiContext as unknown as jest.Mock;
 const readFile = readUpload as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const params = (projectId = 'project-1', documentId = 'doc-1') => ({ params: Promise.resolve({ id: projectId, documentId }) });
-const request = () => new NextRequest('https://example.test/api/projects/project-1/documents/doc-1', {
-  headers: { 'x-request-id': 'request-1' },
-});
+const request = (headers: HeadersInit = { 'x-request-id': 'request-1' }) => new NextRequest('https://example.test/api/projects/project-1/documents/doc-1', { headers });
 
 describe('project document download route', () => {
   beforeEach(() => {
@@ -70,6 +68,21 @@ describe('project document download route', () => {
     expect(writeStructuredLog).toHaveBeenCalledWith('error', 'project.document_download_failed', expect.objectContaining({
       requestId: 'request-1', tenantId: 'tenant-1', projectId: 'project-1', documentId: 'doc-1',
       error: { name: 'Error' },
+    }));
+  });
+
+  it('falls back to the Cloudflare request ID and handles an unknown storage error', async () => {
+    db.projectDocument.findFirst.mockResolvedValue({ id: 'doc-1', name: 'Plan.pdf', filePath: 'r2://tenant-1/project-1/doc-1.pdf' });
+    readFile.mockRejectedValueOnce({ failure: true });
+    await expect(GET(request({ 'cf-ray': 'ray-1' }), params())).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(writeStructuredLog).toHaveBeenLastCalledWith('error', 'project.document_download_failed', expect.objectContaining({
+      requestId: 'ray-1', error: { name: 'UnknownError' },
+    }));
+
+    readFile.mockRejectedValueOnce({ failure: true });
+    await expect(GET(request({}), params())).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(writeStructuredLog).toHaveBeenLastCalledWith('error', 'project.document_download_failed', expect.objectContaining({
+      requestId: undefined, error: { name: 'UnknownError' },
     }));
   });
 });

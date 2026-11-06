@@ -195,4 +195,33 @@ describe('BOQ add-to-budget API', () => {
     db.boqRevision.findFirst.mockRejectedValueOnce({});
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: 'Failed to add BOQ to budget.', status: 500 });
   });
+
+  it('rejects empty or invalid allocations, stale contributions, and failed D1 compare-and-set writes', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [] }));
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.budgetNeedsAtLeastOneLine, status: 400,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(revision({
+      lines: [{ id: 'bad-cost', quantity: 1, aiUnitCost: 10, aiTotalCost: -1, category: null }],
+    }));
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToAddBoqToBudget, status: 400,
+    });
+
+    db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'unexpected-status', status: 'CANCELLED' });
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.budgetContributionChangedPleaseRefresh, status: 409,
+    });
+
+    (writeD1BatchAtomically as jest.Mock).mockImplementationOnce(async (statements: Array<{ sql: string }>) =>
+      statements.map(({ sql }) => sql.includes('INSERT INTO "budget_transactions"')
+        ? { meta: { changes: 1 }, results: [{ id: 'tx-without-code' }] }
+        : { meta: { changes: 1 } }));
+    const fallbackResult = await POST(request({ boqRevisionId: 'revision-1' })) as unknown as { data: { transactionCode: string } };
+    expect(fallbackResult.data.transactionCode).toMatch(/^BTX-[a-f0-9]{8}$/i);
+  });
 });

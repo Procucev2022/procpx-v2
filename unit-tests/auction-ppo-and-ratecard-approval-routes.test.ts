@@ -14,6 +14,7 @@ import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { RATE_CARD_APPROVE_PROJECT_UPDATE_SQL } from '../src/lib/d1-batch.constants';
 import { PPO_VENDOR_ACCEPT_UPDATE_IF_ISSUED_SQL, PPO_VENDOR_ISSUE_UPDATE_IF_ISSUED_SQL, RFQ_VENDOR_MESSAGE_INSERT_AFTER_AUDIT_SQL } from '../src/lib/d1-batch.constants';
 import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '../src/lib/rate-card-approval-history.constants';
+import { PPO_VENDOR_ACTION_COMMENT_MAX_LENGTH } from '../src/app/api/procurement/ppos/vendor-action.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -241,6 +242,30 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     await expect(acceptPpo(request(), params('ppo-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder2, status: 500 });
     db.ppo.findFirst.mockRejectedValueOnce({});
     await expect(acceptPpo(request(), params('ppo-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder2, status: 500 });
+  });
+
+  it('rejects malformed vendor action payloads, invalid lifecycle states, and unsuccessful D1 transitions', async () => {
+    await expect(acceptPpo(request([]), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(acceptPpo(request({ vendorComments: 4 }), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(acceptPpo(request({ vendorComments: 'x'.repeat(PPO_VENDOR_ACTION_COMMENT_MAX_LENGTH + 1) }), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.ppo.findFirst.mockResolvedValueOnce(ppoRecord({ status: 'DRAFT' }));
+    await expect(acceptPpo(request(), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.ppo.findFirst.mockResolvedValueOnce(ppoRecord());
+    batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+    await expect(acceptPpo(request(), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    await expect(raisePpoIssue(request([]), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(raisePpoIssue(request({ issueRemarks: 7 }), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(raisePpoIssue(request({ issueRemarks: 'x'.repeat(PPO_VENDOR_ACTION_COMMENT_MAX_LENGTH + 1) }), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.ppo.findFirst.mockResolvedValueOnce(ppoRecord({ status: 'DRAFT' }));
+    await expect(raisePpoIssue(request({ issueRemarks: 'Blocked item' }), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    auth.mockResolvedValueOnce({ ...context, userName: '' });
+    db.ppo.findFirst.mockResolvedValueOnce(ppoRecord({ rfqId: null, vendor: { name: 'Acme' } }));
+    batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }]);
+    await expect(raisePpoIssue(request({ issueRemarks: 'Blocked item' }), params('ppo-1'))).resolves.toMatchObject({ ok: false, status: 409 });
+    expect(JSON.parse(String(batch.mock.calls.at(-1)?.[0][1].values[9]))).toMatchObject({ raisedBy: 'Acme Representative' });
   });
 
   it('enforces approval levels, role access, agreement signatures, and finalizes rate cards', async () => {

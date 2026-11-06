@@ -238,6 +238,14 @@ describe('project listing and creation', () => {
     expect(writeStructuredLog).toHaveBeenCalledWith('error', 'project.register_read_failed', expect.objectContaining({
       operation: 'list_projects', tenantId: 'tenant-1', pageSize: 50,
     }), 'application');
+
+    db.project.count.mockRejectedValueOnce({});
+    await expect(listProjects(new NextRequest('http://localhost/api/projects', { headers: { 'cf-ray': 'projects-list-ray' } }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchProjects, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenLastCalledWith('error', 'project.register_read_failed', expect.objectContaining({
+      requestId: 'projects-list-ray', error: { type: 'object' },
+    }), 'application');
   });
 
   it('validates project details before generating a new code', async () => {
@@ -317,6 +325,11 @@ describe('project listing and creation', () => {
     db.project.findFirst.mockRejectedValueOnce(new Error('project database failure'));
     await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProject, status: 500 });
     db.project.findFirst.mockRejectedValueOnce({});
+    await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProject, status: 500 });
+
+    db.project.findFirst.mockResolvedValueOnce({ projectCode: 'legacy-code' });
+    await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProject, status: 500 });
+    db.project.findFirst.mockResolvedValueOnce({ projectCode: 'CPX-P-999999' });
     await expect(createProject(request('http://localhost/api/projects', { name: 'Project', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProject, status: 500 });
   });
 });

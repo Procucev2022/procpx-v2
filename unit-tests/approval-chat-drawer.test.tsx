@@ -64,6 +64,31 @@ describe('approval communication drawer', () => {
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsApprovalChatDrawer.value))).not.toBeInTheDocument();
   });
 
+  it('loads an older page with its cursor and prepends messages without changing their order', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response({
+        messages: [{ id: 'newer', senderName: 'Buyer', senderRole: 'BUYER', type: 'MESSAGE', content: 'Newer message', timestamp: '2026-10-29T10:00:00Z' }],
+        hasMore: true,
+        nextCursor: { id: 'cursor/id', timestamp: '2026-10-29T09:00:00+00:00' },
+      }))
+      .mockResolvedValueOnce(response({
+        messages: [{ id: 'older', senderName: 'Requester', senderRole: 'REQUESTER', type: 'MESSAGE', content: 'Older message', timestamp: '2026-10-29T08:00:00Z' }],
+        hasMore: false,
+        nextCursor: null,
+      }));
+    render(<ApprovalChatDrawer isOpen onClose={onClose} entityType="PR" entityId="pr-page" entityCode="PR-PAGE" />);
+
+    expect(await screen.findByText('Newer message')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Older message')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      '/api/approvals/messages?prId=pr-page&beforeId=cursor%2Fid&beforeTimestamp=2026-10-29T09%3A00%3A00%2B00%3A00',
+    );
+    const renderedMessages = screen.getAllByText(/(?:Older|Newer) message/);
+    expect(renderedMessages.map((message) => message.textContent)).toEqual(['Older message', 'Newer message']);
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
+  });
+
   it('reports API and network errors while loading, including default messages', async () => {
     fetchMock.mockResolvedValueOnce(response({ error: 'History unavailable' }, false));
     const view = render(<ApprovalChatDrawer isOpen onClose={onClose} entityType="PR" entityId="pr-2" entityCode="PR-002" />);

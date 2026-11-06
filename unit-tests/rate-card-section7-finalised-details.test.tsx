@@ -106,6 +106,12 @@ describe('rate card Section 7 finalised details', () => {
     expect(screen.getByText(/01 Oct 2026 to 30 Sep/)).toBeInTheDocument();
     expect(screen.getByText('Stored agreement')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.pendingSignature))).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewExecutedAgreement) })[0]);
+    expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toHaveTextContent('Stored agreement');
+    fireEvent.click(screen.getByRole('button', { name: 'Close agreement' }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.previewViewExecutedAgreement) }));
+    expect(screen.getByRole('dialog', { name: 'Agreement preview' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close agreement' }));
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadRateCard) }));
     const exportedItem = xlsx.utils.json_to_sheet.mock.calls[0][0][0];
@@ -160,5 +166,44 @@ describe('rate card Section 7 finalised details', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates) }));
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.valuation)).length).toBeGreaterThan(0);
     expect(empty.container).toBeInTheDocument();
+  });
+
+  it('uses persisted history fallbacks and renders a fully evidenced signed workflow', () => {
+    render(<Section7FinalisedDetails rateCard={{
+      rateCardNumber: 'RC-SIGNED', status: 'APPROVED', vendor: { name: 'Signed Vendor', code: 'SV-1' },
+      category: 'Electrical', subcategory: 'Cables', title: 'Signed cable schedule',
+      items: [
+        {
+          itemCode: 'C-1', description: 'Power cable', specification: '', uom: '', referenceQty: 0, minQuantity: 5,
+          rate: 20, comparisonRef: JSON.stringify({ referenceQty: 3, buyerOffer1: 18, vendorQuote1: 19, buyerOffer2: 17, vendorQuote2: 18, finalAgreedRate: 16 }),
+        },
+        { description: '', rate: 0, comparisonRef: '[]' },
+      ],
+      notes: JSON.stringify({
+        round1: { buyerOffer1Date: '2026-10-11T00:00:00.000Z', buyerOffer1Actor: 'Buyer One', vendorQuote1Date: '2026-10-12T00:00:00.000Z', vendorQuote1Actor: 'Vendor One' },
+        round2: { buyerOffer2Date: '2026-10-13T00:00:00.000Z', buyerOffer2Actor: 'Buyer Two', vendorQuote2Date: '2026-10-14T00:00:00.000Z', vendorQuote2Actor: 'Vendor Two', vendorQuote2Remarks: 'Final alignment' },
+        buyerAccepted: { timestamp: '2026-10-15T00:00:00.000Z', actor: 'Approver', remarks: 'Accepted' },
+        vendorAccepted: { timestamp: '2026-10-16T00:00:00.000Z', actor: 'Signatory', remarks: 'Signed' },
+        projectApproved: { timestamp: '2026-10-17T00:00:00.000Z', actor: 'Project Approver', remarks: 'Project checked' },
+        financeApproved: { timestamp: '2026-10-18T00:00:00.000Z', actor: 'Finance Approver', remarks: 'Finance checked' },
+        agreement: {
+          required: true, type: 'GENERATED', documentTitle: 'Master agreement', documentNumber: '', version: 2,
+          fileName: 'master.pdf', fileSize: 1024,
+          signature: { verified: true, signedBy: 'Signatory', designation: 'Director', signedAt: '2026-10-16T00:00:00.000Z' },
+        },
+      }),
+    }} />);
+
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.digitallySignedVerified))).toBeInTheDocument();
+    expect(screen.getByText('Master agreement')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.generatedCapexMasterAgreement))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
+    expect(screen.getAllByText('Power cable').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.negotiationHistory) }));
+    expect(screen.getByText(/Final alignment/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.signOffTimeline) }));
+    expect(screen.getByText('Project checked')).toBeInTheDocument();
+    expect(screen.getByText('Finance checked')).toBeInTheDocument();
+    expect(screen.getByText('Signatory')).toBeInTheDocument();
   });
 });

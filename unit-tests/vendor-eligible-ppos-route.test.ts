@@ -96,6 +96,23 @@ describe('eligible vendor PPOs API', () => {
     expect(projectAccessFilter).toHaveBeenCalledWith('user-1', 'PROJECT_APPROVER', 'tenant-1');
   });
 
+  it('allows an unscoped page when the access filter is empty and logs non-Error failures', async () => {
+    projectAccessFilter.mockResolvedValueOnce(null);
+    db.ppo.findMany.mockResolvedValueOnce([ppoRow('only')]);
+    db.ppo.count.mockResolvedValueOnce(1);
+
+    await expect(GET(request('?pageSize=3'), params())).resolves.toMatchObject({
+      ok: true, data: { eligiblePpos: [ppoRow('only')], pagination: { total: 1, hasMore: false } },
+    });
+    expect(db.ppo.findMany.mock.calls[0][0].where).not.toHaveProperty('project');
+
+    db.ppo.findMany.mockRejectedValueOnce({ database: 'offline' });
+    await expect(GET(request(), params())).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(writeLog).toHaveBeenLastCalledWith('error', 'vendor.eligible_ppos_read_failed', expect.objectContaining({
+      error: { type: 'object' },
+    }));
+  });
+
   it('does not expose rating candidates to procurement users', async () => {
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_USER' });
     await expect(GET(request(), params())).resolves.toMatchObject({

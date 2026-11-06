@@ -150,6 +150,21 @@ describe('auction register API', () => {
     expect(d1Batch).not.toHaveBeenCalled();
   });
 
+  it('preserves the list error response when optional log persistence also fails', async () => {
+    db.auction.findMany.mockRejectedValueOnce(new Error('auction list unavailable'));
+    log.mockRejectedValueOnce(new Error('log sink unavailable'));
+    const request = new NextRequest('http://localhost/api/procurement/auctions', {
+      headers: { 'cf-ray': 'ray-auction-list' },
+    });
+
+    await expect(GET(request)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAuctions, status: 500,
+    });
+    expect(log).toHaveBeenCalledWith('error', 'auction.register_read_failed', expect.objectContaining({
+      requestId: 'ray-auction-list', tenantId: 'tenant-1',
+    }));
+  });
+
   it('validates auction creation inputs and quoted vendor exclusions', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);

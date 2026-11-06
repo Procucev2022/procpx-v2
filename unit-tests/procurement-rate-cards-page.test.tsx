@@ -24,6 +24,7 @@ jest.mock('../src/components/rate-cards/HomeWorkspace', () => ({
       <button onClick={() => props.onNegotiateClick('RC-2026-0006')}>Open negotiation</button>
       <button onClick={() => props.onBuyerAcceptClick('RC-2026-0006')}>Open buyer acceptance</button>
       <button onClick={() => props.onDetailsClick('RC-2026-0006')}>Open details</button>
+      <button onClick={props.onLoadMore}>Load rate card page</button>
     </section>
   ),
 }));
@@ -47,6 +48,7 @@ jest.mock('../src/components/rate-cards/NegotiationWorkspace', () => ({
   __esModule: true,
   default: (props: any) => (
     <section data-testid="negotiation-workspace">
+      <output data-testid="negotiation-items">{JSON.stringify(props.items)}</output>
       <button onClick={() => props.onItemsChange(props.items.map((item: any) => ({ ...item, currentBuyerOffer: item.buyerTargetRate })))}>Change items</button>
       <button onClick={props.onReset}>Reset offer</button>
       <button onClick={props.onSaveDraft}>Save offer</button>
@@ -276,5 +278,43 @@ describe('procurement rate cards page', () => {
     await flushEffects();
     expect(JSON.parse(screen.getByTestId('cards-data').textContent || '[]')).toEqual([]);
     expect(console.error).toHaveBeenCalledWith('Error fetching rate cards:', expect.any(Error));
+  });
+
+  it('appends rate-card pages and derives negotiation values from direct, stored, and invalid metadata', async () => {
+    const listCard = { ...workflowRateCard, status: 'ROUND_1_VENDOR_QUOTE' };
+    const detailCard = {
+      ...workflowRateCard,
+      items: [
+        { id: 'direct', itemCode: 'D-1', description: 'Direct item', specification: 'Spec', uom: 'EA', referenceQty: 2,
+          buyerOffer1: 11, vendorQuote2: 15, buyerOffer2: 12, rate: 10, comparisonRef: null },
+        { id: 'stored', referenceQty: null, minQuantity: '3', benchmarkRate: 6, rate: 5, proposedRate: 4,
+          comparisonRef: JSON.stringify({ buyerOffer1: 7, vendorQuote2: 9, vendorQuote1: 8, buyerOffer2: 10 }) },
+        { id: 'invalid', referenceQty: 0, minQuantity: 'bad', buyerOffer1: 'bad', vendorQuote1: 'bad', buyerOffer2: 'bad',
+          comparisonRef: '{bad json' },
+        { id: 'array', rate: 5, comparisonRef: '[]' },
+      ],
+    };
+    const fetchMock = jest.fn((url: string | URL | Request) => {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/api/procurement/rate-cards/workflow')) return Promise.resolve(jsonResponse({ rateCard: detailCard }));
+      if (requestUrl.includes('page=2')) return Promise.resolve(jsonResponse({ rateCards: [listCard], hasMore: false }));
+      return Promise.resolve(jsonResponse({ rateCards: [], hasMore: true, summary: { finalised: 0, inProgress: 1 } }));
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(<RateCardManagementPage />);
+    await flushEffects();
+    fireEvent.click(screen.getByRole('button', { name: 'Load rate card page' }));
+    await flushEffects();
+    expect(screen.getByTestId('cards-data')).toHaveTextContent('RC-2026-0006');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open negotiation' }));
+    await flushEffects();
+    const items = JSON.parse(screen.getByTestId('negotiation-items').textContent || '[]');
+    expect(items).toEqual([
+      expect.objectContaining({ id: 'direct', qty: 2, buyerTargetRate: 11, latestVendorQuote: 15, currentBuyerOffer: 12, proposedAmount: 24 }),
+      expect.objectContaining({ id: 'stored', qty: 3, buyerTargetRate: 7, latestVendorQuote: 9, currentBuyerOffer: 10, proposedAmount: 30 }),
+      expect.objectContaining({ id: 'invalid', qty: 1, buyerTargetRate: 0, latestVendorQuote: 0, currentBuyerOffer: 0 }),
+      expect.objectContaining({ id: 'array', qty: 1, buyerTargetRate: 5, latestVendorQuote: 5, currentBuyerOffer: 5 }),
+    ]);
   });
 });

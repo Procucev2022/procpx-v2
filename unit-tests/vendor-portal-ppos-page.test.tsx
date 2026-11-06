@@ -207,4 +207,40 @@ describe('vendor purchase orders page', () => {
     await waitFor(() => expect(screen.queryByText('Raise Fulfillment Query on PPO-002')).not.toBeInTheDocument());
     alertSpy.mockRestore();
   });
+
+  it('uses safe fallbacks for non-Error failures in register, detail, acceptance, and issue requests', async () => {
+    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => undefined);
+    mockFetch.mockRejectedValueOnce({});
+    const first = render(<VendorPposPage />);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders))).toBeInTheDocument();
+    first.unmount();
+
+    mockFetch.mockResolvedValueOnce(response({ ppos: [ppo('fallback', { lineCount: 1 })] }));
+    const detail = render(<VendorPposPage />);
+    const fallbackRow = await screen.findByText('PPO-fallback');
+    mockFetch.mockRejectedValueOnce({});
+    fireEvent.click(within(fallbackRow.closest('tr')!).getByTitle(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.toggleLineItems)));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders))).toBeInTheDocument();
+
+    detail.unmount();
+    mockFetch.mockResolvedValueOnce(response({ ppos: [
+      ppo('actions'), ppo('002', { vendorStatus: 'ISSUE_RAISED', vendorIssueRemarks: '' }),
+    ] }));
+    render(<VendorPposPage />);
+    const actionRow = (await screen.findByText('PPO-actions')).closest('tr')!;
+    fireEvent.click(within(actionRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.acceptPPO) }));
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.fullNameOfSigningRepresentative)), { target: { value: 'Sam Vendor' } });
+    mockFetch.mockRejectedValueOnce({});
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.confirmOrderAcceptance) }).closest('form')!);
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to accept purchase order')));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+
+    const issueRow = screen.getByText('PPO-002').closest('tr')!;
+    fireEvent.click(within(issueRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalPposPage.raiseIssue) }));
+    fireEvent.change(screen.getByPlaceholderText(/Specify the issue/), { target: { value: 'Delivery date clarification' } });
+    mockFetch.mockRejectedValueOnce({});
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitIssueToBuyer) }).closest('form')!);
+    await waitFor(() => expect(alertSpy).toHaveBeenLastCalledWith(expect.stringContaining('Failed to report fulfillment issue')));
+    alertSpy.mockRestore();
+  });
 });

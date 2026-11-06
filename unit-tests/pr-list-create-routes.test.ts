@@ -106,6 +106,30 @@ describe('PR list and create API', () => {
     expect(db.boqRevision.findFirst).not.toHaveBeenCalled();
   });
 
+  it('rejects malformed PR bodies, oversized line selections, and invalid required dates', async () => {
+    for (const body of [
+      [],
+      { boqRevisionId: 'revision-1', costCentreId: 'cc-1', projectId: 12 },
+      { boqRevisionId: 'revision-1', costCentreId: 'cc-1', title: 12 },
+      { boqRevisionId: 'revision-1', costCentreId: 'cc-1', requiredDate: 12 },
+      { boqRevisionId: 'revision-1', costCentreId: 'cc-1', selectedLineIds: 'line-1' },
+      { boqRevisionId: 'revision-1', costCentreId: 'cc-1', selectedLineIds: [12] },
+      { boqRevisionId: 'revision-1', costCentreId: 'cc-1', autoSubmit: 'yes' },
+    ]) {
+      await expect(POST(postRequest(body))).resolves.toEqual({
+        ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+      });
+    }
+
+    await expect(POST(postRequest({
+      boqRevisionId: 'revision-1', costCentreId: 'cc-1',
+      selectedLineIds: Array.from({ length: MAX_PR_BATCH_LINES + 1 }, (_, index) => `line-${index}`),
+    }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', requiredDate: 'not-a-date' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidDate, status: 400,
+    });
+  });
+
   it('applies tenant and query filters and derives unique or fallback categories', async () => {
     db.procurementRequest.findMany.mockResolvedValueOnce([
       { id: 'pr-1', _count: { lines: 3 }, boq: { category: 'Fallback' } },
@@ -232,6 +256,29 @@ describe('PR list and create API', () => {
     const invalidQuantity = await POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }));
     expect(invalidQuantity).toMatchObject({ ok: false, status: 400, error: expect.stringContaining('Quantity required for 1 item') });
     expect(batchWrite).not.toHaveBeenCalled();
+
+    projectAuthorized.mockResolvedValueOnce(false);
+    await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403,
+    });
+
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ prNumber: 'PR-EXISTING' });
+    await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: expect.stringContaining('PR-EXISTING'),
+    });
+  });
+
+  it('returns a conflict when an atomic PR insert loses the race', async () => {
+    batchWrite.mockResolvedValueOnce([{ results: [], meta: { changes: 0 } }]);
+    await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+
+    batchWrite.mockResolvedValueOnce([{ results: [], meta: { changes: 0 } }]);
+    db.procurementRequest.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce({ prNumber: 'PR-RACE' });
+    await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: expect.stringContaining('PR-RACE'),
+    });
   });
 
   it('returns clear errors for malformed requests and failed persistence', async () => {

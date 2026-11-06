@@ -212,6 +212,14 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     await expect(updateCostCentre(request({ status: 'ARCHIVED' }), idParams('cc-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
 
     db.costCentre.findFirst.mockResolvedValueOnce(existing);
+    await expect(updateCostCentre(request({ areaSqFt: {} }), idParams('cc-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+
+    db.costCentre.findFirst.mockResolvedValueOnce({ ...existing, updatedAt: 'not-a-date' });
+    await expect(updateCostCentre(request({ name: 'New' }), idParams('cc-1'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+
+    db.costCentre.findFirst.mockResolvedValueOnce(existing);
     writeBatch.mockImplementationOnce(async (batchStatements: [{ values: unknown[] }, { values: unknown[] }]) => {
       const attemptedAt = batchStatements[0].values[6] as Date;
       db.costCentre.findFirst.mockResolvedValueOnce({ ...existing, updatedAt: attemptedAt, name: 'New' });

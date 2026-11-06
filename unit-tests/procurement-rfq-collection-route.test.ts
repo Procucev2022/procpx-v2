@@ -8,6 +8,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { MAX_D1_BATCH_STATEMENTS } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -314,6 +315,35 @@ describe('RFQ collection API', () => {
     await expect(POST(postRequest({ prId: 'pr-1', title: 'New RFQ' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateRfq, status: 500 });
     const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid RFQ body')) } as unknown as NextRequest;
     await expect(POST(badJson)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400 });
+
+    const validBoqRequest = { projectId: 'project-1', boqRevisionId: 'rev-1', title: 'Validated inputs' };
+    for (const invalidDates of [
+      { submissionDeadline: 123 },
+      { submissionDeadline: 'not-a-date' },
+      { clarificationDeadline: {} },
+      { clarificationDeadline: 'not-a-date' },
+    ]) {
+      await expect(POST(postRequest({ ...validBoqRequest, ...invalidDates }))).resolves.toEqual({
+        ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+      });
+    }
+    await expect(POST(postRequest({ ...validBoqRequest, packageType: 'CATEGORY' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsRoute.categoryNameIsRequiredForCategoryRFQ, status: 400,
+    });
+    await expect(POST(postRequest({ ...validBoqRequest, selectedLineIds: Array.from({ length: MAX_D1_BATCH_STATEMENTS }, (_, index) => `line-${index}`) }))).resolves.toMatchObject({
+      ok: false, status: 400, error: expect.stringContaining('atomic'),
+    });
+
+    db.rfq.findFirst.mockRejectedValueOnce(new Error('bounded request identifier failure'));
+    const oversizedRequestId = new NextRequest('http://localhost/api/procurement/rfqs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-request-id': 'r'.repeat(129) },
+      body: JSON.stringify({ prId: 'pr-1', title: 'Bounded request id' }),
+    });
+    await expect(POST(oversizedRequestId)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCreateRfq, status: 500,
+    });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rfq.create_failed', expect.objectContaining({ requestId: undefined }), 'next');
   });
 
   it('enforces project and vendor tenant scope and keeps a committed RFQ when outbox dispatch fails', async () => {
