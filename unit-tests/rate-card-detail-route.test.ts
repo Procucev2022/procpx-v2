@@ -6,6 +6,8 @@ import { createAuditLog } from '../src/lib/audit';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { MAX_RATE_CARD_ITEMS } from '../src/lib/d1-batch.constants';
+import { MAX_RATE_CARD_NOTES_LENGTH, MAX_RATE_CARD_TEXT_LENGTH } from '../src/app/api/procurement/rate-cards/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -360,5 +362,86 @@ describe('rate card detail API', () => {
     await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
     db.vendorRateCard.findFirst.mockResolvedValueOnce(null);
     await expect(PUT(request({}), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rateCardNotFound, status: 404 });
+  });
+
+  it('covers malformed bodies, workflow validation and guarded batch conflicts', async () => {
+    await expect(PUT(request(null), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ payload: 'x'.repeat(MAX_RATE_CARD_NOTES_LENGTH) }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [{ id: 'i1', buyerOffer2: 5 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [{ id: '', buyerOffer2: 5 }] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [
+      { id: 'i1', buyerOffer2: 5 }, { id: 'i1', buyerOffer2: 6 },
+    ] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{bad' }] }));
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [{ id: 'i1', buyerOffer2: 5 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 500 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(PUT(request({ action: 'SAVE_BUYER_OFFER_2_DRAFT', items: [{ id: 'i1', buyerOffer2: 5 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: 'i1', buyerOffer2: -1 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: 'i1', buyerOffer2: 5 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: 'i1', buyerOffer2: 5 }] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{}' }] }));
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: '', buyerOffer2: 5 }] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_1_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{bad' }] }));
+    await expect(PUT(request({ action: 'SUBMIT_BUYER_OFFER_2', items: [{ id: 'i1', buyerOffer2: 5 }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 500 });
+
+    await expect(PUT(request({ action: 'ACCEPT_FINAL_VENDOR_OFFER', roundNumber: 3 }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE', items: [] }));
+    await expect(PUT(request({ action: 'ACCEPT_FINAL_VENDOR_OFFER' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE', items: [{ id: 'i1', comparisonRef: '{bad' }] }));
+    await expect(PUT(request({ action: 'ACCEPT_FINAL_VENDOR_OFFER' }), params())).resolves.toMatchObject({ ok: false, status: 500 });
+  });
+
+  it('covers agreement, signoff and standard detail update input guards', async () => {
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE' }));
+    await expect(PUT(request({ action: 'CATEGORY_MANAGER_ACCEPT', remarks: 4 }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    auth.mockResolvedValueOnce({ ...context, userName: '', userEmail: '' });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'ROUND_2_VENDOR_QUOTE' }));
+    await expect(PUT(request({ action: 'CATEGORY_MANAGER_ACCEPT' }), params())).resolves.toMatchObject({ ok: true });
+    expect(JSON.parse(String(writeBatch.mock.calls[0][0][0].values[0])).categoryManagerAccepted.actor).toBe('Category Manager');
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'VENDOR_ACCEPTED' }));
+    await expect(PUT(request({ action: 'CATEGORY_MANAGER_SIGNOFF', remarks: false }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({ status: 'APPROVED' }));
+    await expect(PUT(request({}), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ title: 'Changed', status: 'APPROVED' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ title: 42 }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ version: 'invalid' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ validFrom: 123 }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ validFrom: '2027-01-01', validTo: '2026-01-01' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ items: {} }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ items: Array.from({ length: MAX_RATE_CARD_ITEMS + 1 }, (_, index) => ({ description: `Line ${index}` })) }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ items: [null] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ items: [{ description: 'Cable', id: 'not-existing' }] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ items: [{ description: 'Cable', rate: -1 }] }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(PUT(request({ items: [{ description: 'Cable', specification: 'x'.repeat(MAX_RATE_CARD_TEXT_LENGTH + 1) }] }), params()))
+      .resolves.toMatchObject({ ok: false, status: 400 });
+  });
+
+  it('returns a conflict when a guarded draft delete no longer matches', async () => {
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
+    await expect(DELETE(new NextRequest('http://localhost/api/procurement/rate-cards/rc-1'), params()))
+      .resolves.toMatchObject({ ok: false, status: 409 });
   });
 });
