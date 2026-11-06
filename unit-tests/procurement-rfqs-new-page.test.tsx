@@ -47,6 +47,7 @@ const vendors = [
   { id: 'v-2', name: 'Beta Engineering', vendorCode: 'BETA', code: 'B-1', email: 'beta@example.test', contactPerson: 'Bharat', vendorType: 'PROCUCEV_VENDOR', state: 'Karnataka', city: 'Bengaluru', categories: '["Electrical","Pipes"]', complianceStatus: 'COMPLIANT', qualificationStatus: 'APPROVED', performanceScore: 4.2, _count: { ppos: 1 }, isBlacklisted: false },
   { id: 'v-3', name: 'Gamma Works', vendorCode: 'GAMMA', code: 'G-1', email: '', contactPerson: '', vendorType: 'CLIENT_VENDOR', state: 'Maharashtra', city: '', categories: 'Electrical, Mechanical', complianceStatus: 'PENDING', qualificationStatus: '', performanceScore: 0, isBlacklisted: false },
   { id: 'v-4', name: 'Delta Blacklisted', vendorCode: 'DELTA', code: 'D-1', email: 'delta@example.test', contactPerson: 'Dee', vendorType: 'CLIENT_VENDOR', state: '', city: '', categories: null, complianceStatus: 'COMPLIANT', isBlacklisted: true },
+  { id: 'v-5', name: 'Omega Plumbing', vendorCode: 'OMEGA', code: 'O-1', email: 'omega@example.test', contactPerson: 'Omar', vendorType: 'PROCUCEV_VENDOR', state: 'Karnataka', city: 'Bengaluru', categories: ['Plumbing'], complianceStatus: 'COMPLIANT', qualificationStatus: 'QUALIFIED', performanceScore: 4.1, pposCount: 1, isBlacklisted: false },
 ];
 const rateCards = [
   { id: 'rc-1', vendorId: 'v-1', status: 'APPROVED', validTo: null, rateCardNumber: 'RC-1' },
@@ -66,10 +67,17 @@ const pr = {
 };
 
 function configureFetch(overrides: Record<string, unknown> = {}) {
+  const detailOkSequence = Array.isArray(overrides.boqDetailsOkSequence)
+    ? [...overrides.boqDetailsOkSequence]
+    : [];
   mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.startsWith('/api/procurement/approved-boqs')) {
-      if (url.includes('revisionId=')) return response(overrides.boqDetails ?? { approvedBoqs: defaultBoqs });
+      if (url.includes('revisionId=')) {
+        const detailOk = detailOkSequence.length > 0 ? detailOkSequence.shift() !== false : overrides.boqDetailsOk !== false;
+        return response(overrides.boqDetails ?? { approvedBoqs: defaultBoqs }, detailOk);
+      }
+      if (url.includes('page=')) return response(overrides.moreBoqs ?? { approvedBoqs: [], page: 2, hasMore: false }, overrides.moreBoqsOk !== false);
       return response(overrides.boqs ?? { approvedBoqs: defaultBoqSummaries });
     }
     if (url === '/api/procurement/vendors') return response(overrides.vendors ?? { vendors });
@@ -202,6 +210,9 @@ describe('new procurement RFQ workflow', () => {
     fireEvent.click(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.showOnlyRateCardVendors)));
     expect(screen.getByText('Beta Engineering')).toBeInTheDocument();
     expect(screen.queryByText('Delta Blacklisted')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.showOnlyRateCardVendors)));
+    expect(screen.queryByText('Omega Plumbing')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.showOnlyRateCardVendors)));
     fireEvent.change(filters[0], { target: { value: '' } });
     fireEvent.change(filters[1], { target: { value: '' } });
     fireEvent.change(filters[2], { target: { value: '' } });
@@ -351,6 +362,95 @@ describe('new procurement RFQ workflow', () => {
     renderPage();
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.createRequestForQuotation))).toBeInTheDocument();
     await waitFor(() => expect(error).toHaveBeenCalledWith('Error initializing RFQ wizard data:', expect.any(Error)));
+  });
+
+  it('reports unavailable or incomplete details for an approved BOQ summary', async () => {
+    configureFetch({ boqs: { approvedBoqs: defaultBoqSummaries }, boqDetailsOk: false });
+    const unavailable = renderPage();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+    unavailable.unmount();
+
+    configureFetch({ boqs: { approvedBoqs: defaultBoqSummaries }, boqDetails: { approvedBoqs: [] } });
+    const missing = renderPage();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+    missing.unmount();
+
+    configureFetch({ boqs: { approvedBoqs: defaultBoqSummaries }, boqDetails: { approvedBoqs: [{ ...defaultBoqs[0], lines: null }] } });
+    renderPage();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+  });
+
+  it('appends the next approved BOQ page and reports pagination failures', async () => {
+    configureFetch({
+      boqs: { approvedBoqs: defaultBoqSummaries, page: 1, hasMore: true },
+      moreBoqs: { approvedBoqs: [stripBoqLines(boq('rev-3', 'West Plant'))], page: 2, hasMore: false },
+    });
+    const paginated = renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    const loadMore = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) });
+    fireEvent.click(loadMore);
+    expect(await screen.findByRole('option', { name: /West Plant/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
+    paginated.unmount();
+
+    configureFetch({ boqs: { approvedBoqs: defaultBoqSummaries, hasMore: true }, moreBoqsOk: false });
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+  });
+
+  it('recovers from a BOQ selection detail failure and toggles every line from the header checkbox', async () => {
+    configureFetch({ boqDetailsOkSequence: [true, false] });
+    const selection = renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'rev-2' } });
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+    selection.unmount();
+
+    configureFetch();
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    const headerCheckbox = screen.getAllByRole('checkbox')[0];
+    expect(headerCheckbox).toBeChecked();
+    fireEvent.click(headerCheckbox);
+    await waitFor(() => expect(headerCheckbox).not.toBeChecked());
+    fireEvent.click(headerCheckbox);
+    await waitFor(() => expect(headerCheckbox).toBeChecked());
+  });
+
+  it('shows the empty state when no applicable active rate cards exist', async () => {
+    configureFetch({ rateCards: { rateCards: [] } });
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    continueTo(3);
+    fireEvent.change(screen.getByLabelText(uiStringPattern(UI_STRINGS.common.submissionDeadline, '', false)), { target: { value: '2027-02-10' } });
+    fireEvent.change(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.clarificationDeadline, '', false)), { target: { value: '2027-02-01' } });
+    continueTo(4);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.noActiveRateCardsAreCurrentlyRegisteredForThisPackageCategory))).toBeInTheDocument();
+  });
+
+  it('filters vendors by region and city while showing mismatch results', async () => {
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    fireEvent.change(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.rFQTitle, "", false)), { target: { value: 'Regional package' } });
+    continueTo(3);
+    continueTo(4);
+
+    const filters = screen.getAllByRole('combobox');
+    fireEvent.change(filters[0], { target: { value: 'Karnataka' } });
+    expect(filters[0]).toHaveValue('Karnataka');
+    expect(screen.queryByText('Alpha Electrical')).not.toBeInTheDocument();
+    expect(screen.getByText('Omega Plumbing')).toBeInTheDocument();
+
+    fireEvent.change(filters[0], { target: { value: 'Maharashtra' } });
+    fireEvent.change(filters[1], { target: { value: 'Pune' } });
+    expect(filters[1]).toHaveValue('Pune');
+    expect(screen.getByText('Alpha Electrical')).toBeInTheDocument();
+    expect(screen.queryByText('Gamma Works')).not.toBeInTheDocument();
   });
 
   it('uses the server error fallback when a save response is unsuccessful and omits the error text', async () => {
