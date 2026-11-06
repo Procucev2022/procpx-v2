@@ -210,6 +210,32 @@ describe('BOQ list and create API', () => {
     expect(structuredLog).toHaveBeenCalledWith('error', 'boq.register_load_failed', expect.any(Object));
   });
 
+  it('rejects non-object inputs and normalizes numeric and inherited BOQ defaults', async () => {
+    await expect(POST(postRequest(null))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest([]))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...createBody, description: 12 }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...createBody, areaSqFt: 'unknown' }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ...createBody, areaSqFt: -1 }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    auth.mockResolvedValueOnce({ ...context, userEmail: '' });
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', projectCode: 'P1', sector: '', projectType: '', areaSqFt: 500 });
+    db.costCentre.findFirst.mockResolvedValueOnce({ id: 'cc-1', code: 'CC01', areaSqFt: null, floorZone: null });
+    makeSuccessfulBatch('BOQ-P1-004');
+    await expect(POST(postRequest({ ...createBody, areaSqFt: '125.5', scope: ' Scope ' }))).resolves.toMatchObject({
+      ok: true, data: { boq: { createdBy: 'user-1' } },
+    });
+    const notes = JSON.parse(writeBatch.mock.calls.at(-1)?.[0][1].values[17] as string);
+    expect(notes).toEqual({
+      sector: BOQ_DEFAULT_SECTOR, projectType: BOQ_DEFAULT_PROJECT_TYPE, areaSqFt: 125.5,
+      floorZone: null, requiredDate: null, referenceDrawing: null, remarks: null,
+    });
+
+    writeBatch.mockResolvedValueOnce([
+      { meta: { changes: 1 }, results: [] }, { meta: { changes: 1 } }, { meta: { changes: 1 } },
+    ]);
+    await expect(POST(postRequest(createBody))).resolves.toMatchObject({ ok: false, status: 409 });
+  });
+
   it('keeps BOQ workflow constants stable', () => {
     expect(BOQ_CREATE_AUDIT_ACTION).toBe('BOQ_CREATED');
     expect(BOQ_INITIAL_REVISION_SOURCE_TYPE).toBe('NOT_YET_SELECTED');
