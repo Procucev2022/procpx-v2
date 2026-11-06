@@ -266,4 +266,44 @@ describe('vendor sourcing dashboard', () => {
     await waitFor(() => expect(global.alert).toHaveBeenCalledWith('Error: Issue rejected'));
     view.unmount();
   });
+
+  it('reports non-Error pagination failures and missing negotiation details', async () => {
+    const sparsePpo = { ...pendingPpo, id: 'ppo-sparse', project: {}, deliveryTerms: '', paymentTerms: '', issuedAt: '2026-04-01' };
+    const paginatedDashboard = { ...dashboard, ppos: [sparsePpo], pagination: { rfqs: { page: 1, pageSize: 1, total: 2, hasMore: true } } };
+    configureFetch(paginatedDashboard);
+    render(<VendorSourcingDashboard vendorId="vendor-1" vendorName="Vendor One" vendorCode="V-1" />);
+    await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.vendorSourcingOrderFulfillmentPipeline));
+    mockFetch.mockImplementation((url: string) => {
+      if (url === dashboardUrl) return Promise.resolve(response(paginatedDashboard));
+      if (url.includes('section=rfqs')) return Promise.reject('pagination transport failed');
+      if (url.includes('/api/procurement/rfqs/rfq-101')) return Promise.resolve(response({}));
+      return Promise.resolve(response({}));
+    });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(global.alert).toHaveBeenCalledWith(expect.stringContaining(UI_STRINGS.common.userMessages.failedToFetchVendorDashboardData)));
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url === dashboardUrl) return Promise.resolve(response(paginatedDashboard));
+      if (url.includes('section=rfqs')) return Promise.resolve(response({ error: 'Page unavailable' }, false));
+      if (url.includes('/api/procurement/rfqs/rfq-101')) return Promise.resolve(response({}));
+      return Promise.resolve(response({}));
+    });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Page unavailable')));
+
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.openCommercialNegotiationWorkspace))[0]);
+    await waitFor(() => expect(global.alert).toHaveBeenCalledWith(expect.stringContaining(UI_STRINGS.common.userMessages.failedToFetchRfqDetail)));
+    expect(screen.queryByTestId('vendor-negotiation')).not.toBeInTheDocument();
+
+    mockFetch.mockImplementation((url: string) => url === dashboardUrl
+      ? Promise.resolve(response(paginatedDashboard))
+      : url.includes('/api/procurement/rfqs/rfq-101') ? Promise.reject('RFQ transport failed') : Promise.resolve(response({})));
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.openCommercialNegotiationWorkspace))[0]);
+    await waitFor(() => expect(global.alert).toHaveBeenCalledWith(expect.stringContaining(UI_STRINGS.common.userMessages.failedToFetchRfqDetail)));
+
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorSourcingDashboard.acceptPPOConfirmOrder) })[0]);
+    expect(screen.getByText(UI_STRINGS.componentsVendorSourcingDashboard.clientProject)).toBeInTheDocument();
+    expect(screen.getByText(UI_STRINGS.componentsVendorSourcingDashboard.siteDelivery)).toBeInTheDocument();
+    expect(screen.getByText(UI_STRINGS.componentsVendorSourcingDashboard.copytyq0ce)).toBeInTheDocument();
+  });
 });
