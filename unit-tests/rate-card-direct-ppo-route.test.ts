@@ -5,9 +5,12 @@ import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-
 import { createAuditLog } from '../src/lib/audit';
 import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '../src/lib/notifications';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { isD1BatchWithinLimits } from '../src/lib/d1-batch';
+import { MAX_PPO_CREATE_LINES } from '../src/lib/d1-batch.constants';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { DIRECT_RATE_CARD_PPO_CODE_RETRIES } from '../src/app/api/procurement/rate-cards/direct-ppo/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -26,7 +29,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn(), dispatchPreparedWorkflowNotification: jest.fn() }));
-jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: jest.fn((input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100)), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
@@ -38,6 +41,7 @@ const successResult = apiSuccess as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const notify = notifyNextResponsibleParty as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
+const withinBatchLimits = isD1BatchWithinLimits as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1', userName: 'Buyer One' };
@@ -54,8 +58,8 @@ const pr = {
     category: 'Electrical', subcategory: 'Power', uom: 'm', quantity: 10, boqLineId: 'boq-line-1' }],
 };
 
-function request(body: unknown) {
-  return { json: jest.fn().mockResolvedValue(body) } as unknown as NextRequest;
+function request(body: unknown, headers?: Record<string, string>) {
+  return { json: jest.fn().mockResolvedValue(body), headers: new Headers(headers) } as unknown as NextRequest;
 }
 
 describe('direct PPO from rate card route', () => {
@@ -69,6 +73,7 @@ describe('direct PPO from rate card route', () => {
     db.ppo.findFirst.mockResolvedValue(null);
     db.ppo.count.mockResolvedValue(2);
     batchWrite.mockImplementation(async (statements: unknown[]) => statements.map(() => ({ meta: { changes: 1 } })));
+    withinBatchLimits.mockReset().mockImplementation((input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100));
     projectAuthorized.mockResolvedValue(true);
     structuredLog.mockReset().mockResolvedValue(undefined);
     audit.mockResolvedValue(undefined);
@@ -235,6 +240,90 @@ describe('direct PPO from rate card route', () => {
     batchWrite.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.directPpoSourceChangedPleaseReloadAndRetry, status: 409,
+    });
+  });
+
+  it('rejects malformed requests, invalid RFQs, missing projects, oversized batches and invalid lines', async () => {
+    await expect(POST(request(null))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(request([]))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'DRAFT' });
+    await expect(POST(request({ rateCardId: 'rate-card-1', rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'AWARDED', projectId: '', lines: [], boqRevision: null });
+    await expect(POST(request({ rateCardId: 'rate-card-1', rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, status: 404 });
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, lines: Array.from({ length: MAX_PPO_CREATE_LINES + 1 }, (_, index) => ({
+      ...pr.lines[0], id: `line-${index}`, itemDescription: 'Copper cable',
+    })) });
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ ...pr, lines: [
+      { ...pr.lines[0], itemDescription: '  ', quantity: 10 },
+      { ...pr.lines[0], id: 'pr-line-2', itemDescription: 'Copper cable', quantity: 0 },
+    ] });
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.rfq.findFirst.mockResolvedValueOnce({
+      id: 'rfq-2', title: 'Cable supply', status: 'APPROVED', projectId: 'project-2', boqRevisionId: null,
+      boqRevision: null, lines: [{ id: 'rfq-line-2', lineNumber: '1', description: 'Cable', specification: null,
+        category: null, subcategory: null, uom: 'm', quantity: 1, prLineId: null, boqLineId: null }],
+    });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce({ ...rateCard, terms: '' });
+    db.ppo.findFirst.mockResolvedValueOnce({ ppoNumber: 'PPO-2020-000099' });
+    notify.mockResolvedValueOnce(null);
+    await expect(POST(request({ rateCardId: 'rate-card-1', rfqId: 'rfq-2', deliveryTerms: ' ', paymentTerms: 42, taxDetails: '' })))
+      .resolves.toMatchObject({ ok: true, data: { ppo: {
+        deliveryTerms: expect.any(String), paymentTerms: expect.any(String), taxDetails: expect.any(String),
+      } } });
+    expect(batchWrite).toHaveBeenCalledWith(expect.not.arrayContaining([expect.objectContaining({ sql: expect.stringContaining('notification_outbox') })]));
+    expect(withinBatchLimits).toHaveBeenCalled();
+  });
+
+  it('retries a PPO number collision and returns a conflict after exhausting retries', async () => {
+    const year = new Date().getFullYear();
+    db.ppo.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'collision-1' }).mockResolvedValueOnce({ ppoNumber: `PPO-${year}-000009` });
+    batchWrite.mockReset()
+      .mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }])
+      .mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toMatchObject({ ok: true, status: 201 });
+    expect(batchWrite).toHaveBeenCalledTimes(2);
+
+    db.ppo.findFirst.mockReset().mockResolvedValueOnce(null);
+    for (let attempt = 0; attempt < DIRECT_RATE_CARD_PPO_CODE_RETRIES; attempt += 1) {
+      db.ppo.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: `collision-${attempt}` });
+    }
+    batchWrite.mockReset();
+    for (let attempt = 0; attempt < DIRECT_RATE_CARD_PPO_CODE_RETRIES; attempt += 1) {
+      batchWrite.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    }
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toMatchObject({ ok: false, status: 409 });
+    expect(batchWrite).toHaveBeenCalledTimes(DIRECT_RATE_CARD_PPO_CODE_RETRIES);
+  });
+
+  it('maps D1 limit rejection and uncaptured write errors with request context', async () => {
+    withinBatchLimits.mockReturnValueOnce(false);
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.ppo.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    batchWrite.mockRejectedValueOnce(new Error('D1 unavailable'));
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }, { 'x-request-id': 'direct-ppo-test' })))
+      .resolves.toMatchObject({ ok: false, status: 500 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'ppo.direct_rate_card_create_failed', expect.objectContaining({ requestId: 'direct-ppo-test' }), 'next');
+
+    db.rfq.findFirst.mockResolvedValueOnce({
+      id: 'rfq-3', title: 'Cable supply', status: 'AWARDED', projectId: 'project-3', boqRevisionId: null,
+      boqRevision: null, lines: [{ id: 'rfq-line-3', lineNumber: '1', description: 'Cable', specification: null,
+        category: 'General', subcategory: null, uom: 'm', quantity: 1, prLineId: null, boqLineId: null }],
+    });
+    db.ppo.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce({ ppoNumber: 'PPO-RFQ-EXISTING' });
+    batchWrite.mockRejectedValueOnce(new Error('unique race'));
+    await expect(POST(request({ rateCardId: 'rate-card-1', rfqId: 'rfq-3' }))).resolves.toMatchObject({ ok: false, status: 409 });
+    expect(db.ppo.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ rfqId: 'rfq-3', vendorId: 'vendor-1' }) }));
+
+    db.ppo.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ppoNumber: 'PPO-RACE-EXISTING' });
+    batchWrite.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    await expect(POST(request({ rateCardId: 'rate-card-1', prId: 'pr-1' }))).resolves.toMatchObject({
+      ok: false, status: 409, error: expect.stringContaining('PPO-RACE-EXISTING'),
     });
   });
 });
