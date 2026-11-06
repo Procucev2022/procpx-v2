@@ -80,14 +80,14 @@ describe('upload storage', () => {
 
   it('reports missing R2 objects, missing bindings and local paths on Workers', async () => {
     bucket.get.mockResolvedValue(null);
-    await expect(readUpload('r2://gone.xlsx')).rejects.toThrow(UI_STRINGS.libStorage.uploadedFileNotFound);
+    await expect(readUpload('r2://gone.xlsx')).rejects.toThrow(UI_STRINGS.libStorage.uploadedFileNotFoundInStorage);
 
     onWorker.mockReturnValue(true);
-    await expect(readUpload('/srv/uploads/file.xlsx')).rejects.toThrow(UI_STRINGS.libStorage.localFileNotAvailableInThisRuntime);
+    await expect(readUpload('/srv/uploads/file.xlsx')).rejects.toThrow(UI_STRINGS.libStorage.thisFileWasUploadedToALocalServerAndIsNotAvailableHere);
     await expect(deleteUpload('/srv/uploads/file.xlsx', ['tenant-1']))
-      .rejects.toThrow(UI_STRINGS.libStorage.localFileNotAvailableInThisRuntime);
+      .rejects.toThrow(UI_STRINGS.libStorage.thisFileWasUploadedToALocalServerAndIsNotAvailableHere);
 
     cloudflareContext.mockReturnValue({ env: {} });
-    await expect(saveUpload(['t'], 'f.xlsx', Buffer.from('x'))).rejects.toThrow(UI_STRINGS.libStorage.fileStorageNotConfigured);
+    await expect(saveUpload(['t'], 'f.xlsx', Buffer.from('x'))).rejects.toThrow(UI_STRINGS.libStorage.fileStorageIsNotConfiguredTheR2BucketBindingUPLOADSIsMissing);
   });
 });

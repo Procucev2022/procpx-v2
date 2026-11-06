@@ -25,7 +25,7 @@ export function isFileLoggingEnabled(environment = process.env): boolean {
 }
 
 export function getLogDirectory(environment = process.env): string {
-  return path.resolve(environment.APP_LOG_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), LOG_DIRECTORY_NAME));
+  return path.resolve(/*turbopackIgnore: true*/ environment.APP_LOG_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), LOG_DIRECTORY_NAME));
 }
 
 function getRetentionDays(environment = process.env): number {

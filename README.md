@@ -13,21 +13,23 @@ npm install
 cp .env.example .env
 ```
 
-`npm run dev` uses the ordinary local Wrangler D1 state under ignored `.wrangler/`. Regression fixtures use a separate persistent local D1 at `.wrangler/e2e-d1`, so seeding or running the regression workflow cannot alter the ordinary development database. Cloudflare remote D1 is accessed only with explicit `:remote` commands.
+Cloudflare D1 is the only application database; there is no local SQLite runtime. `npm run dev` uses the ordinary local Wrangler D1 state under ignored `.wrangler/`. Regression fixtures use a separate persistent local D1 at `.wrangler/e2e-d1`, so fixture setup cannot alter the ordinary development database. Remote D1 is accessed only through explicit `:remote` commands after Wrangler credentials are configured.
 
-### 3. Initialize Database Schema
+### 2. Initialize Database Schema
+Local D1 state (under the ignored `.wrangler/` folder, used by the quality checks):
 ```bash
 npm run db:migrate:safe
 npm run db:integrity
 ```
 
-To apply the schema to your configured Cloudflare D1 database:
+Remote Cloudflare D1 (explicit commands only; check first, then migrate):
 ```bash
+npm run db:integrity:remote
 npm run db:d1:migrate:remote
 npm run db:integrity:remote
 ```
 
-The current migration starts with an empty database. It does not import the legacy mocked SQLite records or seed demo accounts.
+Migrations never seed or import data; existing D1 records are preserved.
 
 To create the schema and add the repeatable, clearly labelled fixture to the isolated local regression D1:
 ```bash
@@ -37,7 +39,7 @@ The command applies ordered Wrangler migrations and uses stable `fx-` IDs with i
 
 **D1 transaction safety:** Prisma's D1 adapter ignores Prisma transaction boundaries, including callback and array transactions. The Prisma proxy rejects explicit `$transaction` calls. RFQ invitations, vendor quote submission, negotiation round submission, and PPO creation write their related records through native D1 batches, which execute sequentially and roll back together on failure. Additions that require atomic multi-write behavior must use the shared D1 batch helper.
 
-### 4. Launch Development Server
+### 3. Launch Development Server
 ```bash
 npm run dev
 ```
@@ -66,17 +68,27 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 
 **Database provider:** application runtime always uses D1. `npm run dev` selects Wrangler's local D1 binding; `npm start` runs the Cloudflare Worker preview. Do not configure `DATABASE_URL` or Prisma SQLite for application runtime. Remote D1 migrations and integrity checks require the explicit `npm run db:d1:migrate:remote` and `npm run db:integrity:remote` commands.
 
-**Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), then run `npm run cf:migrate`.
+**Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), apply it locally with `npm run db:migrate:safe`, then remotely with `npm run db:d1:migrate:remote` (alias: `npm run cf:migrate`). Never use `prisma db push`.
 
 **Secrets** (once per environment):
 ```bash
 npx wrangler secret put NEXTAUTH_SECRET   # a long random value
 npx wrangler secret put NEXTAUTH_URL      # e.g. https://procpx.<subdomain>.workers.dev
+npx wrangler secret put GEMINI_API_KEY    # optional; enables AI vision for scanned drawings
 ```
 
 **Deploy:** `npm run cf:deploy`. On Windows the OpenNext build needs symlink permission, so turn on Developer Mode or build in WSL or CI.
 
 Legacy SQLite import/export is disabled. The Prisma SQLite provider and placeholder URL exist only to generate the D1-compatible schema; application reads and writes require D1. `npm run db:seed:test` creates idempotent local fixtures in the isolated `.wrangler/e2e-d1` store.
+
+### GitHub Actions dev deployment
+
+The `Deploy dev to Cloudflare` workflow deploys automatically when changes reach `main`, or can be started with **Run workflow**. Configure these GitHub Actions secrets in the `dev` environment:
+
+- `CLOUDFLARE_API_TOKEN` — a token with Workers Scripts and D1 edit permissions.
+- `CLOUDFLARE_ACCOUNT_ID` — the Cloudflare account ID that owns the Worker and D1 database.
+
+The workflow runs the full quality gate, verifies remote D1 integrity before and after reviewed migrations, and deploys with OpenNext. It does not seed or reset D1 data. Remote migrations must remain limited to reviewed, data-preserving SQL and use the explicit remote migration command.
 
 ---
 

@@ -6,10 +6,10 @@ Files included: **326**. Files meeting all four 90% thresholds: **278/326**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.75% (96777/98002) |
-| branches | 91.06% (20986/23045) |
+| statements | 98.75% (96784/98009) |
+| branches | 91.06% (20989/23048) |
 | functions | 97.88% (1847/1887) |
-| lines | 98.75% (96777/98002) |
+| lines | 98.75% (96784/98009) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -302,7 +302,7 @@ Files included: **326**. Files meeting all four 90% thresholds: **278/326**.
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/drawing-parser.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/drawing-parser.ts` | 99.21% | 93.27% | 100.00% | 99.21% | PASS |
+| `src/lib/drawing-parser.ts` | 99.21% | 93.36% | 100.00% | 99.21% | PASS |
 | `src/lib/i18n.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/i18n.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/negotiation-history.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

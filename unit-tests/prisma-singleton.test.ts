@@ -22,7 +22,8 @@ const prismaGlobal = globalThis as typeof globalThis & { prisma?: unknown };
 function loadPrismaModule() {
   let moduleExports: typeof import('../src/lib/prisma') | undefined;
   jest.isolateModules(() => {
-    moduleExports = jest.requireActual('../src/lib/prisma') as typeof import('../src/lib/prisma');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a synchronous load.
+    moduleExports = require('../src/lib/prisma') as typeof import('../src/lib/prisma');
   });
   return moduleExports!;
 }

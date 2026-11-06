@@ -12,7 +12,7 @@ const root = path.resolve(__dirname, '..');
 const wranglerCli = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const mode = process.argv.includes('--remote') ? '--remote' : '--local';
 const configPath = path.join(root, 'wrangler.jsonc');
-const inventorySql = "SELECT name AS tableName FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations' AND name <> '_cf_METADATA' ORDER BY name";
+const inventorySql = "SELECT name AS tableName FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations' AND substr(name, 1, 4) <> '_cf_' ORDER BY name";
 
 function remoteEnvironment() {
   const values = {};
@@ -56,7 +56,7 @@ function execute(sql) {
     ...((mode === '--remote' ? ['.env', '.env.local'] : [])
       .filter((filename) => fs.existsSync(path.join(root, filename)))
       .flatMap((filename) => ['--env-file', path.join(root, filename)])),
-  ], { cwd: root, encoding: 'utf8' });
+  ], { cwd: root, env: process.env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
   if (result.error) fail(`Wrangler could not start: ${result.error.message}`);
   if (result.status !== 0) {
@@ -74,12 +74,19 @@ function execute(sql) {
 if (!fs.existsSync(wranglerCli)) fail('the local Wrangler CLI was not found; install dependencies first');
 if (mode === '--remote') {
   const env = remoteEnvironment();
-  const required = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_DATABASE_ID'];
-  const missing = required.filter((key) => !env[key] || env[key].startsWith('replace-with-'));
-  if (missing.length) fail(`remote integrity checks require configured values for: ${missing.join(', ')}`);
+  // Authentication comes from CLOUDFLARE_API_TOKEN or an interactive `wrangler login`.
+  // When a database ID is supplied it must match the tracked Wrangler configuration.
   const configText = fs.readFileSync(configPath, 'utf8');
-  const configuredDatabaseId = configText.match(/database_id\s*:\s*["']([^"']+)["']/)?.[1];
-  if (configuredDatabaseId !== env.CLOUDFLARE_DATABASE_ID) fail('the database_id in wrangler.jsonc must match CLOUDFLARE_DATABASE_ID');
+  const configuredDatabaseId = configText.match(/"database_id"\s*:\s*["']([^"']+)["']/)?.[1];
+  const expectedDatabaseId = env.CLOUDFLARE_DATABASE_ID;
+  if (expectedDatabaseId && !expectedDatabaseId.startsWith('replace-with-') && configuredDatabaseId !== expectedDatabaseId) {
+    fail('the database_id in wrangler.jsonc must match CLOUDFLARE_DATABASE_ID');
+  }
+  // A login with access to several accounts needs an explicit account in non-interactive runs.
+  if (!env.CLOUDFLARE_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID.startsWith('replace-with-')) {
+    const configuredAccountId = configText.match(/"account_id"\s*:\s*["']([^"']+)["']/)?.[1];
+    if (configuredAccountId) process.env.CLOUDFLARE_ACCOUNT_ID = configuredAccountId;
+  }
 }
 
 const inventory = execute(inventorySql);

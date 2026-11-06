@@ -4,7 +4,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const { spawnNpm } = require('./spawn-npm.cjs');
 const dryRun = process.argv.includes('--dry-run');
 const codeExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const typeScriptExtensions = new Set(['.ts', '.tsx', '.mts', '.cts']);
@@ -40,10 +40,9 @@ function npmRun(project, script, args = []) {
   const command = ['run', script, ...(args.length ? ['--', ...args] : [])];
   process.stdout.write(`${dryRun ? '[dry-run] ' : ''}npm ${command.join(' ')} (${relative})\n`);
   if (dryRun) return true;
-  const result = spawnSync(npmCommand, command, {
+  const result = spawnNpm(command, {
     cwd: project,
     env: process.env,
-    shell: process.platform === 'win32',
     stdio: 'inherit',
   });
   if (result.error || result.status !== 0) {

@@ -211,8 +211,11 @@ describe('NextAuth secret', () => {
     Object.assign(process.env, env);
     let secret: unknown;
     jest.isolateModules(() => {
-      jest.requireActual('../src/lib/auth');
-      const calls = (jest.requireMock('next-auth').default as jest.Mock).mock.calls;
+      // Synchronous require keeps each load inside the isolated module registry.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../src/lib/auth');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const calls = (require('next-auth').default as jest.Mock).mock.calls;
       secret = calls[calls.length - 1][0].secret;
     });
     return secret;

@@ -238,11 +238,11 @@ export const UI_STRINGS = {
     uploadedSpreadsheetIsEmptyOrHasNoRecognizableRows: "Uploaded spreadsheet is empty or has no recognizable rows.",
   },
   libStorage: {
-    fileStorageNotConfigured: "File storage is not configured. Please contact support.",
+    fileStorageIsNotConfiguredTheR2BucketBindingUPLOADSIsMissing: "File storage is not configured: the R2 bucket binding UPLOADS is missing.",
     uploadCleanupIsNotSupportedByThisStorageBinding: "Uploaded file cleanup is not supported by this storage binding.",
     uploadReferenceOutsideAllowedDirectory: "Upload cleanup was rejected because the file is outside the allowed directory.",
-    uploadedFileNotFound: "Uploaded file was not found.",
-    localFileNotAvailableInThisRuntime: "This file was uploaded to a local server and is not available here.",
+    uploadedFileNotFoundInStorage: "Uploaded file not found in storage.",
+    thisFileWasUploadedToALocalServerAndIsNotAvailableHere: "This file was uploaded to a local server and is not available here.",
   },
   appApiBudgetsAddBoqRoute: {
     bOQBoqCodeRRevisionNumberAddedToBudgetForCostCentreCodeNameTotalValueToLocaleString: "BOQ {{boqCode}} R{{revisionNumber}} added to Budget for Cost Centre {{code}} ({{name}}). Total value: ₹ {{toLocaleString}}",
@@ -5733,6 +5733,7 @@ export const UI_STRINGS = {
     commercial6A16ARawPowerSocketOutlet: "Commercial 6A/16A Raw Power Socket Outlet",
     dedicated6A16AUPSPowerSocketOutletForMenuBoard: "Dedicated 6A/16A UPS Power Socket Outlet for Menu Board",
     drawingOCRProcessingFailedMessage: "Drawing OCR processing failed: {{message}}",
+    localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings: "Local OCR is not available in Cloudflare Workers. Configure an AI Vision provider for image drawings.",
     extractAllCaPexBOQItemsFromThisDrawingRefDrawingRefNeverInventQuantitiesUseNullIfUnverified: "Extract all CaPex BOQ items from this drawing (Ref: {{drawingRef}}). Never invent quantities; use null if unverified.",
     overheadBeamStructuralSiteVerificationAnchorMounting: "Overhead Beam Structural Site Verification & Anchor Mounting",
     plywoodMSMetalFramingBoxingSupportStructureForDMBScreens: "Plywood & MS Metal Framing Boxing Support Structure for DMB Screens",
