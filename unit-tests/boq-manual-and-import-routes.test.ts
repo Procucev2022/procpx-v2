@@ -10,6 +10,8 @@ import { POST as importBoq } from '../src/app/api/boq/import/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { MANUAL_BOQ_CREATE_AUDIT_ACTION, MANUAL_BOQ_CREATION_NOTES, MANUAL_BOQ_LINES_SAVED_AUDIT_ACTION } from '../src/app/api/boq/manual/route.constants';
+import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
+import { MAX_BOQ_UPLOAD_BYTES } from '../src/lib/boq-upload.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -270,5 +272,63 @@ describe('BOQ spreadsheet import', () => {
     expect(statements[3].values[21]).toBe(2);
     expect(statements[3].values[25]).toBe('WARNING');
     expect(statements[4].values.slice(1, 6)).toEqual([1, 0, 0, 1, 80]);
+  });
+
+  it('guards malformed mappings and files, duplicate lines, stale revisions, and partial writes', async () => {
+    const minimalMapping = { description: 'Description', uom: 'UOM', quantity: 'Quantity' };
+    await expect(importBoq(request([]))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: {
+      ...minimalMapping, extra: 12,
+    } }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', originalFilePath: 'too-large.xlsx', originalFileSize: MAX_BOQ_UPLOAD_BYTES + 1 });
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: minimalMapping }))).resolves.toMatchObject({ ok: false, status: 413 });
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', originalFilePath: 'empty.xlsx', originalFileSize: null });
+    readUploadedFile.mockResolvedValueOnce(Buffer.alloc(0));
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: minimalMapping }))).resolves.toMatchObject({ ok: false, status: 413 });
+
+    const duplicateWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(duplicateWorkbook, XLSX.utils.aoa_to_sheet([
+      ['Line', 'Description', 'UOM', 'Quantity'], ['1', 'Cable', 'mtr', '2'], ['1', 'Panel', 'nos', '3'],
+    ]), 'Duplicate');
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', updatedAt: new Date(), originalFilePath: 'duplicate.xlsx', originalFileSize: null });
+    readUploadedFile.mockResolvedValueOnce(XLSX.write(duplicateWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    standardiseUnit.mockReturnValue({ code: 'MTR' });
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: mapping }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    const singleWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(singleWorkbook, XLSX.utils.aoa_to_sheet([
+      ['Description', 'UOM', 'Quantity'], ['Cable', 'mtr', '2'],
+    ]), 'Items');
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', updatedAt: 'invalid-date', originalFilePath: 'stale.xlsx', originalFileSize: null, boq: { projectId: 'project-1' } });
+    readUploadedFile.mockResolvedValueOnce(XLSX.write(singleWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    standardiseUnit.mockReturnValueOnce({ code: 'MTR' });
+    validateLine.mockReturnValueOnce({ status: 'VALID', messages: [] });
+    qualityScore.mockReturnValueOnce(100);
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: minimalMapping }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', updatedAt: new Date(), originalFilePath: 'conflict.xlsx', originalFileSize: null, boq: { projectId: 'project-1' } });
+    readUploadedFile.mockResolvedValueOnce(XLSX.write(singleWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    standardiseUnit.mockReturnValueOnce({ code: 'MTR' });
+    validateLine.mockReturnValueOnce({ status: 'VALID', messages: [] });
+    qualityScore.mockReturnValueOnce(100);
+    writeBatch.mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: minimalMapping }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', originalFilePath: 'unavailable.xlsx', originalFileSize: null });
+    readUploadedFile.mockRejectedValueOnce(new Error('document storage unavailable'));
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: minimalMapping }))).resolves.toMatchObject({ ok: false, status: 500 });
+
+    const oversizedWorkbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(oversizedWorkbook, XLSX.utils.aoa_to_sheet([
+      ['Description', 'UOM', 'Quantity'],
+      ...Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, (_, index) => [`Item ${index}`, 'mtr', '1']),
+    ]), 'Too many');
+    db.boqRevision.findFirst.mockResolvedValueOnce({ status: 'DRAFT', updatedAt: new Date(), originalFilePath: 'many.xlsx', originalFileSize: null });
+    readUploadedFile.mockResolvedValueOnce(XLSX.write(oversizedWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+    await expect(importBoq(request({ revisionId: 'revision-1', columnMapping: minimalMapping }))).resolves.toMatchObject({ ok: false, status: 400 });
   });
 });
