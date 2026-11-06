@@ -12,6 +12,7 @@ import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { MANUAL_BOQ_CREATE_AUDIT_ACTION, MANUAL_BOQ_CREATION_NOTES, MANUAL_BOQ_LINES_SAVED_AUDIT_ACTION } from '../src/app/api/boq/manual/route.constants';
 import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
 import { MAX_BOQ_UPLOAD_BYTES } from '../src/lib/boq-upload.constants';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -176,6 +177,102 @@ describe('manual BOQ workspace API', () => {
   it('keeps stable manual BOQ audit action names', () => {
     expect(MANUAL_BOQ_CREATE_AUDIT_ACTION).toBe('MANUAL_BOQ_CREATED');
     expect(MANUAL_BOQ_LINES_SAVED_AUDIT_ACTION).toBe('MANUAL_BOQ_LINES_SAVED');
+  });
+
+  it('rejects malformed request shapes and enforces project and cost-centre ownership', async () => {
+    const malformedJson = { json: jest.fn().mockRejectedValue(new Error('invalid JSON')) } as unknown as NextRequest;
+    await expect(editManualBoq(malformedJson)).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(editManualBoq(request({ projectId: 'project-1', lines: 'invalid' }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(editManualBoq(request({ projectId: 'project-1', action: 'MERGE' }))).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(editManualBoq(request({ projectId: 'project-1', boqRevisionId: 'revision-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', name: 'Retail Store' });
+    db.costCentre.findFirst.mockResolvedValueOnce(null);
+    await expect(editManualBoq(request({ projectId: 'project-1', costCentreId: 'foreign-centre', lines: [] }))).resolves.toMatchObject({
+      ok: false, status: 404, error: UI_STRINGS.common.costCentreNotFoundForThisProject,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision({ boq: { ...editableRevision().boq, tenantId: 'other-tenant' } }));
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', lines: [] }))).resolves.toMatchObject({
+      ok: false, status: 404, error: UI_STRINGS.common.bOQRevisionNotFound,
+    });
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision());
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', projectId: 'other-project', lines: [] }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody,
+    });
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision());
+    db.costCentre.findFirst.mockResolvedValueOnce(null);
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', costCentreId: 'foreign-centre', lines: [] }))).resolves.toMatchObject({
+      ok: false, status: 404, error: UI_STRINGS.common.costCentreNotFoundForThisProject,
+    });
+  });
+
+  it('uses manual defaults, numeric line numbers, and append summaries for warning groups', async () => {
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', name: 'Retail Store' });
+    makeSuccessfulBatch();
+    await expect(editManualBoq(request({ projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: true, status: 201, data: { totalLines: 0, revision: { qualityScore: 100 }, boq: { title: 'Retail Store BOQ', purpose: 'BUDGET' } },
+    });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', name: 'Retail Store' });
+    await expect(editManualBoq(request({ projectId: 'project-1', purpose: 'INVALID' }))).resolves.toMatchObject({ ok: false, status: 400 });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision({ updatedAt: '2026-11-04T10:00:00.000Z' }));
+    db.boqLine.groupBy.mockResolvedValueOnce([
+      { validationStatus: 'VALID', _count: { _all: 2 } },
+      { validationStatus: 'ERROR', _count: { _all: 1 } },
+      { validationStatus: 'WARNING', _count: { _all: 0 } },
+    ]);
+    db.category.findMany.mockResolvedValueOnce([{ id: 'cat-1', name: 'Electrical' }]);
+    db.uomMaster.findMany.mockResolvedValueOnce([{ id: 'uom-1', code: 'MTR' }]);
+    makeSuccessfulBatch('BOQ-000001');
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', action: 'APPEND', lines: [
+      { lineNumber: 12, description: 'Panel', quantity: 'invalid', aiUnitCost: 'invalid', uomRaw: 'mtr' },
+      { description: 'Cable', quantity: 1, aiUnitCost: '' },
+    ] }))).resolves.toMatchObject({ ok: true, data: { totalLines: 5, revision: { validLines: 3, errorLines: 2, warningLines: 0 } } });
+    const appended = writeBatch.mock.calls.at(-1)?.[0] as Array<{ values: unknown[] }>;
+    expect(appended[2].values[3]).toBe('12');
+    expect(appended[2].values[37]).toBeNull();
+  });
+
+  it('rejects duplicate line numbers and stale revision timestamps without writing', async () => {
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', name: 'Retail Store' });
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    await expect(editManualBoq(request({ projectId: 'project-1', lines: [
+      { lineNumber: 'same', description: 'First', quantity: 1 },
+      { lineNumber: 'same', description: 'Second', quantity: 1 },
+    ] }))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    expect(writeBatch).not.toHaveBeenCalled();
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision({ updatedAt: 'not-a-date' }));
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', lines: [] }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('returns atomic audit and metrics conflicts and logs non-Error storage failures', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision());
+    writeBatch.mockResolvedValueOnce([
+      { meta: { changes: 1 } }, { meta: { changes: 0 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } },
+    ]);
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', lines: [] }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision());
+    writeBatch.mockResolvedValueOnce([
+      { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 0 } },
+    ]);
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', lines: [] }))).resolves.toMatchObject({ ok: false, status: 409 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1', name: 'Retail Store' });
+    writeBatch.mockRejectedValueOnce({ code: 'D1_UNAVAILABLE' });
+    await expect(editManualBoq(request({ projectId: 'project-1', lines: [] }))).resolves.toMatchObject({
+      ok: false, status: 500, error: UI_STRINGS.common.userMessages.manualBoqOperationFailed,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'boq.manual_operation_failed', expect.objectContaining({
+      error: { type: 'object' }, lineCount: 0,
+    }));
   });
 });
 describe('BOQ spreadsheet import', () => {
