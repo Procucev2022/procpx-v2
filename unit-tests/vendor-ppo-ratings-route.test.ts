@@ -148,6 +148,28 @@ describe('vendor PPO ratings API', () => {
     await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchPpoRatings, status: 500 });
   });
 
+  it('trims the extra pagination row and counts accepted PPOs with zero-valued groups', async () => {
+    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 51 }, (_, index) => rating({ id: `rating-${index}` })));
+    db.ppo.groupBy.mockResolvedValueOnce([
+      { status: 'ACCEPTED', _count: { _all: 0 } },
+      { status: 'COMPLETED', _count: { _all: 2 } },
+    ]);
+    const result = await GET(getRequest(), params());
+    expect(result).toMatchObject({ ok: true, data: {
+      ratings: expect.any(Array), summary: { ppoCount: 2, completedPpoCount: 2 },
+      pagination: { page: 1, pageSize: 50, hasMore: true },
+    } });
+    const resultBody = result as unknown as { data: { ratings: unknown[] } };
+    expect(resultBody.data.ratings).toHaveLength(50);
+  });
+
+  it('rejects malformed bodies and invalid assessment actions before PPO lookup', async () => {
+    await expect(POST(postRequest([]), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ppoId: 'ppo-1', action: 'UNKNOWN' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    await expect(POST(postRequest({ ppoId: 'ppo-1', markPpoCompleted: 'yes' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
+    expect(db.ppo.findFirst).not.toHaveBeenCalled();
+  });
+
   it('validates rating permissions, vendor, PPO eligibility, project scope, and existing decision state', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);
@@ -174,6 +196,8 @@ describe('vendor PPO ratings API', () => {
       db.ppoVendorRating.findFirst.mockResolvedValueOnce({ id: 'existing', status });
       await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toMatchObject({ ok: false, error: expect.stringContaining('assessment'), status: 400 });
     }
+    db.ppoVendorRating.findFirst.mockResolvedValueOnce({ id: 'existing', status: 'LOCKED' });
+    await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toMatchObject({ ok: false, status: 400 });
     await expect(POST(postRequest({ ppoId: 'ppo-1' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.pleaseProvideFeedbackOrAreasForImprovementBeforeSubmittingForProjectApproval, status: 400 });
   });
 
