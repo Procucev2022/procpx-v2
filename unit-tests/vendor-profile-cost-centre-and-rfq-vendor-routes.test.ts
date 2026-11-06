@@ -278,4 +278,22 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
       operation: 'invite_vendors', route: '/api/procurement/rfqs/[id]/vendors', tenantId: 'tenant-1', rfqId: 'rfq-1', error: expect.any(Error),
     }), 'application');
   });
+
+  it('chunks large tenant-scoped RFQ vendor eligibility reads below the D1 binding limit', async () => {
+    const vendorIds = Array.from({ length: 101 }, (_, index) => `vendor-${index}`);
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', tenantId: 'tenant-1', status: 'DRAFT', projectId: 'project-1', rfqNumber: 'RFQ-001' });
+    db.vendor.findMany.mockImplementation(async (query: { where: { id: { in: string[] } } }) =>
+      query.where.id.in.map((id) => ({ id, name: id })));
+    writeInvitations.mockResolvedValueOnce(vendorIds.length);
+
+    await expect(inviteRfqVendors(request({ vendorIds }), idParams('rfq-1'))).resolves.toMatchObject({
+      ok: true, data: { invited: 101, vendors: expect.any(Array) },
+    });
+
+    const chunks = db.vendor.findMany.mock.calls.map(([query]) =>
+      (query as { where: { id: { in: string[] }; tenantId: string; isBlacklisted: boolean } }).where);
+    expect(chunks.map((where) => where.id.in.length)).toEqual([90, 11]);
+    expect(chunks.every((where) => where.tenantId === 'tenant-1' && where.isBlacklisted === false)).toBe(true);
+    expect(writeInvitations).toHaveBeenLastCalledWith(expect.objectContaining({ vendorIds }));
+  });
 });

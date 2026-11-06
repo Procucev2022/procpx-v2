@@ -9,6 +9,7 @@ import { MAX_D1_BATCH_STATEMENTS } from '@/lib/d1-batch.constants';
 import { writeRfqVendorInvitationsAtomically } from '@/lib/d1-batch';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function POST(
@@ -44,13 +45,13 @@ export async function POST(
     }
 
     // Verify vendors belong to this tenant and are not blacklisted
-    const eligibleVendors = await prisma.vendor.findMany({
+    const eligibleVendors = await readByD1FilterChunks(vendorIds, (vendorIdChunk) => prisma.vendor.findMany({
       where: {
-        id: { in: vendorIds },
+        id: { in: vendorIdChunk },
         tenantId: ctx.tenantId,
         isBlacklisted: false,
       },
-    });
+    }));
 
     if (eligibleVendors.length === 0) {
       return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400);

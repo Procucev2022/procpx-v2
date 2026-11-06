@@ -115,6 +115,33 @@ describe('approval communication API', () => {
     expect(db.budgetContribution.findFirst).not.toHaveBeenCalled();
   });
 
+  it('chunks identity lookups for the maximum approval message page', async () => {
+    db.procurementRequest.findFirst.mockResolvedValueOnce({
+      id: 'pr-1', prNumber: 'PR-1', requestedBy: 'requester-1', projectId: 'project-1',
+    });
+    db.pRApproval.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `approval-${index}`,
+      approverId: `approver-${index}`,
+      status: 'MESSAGE',
+      remarks: '',
+      timestamp: new Date(`2026-01-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`),
+    })));
+    db.user.findMany.mockResolvedValue([]);
+
+    await expect(GET(getRequest('?prId=pr-1&pageSize=100'))).resolves.toMatchObject({ ok: true });
+
+    const chunks = db.user.findMany.mock.calls.map(([query]) => {
+      const where = (query as { where: { OR: Array<{ id?: { in: string[] }; email?: { in: string[] } }> } }).where;
+      const ids = where.OR[0].id?.in ?? [];
+      const emails = where.OR[1].email?.in ?? [];
+      expect(where.OR[0].id?.in).toEqual(where.OR[1].email?.in);
+      expect(ids.length).toBeLessThanOrEqual(45);
+      expect(emails.length).toBeLessThanOrEqual(45);
+      return ids.length;
+    });
+    expect(chunks).toEqual([45, 45, 11]);
+  });
+
   it('handles missing PR and budget contribution reads and formats budget messages', async () => {
     db.procurementRequest.findFirst.mockResolvedValueOnce(null);
     await expect(GET(getRequest('?prId=missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404 });

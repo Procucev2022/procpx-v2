@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **329**. Files meeting all four 90% thresholds: **281/329**.
+Files included: **331**. Files meeting all four 90% thresholds: **283/331**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 98.75% (96942/98166) |
-| branches | 91.08% (21033/23092) |
-| functions | 97.88% (1849/1889) |
-| lines | 98.75% (96942/98166) |
+| statements | 98.75% (96982/98206) |
+| branches | 91.09% (21050/23108) |
+| functions | 97.88% (1851/1891) |
+| lines | 98.75% (96982/98206) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -81,7 +81,7 @@ Files included: **329**. Files meeting all four 90% thresholds: **281/329**.
 | `src/app/api/actual-costs/route.ts` | 99.40% | 90.47% | 100.00% | 99.40% | PASS |
 | `src/app/api/admin/users/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/admin/users/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/approvals/messages/route.ts` | 94.77% | 84.73% | 100.00% | 94.77% | BELOW 90% |
+| `src/app/api/approvals/messages/route.ts` | 94.81% | 85.60% | 100.00% | 94.81% | BELOW 90% |
 | `src/app/api/approvals/route.ts` | 100.00% | 92.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
@@ -304,6 +304,8 @@ Files included: **329**. Files meeting all four 90% thresholds: **281/329**.
 | `src/lib/d1-batch.ts` | 100.00% | 97.14% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/d1-query.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/d1-query.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/drawing-parser.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/drawing-parser.ts` | 99.21% | 93.36% | 100.00% | 99.21% | PASS |
 | `src/lib/i18n.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -316,7 +318,7 @@ Files included: **329**. Files meeting all four 90% thresholds: **281/329**.
 | `src/lib/observability/edge-logger.ts` | 94.36% | 94.73% | 100.00% | 94.36% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.94% | 95.77% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 95.94% | 100.00% | 98.94% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

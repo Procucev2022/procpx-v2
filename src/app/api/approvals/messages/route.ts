@@ -12,6 +12,8 @@ import {
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import { readByD1FilterChunks } from '@/lib/d1-query';
+import { MAX_D1_QUERY_DUPLICATED_FILTER_VALUES } from '@/lib/d1-query.constants';
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -58,10 +60,10 @@ export async function GET(req: NextRequest) {
       const hasMore = approvals.length > pageSize;
       const pageApprovals = (hasMore ? approvals.slice(0, pageSize) : approvals).reverse();
       const userKeys = Array.from(new Set([pr.requestedBy, ...pageApprovals.map((approval) => approval.approverId)].filter(Boolean)));
-      const users = userKeys.length ? await prisma.user.findMany({
-        where: { tenantId: ctx.tenantId, OR: [{ id: { in: userKeys } }, { email: { in: userKeys } }] },
+      const users = await readByD1FilterChunks(userKeys, (userKeyChunk) => prisma.user.findMany({
+        where: { tenantId: ctx.tenantId, OR: [{ id: { in: userKeyChunk } }, { email: { in: userKeyChunk } }] },
         select: { id: true, name: true, role: true, email: true },
-      }) : [];
+      }), MAX_D1_QUERY_DUPLICATED_FILTER_VALUES);
       const userMap = new Map<string, { name: string; role: string; email: string }>();
       for (const user of users) {
         const entry = { name: user.name, role: user.role, email: user.email };
@@ -109,10 +111,10 @@ export async function GET(req: NextRequest) {
     const hasMore = approvals.length > pageSize;
     const pageApprovals = (hasMore ? approvals.slice(0, pageSize) : approvals).reverse();
     const userKeys = Array.from(new Set([contribution.submittedBy || '', ...pageApprovals.map((approval) => approval.approverId)].filter(Boolean)));
-    const users = userKeys.length ? await prisma.user.findMany({
-      where: { tenantId: ctx.tenantId, OR: [{ id: { in: userKeys } }, { email: { in: userKeys } }] },
+    const users = await readByD1FilterChunks(userKeys, (userKeyChunk) => prisma.user.findMany({
+      where: { tenantId: ctx.tenantId, OR: [{ id: { in: userKeyChunk } }, { email: { in: userKeyChunk } }] },
       select: { id: true, name: true, role: true, email: true },
-    }) : [];
+    }), MAX_D1_QUERY_DUPLICATED_FILTER_VALUES);
     const userMap = new Map<string, { name: string; role: string; email: string }>();
     for (const user of users) {
       const entry = { name: user.name, role: user.role, email: user.email };
