@@ -349,4 +349,37 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     db.vendorRateCard.findFirst.mockRejectedValueOnce({});
     await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({ ok: false, error: 'Failed to approve rate card', status: 500 });
   });
+
+  it('handles missing approver metadata and a stale project approval transition', async () => {
+    auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_APPROVER', userName: '', userEmail: '' });
+    transition.mockResolvedValueOnce(false);
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(rateCard({ approvalLevel: undefined }));
+
+    await expect(approveRateCard(request(), params('card-1'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+    expect(transition).toHaveBeenLastCalledWith(expect.objectContaining({
+      updateValues: expect.arrayContaining(['PROJECT_APPROVER', null]),
+      approvalValues: expect.arrayContaining(['PROJECT_APPROVER', null, 'Level 1 Project Approval granted. Routed to Finance Approver.']),
+    }));
+
+    auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_APPROVER', userName: '', userEmail: '' });
+    transition.mockResolvedValueOnce(true);
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(rateCard({ approvalLevel: undefined, approvals: [] }));
+    await expect(approveRateCard(request(), params('card-1'))).resolves.toMatchObject({
+      ok: true, data: { rateCard: { approvals: [expect.objectContaining({ approverEmail: null })] } },
+    });
+
+    auth.mockResolvedValueOnce({ ...context, role: 'FINANCE_APPROVER', userName: '', userEmail: '' });
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(rateCard({
+      status: 'PENDING_FINANCE_APPROVAL', approvalLevel: undefined, notes: '{}', approvals: undefined,
+    }));
+    await expect(approveRateCard(request(), params('card-1'))).resolves.toMatchObject({
+      ok: true, data: { rateCard: { approvals: [expect.objectContaining({ approverEmail: null })] } },
+    });
+    expect(transition).toHaveBeenLastCalledWith(expect.objectContaining({
+      updateValues: expect.arrayContaining(['FINANCE_APPROVER', null]),
+      approvalValues: expect.arrayContaining(['FINANCE_APPROVER', null, 'Level 2 Finance Approval granted. Rate Card is now Active.']),
+    }));
+  });
 });
