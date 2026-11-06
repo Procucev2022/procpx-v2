@@ -184,4 +184,72 @@ describe('project detail workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
     expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProjects);
   });
+
+  it('handles partially loaded project sections and document upload fallbacks', async () => {
+    const project = {
+      id: 'project-1', name: 'Partial Project', projectCode: 'PART-1', sector: 'Retail', status: 'ACTIVE',
+      city: 'Pune', state: '', areaSqFt: 0, createdAt: '2026-10-01',
+      _count: { documents: 2, team: 2 },
+      boqs: [{ id: 'boq-partial', _count: { revisions: 2 }, revisions: [
+        { id: 'rev-one', revisionCode: 'REV-1', revisionNumber: 1, status: 'DRAFT', totalLines: 1, qualityScore: null },
+      ] }],
+      team: [{ id: 'member-1', projectRole: 'PROJECT_MANAGER', assignedAt: '2026-10-02', user: { name: 'Sam Taylor', role: 'PROJECT_USER' } }],
+      auditLogs: [],
+    };
+    let pageReads = 0;
+    let uploads = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        uploads += 1;
+        if (uploads === 1) return Promise.resolve(response({ id: 'uploaded-doc', projectId: 'project-1', name: 'Added plan.pdf', category: 'DRAWING', fileType: 'application/pdf', fileSize: 1024, uploadedBy: 'user-1', uploadedAt: '2026-10-30' }));
+        if (uploads === 2) return Promise.resolve(response({}));
+        return Promise.reject(new Error('document store offline'));
+      }
+      if (String(url).includes('/documents?page=')) {
+        pageReads += 1;
+        if (pageReads === 1) return Promise.resolve(response({ documents: [
+          { id: 'page-doc', name: 'Untyped document', category: null, fileSize: null, uploadedBy: '', uploadedAt: '2026-10-29' },
+        ] }));
+        return Promise.reject(new Error('document page offline'));
+      }
+      return Promise.resolve(response(project));
+    });
+
+    render(<ProjectDetailPage />);
+    expect(await screen.findByText('Partial Project')).toBeInTheDocument();
+    expect(screen.getAllByText('Pune').length).toBeGreaterThan(0);
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingRevisionsOfTotal, { loaded: 1, total: 2 })))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Boq' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Team' }));
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingProjectTeamOfTotal, { loaded: 1, total: 2 })))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingDocumentsOfTotal, { loaded: 0, total: 2 })))).toBeInTheDocument();
+
+    const loadMore = () => screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) });
+    fireEvent.click(loadMore());
+    expect(await screen.findByText('Untyped document')).toBeInTheDocument();
+    expect(screen.getByText('Untyped document').closest('tr')).toHaveTextContent(UI_STRINGS.appAppProjectsIdPage.oTHER);
+    fireEvent.change(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.chooseDocumentFile)), { target: { files: [] } });
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) })).toBeDisabled();
+
+    const chooseFile = () => fireEvent.change(screen.getByLabelText(uiStringPattern(UI_STRINGS.appAppProjectsIdPage.chooseDocumentFile)), {
+      target: { files: [new File(['pdf'], 'Added plan.pdf', { type: 'application/pdf' })] },
+    });
+    chooseFile();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
+    expect(await screen.findByText('Added plan.pdf')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsIdPage.showingDocumentsOfTotal, { loaded: 2, total: 3 })))).toBeInTheDocument();
+
+    chooseFile();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProjects);
+    chooseFile();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsIdPage.uploadDocument) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProjects);
+
+    fireEvent.click(loadMore());
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProjects);
+    expect(pageReads).toBe(2);
+    expect(uploads).toBe(3);
+  });
 });
