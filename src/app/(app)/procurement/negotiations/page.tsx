@@ -14,27 +14,40 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 export default function NegotiationsHubPage() {
   const [negotiations, setNegotiations] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number> | null>(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     fetchNegotiations();
   }, []);
 
-  const fetchNegotiations = async () => {
-    setLoading(true);
+  const fetchNegotiations = async (nextPage = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const res = await fetch('/api/procurement/negotiations');
+      const res = await fetch(`/api/procurement/negotiations?page=${nextPage}&pageSize=50`);
       const data = await res.json();
-      if (data.negotiations) setNegotiations(data.negotiations);
+      if (Array.isArray(data.negotiations)) {
+        setNegotiations((current) => append ? [...current, ...data.negotiations] : data.negotiations);
+        setTotal(Number(data.total ?? data.negotiations.length));
+        setStatusCounts(data.statusCounts && typeof data.statusCounts === 'object' ? data.statusCounts : null);
+        setPage(Number(data.page ?? nextPage));
+      }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
   };
 
-  const activeCount = negotiations.filter(n => n.status !== 'CONCLUDED' && n.status !== 'FINAL_RATE_LOCKED').length;
-  const lockedCount = negotiations.filter(n => n.status === 'CONCLUDED' || n.status === 'FINAL_RATE_LOCKED').length;
+  const lockedCount = statusCounts
+    ? Number(statusCounts.CONCLUDED || 0) + Number(statusCounts.FINAL_RATE_LOCKED || 0)
+    : negotiations.filter(n => n.status === 'CONCLUDED' || n.status === 'FINAL_RATE_LOCKED').length;
+  const activeCount = statusCounts ? Math.max(total - lockedCount, 0) : negotiations.length - lockedCount;
 
   return (
     <div className="container" style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto' }}>
@@ -55,7 +68,7 @@ export default function NegotiationsHubPage() {
         <SummaryCardGrid columns={3}>
           <SummaryCard
             label={UI_STRINGS.appAppProcurementNegotiationsPage.totalNegotiations}
-            value={negotiations.length}
+            value={total}
             secondary={UI_STRINGS.appAppProcurementNegotiationsPage.allInitiatedNegotiationTracks}
             icon={<Handshake size={16} />}
             accent="default"
@@ -79,7 +92,7 @@ export default function NegotiationsHubPage() {
 
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementNegotiationsPage.ongoingConcludedNegotiations}{negotiations.length}{UI_STRINGS.common.copyc7zu6c}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{UI_STRINGS.appAppProcurementNegotiationsPage.ongoingConcludedNegotiations}{total}{UI_STRINGS.common.copyc7zu6c}</span>
         </div>
 
         {loading ? (
@@ -96,6 +109,7 @@ export default function NegotiationsHubPage() {
             />
           </div>
         ) : (
+          <>
           <div className="table-container" style={{ overflowX: 'auto', width: '100%' }}>
             <table className="data-table enterprise-table" style={{ width: '100%', fontSize: 13 }}>
               <thead>
@@ -126,7 +140,7 @@ export default function NegotiationsHubPage() {
                       <span className="badge badge-info font-mono">{UI_STRINGS.appAppProcurementNegotiationsPage.round}{neg.currentRound}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <strong>{neg.rounds?.length || 0}{UI_STRINGS.appAppProcurementNegotiationsPage.rounds}</strong>
+                      <strong>{neg._count?.rounds ?? neg.rounds?.length ?? 0}{UI_STRINGS.appAppProcurementNegotiationsPage.rounds}</strong>
                     </td>
                     <td style={{ fontWeight: 700, color: '#059669', textAlign: 'right' }}>{UI_STRINGS.common.copy1g8b5tg}{neg.bestQuoteAmount?.toLocaleString(I18N_CONFIG.defaultLocale) || UI_STRINGS.common.copy4s9bsz}
                     </td>
@@ -145,6 +159,14 @@ export default function NegotiationsHubPage() {
               </tbody>
             </table>
           </div>
+          {negotiations.length < total && (
+            <div style={{ padding: 16, textAlign: 'center' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => fetchNegotiations(page + 1, true)} disabled={loadingMore}>
+                {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>

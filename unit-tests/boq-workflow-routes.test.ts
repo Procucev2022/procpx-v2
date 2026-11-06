@@ -7,6 +7,8 @@ import { POST as rejectBoq } from '../src/app/api/boq/[revisionId]/reject/route'
 import { POST as submitBoq } from '../src/app/api/boq/[revisionId]/submit/route';
 import { GET as getPr } from '../src/app/api/pr/[id]/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -18,6 +20,8 @@ jest.mock('../src/lib/prisma', () => ({
   },
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -47,6 +51,7 @@ describe('BOQ and PR workflow routes', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue(Array.from({ length: 4 }, () => ({ meta: { changes: 1 } })));
   });
 
   it('submits only valid draft revisions and updates the related records', async () => {
@@ -70,10 +75,16 @@ describe('BOQ and PR workflow routes', () => {
     await expect(submitBoq(request(), params('rev-1'))).resolves.toEqual({
       ok: true, data: { message: UI_STRINGS.appApiBoqRevisionIdSubmitRoute.bOQSubmittedForApproval, revisionCode: 'R2' }, status: 200,
     });
-    expect(db.boqRevision.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'rev-1' }, data: expect.objectContaining({ status: UI_STRINGS.common.sUBMITTED, submittedAt: expect.any(Date) }) }));
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-1' }, data: { status: UI_STRINGS.common.sUBMITTED } });
-    expect(db.project.updateMany).toHaveBeenCalledWith({ where: { id: 'project-1', tenantId: 'tenant-1' }, data: { status: 'BOQ_REVIEW' } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.sUBMIT, entityId: 'rev-1', userId: 'user-1' }));
+    const submitBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(submitBatch).toHaveLength(4);
+    expect(submitBatch[0].sql).toContain('"status" = \'DRAFT\'');
+    expect(submitBatch[1].sql).toContain('WHERE changes() = 1');
+    expect(submitBatch[2].sql).toContain('"boqs"');
+    expect(submitBatch[3].sql).toContain('"projects"');
+    expect(db.boqRevision.update).not.toHaveBeenCalled();
+    expect(db.boq.update).not.toHaveBeenCalled();
+    expect(db.project.updateMany).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('approves submitted revisions and rejects missing or non-submitted revisions', async () => {
@@ -93,12 +104,14 @@ describe('BOQ and PR workflow routes', () => {
     await expect(approveBoq(request(), params('rev-2'))).resolves.toEqual({
       ok: true, data: { message: UI_STRINGS.common.bOQApprovedSuccessfully, revisionCode: 'R3' }, status: 200,
     });
-    expect(db.boqRevision.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'rev-2' }, data: expect.objectContaining({ status: UI_STRINGS.common.aPPROVED, approvedById: 'user-1', approvedAt: expect.any(Date) }),
-    }));
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-2' }, data: { status: UI_STRINGS.common.aPPROVED } });
-    expect(db.project.updateMany).toHaveBeenCalledWith({ where: { id: 'project-2', tenantId: 'tenant-1' }, data: { status: 'BOQ_APPROVED' } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.aPPROVE, projectId: 'project-2' }));
+    const approveBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(approveBatch[0].sql).toContain('"status" = \'SUBMITTED\'');
+    expect(approveBatch[0].values).toContain('user-1');
+    expect(approveBatch[2].sql).toContain('"boqs"');
+    expect(db.boqRevision.update).not.toHaveBeenCalled();
+    expect(db.boq.update).not.toHaveBeenCalled();
+    expect(db.project.updateMany).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('validates rejection reasons and rejects only submitted revisions', async () => {
@@ -108,6 +121,9 @@ describe('BOQ and PR workflow routes', () => {
     await expect(rejectBoq(request({ reason: 'Missing drawing' }), params('rev-3'))).resolves.toBe(denied);
 
     await expect(rejectBoq(request({ reason: '   ' }), params('rev-3'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiBoqRevisionIdRejectRoute.rejectionReasonIsRequired, status: 400,
+    });
+    await expect(rejectBoq(request({ reason: 42 }), params('rev-3'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiBoqRevisionIdRejectRoute.rejectionReasonIsRequired, status: 400,
     });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
@@ -125,12 +141,60 @@ describe('BOQ and PR workflow routes', () => {
     await expect(rejectBoq(request({ reason: '  Missing drawing  ' }), params('rev-3'))).resolves.toEqual({
       ok: true, data: { message: UI_STRINGS.appApiBoqRevisionIdRejectRoute.bOQRejected, revisionCode: 'R4' }, status: 200,
     });
-    expect(db.boqRevision.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'rev-3' }, data: expect.objectContaining({ status: 'REJECTED', rejectionReason: 'Missing drawing', rejectedAt: expect.any(Date) }),
+    const rejectBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(rejectBatch[0].sql).toContain('"rejectionReason" = ?');
+    expect(rejectBatch[0].values).toContain('Missing drawing');
+    expect(rejectBatch[2].sql).toContain('"boqs"');
+    expect(db.boqRevision.update).not.toHaveBeenCalled();
+    expect(db.boq.update).not.toHaveBeenCalled();
+    expect(db.project.updateMany).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+  });
+
+  it('returns conflict responses for stale BOQ workflow state and logs D1 batch failures', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'rev-approve-race', status: 'SUBMITTED', boqId: 'boq-1', revisionCode: 'R1', boq: { projectId: 'project-1' },
+    });
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(approveBoq(request(), params('rev-approve-race'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'rev-reject-race', status: 'SUBMITTED', boqId: 'boq-1', revisionCode: 'R1', boq: { projectId: 'project-1' },
+    });
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(rejectBoq(request({ reason: 'Incomplete details' }), params('rev-reject-race'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'rev-submit-race', status: 'DRAFT', errorLines: 0, boqId: 'boq-1', revisionCode: 'R1', boq: { projectId: 'project-1' },
+    });
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(submitBoq(request(), params('rev-submit-race'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+
+    db.boqRevision.findFirst.mockRejectedValueOnce(new Error('BOQ database unavailable'));
+    await expect(approveBoq(request(), params('rev-error'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToApproveBoq, status: 500,
+    });
+    db.boqRevision.findFirst.mockRejectedValueOnce(new Error('BOQ database unavailable'));
+    await expect(rejectBoq(request({ reason: 'Incomplete details' }), params('rev-error'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToProcessApproverDecision, status: 500,
+    });
+    db.boqRevision.findFirst.mockRejectedValueOnce('D1 binding unavailable');
+    await expect(rejectBoq(request({ reason: 'Incomplete details' }), params('rev-error'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToProcessApproverDecision, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'boq.revision_rejection_failed', expect.objectContaining({
+      error: { type: 'string' },
     }));
-    expect(db.boq.update).toHaveBeenCalledWith({ where: { id: 'boq-3' }, data: { status: 'REJECTED' } });
-    expect(db.project.updateMany).toHaveBeenCalledWith({ where: { id: 'project-3', tenantId: 'tenant-1' }, data: { status: 'BOQ_PREPARATION' } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.rEJECT, description: expect.stringContaining('Missing drawing') }));
+    db.boqRevision.findFirst.mockRejectedValueOnce(new Error('BOQ database unavailable'));
+    await expect(submitBoq(request(), params('rev-error'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitBoq, status: 500,
+    });
   });
 
   it('returns tenant-scoped PR details or a not-found response', async () => {
@@ -143,13 +207,18 @@ describe('BOQ and PR workflow routes', () => {
     await expect(getPr(request(), { params: Promise.resolve({ id: 'missing' }) })).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.procurementRequestNotFound, status: 404,
     });
-    db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', prNumber: 'PR-001' });
+    db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', prNumber: 'PR-001', lines: [] });
     await expect(getPr(request(), { params: Promise.resolve({ id: 'pr-1' }) })).resolves.toEqual({
-      ok: true, data: { id: 'pr-1', prNumber: 'PR-001' }, status: 200,
+      ok: true,
+      data: { id: 'pr-1', prNumber: 'PR-001', lines: [], linePagination: { hasMore: false, nextCursor: null, pageSize: 25 } },
+      status: 200,
     });
     expect(db.procurementRequest.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { id: 'pr-1', tenantId: 'tenant-1' },
-      include: expect.objectContaining({ project: true, costCentre: true, boq: true, boqRevision: true, rfqs: expect.any(Object) }),
+      select: expect.objectContaining({
+        project: expect.any(Object), costCentre: expect.any(Object), boq: expect.any(Object), boqRevision: expect.any(Object), rfqs: expect.any(Object),
+        lines: expect.objectContaining({ take: 26 }),
+      }),
     }));
   });
 });

@@ -79,7 +79,15 @@ describe('BOQ revision detail API', () => {
     await expect(GET(getRequest(), params('boq-2'))).resolves.toMatchObject({
       ok: true, data: { boq: { estimatedValue: 10 }, revision: { id: 'revision-latest' }, totalLines: 1, qualityScore: 100 },
     });
-    expect(db.boq.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'boq-2', tenantId: 'tenant-1' } }));
+    expect(db.boq.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'boq-2', tenantId: 'tenant-1' },
+      include: expect.objectContaining({
+        revisions: expect.objectContaining({
+          orderBy: { revisionNumber: 'desc' },
+          take: 1,
+        }),
+      }),
+    }));
   });
 
   it('returns an empty BOQ payload when the BOQ has no revisions and a 404 when neither identifier exists', async () => {

@@ -1,0 +1,2 @@
+export const APPROVED_PR_MAX_PAGE_SIZE = 100;
+export const APPROVED_PR_MAX_SEARCH_LENGTH = 120;

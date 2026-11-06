@@ -6,6 +6,7 @@ export interface AuditLogItem {
   entityId: string;
   action: string;
   description: string;
+  hasDiff?: boolean;
   oldValue?: string | null;
   newValue?: string | null;
   oldValues?: string | null;

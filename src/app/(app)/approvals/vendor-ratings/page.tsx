@@ -39,6 +39,9 @@ export default function VendorRatingsApprovalsPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [ratings, setRatings] = useState<VendorRatingItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [counts, setCounts] = useState({
     pendingCount: 0,
     approvedCount: 0,
@@ -57,15 +60,19 @@ export default function VendorRatingsApprovalsPage() {
   const [confirmAcceptOpen, setConfirmAcceptOpen] = useState(false);
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
 
-  const fetchQueue = async () => {
+  const fetchQueue = async (nextPage = 1, append = false) => {
     try {
-      setLoading(true);
-      const res = await fetch('/api/approvals/vendor-ratings');
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      const res = await fetch(`/api/approvals/vendor-ratings?page=${nextPage}&pageSize=50`);
       if (res.ok) {
         const data = await res.json();
         const rList = data.ratings || data.data?.ratings || [];
         const cMetrics = data.counts || data.data?.counts;
-        setRatings(rList);
+        const pagination = data.pagination || data.data?.pagination;
+        setRatings((current) => append ? [...current, ...rList.filter((rating: VendorRatingItem) => !current.some((loaded) => loaded.id === rating.id))] : rList);
+        setPage(Number(pagination?.page ?? nextPage));
+        setHasMore(Boolean(pagination?.hasMore));
         if (cMetrics) {
           setCounts(cMetrics);
         }
@@ -77,6 +84,7 @@ export default function VendorRatingsApprovalsPage() {
       toast.error(UI_STRINGS.common.userMessages.networkErrorWhileLoadingApprovalsQueue);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -163,7 +171,7 @@ export default function VendorRatingsApprovalsPage() {
             <Link href="/approvals/boq-pr" className="btn btn-secondary text-xs">
               <CheckSquare className="w-3.5 h-3.5" style={{ marginRight: 6 }} />{UI_STRINGS.common.bOQApprovals}</Link>
             <Link href="/approvals/rate-cards" className="btn btn-secondary text-xs">{UI_STRINGS.appAppApprovalsVendorRatingsPage.rateCardApprovals}</Link>
-            <button onClick={fetchQueue} className="btn btn-secondary text-xs">
+            <button onClick={() => fetchQueue()} className="btn btn-secondary text-xs">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -361,6 +369,13 @@ export default function VendorRatingsApprovalsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {!loading && hasMore && (
+          <div className="flex justify-center border-t border-slate-100 p-4">
+            <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => fetchQueue(page + 1, true)}>
+              {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+            </button>
           </div>
         )}
       </Card>

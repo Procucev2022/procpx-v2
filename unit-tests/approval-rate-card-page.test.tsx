@@ -29,7 +29,7 @@ const cardOne = {
     { id: 'i2', description: 'Control Panel', uom: 'EA', rate: 100, benchmarkRate: 0, historicalRate: 0 },
     { description: 'Cable Tray', uom: 'MTR', rate: 90, benchmarkRate: 100, historicalRate: 0 },
   ], terms: 'Net 45', justification: 'Volume discount',
-  approvals: [{ id: 'a1', action: 'CLARIFICATION_MESSAGE', approverName: 'Finance Reviewer', remarks: 'Confirm lead time', timestamp: '2026-04-02T10:00:00Z' }],
+  approvals: [{ id: 'a1', action: 'CLARIFICATION_MESSAGE', approverName: 'Finance Reviewer', remarks: UI_STRINGS.common.notAvailable, timestamp: '2026-04-02T10:00:00Z' }],
 };
 const cardTwo = {
   id: 'rc-2', rateCardNumber: 'RC-2', version: 0, vendor: {}, category: 'Civil', status: 'PENDING_FINANCE_APPROVAL',
@@ -49,9 +49,17 @@ const reply = (body: unknown, ok = true) => ({ ok, json: async () => body });
 function setupFetch(overrides: Record<string, (url: string, init?: RequestInit) => any> = {}) {
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
     if (url === '/api/auth/me') return Promise.resolve(reply({ user: { role: 'FINANCE_HEAD' } }));
-    if (url === '/api/procurement/rate-cards') return Promise.resolve(reply({ rateCards: rows }));
-    const handler = Object.entries(overrides).find(([path]) => url === path || url.startsWith(path))?.[1];
+    if (url === '/api/procurement/rate-cards' || url.startsWith('/api/procurement/rate-cards?')) return Promise.resolve(reply({ rateCards: rows.map((row) => {
+      return { ...Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'approvals')), itemCount: row.items?.length || 0 };
+    }), summary: { level1Pending: 1, level2Pending: 1 } }));
+    const handler = Object.entries(overrides).find(([path]) =>
+      url === path || url.startsWith(`${path}?`) || (path.endsWith('=') && url.startsWith(path))
+    )?.[1];
     if (handler) return Promise.resolve(handler(url, init));
+    if (/^\/api\/procurement\/rate-cards\/rc-[^/]+$/.test(url)) {
+      const card = rows.find((row) => row.id === url.split('/').at(-1));
+      return Promise.resolve(reply({ rateCard: card }));
+    }
     if (url.endsWith('/message')) return Promise.resolve(reply({ approvalEntry: { id: 'a2', action: 'CLARIFICATION_MESSAGE', approverName: 'Finance Reviewer', remarks: 'Posted message', timestamp: '2026-04-03T10:00:00Z' } }));
     return Promise.resolve(reply({ message: 'Saved' }));
   });
@@ -84,6 +92,7 @@ describe('rate card approvals queue', () => {
     render(<RateCardApprovalsPage />);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadingApprovalsQueue))).toBeInTheDocument();
     expect(await screen.findByText('RC-1')).toBeInTheDocument();
+    expect(within(screen.getByText('RC-1').closest('tr')!).getByText(String(cardOne.items.length))).toBeInTheDocument();
     expect(screen.getByTestId('section-six')).toHaveAttribute('data-role', 'FINANCE_APPROVER');
     expect(screen.getByText('2 Pending Approval')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.awaitingLevel1Review))).toBeInTheDocument();
@@ -98,24 +107,26 @@ describe('rate card approvals queue', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRejectedWithRemarks))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApproverQueueLevel1Count) }));
-    expect(screen.getByText('RC-1')).toBeInTheDocument();
+    expect(await screen.findByText('RC-1')).toBeInTheDocument();
     expect(screen.queryByText('RC-2')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApproverQueueLevel2Count) }));
-    expect(screen.getByText('RC-2')).toBeInTheDocument();
+    expect(await screen.findByText('RC-2')).toBeInTheDocument();
     expect(screen.queryByText('RC-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.historyConcluded) }));
-    expect(screen.getByText('RC-3')).toBeInTheDocument();
+    expect(await screen.findByText('RC-3')).toBeInTheDocument();
     expect(screen.queryByText('RC-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.allPendingTotalPending) }));
+    expect(await screen.findByText('RC-1')).toBeInTheDocument();
 
     openReview('RC-1');
     expect(document.querySelector('.modal-content')).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.notAvailable))).toBeInTheDocument();
     expect(screen.getByText(/Signed by Vendor Signatory/)).toBeInTheDocument();
     expect(screen.getByText('Copper Cable')).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.standardSpecificationCompliant))).toHaveLength(2);
     expect(screen.getByText('Net 45')).toBeInTheDocument();
     expect(screen.getByText('Volume discount')).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmValue1))).toBeInTheDocument();
+    expect(screen.getAllByText(UI_STRINGS.common.copy4s9bsz).length).toBeGreaterThan(0);
 
     const messageInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks));
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.postMessage) })).toBeDisabled();
@@ -126,6 +137,180 @@ describe('rate card approvals queue', () => {
     expect(JSON.parse(mockFetch.mock.calls.find(([url]) => url.endsWith('/message'))[1].body)).toEqual({ message: 'Please attach the updated sheet' });
     expect(await screen.findByText('Posted message')).toBeInTheDocument();
     fireEvent.click(document.querySelector('.modal-content button')!);
+  });
+
+  it('loads older approval history pages without duplicating rows and reports paging failures', async () => {
+    const olderApproval = {
+      id: 'a0', action: 'APPROVED', approverName: 'Project Reviewer', remarks: 'Older decision',
+      timestamp: '2026-04-01T10:00:00Z',
+    };
+    const cardWithMoreHistory = {
+      ...cardOne,
+      approvalHistory: { hasMore: true, nextCursor: '2026-04-02T10:00:00.000Z~a1', pageSize: 25 },
+    };
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1/message?cursor=': () => reply({
+        approvals: [cardOne.approvals[0], olderApproval],
+        approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }),
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithMoreHistory }),
+    });
+    const successView = render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.click(await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    }));
+    expect(await screen.findByText('Older decision')).toBeInTheDocument();
+    expect(screen.getAllByText('Finance Reviewer')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory) })).not.toBeInTheDocument();
+    successView.unmount();
+
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1/message?cursor=': () => reply({}, false),
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithMoreHistory }),
+    });
+    render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.click(await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.appAppApprovalsRateCardsPage.failedToLoadOlderApprovalHistory);
+  });
+
+  it.each([
+    ['a non-array approvals value', { approvals: {}, approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 } }],
+    ['missing paging metadata', { approvals: [] }],
+  ])('reports malformed older approval history when the response has %s', async (_caseName, responseBody) => {
+    const cardWithMoreHistory = {
+      ...cardOne,
+      approvalHistory: { hasMore: true, nextCursor: '2026-04-02T10:00:00.000Z~a1', pageSize: 25 },
+    };
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1/message?cursor=': () => reply(responseBody),
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithMoreHistory }),
+    });
+    render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.click(await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.appAppApprovalsRateCardsPage.failedToLoadOlderApprovalHistory);
+  });
+
+  it('ignores an older history response after the reviewer switches cards', async () => {
+    let completeHistoryLoad: ((response: ReturnType<typeof reply>) => void) | undefined;
+    const pendingHistoryLoad = new Promise<ReturnType<typeof reply>>((resolve) => { completeHistoryLoad = resolve; });
+    const cardWithMoreHistory = {
+      ...cardOne,
+      approvalHistory: { hasMore: true, nextCursor: '2026-04-02T10:00:00.000Z~a1', pageSize: 25 },
+    };
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1/message?cursor=': () => pendingHistoryLoad,
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithMoreHistory }),
+      '/api/procurement/rate-cards/rc-2': () => reply({ rateCard: cardTwo }),
+    });
+    render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.click(await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    }));
+    openReview('RC-2');
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rate-cards/rc-2'));
+
+    await act(async () => {
+      completeHistoryLoad?.(reply({
+        approvals: [{ id: 'stale-a0', action: 'APPROVED', approverName: 'Old Reviewer', remarks: 'Stale decision', timestamp: '2026-03-31T10:00:00Z' }],
+        approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }));
+      await pendingHistoryLoad;
+    });
+    expect(screen.queryByText('Stale decision')).not.toBeInTheDocument();
+  });
+
+  it('loads an older page when the detail response omits its approval array', async () => {
+    const cardWithMissingApprovals = {
+      ...cardOne,
+      approvals: undefined,
+      approvalHistory: { hasMore: true, nextCursor: '2026-04-02T10:00:00.000Z~a1', pageSize: 25 },
+    };
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1/message?cursor=': () => reply({
+        approvals: [{ id: 'older-a0', action: 'APPROVED', approverName: 'Past Reviewer', remarks: 'Prior approval event', timestamp: '2026-03-31T10:00:00Z' }],
+        approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }),
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithMissingApprovals }),
+    });
+    render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.click(await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    }));
+    expect(await screen.findByText('Prior approval event')).toBeInTheDocument();
+  });
+
+  it('caps a newly posted clarification at one page and keeps the older-history cursor usable', async () => {
+    const fullApprovalPage = Array.from({ length: 25 }, (_, index) => ({
+      id: `history-${index}`,
+      action: 'APPROVED',
+      approverName: `Reviewer ${index}`,
+      remarks: `Existing decision ${index}`,
+      timestamp: new Date(Date.UTC(2026, 3, 1, 10, 0, index)).toISOString(),
+    }));
+    const cardWithFullHistory = {
+      ...cardOne,
+      approvals: fullApprovalPage,
+      approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 },
+    };
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1/message?cursor=': () => reply({
+        approvals: [], approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 },
+      }),
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithFullHistory }),
+    });
+    render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks)), {
+      target: { value: 'Please confirm the delivery schedule' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.postMessage) }));
+    expect(await screen.findByText('Posted message')).toBeInTheDocument();
+    const loadOlderButton = await screen.findByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    });
+    fireEvent.click(loadOlderButton);
+    await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/message?cursor='))).toBe(true));
+    await waitFor(() => expect(screen.queryByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    })).not.toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('records the first clarification when a detail response omits its approval array', async () => {
+    const cardWithoutApprovals = {
+      ...cardOne,
+      approvals: undefined,
+      approvalHistory: { hasMore: false, nextCursor: null, pageSize: 25 },
+    };
+    setupFetch({
+      '/api/procurement/rate-cards/rc-1': () => reply({ rateCard: cardWithoutApprovals }),
+    });
+    render(<RateCardApprovalsPage />);
+    await screen.findByText('RC-1');
+    openReview('RC-1');
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.askClarificationOrEnterEnquiryRemarks)), {
+      target: { value: 'First clarification request' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.postMessage) }));
+    expect(await screen.findByText('Posted message')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: uiStringPattern(UI_STRINGS.appAppApprovalsRateCardsPage.loadOlderApprovalHistory),
+    })).not.toBeInTheDocument();
   });
 
   it('handles approval, return and rejection success and failure flows with required remarks', async () => {

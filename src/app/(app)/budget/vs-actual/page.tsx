@@ -3,7 +3,7 @@
 // Budget vs Actual Cost Analysis Engine & Line-Level Traceability
 
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { DEFAULT_LIST_PAGE_SIZE } from '@/lib/api-utils.constants';
 
 
 function BudgetVsActualContent() {
@@ -44,7 +45,9 @@ function BudgetVsActualContent() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [reportData, setReportData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreLines, setLoadingMoreLines] = useState(false);
   const [search, setSearch] = useState('');
+  const reportRequestId = useRef(0);
 
   // Drilldown Modal
   const [selectedLine, setSelectedLine] = useState<any | null>(null);
@@ -84,21 +87,32 @@ function BudgetVsActualContent() {
     }
   };
 
-  const fetchReport = async () => {
-    setLoading(true);
+  const fetchReport = async (page = 1, append = false) => {
+    const requestId = ++reportRequestId.current;
+    if (append) setLoadingMoreLines(true);
+    else {
+      setLoading(true);
+      setLoadingMoreLines(false);
+    }
     try {
       let url = `/api/financial/budget-vs-actual?projectId=${selectedProjectId}`;
       if (selectedCostCentre) url += `&costCentreId=${selectedCostCentre}`;
       if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`;
+      if (page > 1) url += `&page=${page}&pageSize=${DEFAULT_LIST_PAGE_SIZE}`;
       const res = await fetch(url);
       const json = await res.json();
-      if (json.data) {
-        setReportData(json.data);
+      if (json.data && requestId === reportRequestId.current) {
+        setReportData(append
+          ? { ...json.data, lineReports: [...(reportData?.lineReports || []), ...(json.data.lineReports || [])] }
+          : json.data);
       }
     } catch (e) {
-      console.error(e);
+      if (requestId === reportRequestId.current) console.error(e);
     } finally {
-      setLoading(false);
+      if (requestId === reportRequestId.current) {
+        if (append) setLoadingMoreLines(false);
+        else setLoading(false);
+      }
     }
   };
 
@@ -161,7 +175,7 @@ function BudgetVsActualContent() {
             >
               <History size={14} />{UI_STRINGS.common.ledger}</Link>
             <button
-              onClick={fetchReport}
+              onClick={() => fetchReport()}
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
@@ -472,6 +486,26 @@ function BudgetVsActualContent() {
             </tbody>
           </table>
         </div>
+        {reportData?.lineReportsPagination && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
+            <span className="text-xs text-slate-500">
+              {interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.showingLineReportsOfTotal, {
+                shown: String(reportData.lineReports?.length || 0),
+                total: String(reportData.lineReportsPagination.total),
+              })}
+            </span>
+            {reportData.lineReportsPagination.hasMore && (
+              <button
+                type="button"
+                onClick={() => fetchReport((reportData.lineReportsPagination.page || 1) + 1, true)}
+                disabled={loadingMoreLines}
+                className="btn btn-secondary btn-sm"
+              >
+                {loadingMoreLines ? UI_STRINGS.appAppBudgetVsActualPage.loadingBudgetVsActual : UI_STRINGS.appAppBudgetVsActualPage.loadMoreLineReports}
+              </button>
+            )}
+          </div>
+        )}
       </Card>
     </div>
   );

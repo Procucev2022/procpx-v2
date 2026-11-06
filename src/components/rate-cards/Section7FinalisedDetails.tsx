@@ -26,7 +26,6 @@ import * as XLSX from 'xlsx';
 import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
 import type { FinalisedRateItem, Section7Props } from "@app-types/components/rate-cards/Section7FinalisedDetails.types";
 export type { FinalisedRateItem };
-import { DEFAULT_ITEMS } from "./Section7FinalisedDetails.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -65,20 +64,20 @@ export default function Section7FinalisedDetails({
   }, [rateCard]);
 
   // Derive authoritative fields from persisted rateCard or props
-  const rateCardId = rateCard?.rateCardNumber || propRateCardId || 'RC-2026-0006';
-  const vendorName = rateCard?.vendor?.name || propVendorName || 'Ramakrishna Interiors';
-  const vendorCode = rateCard?.vendor?.code || propVendorCode || 'VND-0006';
-  const category = rateCard?.category || propCategory || 'Interior Works';
-  const subcategory = rateCard?.subcategory || propSubcategory || 'Retail Turnkey Fitouts';
+  const rateCardId = rateCard?.rateCardNumber || propRateCardId || UI_STRINGS.common.notAvailable;
+  const vendorName = rateCard?.vendor?.name || propVendorName || UI_STRINGS.common.notAvailable;
+  const vendorCode = rateCard?.vendor?.code || propVendorCode || UI_STRINGS.common.notAvailable;
+  const category = rateCard?.category || propCategory || UI_STRINGS.common.notAvailable;
+  const subcategory = rateCard?.subcategory || propSubcategory || UI_STRINGS.common.notAvailable;
   const title = rateCard?.title || propTitle || UI_STRINGS.componentsRateCardsSection7FinalisedDetails.defaultRateCardTitle;
-  const scope = rateCard?.scope || propScope || 'Interior execution including civil, false ceiling, flooring, carpentry, painting and allied works for retail outlets.';
-  const location = rateCard?.location || propLocation || 'All India';
-  const terms = rateCard?.terms || propTerms || 'Rates are exclusive of taxes. Valid for all retail outlets. Includes material and labour unless specified.';
-  const status = rateCard?.status === 'APPROVED' ? UI_STRINGS.common.active : (rateCard?.status || propStatus || UI_STRINGS.common.active);
-  const createdBy = rateCard?.submittedBy || propCreatedBy || 'Category Manager';
+  const scope = rateCard?.scope || propScope || UI_STRINGS.common.notAvailable;
+  const location = rateCard?.location || propLocation || UI_STRINGS.common.notAvailable;
+  const terms = rateCard?.terms || propTerms || UI_STRINGS.common.notAvailable;
+  const status = rateCard?.status === 'APPROVED' ? UI_STRINGS.common.active : (rateCard?.status || propStatus || UI_STRINGS.common.notAvailable);
+  const createdBy = rateCard?.submittedBy || propCreatedBy || UI_STRINGS.common.notAvailable;
   const createdOn = rateCard?.createdAt
     ? new Date(rateCard.createdAt).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
-    : (propCreatedOn || '10 Oct 2026');
+    : (propCreatedOn || UI_STRINGS.common.notAvailable);
 
   const validity = useMemo(() => {
     if (rateCard?.validFrom && rateCard?.validTo) {
@@ -86,12 +85,12 @@ export default function Section7FinalisedDetails({
       const to = new Date(rateCard.validTo).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' });
       return `${from} to ${to}`;
     }
-    return propValidity || '01 Oct 2026 to 30 Sep 2027';
+    return propValidity || UI_STRINGS.common.notAvailable;
   }, [rateCard, propValidity]);
 
-  // Authoritative items derived from persisted DB items or fallback
+  // Use only persisted item rows or explicit caller-provided items.
   const items: FinalisedRateItem[] = useMemo(() => {
-    if (rateCard?.items && Array.isArray(rateCard.items) && rateCard.items.length > 0) {
+    if (rateCard?.items && Array.isArray(rateCard.items)) {
       return rateCard.items.map((it: any) => {
         let meta: any = {};
         if (it.comparisonRef) {
@@ -103,11 +102,11 @@ export default function Section7FinalisedDetails({
           id: it.id,
           itemCode: it.itemCode,
           category: it.category || category,
-          subcategory: it.subcategory || 'General',
+          subcategory: it.subcategory || UI_STRINGS.common.notAvailable,
           description: it.description,
-          specification: it.specification || it.description || 'Saint-Gobain Gyproc / approved commercial grade benchmark specification.',
-          uom: it.uom || 'SQFT',
-          qty: it.referenceQty || meta.referenceQty || it.minQuantity || 1,
+          specification: it.specification || it.description || UI_STRINGS.common.notAvailable,
+          uom: it.uom || UI_STRINGS.common.notAvailable,
+          qty: it.referenceQty || meta.referenceQty || it.minQuantity || 0,
           buyerTargetRate: it.buyerOffer1 ?? meta.buyerOffer1 ?? it.benchmarkRate ?? it.historicalRate ?? it.rate,
           round1VendorQuote: it.vendorQuote1 ?? meta.vendorQuote1 ?? it.proposedRate ?? it.rate,
           round2BuyerOffer: it.buyerOffer2 ?? meta.buyerOffer2 ?? it.rate,
@@ -116,7 +115,7 @@ export default function Section7FinalisedDetails({
         };
       });
     }
-    return propItems || DEFAULT_ITEMS;
+    return propItems || [];
   }, [rateCard, propItems, category]);
 
   // Authoritative agreement metadata
@@ -125,36 +124,61 @@ export default function Section7FinalisedDetails({
     if (rateCard?.agreement) return rateCard.agreement;
     if (parsedNotes?.agreement) return parsedNotes.agreement;
 
-    // Default signed agreement structure for RC-2026-0006 baseline
-    if (rateCardId === 'RC-2026-0006' || status === 'Active') {
-      return {
-        required: true,
-        type: 'TEMPLATE',
-        templateId: 'STANDARD_CAPEX_MRA_V1',
-        documentTitle: `Master Rate Agreement — ${category} — ${vendorName}`,
-        documentNumber: `MRA-${rateCardId}-REV1`,
-        fileName: `Master_Rate_Agreement_${category.replace(/\s+/g, '_')}.pdf`,
-        fileSize: '320 KB',
-        version: 1,
-        signatureRequired: true,
-        status: 'SIGNED',
-        signature: {
-          signedBy: 'K. Ramakrishna',
-          designation: 'Managing Partner / Authorized Representative',
-          signedAt: '24 Oct 2026, 12:00 IST',
-          signatureType: 'DIGITAL_VERIFIED',
-          signatureEvidenceId: `DSC-2026-${vendorCode}-8848`,
-          verified: true,
-        },
-      };
-    }
     return null;
-  }, [propAgreement, rateCard, parsedNotes, rateCardId, status, category, vendorName, vendorCode]);
+  }, [propAgreement, rateCard, parsedNotes]);
 
   // Total valuations
   const totalAgreedValuation = items.reduce((acc, it) => acc + it.qty * it.agreedRate, 0);
   const totalTargetValuation = items.reduce((acc, it) => acc + it.qty * it.buyerTargetRate, 0);
   const totalSavings = totalTargetValuation - totalAgreedValuation;
+  const signoffMilestones = useMemo(() => {
+    const events = [
+      {
+        title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.initiatedPublished,
+        value: rateCard?.createdAt || parsedNotes?.round1?.buyerOffer1Date,
+        actor: rateCard?.submittedBy || parsedNotes?.round1?.buyerOffer1Actor,
+        remarks: rateCard?.title,
+      },
+      {
+        title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.buyerFormalAcceptance,
+        value: parsedNotes?.buyerAccepted?.timestamp,
+        actor: parsedNotes?.buyerAccepted?.actor,
+        remarks: parsedNotes?.buyerAccepted?.remarks,
+        evidence: parsedNotes?.buyerAccepted,
+      },
+      {
+        title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.vendorFormalAcceptanceSignature,
+        value: parsedNotes?.vendorAccepted?.timestamp || agreement?.signature?.signedAt,
+        actor: parsedNotes?.vendorAccepted?.actor || agreement?.signature?.signedBy,
+        remarks: parsedNotes?.vendorAccepted?.remarks,
+        evidence: parsedNotes?.vendorAccepted || agreement?.signature?.verified,
+      },
+      {
+        title: UI_STRINGS.common.level1ProjectApproverReview,
+        value: rateCard?.projectApprovedAt || parsedNotes?.projectApproved?.timestamp,
+        actor: rateCard?.projectApprovedBy || parsedNotes?.projectApproved?.actor,
+        remarks: parsedNotes?.projectApproved?.remarks,
+        evidence: rateCard?.projectApprovedAt || parsedNotes?.projectApproved,
+      },
+      {
+        title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.level2FinanceApproverReviewActivation,
+        value: rateCard?.financeApprovedAt || parsedNotes?.financeApproved?.timestamp,
+        actor: rateCard?.financeApprovedBy || parsedNotes?.financeApproved?.actor,
+        remarks: parsedNotes?.financeApproved?.remarks,
+        evidence: rateCard?.financeApprovedAt || parsedNotes?.financeApproved,
+      },
+    ].filter((event) => Boolean(event.value || event.evidence));
+    return events.map((event, index) => ({
+      ...event,
+      step: index + 1,
+      date: event.value
+        ? new Date(event.value).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : UI_STRINGS.common.notAvailable,
+      actor: event.actor || UI_STRINGS.common.notAvailable,
+      notes: event.remarks || UI_STRINGS.common.notAvailable,
+      status: UI_STRINGS.common.completed,
+    }));
+  }, [rateCard, parsedNotes, agreement]);
 
   // Handle Download Excel Rate Card
   const handleDownload = () => {
@@ -720,32 +744,38 @@ export default function Section7FinalisedDetails({
               <span>{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.persistedCommercialNegotiationAuditTrail}</span>
             </div>
             <ul className="list-disc pl-5 space-y-1 text-slate-600">
-              <li>
+              {parsedNotes?.round1?.buyerOffer1Date || parsedNotes?.round1?.buyerOffer1Actor ? <li>
                 <strong>
-                  {parsedNotes?.round1?.buyerOffer1Date
+                  {parsedNotes.round1.buyerOffer1Date
                     ? new Date(parsedNotes.round1.buyerOffer1Date).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
-                    : UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copybwl7yg}{UI_STRINGS.common.copyhhsact}</strong>{' '}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.rateCardInitiatedBy}{parsedNotes?.round1?.buyerOffer1Actor || UI_STRINGS.common.categoryManager}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.withTargetRatesTotaling}{totalTargetValuation.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.common.copyby08hd}</li>
-              <li>
+                    : UI_STRINGS.common.notAvailable}</strong>{' '}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.rateCardInitiatedBy}{parsedNotes.round1.buyerOffer1Actor || UI_STRINGS.common.notAvailable}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.withTargetRatesTotaling}{totalTargetValuation.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.common.copyby08hd}</li> : null}
+              {parsedNotes?.round1?.vendorQuote1Date || parsedNotes?.round1?.vendorQuote1Actor ? <li>
                 <strong>
-                  {parsedNotes?.round1?.vendorQuote1Date
+                  {parsedNotes.round1.vendorQuote1Date
                     ? new Date(parsedNotes.round1.vendorQuote1Date).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
-                    : UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copypxpgsh}{UI_STRINGS.common.copyhhsact}</strong>{' '}{UI_STRINGS.common.vendor}{parsedNotes?.round1?.vendorQuote1Actor || vendorName}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.submittedRound1Quote}</li>
-              <li>
+                    : UI_STRINGS.common.notAvailable}</strong>{' '}{UI_STRINGS.common.vendor}{parsedNotes.round1.vendorQuote1Actor || vendorName}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.submittedRound1Quote}</li> : null}
+              {parsedNotes?.round2?.buyerOffer2Date || parsedNotes?.round2?.buyerOffer2Actor ? <li>
                 <strong>
-                  {parsedNotes?.round2?.buyerOffer2Date
+                  {parsedNotes.round2.buyerOffer2Date
                     ? new Date(parsedNotes.round2.buyerOffer2Date).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
-                    : UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copy1ndswkw}{UI_STRINGS.common.copyhhsact}</strong>{' '}
-                {parsedNotes?.round2?.buyerOffer2Actor || UI_STRINGS.common.categoryManager}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.submittedCounterOffer2WithTargetBenchmarkingTotaling}{totalAgreedValuation.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.common.copyby08hd}</li>
-              <li>
+                    : UI_STRINGS.common.notAvailable}</strong>{' '}
+                {parsedNotes.round2.buyerOffer2Actor || UI_STRINGS.common.notAvailable}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.submittedCounterOffer2WithTargetBenchmarkingTotaling}{totalAgreedValuation.toLocaleString(I18N_CONFIG.defaultLocale)}{UI_STRINGS.common.copyby08hd}</li> : null}
+              {parsedNotes?.round2?.vendorQuote2Date || parsedNotes?.round2?.vendorQuote2Actor ? <li>
                 <strong>
-                  {parsedNotes?.round2?.vendorQuote2Date
+                  {parsedNotes.round2.vendorQuote2Date
                     ? new Date(parsedNotes.round2.vendorQuote2Date).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
-                    : UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copy6me3rp}{UI_STRINGS.common.copyhhsact}</strong>{' '}{UI_STRINGS.common.vendor}{parsedNotes?.round2?.vendorQuote2Actor || vendorName}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.submittedRevisedRound2QuoteWithAgreedConvergence}{parsedNotes?.round2?.vendorQuote2Remarks || UI_STRINGS.componentsRateCardsSection7FinalisedDetails.commercialParityReached}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copyie9i6}</li>
-              <li>
+                    : UI_STRINGS.common.notAvailable}</strong>{' '}{UI_STRINGS.common.vendor}{parsedNotes.round2.vendorQuote2Actor || vendorName}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.submittedRevisedRound2QuoteWithAgreedConvergence}{parsedNotes.round2.vendorQuote2Remarks || UI_STRINGS.common.notAvailable}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copyie9i6}</li> : null}
+              {parsedNotes?.buyerAccepted ? <li>
                 <strong>
-                  {parsedNotes?.buyerAccepted?.timestamp
+                  {parsedNotes.buyerAccepted.timestamp
                     ? new Date(parsedNotes.buyerAccepted.timestamp).toLocaleDateString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric' })
-                    : UI_STRINGS.common.copyy2zker}{UI_STRINGS.common.copyhhsact}</strong>{' '}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.buyerFormallyAcceptedFinalCommercialQuotation}{parsedNotes?.buyerAccepted?.remarks || UI_STRINGS.componentsRateCardsSection7FinalisedDetails.termsAccepted}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copyie9i6}</li>
+                    : UI_STRINGS.common.notAvailable}</strong>{' '}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.buyerFormallyAcceptedFinalCommercialQuotation}{parsedNotes.buyerAccepted.remarks || UI_STRINGS.common.notAvailable}{UI_STRINGS.componentsRateCardsSection7FinalisedDetails.copyie9i6}</li> : null}
+              {!parsedNotes?.round1?.buyerOffer1Date && !parsedNotes?.round1?.buyerOffer1Actor
+                && !parsedNotes?.round1?.vendorQuote1Date && !parsedNotes?.round1?.vendorQuote1Actor
+                && !parsedNotes?.round2?.buyerOffer2Date && !parsedNotes?.round2?.buyerOffer2Actor
+                && !parsedNotes?.round2?.vendorQuote2Date && !parsedNotes?.round2?.vendorQuote2Actor
+                && !parsedNotes?.buyerAccepted
+                ? <li>{UI_STRINGS.common.notAvailable}</li> : null}
             </ul>
           </div>
         </div>
@@ -761,84 +791,14 @@ export default function Section7FinalisedDetails({
             </div>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
               <CheckCircle2 size={14} className="text-emerald-600" />
-              <span>{status === 'Active' ? UI_STRINGS.componentsRateCardsSection7FinalisedDetails.allMilestonesCompleted : UI_STRINGS.common.inProgress}</span>
+              <span>{status === 'Active' && signoffMilestones.length === 5 ? UI_STRINGS.componentsRateCardsSection7FinalisedDetails.allMilestonesCompleted : UI_STRINGS.common.inProgress}</span>
             </span>
           </div>
 
           <div className="space-y-4">
-            {[
-              {
-                step: 1,
-                title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.initiatedPublished,
-                date: parsedNotes?.round1?.buyerOffer1Date
-                  ? new Date(parsedNotes.round1.buyerOffer1Date).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : '10 Oct 2026, 11:30 AM',
-                actor: `${createdBy} (category.manager@procucev-demo.local)`,
-                role: 'Commercial Lead',
-                action: 'Rate Card Initiated',
-                notes: `Rate Card initiated with ${items.length} items and reference target rates based on capex analysis.`,
-                status: 'Completed',
-              },
-              {
-                step: 2,
-                title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.buyerFormalAcceptance,
-                date: parsedNotes?.buyerAccepted?.timestamp
-                  ? new Date(parsedNotes.buyerAccepted.timestamp).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : '22 Oct 2026, 10:00 AM',
-                actor: `${parsedNotes?.buyerAccepted?.actor || 'Category Manager'} (category.manager@procucev-demo.local)`,
-                role: 'Commercial Lead',
-                action: 'Buyer Formal Offer Acceptance',
-                notes: parsedNotes?.buyerAccepted?.remarks || `Vetted vendor quotation against regional capex benchmarks and confirmed convergence at ₹ ${totalAgreedValuation.toLocaleString(I18N_CONFIG.defaultLocale)}.`,
-                status: 'Completed',
-              },
-              {
-                step: 3,
-                title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.vendorFormalAcceptanceSignature,
-                date: parsedNotes?.vendorAccepted?.timestamp
-                  ? new Date(parsedNotes.vendorAccepted.timestamp).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : '24 Oct 2026, 12:00 PM',
-                actor: `${vendorName} (${vendorCode})`,
-                role: 'Contracted Vendor Partner',
-                action: agreement?.signature?.verified ? 'Vendor Acceptance & Digital Signature' : 'Vendor Formal Acceptance',
-                notes: agreement?.signature?.verified
-                  ? `Digitally signed by ${agreement.signature.signedBy} (${agreement.signature.designation}). Verified stamp: ${agreement.signature.signatureEvidenceId}.`
-                  : (parsedNotes?.vendorAccepted?.remarks || 'Formal acceptance of contract scope and rate schedule.'),
-                status: 'Completed',
-              },
-              {
-                step: 4,
-                title: UI_STRINGS.common.level1ProjectApproverReview,
-                date: rateCard?.projectApprovedAt
-                  ? new Date(rateCard.projectApprovedAt).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : parsedNotes?.projectApproved?.timestamp
-                  ? new Date(parsedNotes.projectApproved.timestamp).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : status === 'Active'
-                  ? '25 Oct 2026, 09:30 AM'
-                  : 'Awaiting Action',
-                actor: rateCard?.projectApprovedBy || parsedNotes?.projectApproved?.actor || 'Project Approver (project.approver@procucev-demo.local)',
-                role: 'Technical Governance',
-                action: 'Technical Governance Approval',
-                notes: parsedNotes?.projectApproved?.remarks || 'Validated item descriptions, standard BOQ taxonomy, and operational scope. Approved and routed to Finance.',
-                status: (rateCard?.projectApprovedAt || parsedNotes?.projectApproved || status === 'Active') ? 'Completed' : 'Pending',
-              },
-              {
-                step: 5,
-                title: UI_STRINGS.componentsRateCardsSection7FinalisedDetails.level2FinanceApproverReviewActivation,
-                date: rateCard?.financeApprovedAt
-                  ? new Date(rateCard.financeApprovedAt).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : parsedNotes?.financeApproved?.timestamp
-                  ? new Date(parsedNotes.financeApproved.timestamp).toLocaleString(I18N_CONFIG.defaultLocale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : status === 'Active'
-                  ? '25 Oct 2026, 11:00 AM'
-                  : 'Awaiting Action',
-                actor: rateCard?.financeApprovedBy || parsedNotes?.financeApproved?.actor || 'Finance Approver (finance.user@procucev-demo.local)',
-                role: 'Commercial Finance Governance',
-                action: 'Final Financial Approval & Activation',
-                notes: parsedNotes?.financeApproved?.remarks || 'Verified commercial terms, payment milestones, volume discounts, and market parity. Contract transitioned to Active.',
-                status: (rateCard?.financeApprovedAt || parsedNotes?.financeApproved || status === 'Active') ? 'Completed' : 'Pending',
-              },
-            ].map((milestone) => {
-              const isDone = milestone.status === 'Completed';
+            {signoffMilestones.length === 0 && <p className="text-sm text-slate-500">{UI_STRINGS.common.notAvailable}</p>}
+            {signoffMilestones.map((milestone) => {
+              const isDone = milestone.status === UI_STRINGS.common.completed;
               return (
                 <div
                   key={milestone.step}
@@ -863,7 +823,7 @@ export default function Section7FinalisedDetails({
                           {milestone.status}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-700 font-medium">{milestone.action}</p>
+                      <p className="text-xs text-slate-700 font-medium">{milestone.title}</p>
                       <p className="text-xs text-slate-500 max-w-2xl">{milestone.notes}</p>
                     </div>
                   </div>

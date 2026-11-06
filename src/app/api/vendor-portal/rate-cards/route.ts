@@ -2,11 +2,22 @@
 // Vendor Rate Cards listing API (strictly isolated to logged-in vendor)
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
-
+import { getListPageWindow, requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  MAX_RATE_CARD_ITEMS,
+  RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
+  RATE_CARD_ITEM_VENDOR_QUOTE_UPDATE_SQL,
+  RATE_CARD_VENDOR_ACCEPT_UPDATE_SQL,
+  RATE_CARD_VENDOR_QUOTE_UPDATE_SQL,
+} from '@/lib/d1-batch.constants';
+import { dispatchPreparedWorkflowNotification } from '@/lib/notifications';
+import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { parseStoredJsonObject } from '@/lib/rate-card-utils';
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
@@ -21,32 +32,44 @@ export async function GET(req: NextRequest) {
     return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
+  const startedAt = Date.now();
   try {
-    const rateCards = await prisma.vendorRateCard.findMany({
-      where: {
-        tenantId: ctx.tenantId,
-        vendorId,
-      },
-      include: {
-        vendor: true,
-        items: {
-          where: { isActive: true },
-        },
-        approvals: {
-          orderBy: { timestamp: 'desc' },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const window = getListPageWindow(req.nextUrl.searchParams);
+    const search = (req.nextUrl.searchParams.get('search') || '').trim().slice(0, 200);
+    const requestedRateCardId = (req.nextUrl.searchParams.get('rateCardId') || '').trim().slice(0, 128);
+    const page = requestedRateCardId ? 1 : window.page;
+    const pageSize = requestedRateCardId ? 1 : window.pageSize;
+    const skip = requestedRateCardId ? 0 : window.skip;
+    const where = {
+      tenantId: ctx.tenantId,
+      vendorId,
+      ...(requestedRateCardId
+        ? { id: requestedRateCardId }
+        : search
+          ? { OR: [
+            { rateCardNumber: { contains: search } },
+            { category: { contains: search } },
+            { scope: { contains: search } },
+          ] }
+          : {}),
+    };
+    const [rateCards, total] = await Promise.all([
+      prisma.vendorRateCard.findMany({
+        where,
+        include: { items: { where: { isActive: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip,
+        take: pageSize,
+      }),
+      prisma.vendorRateCard.count({ where }),
+    ]);
 
+    const invalidStoredFields: Array<{ rateCardId: string; recordId: string; field: string }> = [];
     const formatted = rateCards.map((rc) => {
       const enrichedItems = rc.items.map((it) => {
-        let meta: any = {};
-        if (it.comparisonRef) {
-          try {
-            meta = JSON.parse(it.comparisonRef);
-          } catch {}
-        }
+        const parsedMeta = parseStoredJsonObject(it.comparisonRef);
+        if (it.comparisonRef && !parsedMeta) invalidStoredFields.push({ rateCardId: rc.id, recordId: it.id, field: 'comparisonRef' });
+        const meta = parsedMeta || {};
         return {
           ...it,
           buyerOffer1: meta.buyerOffer1 !== undefined ? meta.buyerOffer1 : it.rate,
@@ -61,10 +84,9 @@ export async function GET(req: NextRequest) {
         };
       });
 
-      let notesData: any = {};
-      if (rc.notes) {
-        try { notesData = JSON.parse(rc.notes); } catch {}
-      }
+      const parsedNotes = parseStoredJsonObject(rc.notes);
+      if (rc.notes && !parsedNotes) invalidStoredFields.push({ rateCardId: rc.id, recordId: rc.id, field: 'notes' });
+      const notesData = parsedNotes || {};
 
       return {
         ...rc,
@@ -74,10 +96,24 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return apiSuccess({ rateCards: formatted, total: formatted.length });
-  } catch (error: any) {
-    console.error('Error fetching vendor rate cards:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchRateCards }), 500);
+    if (invalidStoredFields.length > 0) {
+      await writeStructuredLog('warn', 'vendor_portal.rate_card_metadata_invalid', {
+        operation: 'list_vendor_rate_cards', route: '/api/vendor-portal/rate-cards',
+        requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+        actorId: ctx.userId, vendorId, invalidFieldCount: invalidStoredFields.length,
+        invalidFields: invalidStoredFields.slice(0, 20),
+      });
+    }
+
+    return apiSuccess({ rateCards: formatted, total, page, pageSize, hasMore: skip + formatted.length < total });
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'vendor_portal.rate_cards_fetch_failed', {
+      operation: 'list_vendor_rate_cards', route: '/api/vendor-portal/rate-cards',
+      requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+      actorId: ctx.userId, vendorId, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchRateCards, 500);
   }
 }
 
@@ -94,9 +130,18 @@ export async function POST(req: NextRequest) {
     return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
   }
 
+  const startedAt = Date.now();
+  let rateCardId: string | undefined;
   try {
-    const body = await req.json();
-    const { rateCardId, items = [], remarks = '', action } = body;
+    const body: unknown = await req.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400);
+    }
+    const input = body as Record<string, unknown>;
+    rateCardId = typeof input.rateCardId === 'string' ? input.rateCardId.trim() : undefined;
+    const items = Array.isArray(input.items) ? input.items : [];
+    const remarks = typeof input.remarks === 'string' ? input.remarks.slice(0, 1000) : '';
+    const action = typeof input.action === 'string' ? input.action : undefined;
 
     if (!rateCardId) {
       return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardIDIsRequired, 400);
@@ -109,8 +154,8 @@ export async function POST(req: NextRequest) {
         tenantId: ctx.tenantId,
       },
       include: {
-        vendor: true,
-        items: true,
+        vendor: { select: { id: true, name: true } },
+        items: { where: { isActive: true } },
       },
     });
 
@@ -121,10 +166,16 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const vendorUserName = rateCard.vendor.name || ctx.userName || 'Vendor User';
 
-    // Parse existing notes
-    let notesData: any = {};
-    if (rateCard.notes) {
-      try { notesData = JSON.parse(rateCard.notes); } catch {}
+    // Workflow writes must not replace unreadable stored history with an empty object.
+    const notesData = parseStoredJsonObject(rateCard.notes);
+    if (!notesData) {
+      await writeStructuredLog('error', 'rate_card.workflow_metadata_invalid', {
+        operation: 'submit_vendor_rate_card', route: '/api/vendor-portal/rate-cards',
+        requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+        actorId: ctx.userId, vendorId, rateCardId, field: 'notes', action: action || 'SUBMIT_VENDOR_QUOTE',
+        durationMs: Date.now() - startedAt,
+      });
+      return apiError(UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals, 500);
     }
 
     // ── CASE 1: VENDOR_ACCEPT (Accept Final Rate Card Version & Terms) ──
@@ -133,23 +184,28 @@ export async function POST(req: NextRequest) {
         return apiError(interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorAcceptanceRequiresPriorCategoryManagerAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
       }
 
-      const { signature } = body;
-      const isSigned = !!(signature && signature.verified);
+      const signature = input.signature && typeof input.signature === 'object' && !Array.isArray(input.signature)
+        ? input.signature as Record<string, unknown>
+        : undefined;
+      const isSigned = signature?.verified === true;
 
-      if (notesData.agreement) {
+      if (notesData.agreement && typeof notesData.agreement === 'object' && !Array.isArray(notesData.agreement)) {
+        const agreement = notesData.agreement as Record<string, unknown>;
         if (isSigned) {
-          notesData.agreement.status = 'SIGNED';
-          notesData.agreement.signature = {
-            signedBy: signature.signedBy,
-            designation: signature.designation,
-            signedAt: signature.signedAt || now.toISOString(),
-            signatureType: signature.signatureType || 'DIGITAL_VERIFIED',
-            signatureEvidenceId: signature.signatureEvidenceId || `DSC-${now.getFullYear()}-${rateCard.rateCardNumber}`,
+          agreement.status = 'SIGNED';
+          agreement.signature = {
+            signedBy: typeof signature.signedBy === 'string' ? signature.signedBy.slice(0, 200) : '',
+            designation: typeof signature.designation === 'string' ? signature.designation.slice(0, 200) : '',
+            signedAt: typeof signature.signedAt === 'string' ? signature.signedAt.slice(0, 80) : now.toISOString(),
+            signatureType: typeof signature.signatureType === 'string' ? signature.signatureType.slice(0, 80) : 'DIGITAL_VERIFIED',
+            signatureEvidenceId: typeof signature.signatureEvidenceId === 'string'
+              ? signature.signatureEvidenceId.slice(0, 200)
+              : `DSC-${now.getFullYear()}-${rateCard.rateCardNumber}`,
             verified: true,
           };
         } else {
-          notesData.agreement.status = 'VENDOR_ACCEPTED';
-          notesData.agreement.signature = null;
+          agreement.status = 'VENDOR_ACCEPTED';
+          agreement.signature = null;
         }
       }
 
@@ -161,54 +217,47 @@ export async function POST(req: NextRequest) {
       };
 
       // Canonical Sequence: Vendor Acceptance -> Level 1 Project Approver Approval
-      const updated = await prisma.vendorRateCard.update({
-        where: { id: rateCardId },
-        data: {
-          status: 'PENDING_PROJECT_APPROVAL',
-          approvalLevel: 'LEVEL_1_PROJECT',
-          notes: JSON.stringify(notesData),
-        },
-      });
-
-      await prisma.rateCardApproval.create({
-        data: {
-          tenantId: ctx.tenantId,
-          rateCardId,
-          level: 'LEVEL_1_PROJECT',
-          approverId: ctx.userId,
-          approverName: vendorUserName,
-          approverEmail: ctx.userEmail || null,
-          action: 'VENDOR_ACCEPTED',
-          remarks: isSigned
-            ? `Vendor ${vendorUserName} accepted terms & executed digital signature (${signature.signatureEvidenceId})`
-            : remarks || 'Vendor accepted final negotiated rate card agreement',
-          timestamp: now,
-        },
-      });
-
-      await prisma.notification.create({
-        data: {
-          tenantId: ctx.tenantId,
-          title: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardAcceptedByVendorLevel1ProjectApprovalRequired,
-          message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameAcceptedRateCardRateCardNumberLevel1ProjectApprovalIsNowRequired, { "vendorUserName": vendorUserName, "rateCardNumber": rateCard.rateCardNumber }),
-          type: 'ACTION_REQUIRED',
-          entityType: 'RATE_CARD',
-          entityId: rateCardId,
-          recordNumber: rateCard.rateCardNumber,
-          targetRole: 'PROJECT_APPROVER',
-          link: '/approvals/rate-cards',
-        },
-      });
-
-      await createAuditLog({
+      const approvalId = crypto.randomUUID();
+      const auditLogId = crypto.randomUUID();
+      const notification = prepareNotificationOutbox({
         tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        entityType: 'VENDOR',
-        entityId: vendorId,
-        action: 'RATE_CARD_VENDOR_ACCEPTED',
-        description: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameAcceptedFinalRateCardRateCardNumberTermsRoutedToLevel1ProjectApprover, { "vendorUserName": vendorUserName, "rateCardNumber": rateCard.rateCardNumber }),
-        newValue: { status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', isSigned },
+        title: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardAcceptedByVendorLevel1ProjectApprovalRequired,
+        message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameAcceptedRateCardRateCardNumberLevel1ProjectApprovalIsNowRequired, { vendorUserName, rateCardNumber: rateCard.rateCardNumber }),
+        type: 'ACTION_REQUIRED',
+        entityType: 'RATE_CARD',
+        entityId: rateCardId,
+        recordNumber: rateCard.rateCardNumber,
+        targetRole: 'PROJECT_APPROVER',
+        link: '/approvals/rate-cards',
+      }, now, auditLogId);
+      const approvalRemarks = isSigned
+        ? `Vendor ${vendorUserName} accepted terms & executed digital signature (${typeof signature?.signatureEvidenceId === 'string' ? signature.signatureEvidenceId.slice(0, 200) : ''})`
+        : remarks || 'Vendor accepted final negotiated rate card agreement';
+      const auditDescription = interpolateUiString(
+        UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameAcceptedFinalRateCardRateCardNumberTermsRoutedToLevel1ProjectApprover,
+        { vendorUserName, rateCardNumber: rateCard.rateCardNumber },
+      );
+      const results = await writeD1BatchAtomically([
+        {
+          sql: RATE_CARD_VENDOR_ACCEPT_UPDATE_SQL,
+          values: [JSON.stringify(notesData), now, rateCardId, ctx.tenantId, vendorId],
+        },
+        {
+          sql: RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
+          values: [approvalId, ctx.tenantId, rateCardId, 'LEVEL_1_PROJECT', ctx.userId, vendorUserName, ctx.userEmail || null, 'VENDOR_ACCEPTED', approvalRemarks, now],
+        },
+        {
+          sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+          values: [auditLogId, ctx.tenantId, ctx.userId, null, 'VENDOR', vendorId, 'RATE_CARD_VENDOR_ACCEPTED', auditDescription,
+            JSON.stringify({ status: rateCard.status }), JSON.stringify({ status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', isSigned }), null, null, now],
+        },
+        notification.statement,
+      ]);
+      if (results.some((result) => Number(result.meta?.changes || 0) !== 1)) throw new Error();
+      await dispatchPreparedWorkflowNotification(notification.id, now, {
+        tenantId: ctx.tenantId, entityType: 'RATE_CARD', entityId: rateCardId, route: '/api/vendor-portal/rate-cards',
       });
+      const updated = { ...rateCard, status: 'PENDING_PROJECT_APPROVAL', approvalLevel: 'LEVEL_1_PROJECT', notes: JSON.stringify(notesData), updatedAt: now };
 
       return apiSuccess({
         message: UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardFinalTermsAcceptedRequestForwardedToLevel1ProjectApproverQueue,
@@ -218,111 +267,126 @@ export async function POST(req: NextRequest) {
 
     // Determine round from action or current rate card status
     const isRound2 = action === 'SUBMIT_VENDOR_QUOTE_2' || rateCard.status === 'ROUND_2_BUYER_OFFER';
-    const isRound1 = action === 'SUBMIT_VENDOR_QUOTE_1' || rateCard.status === 'ROUND_1_BUYER_OFFER' || !isRound2;
-
     const roundTarget = isRound2 ? 2 : 1;
     const newStatus = isRound2 ? 'ROUND_2_VENDOR_QUOTE' : 'ROUND_1_VENDOR_QUOTE';
+    const expectedStatus = isRound2 ? 'ROUND_2_BUYER_OFFER' : 'ROUND_1_BUYER_OFFER';
+    if (rateCard.status !== expectedStatus || (action && action !== `SUBMIT_VENDOR_QUOTE_${roundTarget}`)) {
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorQuoteSubmissionRequiresBuyerOfferStage, 400);
+    }
+    if (items.length === 0 || items.length > MAX_RATE_CARD_ITEMS) {
+      return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorQuoteSubmissionRequiresValidLineItems, 400);
+    }
 
-    // Update proposedRate and comparisonRef on items
-    for (const item of items) {
-      if (!item.id) continue;
-      const existingItem = rateCard.items.find((x) => x.id === item.id);
-      if (!existingItem) continue;
-
-      let compMeta: any = {};
-      if (existingItem.comparisonRef) {
-        try { compMeta = JSON.parse(existingItem.comparisonRef); } catch {}
+    const seenItemIds = new Set<string>();
+    const quoteItems: Array<{ id: string; rate: number; comparisonRef: string }> = [];
+    for (const rawItem of items) {
+      if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
+        return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorQuoteSubmissionRequiresValidLineItems, 400);
       }
-
-      const quoteVal = item.proposedRate !== undefined ? Number(item.proposedRate) : Number(item.rate);
-
-      if (roundTarget === 1) {
-        compMeta.vendorQuote1 = quoteVal;
-      } else {
-        compMeta.vendorQuote2 = quoteVal;
+      const quoteItem = rawItem as Record<string, unknown>;
+      const itemId = typeof quoteItem.id === 'string' ? quoteItem.id.trim() : '';
+      const existingItem = rateCard.items.find((candidate) => candidate.id === itemId);
+      const rate = Number(quoteItem.proposedRate !== undefined ? quoteItem.proposedRate : quoteItem.rate);
+      if (!itemId || seenItemIds.has(itemId) || !existingItem || !Number.isFinite(rate) || rate <= 0) {
+        return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorQuoteSubmissionRequiresValidLineItems, 400);
       }
-
-      await prisma.vendorRateCardItem.update({
-        where: { id: item.id },
-        data: {
-          proposedRate: quoteVal,
-          comparisonRef: JSON.stringify(compMeta),
-        },
-      });
+      seenItemIds.add(itemId);
+      const comparisonData = parseStoredJsonObject(existingItem.comparisonRef);
+      if (!comparisonData) {
+        await writeStructuredLog('error', 'rate_card.workflow_metadata_invalid', {
+          operation: 'submit_vendor_rate_card', route: '/api/vendor-portal/rate-cards',
+          requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+          actorId: ctx.userId, vendorId, rateCardId, itemId, field: 'comparisonRef',
+          action: action || 'SUBMIT_VENDOR_QUOTE', durationMs: Date.now() - startedAt,
+        });
+        return apiError(UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals, 500);
+      }
+      comparisonData[roundTarget === 1 ? 'vendorQuote1' : 'vendorQuote2'] = rate;
+      quoteItems.push({ id: itemId, rate, comparisonRef: JSON.stringify(comparisonData) });
     }
 
     // Update rateCard notes and status
     if (roundTarget === 1) {
+      const priorRound = notesData.round1 && typeof notesData.round1 === 'object' && !Array.isArray(notesData.round1)
+        ? notesData.round1 as Record<string, unknown> : {};
       notesData.round1 = {
-        ...notesData.round1,
+        ...priorRound,
         vendorQuote1Date: now.toISOString(),
         vendorQuote1Actor: vendorUserName,
         vendorQuote1Remarks: remarks,
       };
     } else {
+      const priorRound = notesData.round2 && typeof notesData.round2 === 'object' && !Array.isArray(notesData.round2)
+        ? notesData.round2 as Record<string, unknown> : {};
       notesData.round2 = {
-        ...notesData.round2,
+        ...priorRound,
         vendorQuote2Date: now.toISOString(),
         vendorQuote2Actor: vendorUserName,
         vendorQuote2Remarks: remarks,
       };
     }
 
-    const updatedCard = await prisma.vendorRateCard.update({
-      where: { id: rateCardId },
-      data: {
-        status: newStatus,
-        notes: JSON.stringify(notesData),
-      },
-    });
-
-    // Record formal audit & clarification entry
-    await prisma.rateCardApproval.create({
-      data: {
-        tenantId: ctx.tenantId,
-        rateCardId,
-        level: rateCard.approvalLevel || 'LEVEL_1_PROJECT',
-        approverId: ctx.userId,
-        approverName: vendorUserName,
-        approverEmail: ctx.userEmail || null,
-        action: `VENDOR_QUOTE_${roundTarget}_SUBMITTED`,
-        remarks: remarks || `Vendor submitted Vendor RC Quote-${roundTarget} for commercial review`,
-        timestamp: now,
-      },
-    });
-
-    // Notify Category Manager
-    await prisma.notification.create({
-      data: {
-        tenantId: ctx.tenantId,
-        title: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSubmitted, { "roundTarget": roundTarget }),
-        message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameSubmittedVendorRCQuoteRoundTargetForRateCardRateCardNumber, { "vendorUserName": vendorUserName, "roundTarget": roundTarget, "rateCardNumber": rateCard.rateCardNumber }),
-        type: 'ACTION_REQUIRED',
-        entityType: 'RATE_CARD',
-        entityId: rateCardId,
-        recordNumber: rateCard.rateCardNumber,
-        targetRole: 'CATEGORY_MANAGER',
-        link: '/procurement/rate-cards',
-      },
-    });
-
-    await createAuditLog({
+    const auditLogId = crypto.randomUUID();
+    const approvalId = crypto.randomUUID();
+    const notification = prepareNotificationOutbox({
       tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      entityType: 'VENDOR',
-      entityId: vendorId,
-      action: `RATE_CARD_VENDOR_QUOTE_${roundTarget}_SUBMITTED`,
-      description: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSubmittedForRateCardRateCardNumber, { "roundTarget": roundTarget, "rateCardNumber": rateCard.rateCardNumber }),
-      newValue: { status: newStatus, round: roundTarget },
+      title: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSubmitted, { roundTarget }),
+      message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorVendorUserNameSubmittedVendorRCQuoteRoundTargetForRateCardRateCardNumber, { vendorUserName, roundTarget, rateCardNumber: rateCard.rateCardNumber }),
+      type: 'ACTION_REQUIRED',
+      entityType: 'RATE_CARD',
+      entityId: rateCardId,
+      recordNumber: rateCard.rateCardNumber,
+      targetRole: 'CATEGORY_MANAGER',
+      link: '/procurement/rate-cards',
+    }, now, auditLogId);
+    const approvalRemarks = remarks || `Vendor submitted Vendor RC Quote-${roundTarget} for commercial review`;
+    const auditAction = `RATE_CARD_VENDOR_QUOTE_${roundTarget}_SUBMITTED`;
+    const auditDescription = interpolateUiString(
+      UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSubmittedForRateCardRateCardNumber,
+      { roundTarget, rateCardNumber: rateCard.rateCardNumber },
+    );
+    const batch = [
+      {
+        sql: RATE_CARD_VENDOR_QUOTE_UPDATE_SQL,
+        values: [newStatus, JSON.stringify(notesData), now, rateCardId, ctx.tenantId, vendorId, rateCard.status,
+          JSON.stringify(quoteItems.map(({ id }) => id)), quoteItems.length],
+      },
+      ...quoteItems.map((item) => ({
+        sql: RATE_CARD_ITEM_VENDOR_QUOTE_UPDATE_SQL,
+        values: [item.rate, item.comparisonRef, now, item.id, ctx.tenantId, rateCardId, newStatus],
+      })),
+      {
+        sql: RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
+        values: [approvalId, ctx.tenantId, rateCardId, rateCard.approvalLevel || 'LEVEL_1_PROJECT', ctx.userId,
+          vendorUserName, ctx.userEmail || null, `VENDOR_QUOTE_${roundTarget}_SUBMITTED`, approvalRemarks, now],
+      },
+      {
+        sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+        values: [auditLogId, ctx.tenantId, ctx.userId, null, 'VENDOR', vendorId, auditAction, auditDescription,
+          JSON.stringify({ status: rateCard.status }), JSON.stringify({ status: newStatus, round: roundTarget }), null, null, now],
+      },
+      notification.statement,
+    ];
+    const results = await writeD1BatchAtomically(batch);
+    if (results.some((result) => Number(result.meta?.changes || 0) !== 1)) throw new Error();
+    await dispatchPreparedWorkflowNotification(notification.id, now, {
+      tenantId: ctx.tenantId, entityType: 'RATE_CARD', entityId: rateCardId, route: '/api/vendor-portal/rate-cards',
     });
+    const updatedCard = { ...rateCard, status: newStatus, notes: JSON.stringify(notesData), updatedAt: now };
 
     return apiSuccess({
       message: interpolateUiString(UI_STRINGS.appApiVendorPortalRateCardsRoute.vendorRCQuoteRoundTargetSuccessfullySubmittedForCommercialReview, { "roundTarget": roundTarget }),
       rateCardId,
       rateCard: updatedCard,
     });
-  } catch (error: any) {
-    console.error('Error submitting vendor rate card negotiation offer:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals }), 500);
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'vendor_portal.rate_card_submission_failed', {
+      operation: 'submit_vendor_rate_card', route: '/api/vendor-portal/rate-cards',
+      requestId: req.headers.get('x-request-id') || undefined,
+      tenantId: ctx.tenantId, actorId: ctx.userId, vendorId, rateCardId,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals, 500);
   }
 }

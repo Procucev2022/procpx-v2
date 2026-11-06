@@ -5,13 +5,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
 };
 
-// DATABASE_PROVIDER=d1 makes `next dev` use the remote D1 database from
-// wrangler.jsonc (through your `wrangler login`) instead of the local SQLite file.
-// The connection is awaited so no request is served before D1 is ready.
+// Initialize local Wrangler bindings for `next dev`; remote D1 access is reserved
+// for explicit Wrangler commands and is never enabled by the dev config.
 export default async function config(): Promise<NextConfig> {
   if (process.env.DATABASE_PROVIDER === "d1") {
     const { initOpenNextCloudflareForDev } = await import("@opennextjs/cloudflare");
-    await initOpenNextCloudflareForDev({ remoteBindings: true });
+    await initOpenNextCloudflareForDev();
   }
   return nextConfig;
 }

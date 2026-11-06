@@ -47,7 +47,7 @@ function configureFetch() {
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
     if (init?.method === 'PUT') return Promise.resolve(actionReply);
     if (init?.method === 'POST') return Promise.resolve(bidReply);
-    return Promise.resolve(reply({ auction: currentAuction, isObserver: false, serverTime: '2026-04-01T10:00:00Z' }));
+    return Promise.resolve(reply({ auction: currentAuction, bidHistory: { total: currentAuction.bids.length, pageSize: 50, hasMore: false, nextCursor: null }, isObserver: false, serverTime: '2026-04-01T10:00:00Z' }));
   });
   global.fetch = mockFetch as typeof fetch;
 }
@@ -130,7 +130,7 @@ describe('live auction room', () => {
     expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementAuctionsIdPage.documentValue1, {"value1":"2"})))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Refresh","toLocaleString":"Telemetry"})) }));
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/auctions/auction-1'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/auctions/auction-1?pageSize=50'));
     expect(await screen.findByRole('heading', { name: 'Cable Reverse Auction' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.logAssistedVendorBid2) }));
     expect(screen.getByText(/Record a verified phone/)).toBeInTheDocument();
@@ -163,6 +163,28 @@ describe('live auction room', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.submitValidatedBid) }));
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith({ title: UI_STRINGS.common.bidRejected, message: 'Minimum bid reduction not met' }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+  });
+
+  it('loads older bid pages without discarding the current leaderboard', async () => {
+    const olderBid = { id: 'bid-old', bidNumber: 0, vendorName: 'Earlier Supply', itemCode: 'CBL-1', bidAmount: 130000, timestamp: '2026-03-31T10:00:00Z' };
+    mockFetch.mockImplementation((url: string) => {
+      const isOlderPage = url.includes('beforeId=bid-1');
+      return Promise.resolve(reply({
+        auction: { ...liveAuction, bids: isOlderPage ? [olderBid] : [liveAuction.bids[0]] },
+        bidHistory: isOlderPage
+          ? { total: 3, pageSize: 1, hasMore: false, nextCursor: null }
+          : { total: 3, pageSize: 1, hasMore: true, nextCursor: { beforeId: 'bid-1', beforeTimestamp: liveAuction.bids[0].timestamp } },
+        isObserver: false,
+      }));
+    });
+
+    renderRoom();
+    const loadOlder = await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.loadOlderBids) });
+    fireEvent.click(loadOlder);
+
+    expect(await screen.findByText('Earlier Supply')).toBeInTheDocument();
+    expect(mockFetch.mock.calls.some(([url]) => String(url).includes('beforeId=bid-1'))).toBe(true);
+    expect(screen.getAllByText('Alpha Supply').length).toBeGreaterThan(0);
   });
 
   it('covers observer, sealed, paused and completed views and reports failed controls or bids', async () => {

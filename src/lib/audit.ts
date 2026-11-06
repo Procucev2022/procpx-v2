@@ -21,7 +21,14 @@ export async function createAuditLog(params: AuditParams) {
       },
     });
   } catch (err) {
-    console.error('Audit log creation failed:', err);
+    console.error('audit.write_failed', {
+      operation: 'create',
+      tenantId: params.tenantId,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      action: params.action,
+      error: err,
+    });
     // Never throw — audit failure must not break business flow
   }
 }

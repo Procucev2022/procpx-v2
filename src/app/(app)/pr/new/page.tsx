@@ -1,6 +1,6 @@
 'use client';
 // src/app/(app)/pr/new/page.tsx - Create Procurement Request from BOQ Baseline
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -14,17 +14,24 @@ import {
   CheckCircle2,
   Layers,
   AlertCircle,
+  Search,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import FormSection from '@/components/ui/FormSection';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLookupOption } from '@app-types/app/api/cost-centres.types';
 
 
 export default function CreatePrPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
-  const [costCentres, setCostCentres] = useState<any[]>([]);
+  const [costCentres, setCostCentres] = useState<CostCentreLookupOption[]>([]);
+  const [costCentreSearch, setCostCentreSearch] = useState('');
+  const [costCentrePage, setCostCentrePage] = useState(1);
+  const [costCentreTotal, setCostCentreTotal] = useState(0);
+  const [costCentreHasMore, setCostCentreHasMore] = useState(false);
+  const costCentreRequestSequence = useRef(0);
   const [boqs, setBoqs] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedCostCentreId, setSelectedCostCentreId] = useState('');
@@ -35,56 +42,37 @@ export default function CreatePrPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadProjects();
+  const loadCostCentres = useCallback(async (pId: string, search = '', page = 1, append = false, preserveSelectedId = '') => {
+    const sequence = ++costCentreRequestSequence.current;
+    try {
+      const query = new URLSearchParams({ projectId: pId, page: String(page), pageSize: '100' });
+      if (search.trim()) query.set('search', search.trim());
+      const res = await fetch(`/api/cost-centres?${query.toString()}`);
+      if (res.ok) {
+        const cc = await res.json() as CostCentreLookupApiResponse;
+        if (sequence !== costCentreRequestSequence.current) return;
+        const payload: CostCentreLookupPayload = cc.data ?? cc;
+        const rows = Array.isArray(payload) ? payload : payload.costCentres ?? [];
+        const pagination = Array.isArray(payload) ? undefined : payload.pagination;
+        setCostCentres((current) => {
+          const existing = preserveSelectedId
+            ? current.find((item) => item.id === preserveSelectedId && item.projectId === pId)
+            : undefined;
+          const base = append ? current : existing ? [existing] : [];
+          const ids = new Set(base.map((item) => item.id));
+          return [...base, ...rows.filter((item) => !ids.has(item.id))];
+        });
+        setCostCentrePage(page);
+        setCostCentreTotal(pagination?.total ?? rows.length);
+        setCostCentreHasMore(Boolean(pagination?.hasMore));
+        if (!append && !search && rows.length > 0) setSelectedCostCentreId(rows[0].id);
+      }
+    } catch (e) {
+      if (sequence === costCentreRequestSequence.current) console.error(e);
+    }
   }, []);
 
-  useEffect(() => {
-    if (selectedProjectId) {
-      setCostCentres([]);
-      setBoqs([]);
-      setSelectedCostCentreId('');
-      setSelectedBoqId('');
-      loadCostCentres(selectedProjectId);
-      loadBoqs(selectedProjectId);
-    } else {
-      setCostCentres([]);
-      setBoqs([]);
-      setSelectedCostCentreId('');
-      setSelectedBoqId('');
-    }
-  }, [selectedProjectId]);
-
-  const loadProjects = async () => {
-    try {
-      const res = await fetch('/api/projects');
-      if (res.ok) {
-        const pData = await res.json();
-        const list = pData.data || pData || [];
-        setProjects(list);
-        if (list.length > 0) {
-          setSelectedProjectId(list[0].id);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const loadCostCentres = async (pId: string) => {
-    try {
-      const res = await fetch(`/api/cost-centres?projectId=${pId}`);
-      if (res.ok) {
-        const cc = await res.json();
-        setCostCentres(cc);
-        if (cc.length > 0) setSelectedCostCentreId(cc[0].id);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const loadBoqs = async (pId: string) => {
+  const loadBoqs = useCallback(async (pId: string) => {
     try {
       const res = await fetch(`/api/boq?projectId=${pId}`);
       if (res.ok) {
@@ -96,7 +84,45 @@ export default function CreatePrPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const res = await fetch('/api/projects');
+        if (!res.ok) return;
+        const pData = await res.json();
+        const list = pData.data || pData || [];
+        if (!active) return;
+        setProjects(list);
+        if (list.length > 0) setSelectedProjectId(list[0].id);
+      } catch (error) {
+        console.error(error);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      setCostCentres([]);
+      setCostCentreSearch('');
+      setCostCentrePage(1);
+      setCostCentreTotal(0);
+      setCostCentreHasMore(false);
+      setBoqs([]);
+      setSelectedCostCentreId('');
+      setSelectedBoqId('');
+      void loadCostCentres(selectedProjectId);
+      void loadBoqs(selectedProjectId);
+    } else {
+      setCostCentres([]);
+      setBoqs([]);
+      setSelectedCostCentreId('');
+      setSelectedBoqId('');
+    }
+  }, [selectedProjectId, loadCostCentres, loadBoqs]);
 
   const handleCreatePr = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,6 +217,22 @@ export default function CreatePrPage() {
 
             <div className="form-group">
               <label className="form-label">{UI_STRINGS.common.costCentre2}</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="search"
+                  className="form-control"
+                  value={costCentreSearch}
+                  onChange={e => setCostCentreSearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void loadCostCentres(selectedProjectId, costCentreSearch, 1, false, selectedCostCentreId); } }}
+                  placeholder={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
+                  onClick={() => void loadCostCentres(selectedProjectId, costCentreSearch, 1, false, selectedCostCentreId)}
+                ><Search size={16} /></button>
+              </div>
               <select
                 className="form-control"
                 value={selectedCostCentreId}
@@ -203,6 +245,16 @@ export default function CreatePrPage() {
                   </option>
                 ))}
               </select>
+              {costCentreTotal > costCentres.length && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {interpolateUiString(UI_STRINGS.appAppCostCentresPage.showingCostCentreCountOfTotal, { loaded: costCentres.length, total: costCentreTotal })}
+                </p>
+              )}
+              {costCentreHasMore && (
+                <button type="button" className="text-sm text-blue-600 underline mt-1" onClick={() => void loadCostCentres(selectedProjectId, costCentreSearch, costCentrePage + 1, true)}>
+                  {UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres}
+                </button>
+              )}
             </div>
           </div>
         </FormSection>

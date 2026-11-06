@@ -5,6 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import {
+  DEFAULT_RATE_CARD_MATCH_PAGE_SIZE,
+  MAX_RATE_CARD_MATCH_PAGE_SIZE,
+  MAX_RATE_CARD_MATCH_SCOPE_LINES,
+} from '../route.constants';
 
 
 export async function GET(req: NextRequest) {
@@ -14,8 +20,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const prId = searchParams.get('prId');
   const rfqId = searchParams.get('rfqId');
+  const startedAt = Date.now();
+  const requestedPage = Number(searchParams.get('page'));
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 10_000) : 1;
+  const requestedPageSize = Number(searchParams.get('pageSize'));
+  const pageSize = Number.isSafeInteger(requestedPageSize) && requestedPageSize > 0
+    ? Math.min(requestedPageSize, MAX_RATE_CARD_MATCH_PAGE_SIZE)
+    : DEFAULT_RATE_CARD_MATCH_PAGE_SIZE;
 
-  if (!prId && !rfqId) {
+  if (Boolean(prId) === Boolean(rfqId)) {
     return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.eitherPrIdOrRfqIdIsRequiredToMatchRateCards, 400);
   }
 
@@ -32,18 +45,22 @@ export async function GET(req: NextRequest) {
       quantity: number;
       aiUnitCost: number;
       aiTotalCost: number;
+      quantityValid: boolean;
     }> = [];
 
     let referenceEntity: any = null;
+    let tooManyScopeLines = false;
 
     if (prId) {
       const pr = await prisma.procurementRequest.findFirst({
         where: { id: prId, tenantId: ctx.tenantId },
         include: {
-          project: true,
-          costCentre: true,
+          project: { select: { id: true, name: true, projectCode: true } },
+          costCentre: { select: { id: true, code: true, name: true } },
           lines: {
-            include: { boqLine: true },
+            orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+            take: MAX_RATE_CARD_MATCH_SCOPE_LINES + 1,
+            include: { boqLine: { select: { aiUnitCost: true, specification: true } } },
           },
         },
       });
@@ -58,10 +75,13 @@ export async function GET(req: NextRequest) {
         project: pr.project,
         costCentre: pr.costCentre,
       };
+      tooManyScopeLines = pr.lines.length > MAX_RATE_CARD_MATCH_SCOPE_LINES;
 
       lines = pr.lines.map((l) => {
-        const aiCost = l.boqLine?.aiUnitCost || l.estimatedRate || 100;
-        const qty = l.quantity || 1;
+        const aiCost = l.boqLine?.aiUnitCost ?? l.estimatedRate ?? 0;
+        const parsedQuantity = Number(l.quantity);
+        const quantityValid = Number.isFinite(parsedQuantity) && parsedQuantity > 0;
+        const qty = quantityValid ? parsedQuantity : 0;
         return {
           id: l.id,
           lineNumber: l.lineNumber,
@@ -73,15 +93,18 @@ export async function GET(req: NextRequest) {
           quantity: qty,
           aiUnitCost: aiCost,
           aiTotalCost: qty * aiCost,
+          quantityValid,
         };
       });
     } else if (rfqId) {
       const rfq = await prisma.rfq.findFirst({
         where: { id: rfqId, tenantId: ctx.tenantId },
         include: {
-          project: true,
+          project: { select: { id: true, name: true, projectCode: true } },
           lines: {
-            include: { boqLine: true },
+            orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+            take: MAX_RATE_CARD_MATCH_SCOPE_LINES + 1,
+            include: { boqLine: { select: { aiUnitCost: true, specification: true } } },
           },
         },
       });
@@ -95,10 +118,13 @@ export async function GET(req: NextRequest) {
         status: rfq.status,
         project: rfq.project,
       };
+      tooManyScopeLines = rfq.lines.length > MAX_RATE_CARD_MATCH_SCOPE_LINES;
 
       lines = rfq.lines.map((l) => {
-        const aiCost = l.boqLine?.aiUnitCost || l.benchmarkRate || 100;
-        const qty = l.quantity || 1;
+        const aiCost = l.boqLine?.aiUnitCost ?? l.benchmarkRate ?? 0;
+        const parsedQuantity = Number(l.quantity);
+        const quantityValid = Number.isFinite(parsedQuantity) && parsedQuantity > 0;
+        const qty = quantityValid ? parsedQuantity : 0;
         return {
           id: l.id,
           lineNumber: l.lineNumber,
@@ -110,8 +136,14 @@ export async function GET(req: NextRequest) {
           quantity: qty,
           aiUnitCost: aiCost,
           aiTotalCost: qty * aiCost,
+          quantityValid,
         };
       });
+    }
+
+    if (tooManyScopeLines) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsMatchRoute.rateCardMatchingSupportsAtMostLengthLinesPerProcurementRequestOrRFQ,
+        { length: MAX_RATE_CARD_MATCH_SCOPE_LINES }), 400);
     }
 
     if (lines.length === 0) {
@@ -123,24 +155,31 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 2. Fetch all rate cards for this tenant
-    const rateCards = await prisma.vendorRateCard.findMany({
-      where: { tenantId: ctx.tenantId },
-      include: {
-        vendor: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            vendorType: true,
-            complianceStatus: true,
-            qualificationStatus: true,
-            performanceScore: true,
+    // 2. Read a stable page of cards and only the fields used in matching.
+    const rateCardWhere = { tenantId: ctx.tenantId };
+    const [rateCards, rateCardCount] = await Promise.all([
+      prisma.vendorRateCard.findMany({
+        where: rateCardWhere,
+        include: {
+          vendor: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              vendorType: true,
+              complianceStatus: true,
+              qualificationStatus: true,
+              performanceScore: true,
+            },
           },
+          items: { select: { id: true, description: true, rate: true, uom: true } },
         },
-        items: true,
-      },
-    });
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.vendorRateCard.count({ where: rateCardWhere }),
+    ]);
 
     // 3. Fetch historical PPO lines for baseline price comparison
     const itemDescriptions = lines.map((l) => l.itemDescription.toLowerCase());
@@ -197,8 +236,8 @@ export async function GET(req: NextRequest) {
         const reqDesc = reqLine.itemDescription.toLowerCase().trim();
         // Look for matching rate card item by description, itemCode, or category match
         const matchingRcItem = rc.items.find((item) => {
-          const itemDesc = item.description.toLowerCase().trim();
-          return itemDesc.includes(reqDesc) || reqDesc.includes(itemDesc);
+          const itemDesc = (item.description || '').toLowerCase().trim();
+          return itemDesc.length > 0 && reqDesc.length > 0 && (itemDesc.includes(reqDesc) || reqDesc.includes(itemDesc));
         });
 
         // Historical PPO comparison for this line
@@ -214,7 +253,7 @@ export async function GET(req: NextRequest) {
 
           // Check UOM mismatch
           let uomMismatch = false;
-          if (matchingRcItem.uom.toUpperCase() !== reqLine.uom.toUpperCase()) {
+          if (String(matchingRcItem.uom || '').toUpperCase() !== String(reqLine.uom || '').toUpperCase()) {
             uomMismatch = true;
             mismatchReasons.push(`Line ${reqLine.lineNumber}: UOM mismatch (${reqLine.uom} required vs ${matchingRcItem.uom} on rate card)`);
           }
@@ -274,8 +313,12 @@ export async function GET(req: NextRequest) {
       if (!isVendorCompliant) blockReasons.push(`Vendor compliance status is ${rc.vendor.complianceStatus}`);
       if (!isFullCoverage) blockReasons.push(`Partial item coverage: only ${matchedItemsCount}/${lines.length} items covered (${coveragePercent}%)`);
       if (mismatchReasons.length > 0) blockReasons.push(...mismatchReasons);
+      if (lines.some((line) => !line.quantityValid)) {
+        blockReasons.push(UI_STRINGS.appApiProcurementRateCardsMatchRoute.sourcingLinesRequirePositiveQuantitiesForDirectPPO);
+      }
 
-      const directPpoEligible = isStatusApproved && isDateValid && isVendorCompliant && isFullCoverage && mismatchReasons.length === 0;
+      const directPpoEligible = isStatusApproved && isDateValid && isVendorCompliant && isFullCoverage
+        && mismatchReasons.length === 0 && lines.every((line) => line.quantityValid);
 
       return {
         rateCardId: rc.id,
@@ -284,8 +327,8 @@ export async function GET(req: NextRequest) {
         category: rc.category,
         vendor: rc.vendor,
         status: rc.status,
-        validFrom: rc.validFrom.toISOString().split('T')[0],
-        validTo: rc.validTo.toISOString().split('T')[0],
+        validFrom: rc.validFrom?.toISOString().split('T')[0] || '',
+        validTo: rc.validTo?.toISOString().split('T')[0] || '',
         isCurrentlyValid: isDateValid,
         coveragePercent,
         matchedItemsCount,
@@ -318,9 +361,18 @@ export async function GET(req: NextRequest) {
       lines,
       matchedRateCards: evaluatedRateCards,
       eligibleCount: evaluatedRateCards.filter((r) => r.directPpoEligible).length,
+      total: rateCardCount,
+      page,
+      pageSize,
+      hasMore: page * pageSize < rateCardCount,
     });
-  } catch (error: any) {
-    console.error('Error matching rate cards:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToMatchRateCards }), 500);
+  } catch (error: unknown) {
+    await writeStructuredLog('error', 'rate_card.match_read_failed', {
+      operation: 'match_rate_cards', route: '/api/procurement/rate-cards/match',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      prId, rfqId, page, pageSize, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToMatchRateCards, 500);
   }
 }

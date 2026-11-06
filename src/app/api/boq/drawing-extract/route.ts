@@ -1,255 +1,301 @@
-// src/app/api/boq/drawing-extract/route.ts - Method 3: AI Drawing to BOQ Extraction & Persistence
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { processDrawingFile, ExtractedDrawingItem } from '@/lib/drawing-parser';
-import { saveUpload } from '@/lib/storage';
-import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
+import { processDrawingFile } from '@/lib/drawing-parser';
+import type { DrawingDraftLine, DrawingDraftRequest, PreparedDrawingBoqLine } from '@app-types/app/api/boq/drawing-extract.types';
+import { deleteUpload, saveUpload } from '@/lib/storage';
+import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { interpolateUiString } from '@/lib/i18n';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  BOQ_INSERT_NEXT_CODE_SQL,
+  BOQ_LINE_INSERT_AFTER_AUDIT_SQL,
+  BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
+  BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
+  BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL,
+} from '@/lib/d1-batch.constants';
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
+import { DRAWING_BOQ_AUDIT_ACTION, DRAWING_BOQ_SOURCE_TYPE, MAX_DRAWING_BOQ_LINES, SUPPORTED_DRAWING_EXTENSIONS } from './route.constants';
 
+class InvalidDrawingRequestError extends Error {}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function text(value: unknown): string {
+  return value === undefined || value === null ? '' : String(value).trim();
+}
+
+function isUpload(value: FormDataEntryValue | null): value is File {
+  return typeof value === 'object' && value !== null && 'name' in value && 'size' in value
+    && 'arrayBuffer' in value && typeof value.arrayBuffer === 'function';
+}
+
+function drawingLineStatement(line: PreparedDrawingBoqLine, revisionId: string, tenantId: string, auditId: string, now: Date): D1BatchInputStatement {
+  return {
+    sql: BOQ_LINE_INSERT_AFTER_AUDIT_SQL,
+    values: [
+      crypto.randomUUID(), tenantId, revisionId, line.lineNumber, line.description, line.description, line.specification,
+      line.categoryId, null, line.uomId, line.uomRaw, line.quantity, line.location, line.drawingReference, null,
+      null, null, null, null, null, line.sourceSheet, null, line.sourceReference, line.confidence, true, line.status,
+      JSON.stringify(line.validationMessages), false, null, null, line.description, line.specification,
+      line.aiReason, line.confidence, null, null, null, null, null, null, null, null, null, now, now,
+      auditId, tenantId, revisionId, tenantId,
+    ],
+  };
+}
+
+function prepareDrawingLines(lines: DrawingDraftLine[], categories: Array<{ id: string; name: string }>, uoms: Array<{ id: string; code: string }>, drawingNumber: string): {
+  lines: PreparedDrawingBoqLine[];
+  validCount: number;
+  warningCount: number;
+  errorCount: number;
+} {
+  const categoryByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category.id]));
+  const uomByCode = new Map(uoms.map((uom) => [uom.code.trim().toUpperCase(), uom.id]));
+  const prepared: PreparedDrawingBoqLine[] = [];
+  let validCount = 0;
+  let warningCount = 0;
+  let errorCount = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const item = lines[index];
+    const description = text(item.description);
+    if (!description) throw new InvalidDrawingRequestError(UI_STRINGS.common.descriptionIsRequired);
+    const rawQuantity = item.quantity;
+    const hasQuantity = rawQuantity !== null && rawQuantity !== undefined && text(rawQuantity) !== '' && Number.isFinite(Number(rawQuantity));
+    const numericQuantity = hasQuantity ? Number(rawQuantity) : null;
+    const negativeQuantity = numericQuantity !== null && numericQuantity < 0;
+    const uncertain = item.quantityType === 'UNCERTAIN' || !hasQuantity || numericQuantity === 0;
+    const messages: PreparedDrawingBoqLine['validationMessages'] = [];
+    let status = 'VALID';
+    if (negativeQuantity) {
+      status = 'ERROR';
+      messages.push({ level: 'ERROR', code: 'QTY_NEGATIVE', message: UI_STRINGS.appApiBoqUploadTemplateRoute.quantityCannotBeNegative });
+    } else if (uncertain) {
+      status = 'WARNING';
+      messages.push({ level: 'WARNING', code: 'UNVERIFIED_QUANTITY', message: text(item.uncertainReason) || UI_STRINGS.appApiBoqDrawingExtractRoute.quantityUnverifiedInDrawingFieldVerificationRequired });
+    } else {
+      messages.push({
+        level: 'INFO', code: 'DRAWING_EXTRACTED',
+        message: interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.extractedFromDrawingValue1Value2, {
+          value1: drawingNumber,
+          value2: item.location ? interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.locationValue1, { value1: text(item.location) }) : '',
+        }),
+      });
+    }
+    if (status === 'VALID') validCount += 1;
+    else if (status === 'WARNING') warningCount += 1;
+    else errorCount += 1;
+
+    const rawUom = text(item.uom) || 'NOS';
+    const categoryName = text(item.category).toLowerCase();
+    const confidence = Number.isFinite(Number(item.confidence)) ? Number(item.confidence) : 0.9;
+    const mark = text(item.mark);
+    prepared.push({
+      lineNumber: String(index + 1), description,
+      specification: text(item.specification) || description,
+      categoryId: categoryByName.get(categoryName) || null,
+      uomId: uomByCode.get(rawUom.toUpperCase()) || null,
+      uomRaw: rawUom,
+      quantity: hasQuantity ? numericQuantity : null,
+      location: text(item.location) || null,
+      drawingReference: text(item.drawingReference) || drawingNumber,
+      sourceSheet: text(item.sheet) || 'Sheet 01',
+      sourceReference: mark ? `${mark} - ${description}` : description,
+      confidence,
+      aiReason: text(item.uncertainReason) || `Extracted from drawing ${drawingNumber}`,
+      status,
+      validationMessages: messages,
+    });
+  }
+  return { lines: prepared, validCount, warningCount, errorCount };
+}
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_UPLOAD');
   if (!isApiContext(ctx)) return ctx;
+  const startedAt = Date.now();
+  let projectIdForLog: string | undefined;
+  let boqIdForLog: string | undefined;
+  let revisionIdForLog: string | undefined;
+  let lineCount = 0;
+  let savedFilePath: string | undefined;
+  let documentPersisted = false;
+  let uploadCreatedInRequest = false;
 
   try {
     const contentType = req.headers.get('content-type') || '';
-
-    // -------------------------------------------------------------
-    // STAGE 2: GENERATE DRAFT BOQ (JSON payload with reviewed lines)
-    // -------------------------------------------------------------
+    const contentLength = Number(req.headers.get('content-length'));
+    if (!contentType.includes('application/json') && Number.isFinite(contentLength) && contentLength > MAX_BOQ_UPLOAD_BYTES + 64 * 1024) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileMustBeBetweenOneByteAndMaxBytes, { maxBytes: MAX_BOQ_UPLOAD_BYTES }), 413);
+    }
     if (contentType.includes('application/json')) {
-      const body = await req.json();
-      const {
-        projectId,
-        costCentreId,
-        drawingNumber,
-        fileName,
-        savedFilePath,
-        fileSize,
-        title,
-        description,
-        purpose,
-        lines,
-      } = body;
+      const parsed: unknown = await req.json();
+      if (!isRecord(parsed)) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      const body = parsed as DrawingDraftRequest;
+      projectIdForLog = text(body.projectId) || undefined;
+      const projectId = text(body.projectId);
+      const drawingNumber = text(body.drawingNumber) || 'DWG-A-101';
+      const fileName = text(body.fileName) || `${drawingNumber || 'drawing'}.pdf`;
+      const fileSize = Number(body.fileSize);
+      const lines = body.lines;
+      if (!projectId) return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, 400);
+      if (!Array.isArray(lines) || lines.length === 0) return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, 400);
+      if (lines.length > MAX_DRAWING_BOQ_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
+      if (!lines.every(isRecord)) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
 
-      if (!projectId) {
-        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, 400);
-      }
-      if (!Array.isArray(lines) || lines.length === 0) {
-        return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, 400);
-      }
-
-      const project = await prisma.project.findFirst({
-        where: { id: projectId, tenantId: ctx.tenantId },
-      });
+      const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenantId } });
       if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
-
-      // Unique BOQ Code
-      const count = await prisma.boq.count({ where: { tenantId: ctx.tenantId } });
-      const boqCode = `BOQ-${String(count + 1).padStart(6, '0')}`;
-
-      // Create Draft BOQ (Principle: Drawing extraction creates Draft BOQ)
-      const boq = await prisma.boq.create({
-        data: {
-          tenantId: ctx.tenantId,
-          projectId,
-          costCentreId: costCentreId || null,
-          boqCode,
-          title: interpolateUiString(UI_STRINGS.common.value1, { "value1": title?.trim() || `Architectural Drawing — ${project.name}` }),
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": description?.trim() || `Extracted from architectural drawing ${drawingNumber || 'DWG'}` }),
-          purpose: purpose || 'BUDGET',
-          status: 'DRAFT',
-          createdBy: ctx.userId,
-        },
-      });
-
-      const validLinesCount = lines.filter((l: any) => l.quantity !== null && Number(l.quantity) > 0).length;
-
-      // Create Revision R0
-      const boqRevision = await prisma.boqRevision.create({
-        data: {
-          tenantId: ctx.tenantId,
-          boqId: boq.id,
-          costCentreId: costCentreId || null,
-          revisionNumber: 0,
-          revisionCode: 'R0',
-          status: 'DRAFT',
-          preparationStatus: 'AI_REVIEW',
-          budgetStatus: 'NOT_ADDED_TO_BUDGET',
-          prStatus: 'PR_NOT_CREATED',
-          sourceType: 'DRAWING_AI',
-          sourceFile: fileName || `${drawingNumber || 'drawing'}.pdf`,
-          sourceReference: drawingNumber || 'DWG-A-101',
-          sourceConfidence: 0.90,
-          originalFileName: fileName || `${drawingNumber || 'drawing'}.pdf`,
-          originalFilePath: savedFilePath || null,
-          originalFileSize: Number(fileSize) || 0,
-          notes: `Extracted via Architectural Drawing Parser from ${fileName || drawingNumber} (Ref: ${drawingNumber})`,
-          totalLines: lines.length,
-          validLines: validLinesCount,
-          qualityScore: Math.round((validLinesCount / lines.length) * 100) || 90,
-          createdById: ctx.userId,
-          uploadedAt: new Date(),
-        },
-      });
-
-      // Match tenant categories and UOMs
-      const categories = await prisma.category.findMany({ where: { tenantId: ctx.tenantId } });
-      const uoms = await prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId } });
-      const catMap = new Map(categories.map(c => [c.name.toLowerCase(), c]));
-      const uomMap = new Map(uoms.map(u => [u.code.toUpperCase(), u]));
-
-      const createdLines = [];
-      for (let i = 0; i < lines.length; i++) {
-        const item = lines[i];
-        const catName = (item.category || '').toLowerCase();
-        const matchedCat = catMap.get(catName);
-        const uomCode = (item.uom || 'NOS').toUpperCase();
-        const matchedUom = uomMap.get(uomCode);
-
-        const hasValidQty = item.quantity !== null && item.quantity !== undefined && !isNaN(Number(item.quantity));
-        const numQty = hasValidQty ? Number(item.quantity) : 0;
-        const isUncertain = item.quantityType === 'UNCERTAIN' || !hasValidQty || numQty === 0;
-
-        const validationMessages = [];
-        if (isUncertain) {
-          validationMessages.push({
-            level: 'WARNING',
-            code: 'UNVERIFIED_QUANTITY',
-            message: interpolateUiString(UI_STRINGS.common.value1, { "value1": item.uncertainReason || 'Quantity unverified in drawing schedule. Field verification required.' }),
-          });
-        } else {
-          validationMessages.push({
-            level: 'INFO',
-            code: 'DRAWING_EXTRACTED',
-            message: interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.extractedFromDrawingValue1Value2, { "value1": drawingNumber || '', "value2": item.location ? `Location: ${item.location}` : '' }),
-          });
-        }
-
-        const line = await prisma.boqLine.create({
-          data: {
-            tenantId: ctx.tenantId,
-            boqRevisionId: boqRevision.id,
-            lineNumber: String(i + 1),
-            originalDescription: item.description,
-            standardDescription: item.description,
-            specification: item.specification || item.description,
-            aiSuggestedDescription: item.description,
-            aiSuggestedSpec: item.specification || item.description,
-            aiConfidence: item.confidence || 0.90,
-            aiReason: item.uncertainReason || `Extracted from drawing ${drawingNumber}`,
-            drawingReference: drawingNumber || item.drawingReference || 'DWG-A-101',
-            sourceSheet: item.sheet || 'Sheet 01',
-            sourceReference: item.mark ? `${item.mark} - ${item.description}` : item.description,
-            confidenceScore: item.confidence || 0.90,
-            location: item.location || null,
-            categoryId: matchedCat?.id || null,
-            uomId: matchedUom?.id || null,
-            uomRaw: item.uom || 'NOS',
-            quantity: hasValidQty ? numQty : null,
-            validationStatus: isUncertain ? 'WARNING' : 'VALID',
-            validationMessages: JSON.stringify(validationMessages),
-            benchmarkEligible: true,
-          },
+      const costCentreId = text(body.costCentreId) || null;
+      if (costCentreId) {
+        const costCentre = await prisma.costCentre.findFirst({ where: { id: costCentreId, projectId, tenantId: ctx.tenantId }, select: { id: true } });
+        if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+      }
+      if (body.savedDocumentId) {
+        const document = await prisma.projectDocument.findFirst({
+          where: { id: text(body.savedDocumentId), projectId, tenantId: ctx.tenantId, category: 'DRAWING' },
+          select: { id: true, filePath: true, fileSize: true, name: true },
         });
-        createdLines.push(line);
+        if (!document) return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.uploadedDrawingNotFound, 404);
+        savedFilePath = String(document.filePath);
       }
 
-      // Audit Log
-      await prisma.auditLog.create({
-        data: {
-          tenantId: ctx.tenantId,
-          userId: ctx.userId,
-          projectId,
-          entityType: 'BOQ',
-          entityId: boq.id,
-          action: 'DRAWING_BOQ_GENERATED',
-          description: interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.draftBOQBoqCodeGeneratedFromDrawingValue2LengthLinesCreated, { "boqCode": boq.boqCode, "value2": fileName || drawingNumber, "length": lines.length }),
+      const [categories, uoms] = await Promise.all([
+        prisma.category.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+        prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, code: true } }),
+      ]);
+      const prepared = prepareDrawingLines(lines, categories, uoms, drawingNumber);
+      lineCount = prepared.lines.length;
+      const qualityScore = Math.round((prepared.validCount / prepared.lines.length) * 100) || 0;
+      const now = new Date();
+      const newBoqId = crypto.randomUUID();
+      const newRevisionId = crypto.randomUUID();
+      const auditId = crypto.randomUUID();
+      boqIdForLog = newBoqId;
+      revisionIdForLog = newRevisionId;
+      const title = text(body.title) || interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.architecturalDrawingTitleForProject, { projectName: project.name });
+      const description = text(body.description) || interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.extractedFromArchitecturalDrawingNumber, { drawingNumber });
+      const purpose = text(body.purpose) || 'BUDGET';
+      const validFileSize = Number.isFinite(fileSize) && fileSize >= 0 ? Math.min(Math.floor(fileSize), 2_147_483_647) : 0;
+      const statements: D1BatchInputStatement[] = [
+        {
+          sql: BOQ_INSERT_NEXT_CODE_SQL,
+          values: [newBoqId, ctx.tenantId, projectId, costCentreId, title, description, null, null, 'DRAFT', purpose, ctx.userId, now, now],
         },
-      });
-
+        {
+          sql: BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL,
+          values: [newRevisionId, ctx.tenantId, newBoqId, costCentreId, 'DRAFT', 'AI_REVIEW', 'NOT_ADDED_TO_BUDGET',
+            'PR_NOT_CREATED', DRAWING_BOQ_SOURCE_TYPE, fileName, drawingNumber, 0.9, fileName, savedFilePath || null,
+            validFileSize, `Extracted via Architectural Drawing Parser from ${fileName} (Ref: ${drawingNumber})`,
+            prepared.lines.length, prepared.validCount, prepared.errorCount, prepared.warningCount, qualityScore,
+            ctx.userId, savedFilePath ? now : null, now, now],
+        },
+        {
+          sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+          values: [auditId, ctx.tenantId, ctx.userId, projectId, 'BOQ', newBoqId, DRAWING_BOQ_AUDIT_ACTION,
+            interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingBOQCreatedFromDrawingWithLineCount, { drawingNumber, length: prepared.lines.length }),
+            null, JSON.stringify({ drawingNumber, totalLines: prepared.lines.length, validLines: prepared.validCount,
+              warningLines: prepared.warningCount, errorLines: prepared.errorCount, qualityScore }), null,
+            req.headers.get('user-agent'), now],
+        },
+        ...prepared.lines.map((line) => drawingLineStatement(line, newRevisionId, ctx.tenantId, auditId, now)),
+        {
+          sql: BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
+          values: [prepared.lines.length, prepared.validCount, prepared.errorCount, prepared.warningCount,
+            qualityScore, now, newRevisionId, ctx.tenantId, auditId, ctx.tenantId],
+        },
+        {
+          sql: BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
+          values: [newBoqId, ctx.tenantId, newRevisionId, ctx.tenantId, newBoqId, auditId, ctx.tenantId,
+            newBoqId, newRevisionId, ctx.tenantId, prepared.lines.length, newRevisionId, ctx.tenantId,
+            prepared.lines.length, prepared.validCount, prepared.errorCount, prepared.warningCount, qualityScore],
+        },
+      ];
+      const results = await writeD1BatchAtomically(statements);
+      const boqCode = String(results[0]?.results?.[0]?.boqCode || '');
+      const revisionCode = String(results[1]?.results?.[0]?.revisionCode || '');
+      const expectedWrites = results.slice(0, statements.length - 1).every((result) => result.success !== false);
+      if (!boqCode || !revisionCode || !expectedWrites) {
+        await writeStructuredLog('error', 'boq.drawing_draft_batch_invariant_failed', {
+          operation: 'persist_drawing_boq', route: '/api/boq/drawing-extract', requestId: req.headers.get('x-request-id'),
+          tenantId: ctx.tenantId, userId: ctx.userId, projectId, boqId: newBoqId, revisionId: newRevisionId,
+          lineCount, durationMs: Date.now() - startedAt, hasBoqCode: Boolean(boqCode), hasRevisionCode: Boolean(revisionCode),
+        });
+        return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+      }
       return apiSuccess({
-        boqId: boq.id,
-        revisionId: boqRevision.id,
-        boqCode: boq.boqCode,
-        revisionCode: boqRevision.revisionCode,
-        totalLines: lines.length,
-        validLines: validLinesCount,
-        drawingNumber,
+        boqId: newBoqId, revisionId: newRevisionId, boqCode, revisionCode,
+        totalLines: prepared.lines.length, validLines: prepared.validCount, drawingNumber,
       }, 201);
     }
 
-    // -------------------------------------------------------------
-    // STAGE 1: UPLOAD & PROCESS DRAWING (FormData payload)
-    // -------------------------------------------------------------
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const projectId = formData.get('projectId') as string;
-    const drawingNumber = (formData.get('drawingNumber') as string) || 'DWG-A-101';
+    const fileValue = formData.get('file');
+    const projectId = text(formData.get('projectId'));
+    const drawingNumber = text(formData.get('drawingNumber')) || 'DWG-A-101';
+    if (!isUpload(fileValue) || !projectId) return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400);
+    projectIdForLog = projectId;
 
-    if (!file || !projectId) {
-      return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400);
-    }
-
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, tenantId: ctx.tenantId },
-    });
+    const project = await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenantId } });
     if (!project) return apiError(UI_STRINGS.common.projectNotFound2, 404);
-
-    // Validate supported file extension
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    const supportedExts = ['pdf', 'png', 'jpg', 'jpeg'];
-    if (!ext || !supportedExts.includes(ext)) {
-      return apiError(
-        interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { "ext": ext }),
-        400
-      );
+    if (fileValue.size <= 0 || fileValue.size > MAX_BOQ_UPLOAD_BYTES) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileMustBeBetweenOneByteAndMaxBytes, { maxBytes: MAX_BOQ_UPLOAD_BYTES }), 413);
+    }
+    const extension = fileValue.name.split('.').pop()?.toLowerCase();
+    if (!extension || !SUPPORTED_DRAWING_EXTENSIONS.includes(extension as typeof SUPPORTED_DRAWING_EXTENSIONS[number])) {
+      return apiError(interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { ext: extension || '' }), 400);
     }
 
-    // Save drawing file to persistent uploads storage
-    const arrayBuffer = await file.arrayBuffer();
-    const fileBuffer = Buffer.from(arrayBuffer);
-    const savedFilePath = await saveUpload(
-      [ctx.tenantId, projectId, 'drawings'],
-      `${Date.now()}_${file.name}`,
-      fileBuffer
-    );
-
-    // Register in Project Documents for traceability
-    await prisma.projectDocument.create({
+    const safeOriginalName = (fileValue.name.split(/[\\/]/).pop() || '')
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .trim();
+    if (!safeOriginalName || safeOriginalName.length > 200) return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400);
+    const fileBuffer = Buffer.from(await fileValue.arrayBuffer());
+    const parseResult = await processDrawingFile(fileBuffer, safeOriginalName, drawingNumber);
+    savedFilePath = await saveUpload([ctx.tenantId, projectId, 'drawings'], `${crypto.randomUUID()}.${extension}`, fileBuffer);
+    uploadCreatedInRequest = true;
+    const document = await prisma.projectDocument.create({
       data: {
-        tenantId: ctx.tenantId,
-        projectId,
-        name: file.name,
-        fileType: file.type || (ext === 'pdf' ? 'application/pdf' : `image/${ext}`),
-        fileSize: file.size,
-        filePath: savedFilePath,
-        uploadedBy: ctx.userId,
-        category: 'DRAWING',
+        tenantId: ctx.tenantId, projectId, name: safeOriginalName,
+        fileType: extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : 'image/jpeg',
+        fileSize: fileValue.size, filePath: savedFilePath, uploadedBy: ctx.userId, category: 'DRAWING',
       },
     });
-
-    // Execute drawing parsing (Native schedule extraction or AI multimodal vision)
-    const parseResult = await processDrawingFile(fileBuffer, file.name, drawingNumber);
+    documentPersisted = true;
 
     return apiSuccess({
-      success: true,
-      fileName: file.name,
-      fileSize: file.size,
-      savedFilePath,
-      drawingNumber: parseResult.drawingReference || drawingNumber,
-      parserUsed: parseResult.parserUsed,
-      providerMessage: parseResult.providerMessage,
-      totalDetected: parseResult.totalDetected,
-      explicitCount: parseResult.explicitCount,
-      uncertainCount: parseResult.uncertainCount,
-      items: parseResult.items,
-      warnings: parseResult.warnings,
+      success: true, fileName: safeOriginalName, fileSize: fileValue.size, documentId: document.id,
+      drawingNumber: parseResult.drawingReference || drawingNumber, parserUsed: parseResult.parserUsed,
+      providerMessage: parseResult.providerMessage, totalDetected: parseResult.totalDetected,
+      explicitCount: parseResult.explicitCount, uncertainCount: parseResult.uncertainCount,
+      items: parseResult.items, warnings: parseResult.warnings,
     }, 200);
-
-  } catch (err: any) {
-    console.error('Drawing processing error:', err);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.drawingProcessingFailed }), 500);
+  } catch (error) {
+    if (error instanceof InvalidDrawingRequestError) return apiError(UI_STRINGS.common.descriptionIsRequired, 400);
+    if (savedFilePath && uploadCreatedInRequest && !documentPersisted && projectIdForLog) {
+      try {
+        await deleteUpload(savedFilePath, [ctx.tenantId, projectIdForLog, 'drawings']);
+        savedFilePath = undefined;
+      } catch (cleanupError) {
+        await writeStructuredLog('error', 'boq.drawing_upload_cleanup_failed', {
+          operation: 'remove_unreferenced_drawing', route: '/api/boq/drawing-extract',
+          requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, projectId: projectIdForLog,
+          error: cleanupError instanceof Error ? { name: cleanupError.name, message: cleanupError.message.slice(0, 300) } : { type: typeof cleanupError },
+        });
+      }
+    }
+    await writeStructuredLog('error', 'boq.drawing_processing_failed', {
+      operation: 'process_drawing_or_create_draft', route: '/api/boq/drawing-extract',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      projectId: projectIdForLog, boqId: boqIdForLog, revisionId: revisionIdForLog,
+      lineCount, durationMs: Date.now() - startedAt, documentPersisted,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingProcessingFailed, 500);
   }
 }

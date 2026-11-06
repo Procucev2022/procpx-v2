@@ -7,3 +7,7 @@ export interface PrDetailModalProps {
   userRole?: string;
   onCreateRfq?: (pr: any) => void;
 }
+
+export interface PurchaseRequestRfqSummary {
+  status?: string | null;
+}

@@ -1,7 +1,8 @@
 'use client';
 // src/app/(app)/procurement/rfqs/new/page.tsx
 // Exact Approved Five-Step Enterprise RFQ Creation Workflow
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import type { ApprovedBoqDetail, ApprovedBoqListResponse, ApprovedBoqSummary } from '@app-types/app/api/procurement/approved-boqs.types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/ui/PageHeader';
@@ -60,13 +61,17 @@ export default function NewRfqPage() {
   const [saving, setSaving] = useState(false);
   const [approvedBoqs, setApprovedBoqs] = useState<any[]>([]);
   const [selectedBoq, setSelectedBoq] = useState<any>(null);
+  const [selectedBoqLoading, setSelectedBoqLoading] = useState(false);
+  const selectedBoqRequestVersionRef = useRef(0);
+  const [approvedBoqPage, setApprovedBoqPage] = useState(1);
+  const [hasMoreApprovedBoqs, setHasMoreApprovedBoqs] = useState(false);
+  const [loadingMoreApprovedBoqs, setLoadingMoreApprovedBoqs] = useState(false);
   const [vendors, setVendors] = useState<any[]>([]);
   const [rateCards, setRateCards] = useState<any[]>([]);
 
   // Sourced PR & Duplicate Detection State
   const [sourcePr, setSourcePr] = useState<any>(null);
   const [existingActiveRfq, setExistingActiveRfq] = useState<any>(null);
-  const [rateCardMatch, setRateCardMatch] = useState<any>(null);
 
   // Wizard Scope State (Step 2)
   const [scopeType, setScopeType] = useState<'ENTIRE_BOQ' | 'CATEGORY' | 'SELECTED_LINES'>('ENTIRE_BOQ');
@@ -167,12 +172,27 @@ export default function NewRfqPage() {
     fetchInitialData();
   }, []);
 
+  const fetchApprovedBoqDetails = async (boq: ApprovedBoqSummary): Promise<ApprovedBoqDetail> => {
+    if (Array.isArray(boq.lines)) return boq as ApprovedBoqDetail;
+    const query = new URLSearchParams({ revisionId: boq.id, pageSize: '1' });
+    const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
+    if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+    const data = await res.json() as ApprovedBoqListResponse;
+    const detailedBoq = data.approvedBoqs?.find((item) => item.id === boq.id);
+    if (!detailedBoq || !Array.isArray(detailedBoq.lines)) {
+      throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+    }
+    return detailedBoq as ApprovedBoqDetail;
+  };
+
   const fetchInitialData = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
       const fetchPromises: Promise<any>[] = [
-        fetch('/api/procurement/approved-boqs'),
+        fetch(initialRevisionId
+          ? `/api/procurement/approved-boqs?revisionId=${encodeURIComponent(initialRevisionId)}`
+          : '/api/procurement/approved-boqs'),
         fetch('/api/procurement/vendors'),
         fetch('/api/procurement/rate-cards'),
       ];
@@ -180,7 +200,6 @@ export default function NewRfqPage() {
       if (initialPrId) {
         fetchPromises.push(fetch(`/api/pr/${initialPrId}`));
         fetchPromises.push(fetch('/api/procurement/approved-prs'));
-        fetchPromises.push(fetch(`/api/procurement/rate-cards/match?prId=${initialPrId}`));
       }
 
       const results = await Promise.all(fetchPromises);
@@ -189,7 +208,6 @@ export default function NewRfqPage() {
       const rateCardsData = results[2]?.ok ? await results[2].json() : { rateCards: [] };
 
       let foundPr: any = null;
-      let rateCardMatchData: any = null;
 
       if (initialPrId) {
         // 1. Try direct PR fetch first
@@ -205,17 +223,10 @@ export default function NewRfqPage() {
           foundPr = prList.find((p: any) => p.id === initialPrId);
         }
 
-        if (results[5]?.ok) {
-          rateCardMatchData = await results[5].json();
-        }
       }
 
       if (rateCardsData?.rateCards) {
         setRateCards(rateCardsData.rateCards);
-      }
-
-      if (rateCardMatchData?.matches && rateCardMatchData.matches.length > 0) {
-        setRateCardMatch(rateCardMatchData.matches[0]);
       }
 
       // Check if creating directly from an Approved PR
@@ -293,11 +304,23 @@ export default function NewRfqPage() {
         }));
       } else if (boqsData.approvedBoqs && boqsData.approvedBoqs.length > 0) {
         setApprovedBoqs(boqsData.approvedBoqs);
+        setApprovedBoqPage(boqsData.page || 1);
+        setHasMoreApprovedBoqs(Boolean(boqsData.hasMore));
         const match = initialRevisionId
           ? boqsData.approvedBoqs.find((b: any) => b.id === initialRevisionId)
           : boqsData.approvedBoqs[0];
 
-        const activeBoq = match || boqsData.approvedBoqs[0];
+        const activeBoqSummary: ApprovedBoqSummary = match || boqsData.approvedBoqs[0];
+        setSelectedBoqLoading(true);
+        let activeBoq: any;
+        try {
+          activeBoq = await fetchApprovedBoqDetails(activeBoqSummary);
+        } catch (error) {
+          setErrorMsg(error instanceof Error ? error.message : UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+          return;
+        } finally {
+          setSelectedBoqLoading(false);
+        }
         setSelectedBoq(activeBoq);
         setSelectedLineIds(activeBoq.lines.map((l: any) => l.id));
         setRfqDetails((prev) => ({
@@ -322,14 +345,46 @@ export default function NewRfqPage() {
     }
   };
 
-  const handleSelectBoq = (boq: any) => {
-    setSelectedBoq(boq);
-    setSelectedLineIds(boq.lines.map((l: any) => l.id));
+  const handleSelectBoq = async (boq: ApprovedBoqSummary) => {
+    const requestVersion = ++selectedBoqRequestVersionRef.current;
+    setSelectedBoq({ ...boq, lines: [] });
+    setSelectedLineIds([]);
+    setSelectedBoqLoading(true);
     setRfqDetails((prev) => ({
       ...prev,
       title: interpolateUiString(UI_STRINGS.appAppProcurementRfqsNewPage.rFQForProjectNameValue2Package, { "projectName": boq.projectName, "value2": boq.categories[0]?.category || 'Works' }),
       packageName: `${boq.categories[0]?.category || 'Works'} Package`,
     }));
+    try {
+      const detailedBoq = await fetchApprovedBoqDetails(boq);
+      if (requestVersion !== selectedBoqRequestVersionRef.current) return;
+      setSelectedBoq(detailedBoq);
+      setSelectedLineIds(detailedBoq.lines.map((line: any) => line.id));
+    } catch (error) {
+      if (requestVersion === selectedBoqRequestVersionRef.current) {
+        setErrorMsg(error instanceof Error ? error.message : UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      }
+    } finally {
+      if (requestVersion === selectedBoqRequestVersionRef.current) setSelectedBoqLoading(false);
+    }
+  };
+
+  const loadMoreApprovedBoqs = async () => {
+    if (loadingMoreApprovedBoqs || !hasMoreApprovedBoqs) return;
+    setLoadingMoreApprovedBoqs(true);
+    try {
+      const nextPage = approvedBoqPage + 1;
+      const res = await fetch(`/api/procurement/approved-boqs?page=${nextPage}&pageSize=50`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      const data = await res.json();
+      setApprovedBoqs((current) => [...current, ...(data.approvedBoqs || [])]);
+      setApprovedBoqPage(data.page || nextPage);
+      setHasMoreApprovedBoqs(Boolean(data.hasMore));
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+    } finally {
+      setLoadingMoreApprovedBoqs(false);
+    }
   };
 
   // Filter scoped lines based on scope mode & line selection
@@ -743,6 +798,11 @@ export default function NewRfqPage() {
                       {b.projectName}{UI_STRINGS.common.copy1b3t0c5}{b.projectCode}{UI_STRINGS.appAppProcurementRfqsNewPage.revision}{b.approvedRevisionCode}{UI_STRINGS.common.copy1b3t0c5}{b.totalLines}{UI_STRINGS.appAppProcurementRfqsNewPage.lines}</option>
                   ))}
                 </select>
+                {hasMoreApprovedBoqs && (
+                  <button type="button" className="btn btn-secondary" style={{ marginTop: 8 }} disabled={loadingMoreApprovedBoqs} onClick={() => void loadMoreApprovedBoqs()}>
+                    {loadingMoreApprovedBoqs ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                  </button>
+                )}
                 <div className="form-helper">{UI_STRINGS.appAppProcurementRfqsNewPage.onlyClientApprovedGovernanceLockedBOQRevisionsCanBeSourcedByProcurement}</div>
               </div>
             )}
@@ -756,6 +816,7 @@ export default function NewRfqPage() {
                   padding: '20px 24px',
                 }}
               >
+                {selectedBoqLoading && <div role="status" style={{ marginBottom: 12, color: '#64748b' }}>{UI_STRINGS.common.loading}</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h4 style={{ fontSize: 12, color: '#64748b', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary}</h4>
                   <span

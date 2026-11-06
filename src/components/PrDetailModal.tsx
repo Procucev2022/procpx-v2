@@ -2,7 +2,7 @@
 // src/components/PrDetailModal.tsx
 // Standardised, reusable PR Detail Modal for Dashboard, Approved PRs, and PR Register
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -23,11 +23,12 @@ import {
   ShieldCheck,
   Package,
 } from 'lucide-react';
-import type { PrDetailModalProps } from "@app-types/components/PrDetailModal.types";
+import type { PrDetailModalProps, PurchaseRequestRfqSummary } from "@app-types/components/PrDetailModal.types";
 export type { PrDetailModalProps };
-import { DEMO_LINES } from "./PrDetailModal.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { normalizePrLineForDisplay } from '@/lib/pr-line-detail';
+import type { PrLineDetailRecord, PrLinePaginationMetadata } from "@app-types/lib/pr-line-pagination.types";
 
 
 
@@ -40,60 +41,84 @@ export default function PrDetailModal({
 }: PrDetailModalProps) {
   const [detailedPr, setDetailedPr] = useState<any | null>(null);
   const [loadingLines, setLoadingLines] = useState(false);
+  const [linePagination, setLinePagination] = useState<PrLinePaginationMetadata | null>(null);
+  const [loadingMoreLines, setLoadingMoreLines] = useState(false);
+  const [lineLoadError, setLineLoadError] = useState('');
+  const linePageRequestSequence = useRef(0);
 
   useEffect(() => {
+    const sequence = ++linePageRequestSequence.current;
     if (!isOpen || !pr) {
       setDetailedPr(null);
-      return;
-    }
-
-    // Check if demo record
-    if (pr.isExample || pr.id === 'PR-DEMO-001' || pr.prNumber === 'PR-DEMO-001') {
-      setDetailedPr({
-        ...pr,
-        lines: DEMO_LINES,
-      });
+      setLoadingLines(false);
+      setLinePagination(null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
       return;
     }
 
     // Check if lines are already provided with full specifications
     if (pr.lines && pr.lines.length > 0 && pr.lines[0].specification && pr.lines[0].itemCode) {
       setDetailedPr(pr);
+      setLoadingLines(false);
+      setLinePagination(pr.linePagination || null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
       return;
     }
 
     // Fetch authoritative lines from API
     const prId = pr.id || pr.prId;
-    if (prId && !String(prId).startsWith('demo') && !String(prId).startsWith('PR-DEMO')) {
+    if (prId) {
+      let active = true;
+      setDetailedPr(null);
       setLoadingLines(true);
+      setLinePagination(null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
       fetch(`/api/pr/${prId}`)
-        .then((res) => (res.ok ? res.json() : null))
+        .then(async (res) => {
+          if (!res.ok) {
+            console.error(JSON.stringify({ event: 'purchase_request.detail_fetch_failed', prId, status: res.status }));
+            return null;
+          }
+          return res.json();
+        })
         .then((json) => {
-          if (json?.data) {
+          if (!active || sequence !== linePageRequestSequence.current) return;
+          const detail = json?.data ?? json;
+          if (detail && typeof detail === 'object') {
+            setLinePagination(detail.linePagination || null);
+            const detailLines = (detail.lines || []) as PrLineDetailRecord[];
             setDetailedPr({
               ...pr,
-              ...json.data,
-              lines: (json.data.lines || []).map((l: any, idx: number) => ({
-                id: l.id,
-                lineNumber: l.lineNumber || String(idx + 1),
-                itemCode: l.itemCode || l.boqLine?.itemCode || `ITM-${idx + 1}`,
-                itemDescription: l.itemDescription || l.boqLine?.standardDescription || l.boqLine?.originalDescription || 'Line Item',
-                specification: l.specification || l.boqLine?.specification || l.itemDescription,
-                category: l.category || pr.category || 'General',
-                quantity: l.quantity,
-                uom: l.uom || l.boqLine?.uom?.code || l.boqLine?.uomRaw || 'NOS',
-                estimatedRate: l.estimatedRate || l.boqLine?.aiUnitCost || 0,
-                estimatedValue: l.estimatedValue || l.boqLine?.aiTotalCost || 0,
-              })),
+              ...detail,
+              lines: detailLines.map((line, index) => normalizePrLineForDisplay(line, index, pr.category)),
             });
           } else {
             setDetailedPr(pr);
+            setLinePagination(null);
           }
         })
-        .catch(() => setDetailedPr(pr))
-        .finally(() => setLoadingLines(false));
+        .catch(() => {
+          if (!active || sequence !== linePageRequestSequence.current) return;
+          console.error(JSON.stringify({ event: 'purchase_request.detail_fetch_failed', prId, reason: 'network_error' }));
+          setDetailedPr(pr);
+          setLinePagination(null);
+        })
+        .finally(() => {
+          if (active && sequence === linePageRequestSequence.current) setLoadingLines(false);
+        });
+      return () => {
+        active = false;
+        if (sequence === linePageRequestSequence.current) linePageRequestSequence.current += 1;
+      };
     } else {
       setDetailedPr(pr);
+      setLoadingLines(false);
+      setLinePagination(null);
+      setLoadingMoreLines(false);
+      setLineLoadError('');
     }
   }, [isOpen, pr]);
 
@@ -102,21 +127,64 @@ export default function PrDetailModal({
   const currentPr = detailedPr || pr;
   const lines = currentPr.lines || [];
   const rfqs = currentPr.rfqs || [];
-  const prAmount = currentPr.requestedValue || currentPr.totalEstimatedValue || currentPr.estimatedValue || 0;
-  const stage = currentPr.sourcingStage || currentPr.currentStage || currentPr.overallStage || 'Approved PR — Awaiting RFQ';
-  const isAwaitingRfq = stage === 'Approved PR — Awaiting RFQ' || rfqs.length === 0;
-  const projectName = currentPr.projectName || currentPr.project?.name || 'Project';
+  const prAmount = currentPr.requestedValue || currentPr.totalEstimatedValue || currentPr.estimatedValue || null;
+  const stage = currentPr.sourcingStage || currentPr.currentStage || currentPr.overallStage || UI_STRINGS.common.notAvailable;
+  const prId = currentPr.id || currentPr.prId;
+  const hasActiveRfq = rfqs.some((rfq: PurchaseRequestRfqSummary) => rfq.status !== 'CANCELLED');
+  const canCreateRfq = Boolean(prId) && !hasActiveRfq && (
+    currentPr.canCreateRfq === true || ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'].includes(currentPr.status || currentPr.prApprovalStatus)
+  );
+  const formatCurrency = (value: unknown) => {
+    if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return UI_STRINGS.common.notAvailable;
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue)
+      ? `${UI_STRINGS.common.copy1g8b5tg}${numericValue.toLocaleString(I18N_CONFIG.defaultLocale)}`
+      : UI_STRINGS.common.notAvailable;
+  };
+  const projectName = currentPr.projectName || currentPr.project?.name || UI_STRINGS.common.notAvailable;
   const projectCode = currentPr.projectCode || currentPr.project?.projectCode || '';
-  const boqCode = currentPr.boqCode || currentPr.boq?.boqCode || '—';
-  const boqRev = currentPr.approvedRevision || currentPr.boqRevision?.revisionCode || 'R0';
-  const costCentreText = currentPr.costCentre ? (typeof currentPr.costCentre === 'object' ? `${currentPr.costCentre.code} - ${currentPr.costCentre.name}` : currentPr.costCentre) : 'General';
-  const categoryText = currentPr.category || (currentPr.categories ? currentPr.categories.join(', ') : 'Civil & Interior');
+  const boqCode = currentPr.boqCode || currentPr.boq?.boqCode || UI_STRINGS.common.notAvailable;
+  const boqRev = currentPr.approvedRevision || currentPr.boqRevision?.revisionCode || UI_STRINGS.common.notAvailable;
+  const costCentreText = currentPr.costCentre
+    ? (typeof currentPr.costCentre === 'object'
+      ? [currentPr.costCentre.code, currentPr.costCentre.name].filter(Boolean).join(' - ') || UI_STRINGS.common.notAvailable
+      : currentPr.costCentre)
+    : UI_STRINGS.common.notAvailable;
+  const categoryText = currentPr.category || (currentPr.categories?.length ? currentPr.categories.join(', ') : UI_STRINGS.common.notAvailable);
+  const knownItemCount = Number(currentPr.totalLines ?? currentPr.itemCount ?? lines.length);
+  const itemCount = Number.isFinite(knownItemCount) ? Math.max(lines.length, knownItemCount) : lines.length;
+
+  const loadMoreLines = async () => {
+    const cursor = linePagination?.nextCursor;
+    if (!prId || !cursor || loadingMoreLines) return;
+    const sequence = ++linePageRequestSequence.current;
+    setLoadingMoreLines(true);
+    setLineLoadError('');
+    try {
+      const response = await fetch(`/api/pr/${prId}/lines?cursor=${encodeURIComponent(cursor)}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      if (sequence !== linePageRequestSequence.current) return;
+      const page = (json?.data ?? json) as { lines?: PrLineDetailRecord[]; linePagination?: PrLinePaginationMetadata | null };
+      const nextLines = (page?.lines || []).map((line, index) => normalizePrLineForDisplay(line, lines.length + index, currentPr.category));
+      setDetailedPr((current: typeof detailedPr) => current?.id === prId
+        ? { ...current, lines: [...(current.lines || []), ...nextLines] }
+        : current);
+      setLinePagination(page?.linePagination || null);
+    } catch {
+      if (sequence !== linePageRequestSequence.current) return;
+      setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
+      console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
+    } finally {
+      if (sequence === linePageRequestSequence.current) setLoadingMoreLines(false);
+    }
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={interpolateUiString(UI_STRINGS.componentsPrDetailModal.procurementRequestDetailsValue1, { "value1": currentPr.prNumber || currentPr.boqCode })}
+      title={interpolateUiString(UI_STRINGS.componentsPrDetailModal.procurementRequestDetailsValue1, { "value1": currentPr.prNumber || currentPr.boqCode || prId || UI_STRINGS.common.notAvailable })}
       subtitle={UI_STRINGS.componentsPrDetailModal.sanctionedTechnicalRequirementsAndCommercialMetadataBaselinedForProcurementSourcing}
       maxWidth="max-w-5xl"
     >
@@ -155,7 +223,7 @@ export default function PrDetailModal({
 
           <div>
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">{UI_STRINGS.componentsPrDetailModal.sanctionedBaseline}</span>
-            <p className="font-mono font-bold text-base text-emerald-700 mt-0.5">{UI_STRINGS.common.copy1g8b5tg}{prAmount.toLocaleString(I18N_CONFIG.defaultLocale)}
+            <p className="font-mono font-bold text-base text-emerald-700 mt-0.5">{formatCurrency(prAmount)}
             </p>
             <span className="text-[11px] text-slate-500 font-medium">{UI_STRINGS.componentsPrDetailModal.totalBudgetSanctioned}</span>
           </div>
@@ -167,12 +235,12 @@ export default function PrDetailModal({
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{UI_STRINGS.componentsPrDetailModal.packageScopeDescription}</span>
               <h4 className="text-sm font-bold text-slate-900 mt-0.5">
-                {currentPr.description || currentPr.title || UI_STRINGS.componentsPrDetailModal.procurementCommercialPackage}
+                {currentPr.description || currentPr.title || UI_STRINGS.common.notAvailable}
               </h4>
             </div>
 
             <div className="flex items-center gap-2">
-              <StatusBadge status={currentPr.prApprovalStatus || currentPr.status || 'APPROVED'} />
+              <StatusBadge status={currentPr.prApprovalStatus || currentPr.status || UI_STRINGS.common.notAvailable} />
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-[#0f52ba] border border-blue-200">
                 {stage}
               </span>
@@ -182,9 +250,9 @@ export default function PrDetailModal({
           <div className="flex flex-wrap items-center gap-4 text-slate-600 pt-1 text-[11px] border-t border-slate-100">
             <span className="flex items-center gap-1.5">
               <ListChecks size={13} className="text-slate-400" />
-              <strong>{lines.length || currentPr.itemCount || currentPr.totalLines || 8}</strong>{UI_STRINGS.componentsPrDetailModal.lineItemsBaselined}</span>
+              <strong>{itemCount}</strong>{UI_STRINGS.componentsPrDetailModal.lineItemsBaselined}</span>
             <span className="flex items-center gap-1.5">
-              <Calendar size={13} className="text-slate-400" />{UI_STRINGS.componentsPrDetailModal.targetDate}<strong>{currentPr.requiredDate ? new Date(currentPr.requiredDate).toLocaleDateString(I18N_CONFIG.defaultLocale) : UI_STRINGS.componentsPrDetailModal.immediateRequirement}</strong>
+              <Calendar size={13} className="text-slate-400" />{UI_STRINGS.componentsPrDetailModal.targetDate}<strong>{currentPr.requiredDate ? new Date(currentPr.requiredDate).toLocaleDateString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.notAvailable}</strong>
             </span>
             {currentPr.requesterName && (
               <span className="flex items-center gap-1.5">
@@ -198,7 +266,7 @@ export default function PrDetailModal({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-2">
-              <span>{UI_STRINGS.componentsPrDetailModal.controlledLineItems}{lines.length}{UI_STRINGS.common.items2}</span>
+                <span>{UI_STRINGS.componentsPrDetailModal.controlledLineItems}{itemCount}{UI_STRINGS.common.items2}</span>
               <span className="text-[10px] text-slate-500 font-normal lowercase">{UI_STRINGS.componentsPrDetailModal.descriptionsQuantitiesAndSpecificationsLockedFromApprovedBOQ}</span>
             </h4>
           </div>
@@ -224,17 +292,20 @@ export default function PrDetailModal({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
                   {lines.map((line: any, idx: number) => {
-                    const lineAmount = (line.quantity || 0) * (line.estimatedRate || 0);
+                    const quantity = line.quantity === null || line.quantity === undefined ? null : Number(line.quantity);
+                    const rate = line.estimatedRate === null || line.estimatedRate === undefined ? null : Number(line.estimatedRate);
+                    const lineAmount = quantity !== null && rate !== null && Number.isFinite(quantity) && Number.isFinite(rate) ? quantity * rate : null;
+                    const estimatedAmount = line.estimatedValue ?? lineAmount;
                     return (
                       <tr key={line.id || idx} className="hover:bg-slate-50 transition-colors">
                         <td className="py-2 px-3 text-center text-slate-400 font-medium border-r border-slate-100">
                           {idx + 1}
                         </td>
                         <td className="py-2 px-3 font-mono font-bold text-slate-800 border-r border-slate-100 whitespace-nowrap">
-                          {line.itemCode || interpolateUiString(UI_STRINGS.componentsPrDetailModal.iTMValue1, { "value1": idx + 1 })}
+                          {line.itemCode || UI_STRINGS.common.notAvailable}
                         </td>
                         <td className="py-2 px-3.5 font-medium text-slate-900 border-r border-slate-100">
-                          <div>{line.itemDescription}</div>
+                          <div>{line.itemDescription || UI_STRINGS.common.notAvailable}</div>
                           {line.category && (
                             <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
                               {line.category}
@@ -243,7 +314,7 @@ export default function PrDetailModal({
                         </td>
                         <td className="py-2 px-3.5 border-r border-slate-100">
                           <SpecificationCell
-                            specification={line.specification || line.itemDescription}
+                            specification={line.specification || line.itemDescription || UI_STRINGS.common.notAvailable}
                             lineNumber={idx + 1}
                             itemDescription={line.itemDescription}
                             lineId={line.id || `line-${idx}`}
@@ -252,15 +323,15 @@ export default function PrDetailModal({
                         </td>
                         <td className="py-2 px-2.5 text-center text-slate-700 border-r border-slate-100">
                           <span className="px-1.5 py-0.5 rounded bg-slate-100 font-semibold text-[11px]">
-                            {line.uom}
+                            {line.uom || UI_STRINGS.common.notAvailable}
                           </span>
                         </td>
                         <td className="py-2 px-3 text-right font-mono font-semibold text-slate-900 border-r border-slate-100">
-                          {line.quantity?.toLocaleString(I18N_CONFIG.defaultLocale) ?? UI_STRINGS.common.copy4s9bsz}
+                          {quantity !== null && Number.isFinite(quantity) ? quantity.toLocaleString(I18N_CONFIG.defaultLocale) : UI_STRINGS.common.notAvailable}
                         </td>
-                        <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-100">{UI_STRINGS.common.copy1g8b5tg}{(line.estimatedRate || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
+                        <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-100">{formatCurrency(line.estimatedRate)}
                         </td>
-                        <td className="py-2 px-3.5 text-right font-mono font-bold text-slate-900">{UI_STRINGS.common.copy1g8b5tg}{(line.estimatedValue || lineAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale)}
+                        <td className="py-2 px-3.5 text-right font-mono font-bold text-slate-900">{formatCurrency(estimatedAmount)}
                         </td>
                       </tr>
                     );
@@ -269,11 +340,19 @@ export default function PrDetailModal({
                 <tfoot>
                   <tr className="bg-slate-50 font-bold border-t border-slate-200 text-slate-900">
                     <td colSpan={7} className="py-2.5 px-3.5 text-right uppercase tracking-wider text-[11px] text-slate-600 border-r border-slate-200">{UI_STRINGS.componentsPrDetailModal.totalSanctionedPackageAmount}</td>
-                    <td className="py-2.5 px-3.5 text-right text-emerald-700 font-mono font-bold">{UI_STRINGS.common.copy1g8b5tg}{prAmount.toLocaleString(I18N_CONFIG.defaultLocale)}
+                    <td className="py-2.5 px-3.5 text-right text-emerald-700 font-mono font-bold">{formatCurrency(prAmount)}
                     </td>
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          )}
+          {lineLoadError && <p role="alert" className="mt-2 text-xs text-red-700">{lineLoadError}</p>}
+          {linePagination?.hasMore && (
+            <div className="mt-2 flex justify-center">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={loadMoreLines} disabled={loadingMoreLines}>
+                {loadingMoreLines ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+              </button>
             </div>
           )}
         </div>
@@ -303,7 +382,7 @@ export default function PrDetailModal({
                       </span>
                     </div>
                     <div className="text-slate-800 font-medium text-xs">
-                      {rfq.description || rfq.packageName}
+                      {rfq.description || rfq.packageName || rfq.title || UI_STRINGS.common.notAvailable}
                     </div>
                     <div className="text-[11px] text-slate-500 flex flex-wrap gap-3">
                       <span>{UI_STRINGS.componentsPrDetailModal.vendors}<strong>{rfq.vendorInvitationProgress || interpolateUiString(UI_STRINGS.componentsPrDetailModal.value1Quotes, { "value1": rfq.quotesCount || 0 })}</strong></span>
@@ -355,9 +434,9 @@ export default function PrDetailModal({
               </Link>
             )}
 
-            {isAwaitingRfq && (
+            {canCreateRfq && (
               <Link
-                href={currentPr.createRfqUrl || `/procurement/rfqs/new?${currentPr.boqRevisionId ? `revisionId=${currentPr.boqRevisionId}&` : ''}prId=${currentPr.id || currentPr.prId}`}
+                href={currentPr.createRfqUrl || `/procurement/rfqs/new?${currentPr.boqRevisionId ? `revisionId=${currentPr.boqRevisionId}&` : ''}prId=${prId}`}
                 className="h-9 px-4 bg-[#0f52ba] hover:bg-blue-800 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
               >
                 <span>{UI_STRINGS.componentsPrDetailModal.createRFQForThisPR}</span>

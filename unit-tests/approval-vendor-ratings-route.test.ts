@@ -3,16 +3,19 @@ import { GET, POST } from '../src/app/api/approvals/vendor-ratings/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
-import { isUserAuthorizedForProject, getUserAuthorizedProjectIds } from '../src/lib/project-auth';
+import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '../src/lib/project-auth';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from '../src/lib/i18n';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    ppoVendorRating: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    ppoVendorRating: { findMany: jest.fn(), groupBy: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     user: { findMany: jest.fn() },
     vendor: { update: jest.fn() },
-    ppo: { update: jest.fn() },
+    ppo: { update: jest.fn(), aggregate: jest.fn() },
     notification: { create: jest.fn() },
   },
 }));
@@ -23,15 +26,21 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
-jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn(), getUserAuthorizedProjectIds: jest.fn() }));
+jest.mock('../src/lib/project-auth', () => ({
+  getUserProjectAccessFilter: jest.fn(),
+  isUserAuthorizedForProject: jest.fn(),
+}));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const projectAuth = isUserAuthorizedForProject as jest.Mock;
-const authorizedProjects = getUserAuthorizedProjectIds as jest.Mock;
+const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'approver-1', userName: 'Project Approver', role: 'PROJECT_APPROVER' };
+const projectScope = { OR: [{ team: { some: { userId: 'approver-1', active: true } } }] };
 const getRequest = (query = '') => new NextRequest(`http://localhost/api/approvals/vendor-ratings${query}`);
 const postRequest = (body: unknown) => new NextRequest('http://localhost/api/approvals/vendor-ratings', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -51,16 +60,19 @@ describe('vendor rating approval queue API', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
-    authorizedProjects.mockResolvedValue(['project-1']);
+    projectAccessFilter.mockResolvedValue(projectScope);
     projectAuth.mockResolvedValue(true);
     db.ppoVendorRating.findMany.mockReset().mockResolvedValue([]);
+    db.ppoVendorRating.groupBy.mockReset().mockResolvedValue([]);
     db.ppoVendorRating.findFirst.mockReset().mockResolvedValue(rating());
     db.ppoVendorRating.update.mockReset().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'rating-1', ...data }));
     db.user.findMany.mockReset().mockResolvedValue([]);
     db.vendor.update.mockReset().mockResolvedValue({});
     db.ppo.update.mockReset().mockResolvedValue({});
+    db.ppo.aggregate.mockReset().mockResolvedValue({ _sum: { totalValue: 0 } });
     db.notification.create.mockReset().mockResolvedValue({ id: 'notification-1' });
     audit.mockReset().mockResolvedValue(undefined);
+    (writeD1BatchAtomically as jest.Mock).mockReset().mockResolvedValue(Array.from({ length: 6 }, () => ({ meta: { changes: 1 } })));
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -72,19 +84,18 @@ describe('vendor rating approval queue API', () => {
     isContext.mockReturnValueOnce(false);
     await expect(GET(getRequest())).resolves.toBe(denied);
 
-    db.ppoVendorRating.findMany
-      .mockResolvedValueOnce([
+    db.ppoVendorRating.findMany.mockResolvedValueOnce([
         rating({ id: 'submitted-1', criteriaDetails: JSON.stringify({ qualityComments: 'Pass', approvedBy: 'approver-1', history: [{ action: 'SUBMITTED' }] }) }),
         rating({ id: 'submitted-2', ratedBy: null, criteriaDetails: { deliveryComments: 'On time', returnReason: 'Revised' } }),
         rating({ id: 'malformed', ratedBy: 'unknown-user', criteriaDetails: '{broken json' }),
-      ])
-      .mockResolvedValueOnce([
-        { status: 'SUBMITTED', ppo: { totalValue: 1000 } },
-        { status: 'APPROVED', ppo: { totalValue: 2500 } },
-        { status: 'APPROVED', ppo: null },
-        { status: 'RETURNED_FOR_CORRECTION', ppo: { totalValue: 500 } },
-        { status: 'DRAFT', ppo: { totalValue: 900 } },
       ]);
+    db.ppoVendorRating.groupBy.mockResolvedValueOnce([
+      { status: 'SUBMITTED', _count: { _all: 1 } },
+      { status: 'APPROVED', _count: { _all: 2 } },
+      { status: 'RETURNED_FOR_CORRECTION', _count: { _all: 1 } },
+      { status: 'DRAFT', _count: { _all: 1 } },
+    ]);
+    db.ppo.aggregate.mockResolvedValueOnce({ _sum: { totalValue: 2500 } });
     db.user.findMany.mockResolvedValueOnce([{ id: 'user-1', name: 'Submitter' }]);
     const result = await GET(getRequest('?status=SUBMITTED'));
     expect(result).toMatchObject({ ok: true, data: {
@@ -94,34 +105,56 @@ describe('vendor rating approval queue API', () => {
         { ratedByName: 'unknown-user', criteriaDetailsParsed: {}, qualityComments: '', decisionHistory: [] },
       ],
       counts: { pendingCount: 1, approvedCount: 2, returnedCount: 1, totalCount: 5, totalEvaluatedValue: 2500 },
+      pagination: { page: 1, pageSize: 50, hasMore: false },
     } });
     expect(db.ppoVendorRating.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { tenantId: 'tenant-1', status: UI_STRINGS.common.sUBMITTED, OR: [
-        { projectId: { in: ['project-1'] } }, { projectId: null }, { ppo: { projectId: { in: ['project-1'] } } },
-      ] },
+      skip: 0, take: 51, orderBy: [{ ratedAt: 'desc' }, { id: 'desc' }],
+      where: { tenantId: 'tenant-1', status: UI_STRINGS.common.sUBMITTED, ppo: { is: { project: { is: projectScope } } } },
     }));
-    expect(db.ppoVendorRating.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      where: { tenantId: 'tenant-1', OR: [
-        { projectId: { in: ['project-1'] } }, { projectId: null }, { ppo: { projectId: { in: ['project-1'] } } },
-      ] },
+    expect(db.ppoVendorRating.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      by: ['status'], where: { tenantId: 'tenant-1', ppo: { is: { project: { is: projectScope } } } }, _count: { _all: true },
     }));
+    expect(db.ppo.aggregate).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ tenantId: 'tenant-1', project: { is: projectScope } }),
+      _sum: { totalValue: true },
+    }));
+    expect(db.ppoVendorRating.findMany).toHaveBeenCalledTimes(1);
     expect(db.user.findMany).toHaveBeenCalledWith({
-      where: { id: { in: ['user-1', 'unknown-user'] } }, select: { id: true, name: true, role: true, email: true },
+      where: { tenantId: 'tenant-1', id: { in: ['user-1', 'unknown-user'] } }, select: { id: true, name: true, role: true, email: true },
     });
   });
 
   it('supports an unfiltered organization queue and handles GET provider errors', async () => {
-    authorizedProjects.mockResolvedValueOnce(null);
-    db.ppoVendorRating.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    projectAccessFilter.mockResolvedValueOnce(null);
+    db.ppoVendorRating.findMany.mockResolvedValueOnce([]);
+    db.ppoVendorRating.groupBy.mockResolvedValueOnce([]);
     await expect(GET(getRequest('?status=ALL'))).resolves.toMatchObject({ ok: true, data: {
-      ratings: [], counts: { pendingCount: 0, approvedCount: 0, returnedCount: 0, totalCount: 0, totalEvaluatedValue: 0 },
+      ratings: [], counts: { pendingCount: 0, approvedCount: 0, returnedCount: 0, totalCount: 0, totalEvaluatedValue: 0 }, pagination: { hasMore: false },
     } });
     expect(db.ppoVendorRating.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { tenantId: 'tenant-1' } }));
 
-    authorizedProjects.mockRejectedValueOnce(new Error('project lookup failed'));
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'project lookup failed', status: 500 });
+    projectAccessFilter.mockRejectedValueOnce(new Error('project lookup failed'));
+    const failureRequest = new NextRequest('http://localhost/api/approvals/vendor-ratings', { headers: { 'x-request-id': 'req-vendor-rating' } });
+    await expect(GET(failureRequest)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovalsQueue, status: 500 });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'vendor_rating.approval_queue_read_failed', expect.objectContaining({
+      operation: 'list_vendor_rating_approvals', route: '/api/approvals/vendor-ratings', requestId: 'req-vendor-rating',
+      tenantId: 'tenant-1', userId: 'approver-1', role: 'PROJECT_APPROVER',
+      error: { name: 'Error', message: 'project lookup failed' },
+    }));
     db.ppoVendorRating.findMany.mockRejectedValueOnce({});
-    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Failed to fetch approvals queue', status: 500 });
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovalsQueue, status: 500 });
+  });
+
+  it('caps vendor-rating pages and reports whether more rows are available', async () => {
+    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 101 }, (_, index) => rating({ id: `rating-${index}` })));
+    const result = await GET(getRequest('?page=2&pageSize=1000'));
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { ratings: expect.any(Array), pagination: { page: 2, pageSize: 100, hasMore: true } },
+    });
+    expect((result as unknown as { data: { ratings: unknown[] } }).data.ratings).toHaveLength(100);
+    expect(db.ppoVendorRating.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 100, take: 101 }));
   });
 
   it('validates approval requests, access, review state, and mandatory return or reject comments', async () => {
@@ -156,16 +189,21 @@ describe('vendor rating approval queue API', () => {
     db.ppoVendorRating.findFirst.mockResolvedValueOnce(rating({ criteriaDetails: '{bad json' }));
     db.ppoVendorRating.findMany.mockResolvedValueOnce([{ overallScore: 4 }, { overallScore: 4.5 }]);
     const result = await POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT', approverComments: '  Approved  ' }));
-    expect(result).toMatchObject({ ok: true, data: { message: 'Assessment for PPO PPO-001 has been accepted and approved score published.' } });
-    const saved = JSON.parse(db.ppoVendorRating.update.mock.calls[0][0].data.criteriaDetails);
+    expect(result).toMatchObject({ ok: true, data: {
+      message: interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.assessmentApprovedPpoMessage, { ppoNumber: 'PPO-001' }),
+    } });
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    const saved = JSON.parse(String(batch[0].values[1]));
     expect(saved).toMatchObject({ approvedBy: 'approver-1', approvedByName: 'Project Approver', approverComments: 'Approved',
       history: [{ action: 'APPROVED', comments: 'Approved', performedByName: 'Project Approver' }] });
-    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: { performanceScore: 86 } });
-    expect(db.ppo.update).toHaveBeenCalledWith({ where: { id: 'ppo-1' }, data: { status: 'COMPLETED', completedAt: expect.any(Date) } });
-    expect(db.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      userId: 'user-1', type: 'SUCCESS', entityId: 'ppo-1', recordNumber: 'PPO-001',
-    }) });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'PPO_RATING_APPROVED', newValue: expect.objectContaining({ status: UI_STRINGS.common.aPPROVED, approverComments: UI_STRINGS.common.approved }) }));
+    expect(batch[1].values).toEqual(expect.arrayContaining(['PPO_RATING_APPROVED', expect.stringContaining('Approved')]));
+    expect(batch[2].sql).toContain('AVG("overallScore")');
+    expect(batch[3].sql).toContain("'COMPLETED'");
+    expect(batch[4].sql).toContain('INSERT INTO "notifications"');
+    expect(batch[4].values).toEqual(expect.arrayContaining(['user-1', 'SUCCESS', 'PPO', 'ppo-1', 'PPO-001']));
+    expect(db.vendor.update).not.toHaveBeenCalled();
+    expect(db.ppo.update).not.toHaveBeenCalled();
+    expect(db.notification.create).not.toHaveBeenCalled();
   });
 
   it('returns assessments for correction and rejects them with recorded decision history', async () => {
@@ -173,24 +211,35 @@ describe('vendor rating approval queue API', () => {
       criteriaDetails: { history: [{ action: 'SUBMITTED' }], approvedByName: 'Earlier Approver' },
     }));
     await expect(POST(postRequest({ ratingId: 'rating-1', action: 'RETURN', approverComments: 'Add invoice copy' })))
-      .resolves.toMatchObject({ ok: true, data: { message: 'Assessment for PPO PPO-001 returned to submitter for correction.' } });
-    const returned = JSON.parse(db.ppoVendorRating.update.mock.calls[0][0].data.criteriaDetails);
+      .resolves.toMatchObject({ ok: true, data: { message: interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.assessmentReturnedPpoMessage, { ppoNumber: 'PPO-001' }) } });
+    let batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    const returned = JSON.parse(String(batch[0].values[1]));
     expect(returned).toMatchObject({ returnReason: 'Add invoice copy', returnedBy: 'approver-1', returnedByName: 'Project Approver',
       approvedByName: 'Earlier Approver', history: [{ action: 'SUBMITTED' }, { action: 'RETURNED_FOR_CORRECTION', comments: 'Add invoice copy' }] });
-    expect(db.notification.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ type: 'WARNING', title: 'Rating Returned for Correction: PPO-001' }) });
+    expect(batch[2].values).toEqual(expect.arrayContaining(['WARNING', 'PPO']));
+    expect(batch[2].values).toContain(UI_STRINGS.appApiApprovalsVendorRatingsRoute.performanceAssessmentReturnedNotificationTitle.replace('{{ppoNumber}}', 'PPO-001'));
 
     auth.mockResolvedValueOnce({ ...context, userName: '' });
     db.ppoVendorRating.findFirst.mockResolvedValueOnce(rating({
       criteriaDetails: '{bad json', ratedBy: 'submitter-2', ppo: { id: 'ppo-1', ppoNumber: 'PPO-001', status: 'COMPLETED', totalValue: 1000 },
     }));
     const result = await POST(postRequest({ ratingId: 'rating-1', action: 'REJECT', approverComments: '  Unsupported cost  ' }));
-    expect(result).toMatchObject({ ok: true, data: { message: 'Assessment for PPO PPO-001 has been rejected.' } });
-    const rejected = JSON.parse(db.ppoVendorRating.update.mock.calls[1][0].data.criteriaDetails);
+    expect(result).toMatchObject({ ok: true, data: { message: interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.assessmentRejectedPpoMessage, { ppoNumber: 'PPO-001' }) } });
+    batch = (writeD1BatchAtomically as jest.Mock).mock.calls[1][0];
+    const rejected = JSON.parse(String(batch[0].values[1]));
     expect(rejected).toMatchObject({ rejectionReason: 'Unsupported cost', rejectedByName: 'Project Approver', approverComments: 'Unsupported cost',
       history: [{ action: 'REJECTED', comments: 'Unsupported cost', performedByName: 'Project Approver' }] });
     expect(db.ppo.update).not.toHaveBeenCalled();
-    expect(db.notification.create).toHaveBeenCalledTimes(2);
-    expect(db.notification.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ type: 'INFO' }) });
+    expect(writeD1BatchAtomically).toHaveBeenCalledTimes(2);
+    expect(batch[2].values).toContain('INFO');
+  });
+
+  it('returns a conflict when another reviewer records the decision first', async () => {
+    db.ppoVendorRating.findFirst.mockResolvedValueOnce(rating());
+    (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([{ meta: { changes: 0 } }]);
+    await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingChangedPleaseRefresh, status: 409,
+    });
   });
 
   it('falls back to the rating score when no prior approvals exist and preserves completed PPO state', async () => {
@@ -198,17 +247,21 @@ describe('vendor rating approval queue API', () => {
       ppo: { id: 'ppo-1', ppoNumber: 'PPO-001', status: 'COMPLETED', totalValue: 1000 } }));
     db.ppoVendorRating.findMany.mockResolvedValueOnce([]);
     await POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }));
-    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: { performanceScore: 85 } });
-    expect(db.ppo.update).not.toHaveBeenCalled();
-    expect(db.notification.create).not.toHaveBeenCalled();
+    const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(batch).toHaveLength(3);
+    expect(batch[2].sql).toContain('AVG("overallScore")');
   });
 
   it('returns POST errors for provider failures and malformed requests', async () => {
     db.ppoVendorRating.findFirst.mockRejectedValueOnce(new Error('approval store failed'));
-    await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toEqual({ ok: false, error: 'approval store failed', status: 500 });
+    await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToRecordApproverDecision, status: 500,
+    });
     db.ppoVendorRating.findFirst.mockRejectedValueOnce({});
-    await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toEqual({ ok: false, error: 'Failed to record approver decision', status: 500 });
-    const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid request')) } as unknown as NextRequest;
-    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: 'invalid request', status: 500 });
+    await expect(POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT' }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToRecordApproverDecision, status: 500,
+    });
+    const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid request')), headers: new Headers() } as unknown as NextRequest;
+    await expect(POST(badJson)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToRecordApproverDecision, status: 500 });
   });
 });

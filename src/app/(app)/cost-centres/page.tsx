@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/cost-centres/page.tsx - Enterprise Cost Centres Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Layers,
@@ -23,10 +23,15 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { CostCentrePagePagination, CostCentrePageRow, CostCentrePageSummary } from '@app-types/app/api/cost-centres.types';
 
 
 export default function CostCentresPage() {
-  const [costCentres, setCostCentres] = useState<any[]>([]);
+  const [costCentres, setCostCentres] = useState<CostCentrePageRow[]>([]);
+  const [pagination, setPagination] = useState<CostCentrePagePagination>({ page: 1, pageSize: 50, total: 0, hasMore: false });
+  const [summary, setSummary] = useState<CostCentrePageSummary>({ totalAreaSqFt: 0, totalBudget: 0, approvedBudget: 0, pendingBudget: 0 });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadSequence = useRef(0);
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [canCreate, setCanCreate] = useState(false);
@@ -56,32 +61,69 @@ export default function CostCentresPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [selectedProjectId]);
+    const timer = setTimeout(() => { void loadData(); }, search ? 250 : 0);
+    return () => clearTimeout(timer);
+  }, [selectedProjectId, search]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (page = 1, append = false) => {
+    const sequence = ++loadSequence.current;
+    if (append) setLoadingMore(true);
+    else {
+      setLoading(true);
+      setError('');
+      setCostCentres([]);
+    }
     try {
-      const [ccRes, pRes] = await Promise.all([
-        fetch(`/api/cost-centres${selectedProjectId ? `?projectId=${selectedProjectId}` : ''}`),
-        fetch('/api/projects'),
-      ]);
-      if (ccRes.ok) {
-        const ccData = await ccRes.json();
-        setCostCentres(ccData);
+      const query = new URLSearchParams({ page: String(page), pageSize: '50' });
+      if (selectedProjectId) query.set('projectId', selectedProjectId);
+      if (search.trim()) query.set('search', search.trim());
+      const ccRes = await fetch(`/api/cost-centres?${query.toString()}`);
+      if (!ccRes.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchCostCentres);
+      const ccData = await ccRes.json();
+      if (sequence !== loadSequence.current) return;
+      const payload = ccData.data || ccData;
+      const rows: CostCentrePageRow[] = Array.isArray(payload) ? payload : payload.costCentres || [];
+      setCostCentres((current) => {
+        if (!append) return rows;
+        const existingIds = new Set(current.map((costCentre) => costCentre.id));
+        return [...current, ...rows.filter((costCentre) => !existingIds.has(costCentre.id))];
+      });
+      setPagination(payload.pagination || { page, pageSize: rows.length, total: rows.length, hasMore: false });
+      if (payload.summary) {
+        setSummary(payload.summary);
+      } else if (!append) {
+        setSummary({
+          totalAreaSqFt: rows.reduce((total, row) => total + (row.areaSqFt || 0), 0),
+          totalBudget: rows.reduce((total, row) => total + (row.totalBudget || 0), 0),
+          approvedBudget: rows.reduce((total, row) => total + (row.approvedBudget || 0), 0),
+          pendingBudget: rows.reduce((total, row) => total + (row.pendingBudget || 0), 0),
+        });
       }
-      if (pRes.ok) {
-        const pData = await pRes.json();
-        setProjects(pData.data || pData || []);
-        if (pData.data && pData.data.length > 0 && !formProject) {
-          setFormProject(pData.data[0].id);
+      if (page === 1 && projects.length === 0) {
+        const pRes = await fetch('/api/projects');
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          setProjects(pData.data || pData || []);
+          if (pData.data && pData.data.length > 0 && !formProject) {
+            setFormProject(pData.data[0].id);
+          }
         }
       }
     } catch (e) {
-      console.error(e);
+      if (sequence === loadSequence.current && e instanceof Error) {
+        console.error('Failed to load cost centre register', e);
+        setError(e.message);
+      }
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
+  };
+
+  const loadMoreCostCentres = () => {
+    if (!loading && !loadingMore && pagination.hasMore) void loadData(pagination.page + 1, true);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -129,23 +171,10 @@ export default function CostCentresPage() {
     }
   };
 
-  const filtered = costCentres.filter(cc => {
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        cc.code.toLowerCase().includes(q) ||
-        cc.name.toLowerCase().includes(q) ||
-        (cc.location && cc.location.toLowerCase().includes(q)) ||
-        (cc.floorZone && cc.floorZone.toLowerCase().includes(q)) ||
-        (cc.project && cc.project.name.toLowerCase().includes(q))
-      );
-    }
-    return true;
-  });
-
-  const totalArea = filtered.reduce((s, c) => s + (c.areaSqFt || 0), 0);
-  const totalApproved = filtered.reduce((s, c) => s + (c.approvedBudget || 0), 0);
-  const totalBudget = filtered.reduce((s, c) => s + (c.totalBudget || 0), 0);
+  const filtered = costCentres;
+  const totalArea = summary.totalAreaSqFt;
+  const totalApproved = summary.approvedBudget;
+  const totalBudget = summary.totalBudget;
   const avgRatePerSqft = totalArea > 0 ? totalApproved / totalArea : 0;
 
   return (
@@ -169,14 +198,14 @@ export default function CostCentresPage() {
       <SummaryCardGrid columns={4}>
         <SummaryCard
           label={UI_STRINGS.appAppCostCentresPage.costCentres}
-          value={costCentres.length}
+          value={pagination.total}
           secondary={UI_STRINGS.appAppCostCentresPage.activeAndOperational}
           accent="default"
         />
         <SummaryCard
           label={UI_STRINGS.appAppCostCentresPage.totalFitoutArea}
           value={`${totalArea.toLocaleString(I18N_CONFIG.defaultLocale)} Sqft`}
-          secondary={interpolateUiString(UI_STRINGS.appAppCostCentresPage.acrossLengthFunctionalZones, { "length": filtered.length })}
+          secondary={interpolateUiString(UI_STRINGS.appAppCostCentresPage.acrossLengthFunctionalZones, { "length": pagination.total })}
           accent="neutral"
         />
         <SummaryCard
@@ -219,6 +248,12 @@ export default function CostCentresPage() {
           ))}
         </select>
       </div>
+
+      {error && !modalOpen && (
+        <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {error}
+        </div>
+      )}
 
       {/* Cost Centre Table */}
       <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
@@ -297,6 +332,28 @@ export default function CostCentresPage() {
           </tbody>
         </table>
       </div>
+      {pagination.total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+          <span className="text-xs text-slate-600">
+            {interpolateUiString(UI_STRINGS.appAppCostCentresPage.showingCostCentreCountOfTotal, {
+              loaded: costCentres.length,
+              total: pagination.total,
+            })}
+          </span>
+          {pagination.hasMore && (
+            <button
+              type="button"
+              onClick={loadMoreCostCentres}
+              disabled={loading || loadingMore}
+              className="btn btn-secondary text-xs"
+            >
+              {loadingMore
+                ? UI_STRINGS.appAppCostCentresPage.loadingMoreCostCentres
+                : UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres}
+            </button>
+          )}
+        </div>
+      )}
     </div>
 
       {/* Modal: Create Cost Centre */}

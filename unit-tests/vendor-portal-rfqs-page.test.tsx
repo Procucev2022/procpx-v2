@@ -57,7 +57,7 @@ const response = (body: unknown, ok = true) => ({ ok, json: async () => body });
 function configureFetch(rfqResponse = response({ rfqs: rows }), sessionResponse = response({ user: { name: 'Vendor rep', vendorId: 'vendor-1' } })) {
   mockFetch.mockImplementation((url: string) => {
     if (url === '/api/auth/session') return Promise.resolve(sessionResponse);
-    if (url === '/api/vendor-portal/rfqs') return Promise.resolve(rfqResponse);
+    if (url.startsWith('/api/vendor-portal/rfqs?')) return Promise.resolve(rfqResponse);
     return Promise.resolve(response({}));
   });
   global.fetch = mockFetch as typeof fetch;
@@ -75,7 +75,7 @@ describe('vendor portal RFQ register', () => {
   });
 
   it('shows loading, renders RFQ records and status variants, and opens chat and negotiation', async () => {
-    mockFetch.mockImplementation((url: string) => url === '/api/vendor-portal/rfqs'
+    mockFetch.mockImplementation((url: string) => url.startsWith('/api/vendor-portal/rfqs?')
       ? new Promise(() => undefined)
       : Promise.resolve(response({ user: { name: 'Vendor rep', vendorId: 'vendor-1' } })));
     const pending = render(<VendorRfqsPage />);
@@ -120,7 +120,7 @@ describe('vendor portal RFQ register', () => {
     expect(screen.getByTestId('negotiation-workspace')).toHaveAttribute('data-vendor', 'vendor-1');
     expect(screen.getByTestId('negotiation-workspace')).toHaveAttribute('data-name', 'Vendor rep');
     fireEvent.click(screen.getByRole('button', { name: 'Negotiation Success' }));
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/rfqs'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/api/vendor-portal/rfqs?pageSize=50')));
     fireEvent.click(screen.getByRole('button', { name: 'Back to RFQs' }));
     expect(await screen.findByText('RFQ-PENDING')).toBeInTheDocument();
   });
@@ -193,5 +193,21 @@ describe('vendor portal RFQ register', () => {
       : Promise.reject(new Error('network down')));
     render(<VendorRfqsPage />);
     expect(await screen.findByText('network down')).toBeInTheDocument();
+  });
+
+  it('loads subsequent RFQ pages without duplicating the first page', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/auth/session') return Promise.resolve(response({ user: { name: 'Vendor rep', vendorId: 'vendor-1' } }));
+      if (!url.includes('cursor=')) return Promise.resolve(response({ rfqs: rows.slice(0, 1), total: 51, page: 1, nextCursor: 'rfq-cursor-1', hasMore: true }));
+      return Promise.resolve(response({ rfqs: [{ id: 'page-2-rfq', rfqNumber: 'RFQ-PAGE-2', title: 'Later package', project: { name: 'North plant' } }], total: 51, page: 2, hasMore: false }));
+    });
+    render(<VendorRfqsPage />);
+    expect(await screen.findByText('RFQ-PENDING')).toBeInTheDocument();
+    const showingFirstPage = interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsPage.showingRfqsOfTotal, { shown: 1, total: 51 });
+    expect(screen.getByText(showingFirstPage)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsPage.loadMoreRfqs) }));
+    expect(await screen.findByText('RFQ-PAGE-2')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('cursor=rfq-cursor-1'));
+    expect(screen.queryByText(showingFirstPage)).not.toBeInTheDocument();
   });
 });

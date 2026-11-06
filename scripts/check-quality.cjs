@@ -75,6 +75,7 @@ const stages = [
   { name: 'i18n string policy', stage: 'check:i18n' },
   { name: 'typecheck', stage: 'typecheck' },
   { name: 'lint', stage: 'lint' },
+  { name: 'D1 mutation boundaries', stage: 'check:architecture' },
   { name: 'safe pending migrations', stage: 'db:migrate:safe' },
   { name: 'database integrity', stage: 'db:integrity' },
 ];

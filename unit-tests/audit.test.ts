@@ -54,7 +54,9 @@ describe('createAuditLog', () => {
     await expect(createAuditLog({
       tenantId: 'tenant-1', entityType: 'PR', entityId: 'pr-1', action: 'CREATED', description: 'Created request',
     })).resolves.toBeUndefined();
-    expect(logError).toHaveBeenCalledWith('Audit log creation failed:', error);
+    expect(logError).toHaveBeenCalledWith('audit.write_failed', expect.objectContaining({
+      tenantId: 'tenant-1', entityType: 'PR', entityId: 'pr-1', action: 'CREATED', error,
+    }));
     logError.mockRestore();
   });
 });

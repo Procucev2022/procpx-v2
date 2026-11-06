@@ -2,4 +2,5 @@
 export interface UploadBucket {
   put(key: string, value: ArrayBuffer | Uint8Array): Promise<unknown>;
   get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  delete?(key: string): Promise<unknown>;
 }

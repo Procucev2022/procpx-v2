@@ -91,8 +91,18 @@ function AuctionsContent() {
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [rfqOptions, setRfqOptions] = useState<any[]>([]);
+  const [selectedRfqDetails, setSelectedRfqDetails] = useState<(typeof rfqOptions)[number] | null>(null);
   const [projectUsers, setProjectUsers] = useState<any[]>([]);
   const [rfqOptionsLoading, setRfqOptionsLoading] = useState(false);
+  const [rfqDetailsLoading, setRfqDetailsLoading] = useState(false);
+  const [rfqListPage, setRfqListPage] = useState(1);
+  const [rfqListPageSize, setRfqListPageSize] = useState(50);
+  const [rfqListHasMore, setRfqListHasMore] = useState(false);
+  const [loadingMoreRfqs, setLoadingMoreRfqs] = useState(false);
+  const [projectUsersPage, setProjectUsersPage] = useState(1);
+  const [projectUsersPageSize, setProjectUsersPageSize] = useState(50);
+  const [projectUsersHasMore, setProjectUsersHasMore] = useState(false);
+  const [loadingMoreProjectUsers, setLoadingMoreProjectUsers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Wizard Form State
@@ -159,52 +169,66 @@ function AuctionsContent() {
     }
   }, [searchParams]);
 
-  // When selected RFQ changes, populate vendors, lines, and benchmark prices
+  // Load the selected RFQ's expanded line and quote data only when the buyer chooses it.
   useEffect(() => {
-    if (!selectedRfqId || rfqOptions.length === 0) return;
-    const rfq = rfqOptions.find((r) => r.id === selectedRfqId);
-    if (!rfq) return;
-
-    if (!auctionName) {
-      setAuctionName(`${rfq.packageName || rfq.title} — E-Auction Event`);
+    if (!selectedRfqId) {
+      setSelectedRfqDetails(null);
+      setAvailableVendors([]);
+      setAuctionItems([]);
+      setInvitedVendorIds([]);
+      setRfqDetailsLoading(false);
+      return;
     }
 
-    // Set starting price default from L1 quote or estimated rate
-    if (rfq.lowestQuotedAmount && !startingPrice) {
-      setStartingPrice(rfq.lowestQuotedAmount);
-    }
+    let active = true;
+    setSelectedRfqDetails(null);
+    setAvailableVendors([]);
+    setAuctionItems([]);
+    setInvitedVendorIds([]);
+    setRfqDetailsLoading(true);
 
-    // Populate vendors shuttle
-    const vendors = rfq.quotedVendors || [];
-    setAvailableVendors(vendors);
-    // By default, pre-invite all vendors who submitted quotations
-    const quotedIds = vendors.filter((v: any) => v.hasSubmittedQuote).map((v: any) => v.vendorId);
-    setInvitedVendorIds(quotedIds.length > 0 ? quotedIds : vendors.map((v: any) => v.vendorId));
+    const loadSelectedRfq = async () => {
+      try {
+        const res = await fetch(`/api/procurement/auctions/rfq-options?rfqId=${encodeURIComponent(selectedRfqId)}&includeObservers=false`);
+        const data = await res.json();
+        const rfq = Array.isArray(data.rfqs) ? data.rfqs[0] : null;
+        if (!res.ok || !rfq) throw new Error(UI_STRINGS.common.userMessages.failedToFetchRfqOptions);
+        if (!active) return;
 
-    // Populate items
-    setAuctionItems(
-      (rfq.lines || []).map((l: any) => ({
-        rfqLineId: l.id,
-        itemCode: l.itemCode,
-        description: l.description,
-        boqDescription: l.boqDescription,
-        category: l.category,
-        subCategory: l.subCategory,
-        uom: l.uom,
-        quantity: l.quantity,
-        startPrice: l.estimatedRate || '',
-      }))
-    );
+        setSelectedRfqDetails(rfq);
+        setAuctionName((current) => current || `${rfq.packageName || rfq.title} — E-Auction Event`);
+        setStartingPrice((current) => current || rfq.lowestQuotedAmount || '');
+        const vendors = rfq.quotedVendors || [];
+        setAvailableVendors(vendors);
+        const quotedIds = vendors.filter((vendor: any) => vendor.hasSubmittedQuote).map((vendor: any) => vendor.vendorId);
+        setInvitedVendorIds(quotedIds.length > 0 ? quotedIds : vendors.map((vendor: any) => vendor.vendorId));
+        setAuctionItems((rfq.lines || []).map((line: any) => ({
+          rfqLineId: line.id,
+          itemCode: line.itemCode,
+          description: line.description,
+          boqDescription: line.boqDescription,
+          category: line.category,
+          subCategory: line.subCategory,
+          uom: line.uom,
+          quantity: line.quantity,
+          startPrice: line.estimatedRate || '',
+        })));
 
-    // Initialize default schedule dates: tomorrow starting 10:00 AM IST to 12:00 PM IST
-    const now = new Date();
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const dateStr = tomorrow.toISOString().split('T')[0];
-    if (!startDate) setStartDate(dateStr);
-    if (!startTime) setStartTime('10:00');
-    if (!endDate) setEndDate(dateStr);
-    if (!endTime) setEndTime('12:00');
-  }, [selectedRfqId, rfqOptions]);
+        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        setStartDate((current) => current || tomorrow);
+        setStartTime((current) => current || '10:00');
+        setEndDate((current) => current || tomorrow);
+        setEndTime((current) => current || '12:00');
+      } catch {
+        if (active) toast.error({ title: UI_STRINGS.common.error, message: UI_STRINGS.common.userMessages.failedToFetchRfqOptions });
+      } finally {
+        if (active) setRfqDetailsLoading(false);
+      }
+    };
+
+    void loadSelectedRfq();
+    return () => { active = false; };
+  }, [selectedRfqId]);
 
   const fetchAuctions = async () => {
     setLoading(true);
@@ -233,13 +257,57 @@ function AuctionsContent() {
       if (data.rfqs) {
         setRfqOptions(data.rfqs);
       }
+      setRfqListPage(data.rfqPage);
+      setRfqListPageSize(data.rfqPageSize);
+      setRfqListHasMore(data.rfqHasMore === true);
       if (data.projectUsers) {
         setProjectUsers(data.projectUsers);
       }
+      if (Number.isSafeInteger(data.projectUsersPage)) setProjectUsersPage(data.projectUsersPage);
+      if (Number.isSafeInteger(data.projectUsersPageSize)) setProjectUsersPageSize(data.projectUsersPageSize);
+      setProjectUsersHasMore(data.projectUsersHasMore === true);
     } catch (err) {
       console.error(err);
     } finally {
       setRfqOptionsLoading(false);
+    }
+  };
+
+  const loadMoreRfqs = async () => {
+    const nextPage = rfqListPage + 1;
+    setLoadingMoreRfqs(true);
+    try {
+      const res = await fetch(`/api/procurement/auctions/rfq-options?rfqPage=${nextPage}&rfqPageSize=${rfqListPageSize}&includeObservers=false`);
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.rfqs)) throw new Error(UI_STRINGS.common.userMessages.failedToFetchRfqOptions);
+      setRfqOptions([...rfqOptions, ...data.rfqs]);
+      setRfqListPage(data.rfqPage);
+      setRfqListPageSize(data.rfqPageSize);
+      setRfqListHasMore(data.rfqHasMore === true);
+    } catch {
+      toast.error({ title: UI_STRINGS.common.error, message: UI_STRINGS.common.userMessages.failedToFetchRfqOptions });
+    } finally {
+      setLoadingMoreRfqs(false);
+    }
+  };
+
+  const loadMoreProjectUsers = async () => {
+    const nextPage = projectUsersPage + 1;
+    setLoadingMoreProjectUsers(true);
+    try {
+      const res = await fetch(`/api/procurement/auctions/rfq-options?usersOnly=true&page=${nextPage}&pageSize=${projectUsersPageSize}`);
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.projectUsers)) {
+        throw new Error(UI_STRINGS.common.userMessages.failedToFetchRfqOptions);
+      }
+      setProjectUsers([...projectUsers, ...data.projectUsers]);
+      setProjectUsersPage(data.projectUsersPage);
+      setProjectUsersPageSize(data.projectUsersPageSize);
+      setProjectUsersHasMore(data.projectUsersHasMore === true);
+    } catch {
+      toast.error({ title: UI_STRINGS.common.error, message: UI_STRINGS.common.userMessages.failedToFetchRfqOptions });
+    } finally {
+      setLoadingMoreProjectUsers(false);
     }
   };
 
@@ -250,8 +318,10 @@ function AuctionsContent() {
 
   // Selected RFQ object
   const currentRfq = useMemo(() => {
-    return rfqOptions.find((r) => r.id === selectedRfqId) || null;
-  }, [rfqOptions, selectedRfqId]);
+    return (selectedRfqDetails?.id === selectedRfqId ? selectedRfqDetails : null)
+      || rfqOptions.find((rfq) => rfq.id === selectedRfqId)
+      || null;
+  }, [rfqOptions, selectedRfqId, selectedRfqDetails]);
 
   // Quoted vendors that are NOT invited
   const nonInvitedQuotedVendors = useMemo(() => {
@@ -279,7 +349,7 @@ function AuctionsContent() {
 
   // Handle Save / Schedule Auction
   const handleSaveAuction = async (isDraft: boolean) => {
-    if (!selectedRfqId) {
+    if (!selectedRfqId || selectedRfqDetails?.id !== selectedRfqId || rfqDetailsLoading) {
       toast.error({ title: UI_STRINGS.common.validation, message: UI_STRINGS.appAppProcurementAuctionsPage.pleaseSelectAnRFQPackage });
       setWizardStep(1);
       return;
@@ -865,9 +935,19 @@ function AuctionsContent() {
                         <option value="">{UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ}</option>
                         {rfqOptions.map((rfq) => (
                           <option key={rfq.id} value={rfq.id}>
-                            {rfq.rfqNumber}{UI_STRINGS.common.copyq9aflv}{rfq.title}{UI_STRINGS.common.copy1b3t0c5}{rfq.quotedVendors?.length || 0}{UI_STRINGS.appAppProcurementAuctionsPage.quotedVendors}</option>
+                            {rfq.rfqNumber}{UI_STRINGS.common.copyq9aflv}{rfq.title}{UI_STRINGS.common.copy1b3t0c5}{rfq.quotedVendorCount ?? rfq.quotedVendors?.length ?? 0}{UI_STRINGS.appAppProcurementAuctionsPage.quotedVendors}</option>
                         ))}
                       </select>
+                      {rfqListHasMore && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={loadMoreRfqs}
+                          disabled={loadingMoreRfqs}
+                          style={{ marginTop: 8 }}
+                        >{loadingMoreRfqs ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}</button>
+                      )}
+                      {rfqDetailsLoading && <div role="status" style={{ marginTop: 6, fontSize: 12, color: '#64748b' }}>{UI_STRINGS.common.loading}</div>}
                       {currentRfq && (
                         <div style={{ marginTop: 6, fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppProcurementAuctionsPage.linkedPR}<strong>{currentRfq.prNumber || UI_STRINGS.common.copy4s9bsz}</strong>{UI_STRINGS.appAppProcurementAuctionsPage.bOQ}<strong>{currentRfq.boqNumber || UI_STRINGS.common.copy4s9bsz}</strong>
                         </div>
@@ -1363,18 +1443,29 @@ function AuctionsContent() {
                           />{UI_STRINGS.appAppProcurementAuctionsPage.no}</label>
                       </div>
                       {inviteProjectUser && (
-                        <select
-                          value={selectedProjectUserId}
-                          onChange={(e) => setSelectedProjectUserId(e.target.value)}
-                          className="form-control"
-                          style={{ height: 36, fontSize: 12 }}
-                        >
-                          <option value="">{UI_STRINGS.appAppProcurementAuctionsPage.selectProjectObserver}</option>
-                          {projectUsers.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name}{UI_STRINGS.common.copy1b3t0c5}{u.role}{UI_STRINGS.common.copyc7zu6c}</option>
-                          ))}
-                        </select>
+                        <>
+                          <select
+                            value={selectedProjectUserId}
+                            onChange={(e) => setSelectedProjectUserId(e.target.value)}
+                            className="form-control"
+                            style={{ height: 36, fontSize: 12 }}
+                          >
+                            <option value="">{UI_STRINGS.appAppProcurementAuctionsPage.selectProjectObserver}</option>
+                            {projectUsers.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}{UI_STRINGS.common.copy1b3t0c5}{u.role}{UI_STRINGS.common.copyc7zu6c}</option>
+                            ))}
+                          </select>
+                          {projectUsersHasMore && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={loadMoreProjectUsers}
+                              disabled={loadingMoreProjectUsers}
+                              style={{ marginTop: 8 }}
+                            >{loadingMoreProjectUsers ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}</button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1699,7 +1790,7 @@ function AuctionsContent() {
                 >{UI_STRINGS.common.cancel}</button>
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={submitting || (selectedRfqId !== '' && (rfqDetailsLoading || selectedRfqDetails?.id !== selectedRfqId))}
                   onClick={() => handleSaveAuction(true)}
                   className="btn btn-secondary btn-sm"
                 >{UI_STRINGS.common.saveAsDraft}</button>
@@ -1707,6 +1798,7 @@ function AuctionsContent() {
                 {wizardStep < 6 ? (
                   <button
                     type="button"
+                    disabled={selectedRfqId !== '' && (rfqDetailsLoading || selectedRfqDetails?.id !== selectedRfqId)}
                     onClick={() => setWizardStep((prev) => prev + 1)}
                     className="btn btn-primary btn-sm"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -1715,7 +1807,7 @@ function AuctionsContent() {
                 ) : (
                   <button
                     type="button"
-                    disabled={submitting}
+                    disabled={submitting || rfqDetailsLoading || selectedRfqDetails?.id !== selectedRfqId}
                     onClick={() => handleSaveAuction(false)}
                     className="btn btn-primary btn-sm"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}

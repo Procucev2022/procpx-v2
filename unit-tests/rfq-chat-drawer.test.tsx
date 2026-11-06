@@ -19,7 +19,7 @@ describe('RFQ clarification drawer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch = fetchMock as unknown as typeof fetch;
-    fetchMock.mockResolvedValue(response({ messages: [] }));
+    fetchMock.mockReset().mockResolvedValue(response({ messages: [] }));
   });
 
   afterEach(() => {
@@ -54,6 +54,52 @@ describe('RFQ clarification drawer', () => {
     render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-2" rfqNumber="RFQ-002" />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRfqChatDrawer.noQueriesOrClarificationsYet))).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-2/messages');
+  });
+
+  it('prepends older pages without changing the visible conversation order', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response({
+        messages: [{ id: 'm2', senderName: 'Vendor', senderRole: 'VENDOR', message: 'Newest reply', createdAt: '2026-10-28T11:20:00Z' }],
+        hasMore: true, nextCursor: '2026-10-28T10:15:00.000Z|m2',
+      }))
+      .mockResolvedValueOnce(response({
+        messages: [{ id: 'm1', senderName: 'Buyer', senderRole: 'BUYER', message: 'Older question', createdAt: '2026-10-28T10:15:00Z' }],
+        hasMore: false, nextCursor: null,
+      }));
+    render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-old" rfqNumber="RFQ-OLD" />);
+    expect(await screen.findByText('Newest reply')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Older question')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/procurement/rfqs/rfq-old/messages?cursor=2026-10-28T10%3A15%3A00.000Z%7Cm2');
+    const conversation = screen.getByText('Older question').closest('[style]')?.parentElement;
+    expect(conversation).toBeTruthy();
+  });
+
+  it('reads nested pagination metadata and recovers from older-page failures', async () => {
+    fetchMock
+      .mockResolvedValueOnce(response({ data: {
+        messages: [{ id: 'newer', senderName: 'Buyer', senderRole: 'BUYER', message: 'Current message', createdAt: '2026-10-30T11:00:00Z' }],
+        hasMore: true, nextCursor: 'older-cursor',
+      } }))
+      .mockResolvedValueOnce({ ok: false, json: jest.fn().mockRejectedValue(new Error('Invalid response')) })
+      .mockResolvedValueOnce(response({ data: { messages: [], hasMore: false, nextCursor: null } }));
+    render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-nested" rfqNumber="RFQ-NESTED" vendorId="vendor-nested" />);
+
+    expect(await screen.findByText('Current message')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadMessageHistory))).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/procurement/rfqs/rfq-nested/messages?cursor=older-cursor&vendorId=vendor-nested');
+
+    fetchMock.mockResolvedValueOnce(response({ data: { messages: [], hasMore: false, nextCursor: null } }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses the default message-history error when an API response omits its message', async () => {
+    fetchMock.mockResolvedValueOnce(response({}, false));
+    render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-error" rfqNumber="RFQ-ERROR" />);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadMessageHistory))).toBeInTheDocument();
   });
 
   it('shows API and network errors while loading history', async () => {

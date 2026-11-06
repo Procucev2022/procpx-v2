@@ -31,23 +31,27 @@ const mockFetch = jest.fn();
 const queue = [
   {
     id: 'contrib-1', amount: 12500, totalEstimatedValue: 12500, acceptedEstimatedValue: 12000,
-    boq: { boqCode: 'BOQ-01', title: 'Electrical package' }, category: { name: 'Electrical' }, boqRevision: { revisionCode: 'R2', lines: [
-      { id: 'line-1', lineNumber: 4, standardDescription: 'Cable tray', category: { name: 'Electrical' }, quantity: 5, uomRaw: 'M', aiUnitCost: 400, aiTotalCost: 2000 },
-      { originalDescription: 'Grounding strip', quantity: 2 },
-    ] },
+    boq: { boqCode: 'BOQ-01', title: 'Electrical package' }, category: { name: 'Electrical' }, boqRevision: { revisionCode: 'R2' },
     project: { name: 'North Plant' }, costCentre: { code: 'CC-01', name: 'Electrical' }, categories: ['Electrical', 'Power'],
     projectApproverDecision: { approverName: 'Asha', approvedAt: '2026-01-04' }, submittedAt: '2026-01-05', hasEnquiry: true,
     financialImpact: { currentApprovedAmount: 5000, projectedApprovedTotal: 17500 },
-    transactions: [{ id: 'tx-1', category: 'Electrical', amount: 2000, quantity: 5, uom: 'M' }],
   },
   {
     id: 'contrib-2', totalEstimatedValue: 600, createdAt: '2026-01-06', categories: [], hasEnquiry: false,
-    boqRevision: {}, transactions: [{ id: 'tx-2', category: 'Civil', amount: 1 }],
+    boqRevision: {},
   },
-  {
-    id: 'contrib-3', totalEstimatedValue: 0, createdAt: '2026-01-07', hasEnquiry: false,
-  },
+  { id: 'contrib-3', totalEstimatedValue: 0, createdAt: '2026-01-07', hasEnquiry: false },
 ];
+const contributionDetails: Record<string, unknown> = {
+  'contrib-1': {
+    boqRevision: { revisionCode: 'R2', lines: [
+      { id: 'line-1', lineNumber: 4, standardDescription: 'Cable tray', category: { name: 'Electrical' }, quantity: 5, uomRaw: 'M', aiUnitCost: 400, aiTotalCost: 2000 },
+      { originalDescription: 'Grounding strip', quantity: 2 },
+    ] },
+    transactions: [{ id: 'tx-1', category: 'Electrical', amount: 2000, quantity: 5, uom: 'M' }],
+  },
+  'contrib-2': { boqRevision: {}, transactions: [{ id: 'tx-2', category: 'Civil', amount: 1 }] },
+};
 
 function response(body: unknown, ok = true) {
   return { ok, json: async () => body };
@@ -55,7 +59,8 @@ function response(body: unknown, ok = true) {
 
 function setupFetch() {
   mockFetch.mockImplementation((url: string, init?: RequestInit) => {
-    if (url === '/api/approvals?type=FINANCE') return Promise.resolve(response({ financeQueue: queue }));
+    if (url.startsWith('/api/approvals?type=FINANCE')) return Promise.resolve(response({ financeQueue: queue }));
+    if (url.startsWith('/api/budgets/contrib-')) return Promise.resolve(response(contributionDetails[url.split('/').at(-1) || ''] || {}));
     if (url === '/api/budgets/finance-approve') return Promise.resolve(response(approveResult.body, approveResult.ok));
     if (url === '/api/budgets/finance-reject') return Promise.resolve(response(rejectResult.body, rejectResult.ok));
     return Promise.resolve(response({}));
@@ -87,14 +92,14 @@ describe('finance budget approval workspace', () => {
     fireEvent.click(within(firstRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Inspect"})) }));
     expect(screen.getByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppFinanceBudgetApprovalsPage.financeCapexSanctionBoqCodeRevisionCode) })).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.categoryWiseAllocationBreakdown))).toBeInTheDocument();
-    expect(screen.getByText('Cable tray')).toBeInTheDocument();
-    expect(screen.getByText('Grounding strip')).toBeInTheDocument();
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
+    expect(await screen.findByText('Grounding strip')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Ask","toLocaleString":"Clarification"})) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');
     expect(screen.getByTestId('approval-chat')).toHaveTextContent('BOQ-01');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Queue' }));
-    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=FINANCE');
+    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=FINANCE&page=1&pageSize=25');
     expect(await screen.findByRole('row', { name: /BOQ-01/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close Chat' }));
     expect(screen.queryByTestId('approval-chat')).not.toBeInTheDocument();
@@ -106,7 +111,7 @@ describe('finance budget approval workspace', () => {
     const sparseRow = screen.getAllByRole('row')[3];
     fireEvent.click(within(sparseRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Inspect"})) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.verified))).toBeInTheDocument();
-    expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.general)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(uiStringPattern(UI_STRINGS.common.general))).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
     fireEvent.click(within(sparseRow).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Enquire"})) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');
@@ -130,6 +135,7 @@ describe('finance budget approval workspace', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.budgetApprovedSuccessfully, undefined, UI_STRINGS.common.userMessages.approvedByFinance);
 
     fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Inspect"})) }));
+    expect(await screen.findByText('Cable tray')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Sanction","toLocaleString":"Budget"})) }));
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.budgetApprovedSuccessfully, UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, UI_STRINGS.common.userMessages.approvedByFinance));
     fireEvent.click(within(screen.getByRole('row', { name: /BOQ-01/ })).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.value1, {"value1":"Inspect"})) }));
@@ -176,7 +182,7 @@ describe('finance budget approval workspace', () => {
   });
 
   it('shows empty and failed queue states', async () => {
-    mockFetch.mockImplementation((url: string) => url === '/api/approvals?type=FINANCE'
+    mockFetch.mockImplementation((url: string) => url.startsWith('/api/approvals?type=FINANCE')
       ? Promise.resolve(response({}))
       : Promise.resolve(response({})));
     const { unmount } = render(<FinanceBudgetApprovalsPage />);
@@ -189,5 +195,20 @@ describe('finance budget approval workspace', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppFinanceBudgetApprovalsPage.noBudgetContributionsCurrentlyAwaitingFinanceApproval))).toBeInTheDocument();
     consoleError.mockRestore();
+  });
+
+  it('loads additional finance approval queue pages without replacing the first page', async () => {
+    const secondPageItem = { ...queue[0], id: 'finance-4', boq: { boqCode: 'BOQ-04', title: 'Mechanical package' } };
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('page=1')) return Promise.resolve(response({ financeQueue: [queue[0]], pagination: { page: 1, queues: { finance: { total: 2, totalPages: 2 } } }, totals: { financePendingAmount: 25100 } }));
+      if (url.includes('page=2')) return Promise.resolve(response({ financeQueue: [secondPageItem], pagination: { page: 2, queues: { finance: { total: 2, totalPages: 2 } } }, totals: { financePendingAmount: 25100 } }));
+      return Promise.resolve(response({}));
+    });
+    render(<FinanceBudgetApprovalsPage />);
+    expect(await screen.findByRole('row', { name: /BOQ-01/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByRole('row', { name: /BOQ-04/ })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /BOQ-01/ })).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/approvals?type=FINANCE&page=2&pageSize=25');
   });
 });

@@ -4,7 +4,16 @@ import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import {
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  AUCTION_BID_INSERT_AFTER_CHANGE_SQL,
+  AUCTION_BID_UPDATE_IF_CURRENT_SQL,
+  AUCTION_ITEM_UPDATE_AFTER_CHANGE_SQL,
+  AUCTION_VENDOR_UPDATE_AFTER_BID_SQL,
+  EXPIRED_AUCTION_CLOSE_SQL,
+} from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -17,25 +26,33 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
+  const startedAt = Date.now();
 
   try {
     if (ctx.role === 'PROJECT_USER' || ctx.role === 'PROJECT_APPROVER') {
       return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.projectUsersHaveReadOnlyObserverAccessAndCannotSubmitBids, 403);
     }
 
-    const body = await req.json();
-    let { vendorId, bidAmount, auctionItemId } = body;
+    let body: Record<string, unknown>;
+    try {
+      const parsedBody: unknown = await req.json();
+      if (typeof parsedBody !== 'object' || parsedBody === null || Array.isArray(parsedBody)) {
+        return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+      }
+      body = parsedBody as Record<string, unknown>;
+    } catch {
+      return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+    }
+    let vendorId = typeof body.vendorId === 'string' ? body.vendorId : undefined;
+    const bidAmount = body.bidAmount;
+    const auctionItemId = typeof body.auctionItemId === 'string' ? body.auctionItemId : undefined;
+    let vendorRecord;
 
     if (ctx.role === 'VENDOR') {
-      const vendorRecord = await prisma.vendor.findFirst({
-        where: {
-          tenantId: ctx.tenantId,
-          OR: [
-            { email: ctx.userEmail || '' },
-            { id: ctx.vendorId || '' },
-            { id: ctx.userId },
-          ],
-        },
+      vendorRecord = await prisma.vendor.findFirst({
+        where: ctx.vendorId
+          ? { tenantId: ctx.tenantId, id: ctx.vendorId }
+          : { tenantId: ctx.tenantId, email: ctx.userEmail || '' },
       });
 
       if (!vendorRecord) {
@@ -46,10 +63,14 @@ export async function POST(
       if (!vendorId) {
         return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIDIsRequired, 400);
       }
+      vendorRecord = await prisma.vendor.findFirst({ where: { tenantId: ctx.tenantId, id: vendorId } });
+      if (!vendorRecord) {
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, 403);
+      }
     }
 
     const numericBid = Number(bidAmount);
-    if (isNaN(numericBid) || numericBid <= 0) {
+    if (!Number.isFinite(numericBid) || numericBid <= 0) {
       return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.pleaseEnterAValidPositiveBidAmount, 400);
     }
 
@@ -57,12 +78,9 @@ export async function POST(
       where: { id, tenantId: ctx.tenantId },
       include: {
         rfq: true,
-        vendors: { where: { vendorId } },
+        vendors: { where: { tenantId: ctx.tenantId, vendorId } },
         items: true,
-        bids: {
-          where: auctionItemId ? { auctionItemId } : undefined,
-          orderBy: { timestamp: 'desc' },
-        },
+        _count: { select: { bids: true } },
       },
     });
 
@@ -85,8 +103,15 @@ export async function POST(
       return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionHasNotStartedYetStartsAtToISOString, { "toISOString": auction.startTime.toISOString() }), 400);
     }
     if (now >= auction.endTime) {
-      await prisma.auction.update({ where: { id }, data: { status: 'CLOSED' } });
+      await writeD1BatchAtomically([{
+        sql: EXPIRED_AUCTION_CLOSE_SQL,
+        values: [now, id, ctx.tenantId, now],
+      }]);
       return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.auctionTimeHasExpiredNoFurtherBidsAreAccepted, 400);
+    }
+
+    if (!['SCHEDULED', 'LIVE', 'EXTENDED'].includes(auction.status)) {
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.thisAuctionHasConcludedFurtherBidsCannotBeAccepted, 400);
     }
 
     const participantRecord = auction.vendors[0];
@@ -94,43 +119,70 @@ export async function POST(
       return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, 403);
     }
 
+    if (!participantRecord.isEligible) {
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.vendorIsNotInvitedToParticipateInThisAuction, 403);
+    }
+
     if (!participantRecord.termsAcceptedAt) {
       return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.youMustReviewAndAcceptTheAuctionTermsConditionsBeforePlacingYourFirstBid, 400);
     }
 
-    const vendorBids = auction.bids.filter((b) => b.vendorId === vendorId);
-    if (auction.auctionType === 'SEALED_BID') {
-      if (vendorBids.length > 0) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.sealedBidProtocolYouHaveAlreadySubmittedYourSinglePermittedSealedBidForThisAuction, 400);
-      }
-    } else if (auction.hasBidLimit && auction.maxBidsPerParticipant) {
-      if (vendorBids.length >= auction.maxBidsPerParticipant) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidLimitReachedYouHavePlacedAllMaxBidsPerParticipantPermittedBidsForThisAuction, { "maxBidsPerParticipant": auction.maxBidsPerParticipant }), 400);
-      }
-    }
-
-    let currentReference = 0;
     const isItemWise = auction.auctionCategory === 'ITEM_WISE';
-    let targetItem: any = null;
+    let targetItem = null as (typeof auction.items)[number] | null;
 
     if (isItemWise) {
       if (!auctionItemId) {
         return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.itemIDIsRequiredForAnItemWiseAuctionBid, 400);
       }
-      targetItem = auction.items.find((i) => i.id === auctionItemId);
+      targetItem = auction.items.find((i) => i.id === auctionItemId) || null;
       if (!targetItem) {
         return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.selectedAuctionItemWasNotFound, 404);
       }
-      currentReference = targetItem.currentLeadingBid
-        ? Number(targetItem.currentLeadingBid)
-        : (targetItem.startPrice ? Number(targetItem.startPrice) : 0);
+    } else if (auctionItemId) {
+      targetItem = auction.items.find((i) => i.id === auctionItemId) || null;
+      if (!targetItem) {
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.selectedAuctionItemWasNotFound, 404);
+      }
+    }
+
+    const itemBidCountQuery = isItemWise && targetItem
+      ? prisma.auctionBid.count({ where: { tenantId: ctx.tenantId, auctionId: id, auctionItemId: targetItem.id } })
+      : Promise.resolve(0);
+    const [vendorBidCount, itemBidCount] = await Promise.all([
+      prisma.auctionBid.count({ where: { tenantId: ctx.tenantId, auctionId: id, vendorId } }),
+      itemBidCountQuery,
+    ]);
+    if (vendorBidCount !== participantRecord.bidsCount) {
+      await writeStructuredLog('warn', 'procurement.auction_bid_counter_drift', {
+        operation: 'submit_auction_bid', route: '/api/procurement/auctions/[id]/bid',
+        requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, auctionId: id,
+        vendorId, storedBidCount: participantRecord.bidsCount, actualBidCount: vendorBidCount,
+      });
+    }
+
+    if (auction.auctionType === 'SEALED_BID') {
+      if (vendorBidCount > 0) {
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.sealedBidProtocolYouHaveAlreadySubmittedYourSinglePermittedSealedBidForThisAuction, 400);
+      }
+    } else if (auction.hasBidLimit && auction.maxBidsPerParticipant) {
+      if (vendorBidCount >= auction.maxBidsPerParticipant) {
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidLimitReachedYouHavePlacedAllMaxBidsPerParticipantPermittedBidsForThisAuction, { "maxBidsPerParticipant": auction.maxBidsPerParticipant }), 400);
+      }
+    }
+
+    let currentReference = 0;
+    if (isItemWise) {
+      const item = targetItem!;
+      currentReference = item.currentLeadingBid
+        ? Number(item.currentLeadingBid)
+        : (item.startPrice ? Number(item.startPrice) : 0);
     } else {
       currentReference = auction.currentLowestBid
         ? Number(auction.currentLowestBid)
         : (auction.startingPrice ? Number(auction.startingPrice) : 0);
     }
 
-    const isFirstBid = auction.bids.length === 0;
+    const isFirstBid = isItemWise ? itemBidCount === 0 : auction._count.bids === 0;
 
     if (auction.auctionType === 'REVERSE_AUCTION') {
       if (isFirstBid && auction.hasStartPrice && currentReference > 0) {
@@ -182,99 +234,85 @@ export async function POST(
       }
     }
 
-    const bidCount = auction.bids.length + 1;
+    const bidCount = auction._count.bids + 1;
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || '127.0.0.1';
-
-    const bid = await prisma.auctionBid.create({
-      data: {
-        tenantId: ctx.tenantId,
-        auctionId: id,
-        auctionItemId: auctionItemId || null,
-        vendorId,
-        bidNumber: bidCount,
-        bidAmount: numericBid,
-        rank: 1,
-        ipAddress: clientIp,
-        timestamp: now,
-      },
-      include: {
-        vendor: { select: { id: true, name: true, code: true } },
-      },
-    });
-
-    const auctionUpdateData: any = {
-      currentLowestBid: numericBid,
-      currentLeadingBid: numericBid,
-      currentWinningVendorId: vendorId,
-      status: extended ? 'EXTENDED' : 'LIVE',
-    };
-
-    if (extended) {
-      auctionUpdateData.endTime = newScheduledEnd;
-      auctionUpdateData.scheduledEndTime = newScheduledEnd;
-      auctionUpdateData.extensionCount = { increment: 1 };
-    }
-
-    await prisma.auction.update({
-      where: { id },
-      data: auctionUpdateData,
-    });
-
+    const bidId = crypto.randomUUID();
+    const status = extended ? 'EXTENDED' : 'LIVE';
+    const auditId = crypto.randomUUID();
+    const description = interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidBidCountOfCurrencyToLocaleStringAcceptedFromNameInAuctionAuctionNumberValue6, { "bidCount": bidCount, "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "name": vendorRecord!.name, "auctionNumber": auction.auctionNumber, "value6": extended ? ` (Triggered ${auction.autoExtensionMinutes}m rolling extension until ${newScheduledEnd.toISOString()})` : '' });
+    const batch = [{
+      sql: AUCTION_BID_UPDATE_IF_CURRENT_SQL,
+      values: [
+        numericBid, numericBid, vendorId, status,
+        extended ? 1 : 0, newScheduledEnd, extended ? 1 : 0, newScheduledEnd,
+        extended ? 1 : 0, now,
+        id, ctx.tenantId, auction.status,
+        auction.startTime, now, auction.endTime, now,
+        auction.currentLowestBid, auction.currentLeadingBid, auction.extensionCount,
+        auction.auctionType, auction.auctionCategory, auction.hasStartPrice, auction.startingPrice,
+        auction.hasMinBidReduction, auction.minDecrement, auction.hasAutoExtension, auction.autoExtensionMinutes,
+        auction.hasBidLimit, auction.maxBidsPerParticipant, auction._count.bids,
+        vendorId, vendorBidCount,
+        participantRecord.id, ctx.tenantId, vendorId, participantRecord.bidsCount,
+        targetItem?.id ?? null, targetItem?.id ?? null, ctx.tenantId,
+        targetItem?.currentLeadingBid ?? null, targetItem?.startPrice ?? null,
+      ],
+    }];
     if (isItemWise && targetItem) {
-      await prisma.auctionItem.update({
-        where: { id: targetItem.id },
-        data: {
-          currentLeadingBid: numericBid,
-        },
+      batch.push({
+        sql: AUCTION_ITEM_UPDATE_AFTER_CHANGE_SQL,
+        values: [numericBid, vendorId, targetItem.id, ctx.tenantId, id, targetItem.currentLeadingBid, targetItem.startPrice],
       });
     }
-
-    await prisma.auctionVendor.update({
-      where: { id: participantRecord.id },
-      data: {
-        bidsCount: { increment: 1 },
-        lastBidAmount: numericBid,
-        lastBidAt: now,
-        bestBidAmount: numericBid,
-        bestBidRank: 1,
-      },
+    batch.push({
+      sql: AUCTION_BID_INSERT_AFTER_CHANGE_SQL,
+      values: [bidId, ctx.tenantId, id, vendorId, auctionItemId || null, bidCount, numericBid, 1, clientIp, now],
     });
-
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: auction.rfq.projectId,
-      entityType: 'AUCTION',
-      entityId: auction.id,
-      action: extended ? 'AUCTION_BID_AND_AUTO_EXTENDED' : 'AUCTION_BID_SUBMITTED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementAuctionsIdBidRoute.bidBidCountOfCurrencyToLocaleStringAcceptedFromNameInAuctionAuctionNumberValue6, { "bidCount": bidCount, "currency": auction.currency, "toLocaleString": numericBid.toLocaleString(I18N_CONFIG.defaultLocale), "name": bid.vendor.name, "auctionNumber": auction.auctionNumber, "value6": extended ? ` (Triggered ${auction.autoExtensionMinutes}m rolling extension until ${newScheduledEnd.toISOString()})` : '' }),
-      newValue: {
-        bidAmount: numericBid,
-        bidNumber: bidCount,
-        extended,
-        newEndTime: extended ? newScheduledEnd.toISOString() : undefined,
-      },
+    batch.push({
+      sql: AUCTION_VENDOR_UPDATE_AFTER_BID_SQL,
+      values: [vendorBidCount + 1, numericBid, now, numericBid, participantRecord.id, ctx.tenantId, id, vendorId, participantRecord.bidsCount],
     });
+    batch.push({
+      sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+      values: [auditId, ctx.tenantId, ctx.userId, auction.rfq.projectId, 'AUCTION', auction.id,
+        extended ? 'AUCTION_BID_AND_AUTO_EXTENDED' : 'AUCTION_BID_SUBMITTED', description, null,
+        JSON.stringify({ bidAmount: numericBid, bidNumber: bidCount, extended,
+          newEndTime: extended ? newScheduledEnd.toISOString() : undefined }),
+        clientIp, req.headers.get('user-agent'), now],
+    });
+    const results = await writeD1BatchAtomically(batch);
+    if (Number(results[0]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
+    const bidResultIndex = isItemWise ? 2 : 1;
+    if (Number(results[bidResultIndex]?.meta?.changes || 0) !== 1) {
+      return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+    }
 
     return apiSuccess({
       bid: {
-        id: bid.id,
-        bidNumber: bid.bidNumber,
+        id: bidId,
+        bidNumber: bidCount,
         bidAmount: numericBid,
-        timestamp: bid.timestamp.toISOString(),
-        vendorName: bid.vendor.name,
+        timestamp: now.toISOString(),
+        vendorName: vendorRecord!.name,
       },
       extended,
       newEndTime: newScheduledEnd.toISOString(),
       remainingBids: auction.hasBidLimit && auction.maxBidsPerParticipant
-        ? auction.maxBidsPerParticipant - (vendorBids.length + 1)
+        ? auction.maxBidsPerParticipant - (vendorBidCount + 1)
         : null,
       message: extended
         ? `Bid accepted! Rolling auto-extension triggered (+${auction.autoExtensionMinutes}m).`
         : 'Bid accepted successfully.',
     }, 201);
-  } catch (error: any) {
-    console.error('Error submitting auction bid:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitBid }), 500);
+  } catch (error) {
+    await writeStructuredLog('error', 'procurement.auction_bid_submission_failed', {
+      operation: 'submit_auction_bid', route: '/api/procurement/auctions/[id]/bid',
+      requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+      auctionId: id, durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToSubmitBid, 500);
   }
 }

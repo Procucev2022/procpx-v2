@@ -1,9 +1,19 @@
 // app/api/procurement/rfqs/[id]/compare/route.ts
 // Comprehensive Line-Level and Package-Level Quote Comparison Matrix with AI Cost, Historical PPO, and Rate Card Baselines
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { createAuditLog } from '@/lib/audit';
+import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE_SQL } from './route.constants';
+import type {
+  RfqCompareRateCardRow,
+  RfqLatestCompareNegotiationRoundRow,
+  RfqLatestCompareQuoteRow,
+} from '@app-types/app/api/procurement/rfqs/compare.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -12,6 +22,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startedAt = Date.now();
   const ctx = await requireAuth('QUOTE_COMPARE');
   if (!isApiContext(ctx)) return ctx;
 
@@ -21,14 +32,32 @@ export async function GET(
     const rfq = await prisma.rfq.findFirst({
       where: { id, tenantId: ctx.tenantId },
       include: {
-        project: true,
+        project: { select: { id: true, name: true, projectCode: true } },
         boqRevision: {
-          include: {
+          select: {
+            id: true,
+            revisionCode: true,
             lines: {
-              include: {
-                category: true,
-                subcategory: true,
-                uom: true,
+              select: {
+                id: true,
+                lineNumber: true,
+                itemCode: true,
+                standardDescription: true,
+                originalDescription: true,
+                specification: true,
+                category: { select: { name: true } },
+                subcategory: { select: { name: true } },
+                uom: { select: { code: true } },
+                costSource: true,
+                costDate: true,
+                aiUnitCost: true,
+                location: true,
+                drawingReference: true,
+                brand: true,
+                model: true,
+                material: true,
+                grade: true,
+                remarks: true,
               },
             },
           },
@@ -39,25 +68,38 @@ export async function GET(
             prNumber: true,
             title: true,
             status: true,
-            costCentre: true,
+            costCentre: { select: { id: true, code: true, name: true } },
           },
         },
         lines: {
-          include: {
+          select: {
+            id: true,
+            lineNumber: true,
+            description: true,
+            specification: true,
+            category: true,
+            subcategory: true,
+            uom: true,
+            quantity: true,
+            benchmarkRate: true,
+            boqLineId: true,
             boqLine: {
-              include: {
-                category: true,
-                subcategory: true,
-                uom: true,
+              select: {
+                id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+                category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+                costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+                brand: true, model: true, material: true, grade: true, remarks: true,
               },
             },
             prLine: {
-              include: {
+              select: {
+                estimatedRate: true,
                 boqLine: {
-                  include: {
-                    category: true,
-                    subcategory: true,
-                    uom: true,
+                  select: {
+                    id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+                    category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+                    costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+                    brand: true, model: true, material: true, grade: true, remarks: true,
                   },
                 },
               },
@@ -65,26 +107,20 @@ export async function GET(
           },
           orderBy: { lineNumber: 'asc' },
         },
-        invitedVendors: {
-          include: { vendor: true },
-        },
-        quotes: {
-          include: {
-            vendor: true,
-            lines: true,
-          },
-          orderBy: [{ quoteVersion: 'desc' }, { createdAt: 'desc' }],
-        },
         negotiations: {
-          include: {
-            rounds: {
-              include: { vendor: true },
-              orderBy: { roundNumber: 'desc' },
-            },
+          select: {
+            id: true,
+            status: true,
+            currentRound: true,
           },
         },
         awards: {
-          include: { recommendedVendor: true },
+          select: {
+            id: true, recommendedVendorId: true, originalQuoteAmount: true, finalNegotiatedAmount: true,
+            benchmarkAmount: true, totalSavingsAmount: true, savingsPercent: true, justification: true,
+            status: true, submittedAt: true, approvedAt: true, approvalRemarks: true,
+            recommendedVendor: { select: { id: true, name: true, code: true } },
+          },
         },
       },
     });
@@ -93,22 +129,179 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
     }
 
-    // 1. Group quotes by vendor to keep full version history and evaluate latest active quote
-    const allQuotesByVendor: Record<string, typeof rfq.quotes> = {};
-    for (const q of rfq.quotes) {
-      if (!allQuotesByVendor[q.vendorId]) {
-        allQuotesByVendor[q.vendorId] = [];
+    // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.
+    const latestQuoteRows = await prisma.$queryRaw<RfqLatestCompareQuoteRow[]>(Prisma.sql`
+      WITH latest_quotes AS (
+        SELECT quote."tenantId", quote."rfqId", quote."vendorId",
+          COUNT(*) AS "versionCount", MAX(quote."quoteVersion") AS "latestVersion"
+        FROM "quotes" AS quote
+        WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${id}
+        GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+      )
+      SELECT latest."id" AS "quoteId", latest."vendorId", latest."quoteNumber", latest."quoteVersion",
+        summary."versionCount", latest."totalQuoteAmount", latest."submittedAt", latest."status",
+        latest."commercialTerms", latest."paymentTermsOffered", latest."deliveryLeadTimeDays",
+        vendor."name" AS "vendorName", vendor."code" AS "vendorCode", vendor."vendorType",
+        vendor."qualificationStatus", vendor."complianceStatus", vendor."performanceScore",
+        quoteLine."id" AS "quoteLineId", quoteLine."rfqLineId", quoteLine."unitRate", quoteLine."lineTotal",
+        quoteLine."discountPercent", quoteLine."taxPercent"
+      FROM latest_quotes AS summary
+      INNER JOIN "quotes" AS latest
+        ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
+          AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
+      LEFT JOIN "vendors" AS vendor
+        ON vendor."id" = latest."vendorId" AND vendor."tenantId" = latest."tenantId"
+      LEFT JOIN "quote_lines" AS quoteLine
+        ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
+    `);
+    const latestQuotesById = new Map<string, {
+      id: string;
+      vendorId: string;
+      quoteNumber: string;
+      quoteVersion: number;
+      versionCount: number;
+      totalQuoteAmount: number;
+      submittedAt: string | Date;
+      status: string;
+      commercialTerms: string | null;
+      paymentTermsOffered: string | null;
+      deliveryLeadTimeDays: number | null;
+      vendor: {
+        id: string;
+        name: string;
+        code: string;
+        vendorType: string | null;
+        qualificationStatus: string | null;
+        complianceStatus: string | null;
+        performanceScore: number | null;
+      };
+      lines: Array<{
+        id: string;
+        rfqLineId: string;
+        unitRate: number;
+        lineTotal: number;
+        discountPercent: number;
+        taxPercent: number;
+      }>;
+    }>();
+    for (const row of latestQuoteRows) {
+      let quote = latestQuotesById.get(row.quoteId);
+      if (!quote) {
+        quote = {
+          id: row.quoteId,
+          vendorId: row.vendorId,
+          quoteNumber: row.quoteNumber,
+          quoteVersion: Number(row.quoteVersion),
+          versionCount: Number(row.versionCount),
+          totalQuoteAmount: Number(row.totalQuoteAmount),
+          submittedAt: row.submittedAt,
+          status: row.status,
+          commercialTerms: row.commercialTerms,
+          paymentTermsOffered: row.paymentTermsOffered,
+          deliveryLeadTimeDays: row.deliveryLeadTimeDays,
+          vendor: {
+            id: row.vendorId,
+            name: row.vendorName || '',
+            code: row.vendorCode || '',
+            vendorType: row.vendorType,
+            qualificationStatus: row.qualificationStatus,
+            complianceStatus: row.complianceStatus,
+            performanceScore: row.performanceScore,
+          },
+          lines: [],
+        };
+        latestQuotesById.set(row.quoteId, quote);
       }
-      allQuotesByVendor[q.vendorId].push(q);
+      if (row.quoteLineId && row.rfqLineId) {
+        quote.lines.push({
+          id: row.quoteLineId,
+          rfqLineId: row.rfqLineId,
+          unitRate: Number(row.unitRate || 0),
+          lineTotal: Number(row.lineTotal || 0),
+          discountPercent: Number(row.discountPercent || 0),
+          taxPercent: Number(row.taxPercent || 0),
+        });
+      }
     }
+    const evaluatedQuotes = [...latestQuotesById.values()];
 
-    const latestQuotesByVendor: Record<string, typeof rfq.quotes[0]> = {};
-    for (const [vendorId, quoteList] of Object.entries(allQuotesByVendor)) {
-      // Sort by quoteVersion descending
-      const sorted = [...quoteList].sort((a, b) => b.quoteVersion - a.quoteVersion);
-      latestQuotesByVendor[vendorId] = sorted[0];
-    }
-    const evaluatedQuotes = Object.values(latestQuotesByVendor);
+    const latestNegotiationRoundRows = rfq.negotiations.length > 0
+      ? await prisma.$queryRaw<RfqLatestCompareNegotiationRoundRow[]>(Prisma.sql`
+        WITH negotiation_round_summaries AS (
+          SELECT rounds."tenantId", rounds."negotiationId", rounds."vendorId",
+            MAX(rounds."roundNumber") AS "latestRoundNumber",
+            COUNT(*) AS "totalRoundCount",
+            SUM(CASE WHEN rounds."status" <> 'SUPERSEDED' AND (
+              rounds."counterOfferAmount" IS NOT NULL OR
+              (rounds."revisedQuoteAmount" IS NULL AND rounds."nextResponsibleParty" = 'VENDOR')
+            ) THEN 1 ELSE 0 END) AS "activeBuyerOfferCount"
+          FROM "negotiation_rounds" AS rounds
+          INNER JOIN "negotiations" AS negotiation
+            ON negotiation."id" = rounds."negotiationId" AND negotiation."tenantId" = rounds."tenantId"
+          WHERE rounds."tenantId" = ${ctx.tenantId} AND negotiation."rfqId" = ${id}
+          GROUP BY rounds."tenantId", rounds."negotiationId", rounds."vendorId"
+        )
+        SELECT rounds."vendorId", rounds."roundNumber", rounds."lineItemsJson", rounds."counterOfferAmount",
+          rounds."revisedQuoteAmount", rounds."status", rounds."nextResponsibleParty", rounds."buyerDecision",
+          summary."totalRoundCount", summary."activeBuyerOfferCount",
+          submitted."id" AS "submittedRoundId", submitted."roundNumber" AS "submittedRoundNumber",
+          submitted."revisedQuoteAmount" AS "submittedRevisedQuoteAmount", submitted."status" AS "submittedStatus",
+          submitted."nextResponsibleParty" AS "submittedNextResponsibleParty", submitted."buyerDecision" AS "submittedBuyerDecision",
+          pending."id" AS "pendingRoundId", pending."roundNumber" AS "pendingRoundNumber",
+          pending."counterOfferAmount" AS "pendingCounterOfferAmount", pending."revisedQuoteAmount" AS "pendingRevisedQuoteAmount",
+          pending."status" AS "pendingStatus", pending."nextResponsibleParty" AS "pendingNextResponsibleParty",
+          pending."buyerDecision" AS "pendingBuyerDecision"
+        FROM negotiation_round_summaries AS summary
+        INNER JOIN "negotiation_rounds" AS rounds
+          ON rounds."tenantId" = summary."tenantId" AND rounds."negotiationId" = summary."negotiationId"
+            AND rounds."vendorId" = summary."vendorId" AND rounds."roundNumber" = summary."latestRoundNumber"
+        LEFT JOIN "negotiation_rounds" AS submitted
+          ON submitted."id" = (
+            SELECT candidate."id" FROM "negotiation_rounds" AS candidate
+            WHERE candidate."tenantId" = summary."tenantId" AND candidate."negotiationId" = summary."negotiationId"
+              AND candidate."vendorId" = summary."vendorId" AND candidate."revisedQuoteAmount" > 0
+              AND candidate."status" IN ('REVISED_SUBMITTED', 'FINAL_OFFER_SUBMITTED')
+              AND (candidate."nextResponsibleParty" = 'BUYER' OR candidate."buyerDecision" IS NOT NULL)
+            ORDER BY candidate."roundNumber" DESC LIMIT 1
+          )
+        LEFT JOIN "negotiation_rounds" AS pending
+          ON pending."id" = (
+            SELECT candidate."id" FROM "negotiation_rounds" AS candidate
+            WHERE candidate."tenantId" = summary."tenantId" AND candidate."negotiationId" = summary."negotiationId"
+              AND candidate."vendorId" = summary."vendorId" AND candidate."status" <> 'SUPERSEDED'
+              AND candidate."counterOfferAmount" > 0
+              AND (candidate."revisedQuoteAmount" IS NULL OR candidate."revisedQuoteAmount" = 0
+                OR candidate."nextResponsibleParty" = 'VENDOR')
+            ORDER BY candidate."roundNumber" DESC LIMIT 1
+          )
+        ORDER BY rounds."vendorId" ASC
+      `)
+      : [];
+    const latestNegotiationRoundByVendor = new Map(
+      latestNegotiationRoundRows.map((round) => [round.vendorId, round])
+    );
+    const negotiationSummaries = latestNegotiationRoundRows.map((round) => ({
+      vendorId: round.vendorId,
+      totalRoundCount: Number(round.totalRoundCount),
+      activeBuyerOfferCount: Number(round.activeBuyerOfferCount),
+      submittedRevisionRound: round.submittedRoundId ? {
+        id: round.submittedRoundId,
+        roundNumber: round.submittedRoundNumber,
+        revisedQuoteAmount: round.submittedRevisedQuoteAmount,
+        status: round.submittedStatus,
+        nextResponsibleParty: round.submittedNextResponsibleParty,
+        buyerDecision: round.submittedBuyerDecision,
+      } : null,
+      pendingBuyerOffer: round.pendingRoundId ? {
+        id: round.pendingRoundId,
+        roundNumber: round.pendingRoundNumber,
+        counterOfferAmount: round.pendingCounterOfferAmount,
+        revisedQuoteAmount: round.pendingRevisedQuoteAmount,
+        status: round.pendingStatus,
+        nextResponsibleParty: round.pendingNextResponsibleParty,
+        buyerDecision: round.pendingBuyerDecision,
+      } : null,
+    }));
 
     // 2. Fetch historical PPO lines for baseline price comparison
     const historicalPpoLines = await prisma.ppoLine.findMany({
@@ -148,56 +341,60 @@ export async function GET(
 
     // 3. Fetch active approved rate cards in the tenant
     const now = new Date();
-    const approvedRateCards = await prisma.vendorRateCard.findMany({
-      where: {
-        tenantId: ctx.tenantId,
-        status: 'APPROVED',
-        validFrom: { lte: now },
-        validTo: { gte: now },
-      },
-      include: {
-        vendor: { select: { id: true, name: true, code: true } },
-        items: true,
-      },
-    });
+    const rateCardDescriptions = [...new Set(rfq.lines.map((line) => line.description.toLowerCase().trim()).filter(Boolean))];
+    const descriptionChunks: string[][] = [];
+    for (let offset = 0; offset < rateCardDescriptions.length; offset += RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE) {
+      descriptionChunks.push(rateCardDescriptions.slice(offset, offset + RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE));
+    }
+    const [approvedRateCardsCount, rateCardRowsByChunk] = await Promise.all([
+      prisma.vendorRateCard.count({
+        where: { tenantId: ctx.tenantId, status: 'APPROVED', validFrom: { lte: now }, validTo: { gte: now } },
+      }),
+      Promise.all(descriptionChunks.map((descriptions) => prisma.$queryRaw<RfqCompareRateCardRow[]>(Prisma.sql`
+        SELECT item."description" AS "description", item."rate" AS "rate",
+          card."rateCardNumber" AS "rateCardNumber", card."version" AS "version", card."status" AS "status",
+          card."validFrom" AS "validFrom", card."validTo" AS "validTo", card."vendorId" AS "vendorId",
+          vendor."name" AS "vendorName"
+        FROM "vendor_rate_card_items" item
+        INNER JOIN "vendor_rate_cards" card ON card."id" = item."rateCardId" AND card."tenantId" = item."tenantId"
+        INNER JOIN "vendors" vendor ON vendor."id" = card."vendorId" AND vendor."tenantId" = card."tenantId"
+        WHERE item."tenantId" = ${ctx.tenantId} AND item."isActive" = 1
+          AND card."status" = 'APPROVED' AND card."validFrom" <= ${now} AND card."validTo" >= ${now}
+          AND lower(trim(item."description")) IN (${Prisma.join(descriptions)})
+        ORDER BY card."vendorId" ASC, lower(trim(item."description")) ASC,
+          card."version" DESC, card."validFrom" DESC, card."updatedAt" DESC, card."id" DESC, item."id" ASC
+      `))),
+    ]);
+    const approvedRateCards = rateCardRowsByChunk.flat();
 
     const rateCardItemsMap = new Map<string, { rate: number; rateCardNumber: string; vendorName: string; validTo: string }>();
     const vendorRateCardMap = new Map<string, { rate: number; rateCardNumber: string; version: string; validity: string; status: string }>();
-    for (const rc of approvedRateCards) {
-      for (const item of rc.items) {
-        const key = item.description.toLowerCase().trim();
-        if (!rateCardItemsMap.has(key)) {
-          rateCardItemsMap.set(key, {
-            rate: item.rate,
-            rateCardNumber: rc.rateCardNumber,
-            vendorName: rc.vendor.name,
-            validTo: rc.validTo.toISOString().split('T')[0],
-          });
-        }
-        const vendorKey = `${rc.vendorId}___${key}`;
-        if (!vendorRateCardMap.has(vendorKey)) {
-          vendorRateCardMap.set(vendorKey, {
-            rate: item.rate,
-            rateCardNumber: rc.rateCardNumber,
-            version: `v${rc.version}.0`,
-            validity: `${rc.validFrom.toISOString().split('T')[0]} to ${rc.validTo.toISOString().split('T')[0]}`,
-            status: rc.status,
-          });
-        }
+    for (const item of approvedRateCards) {
+      const key = item.description.toLowerCase().trim();
+      const validFrom = new Date(item.validFrom);
+      const validTo = new Date(item.validTo);
+      if (!rateCardItemsMap.has(key)) {
+        rateCardItemsMap.set(key, {
+          rate: item.rate,
+          rateCardNumber: item.rateCardNumber,
+          vendorName: item.vendorName,
+          validTo: validTo.toISOString().split('T')[0],
+        });
+      }
+      const vendorKey = `${item.vendorId}___${key}`;
+      if (!vendorRateCardMap.has(vendorKey)) {
+        vendorRateCardMap.set(vendorKey, {
+          rate: item.rate,
+          rateCardNumber: item.rateCardNumber,
+          version: `v${item.version}.0`,
+          validity: `${validFrom.toISOString().split('T')[0]} to ${validTo.toISOString().split('T')[0]}`,
+          status: item.status,
+        });
       }
     }
 
     // 4. Vendors participating in comparison
     const vendors = evaluatedQuotes.map((q) => {
-      const allRevisions = (allQuotesByVendor[q.vendorId] || []).map((rev) => ({
-        id: rev.id,
-        quoteNumber: rev.quoteNumber,
-        version: rev.quoteVersion,
-        totalAmount: rev.totalQuoteAmount,
-        submittedAt: rev.submittedAt,
-        status: rev.status,
-      }));
-
       const quotedLineIds = new Set(q.lines.filter((l) => l.unitRate > 0).map((l) => l.rfqLineId));
       const totalRfqLines = rfq.lines.length;
       const quotedCount = quotedLineIds.size;
@@ -215,6 +412,7 @@ export async function GET(
         quoteId: q.id,
         quoteNumber: q.quoteNumber,
         quoteVersion: q.quoteVersion,
+        versionCount: q.versionCount,
         totalQuoteAmount: q.totalQuoteAmount,
         commercialTerms: q.commercialTerms,
         paymentTermsOffered: q.paymentTermsOffered,
@@ -224,13 +422,13 @@ export async function GET(
         quotedCount,
         missingLineCount,
         isComplete: missingLineCount === 0,
-        revisions: allRevisions,
       };
     });
 
     // 5. Line-level comparison matrix
     let totalAiBenchmark = 0;
     const vendorTotals: Record<string, number> = {};
+    const invalidNegotiationRounds = new Set<string>();
     vendors.forEach((v) => (vendorTotals[v.vendorId] = 0));
 
     const lineComparison = rfq.lines.map((rfqLine) => {
@@ -265,12 +463,7 @@ export async function GET(
         // Vendor-specific Rate Card
         const vendorRc = vendorRateCardMap.get(`${q.vendorId}___${reqDesc}`);
 
-        // Negotiation rounds for this vendor - sort descending by roundNumber
-        const allRounds = rfq.negotiations
-          .flatMap((n) => n.rounds)
-          .filter((r) => r.vendorId === q.vendorId)
-          .sort((a, b) => (b.roundNumber || 1) - (a.roundNumber || 1));
-        const latestRound = allRounds[0];
+        const latestRound = latestNegotiationRoundByVendor.get(q.vendorId);
 
         // 3. Our Offer Rate (persisted buyer counteroffer for this line/round)
         let ourOfferRate: number | null = null;
@@ -282,8 +475,12 @@ export async function GET(
               if (matchItem?.counterRate !== undefined && matchItem?.counterRate !== null) {
                 ourOfferRate = Number(matchItem.counterRate);
               }
+            } else {
+              invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
             }
-          } catch {}
+          } catch {
+            invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
+          }
         }
         if (ourOfferRate === null && latestRound?.counterOfferAmount && q.totalQuoteAmount > 0) {
           ourOfferRate = Math.round(rate * (latestRound.counterOfferAmount / q.totalQuoteAmount));
@@ -299,7 +496,7 @@ export async function GET(
           (latestRound.nextResponsibleParty === 'BUYER' || latestRound.buyerDecision !== null)
         );
 
-        if (isRevisionSubmitted) {
+        if (isRevisionSubmitted && latestRound) {
           if (latestRound.lineItemsJson) {
             try {
               const items = typeof latestRound.lineItemsJson === 'string' ? JSON.parse(latestRound.lineItemsJson) : latestRound.lineItemsJson;
@@ -308,8 +505,12 @@ export async function GET(
                 if (matchItem?.revisedRate !== undefined && matchItem?.revisedRate !== null) {
                   finalNegotiatedRate = Number(matchItem.revisedRate);
                 }
-              }
-            } catch {}
+            } else {
+              invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
+            }
+            } catch {
+              invalidNegotiationRounds.add(`${q.vendorId}:${latestRound.roundNumber || 1}`);
+            }
           }
           if (finalNegotiatedRate === null && latestRound.revisedQuoteAmount && q.totalQuoteAmount > 0) {
             finalNegotiatedRate = Math.round(rate * (latestRound.revisedQuoteAmount / q.totalQuoteAmount));
@@ -450,31 +651,49 @@ export async function GET(
     // Check if active negotiation exists for this RFQ
     const activeNegotiation = rfq.negotiations.find((n) => n.status === 'ACTIVE') || rfq.negotiations[0] || null;
 
-    // Auto-transition RFQ to COMPARISON status if still open
+    const comparisonDescription = interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() });
+    let responseStatus = rfq.status;
     if (rfq.status === 'VENDOR_RESPONSE_OPEN' || rfq.status === 'RELEASED') {
-      await prisma.rfq.update({
-        where: { id },
-        data: { status: 'COMPARISON' },
+      const transitionedAt = new Date();
+      const results = await writeD1BatchAtomically([
+        { sql: RFQ_COMPARE_STATUS_UPDATE_SQL, values: [transitionedAt, id, ctx.tenantId, rfq.status] },
+        {
+          sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+          values: [crypto.randomUUID(), ctx.tenantId, ctx.userId, rfq.projectId, 'RFQ', rfq.id,
+            'QUOTE_COMPARED', comparisonDescription, JSON.stringify({ status: rfq.status }),
+            JSON.stringify({ status: 'COMPARISON', evaluatedQuotes: evaluatedQuotes.length }), null, null, transitionedAt],
+        },
+      ]);
+      if (Number(results[0]?.meta?.changes || 0) === 1 && Number(results[1]?.meta?.changes || 0) === 1) {
+        responseStatus = 'COMPARISON';
+      }
+    } else {
+      await createAuditLog({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        projectId: rfq.projectId,
+        entityType: 'RFQ',
+        entityId: rfq.id,
+        action: 'QUOTE_COMPARED',
+        description: comparisonDescription,
       });
     }
 
-    // Audit comparison action
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: rfq.projectId,
-      entityType: 'RFQ',
-      entityId: rfq.id,
-      action: 'QUOTE_COMPARED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdCompareRoute.evaluatedLengthVendorQuotesForRFQRfqNumberL1Value3ToLocaleString, { "length": evaluatedQuotes.length, "rfqNumber": rfq.rfqNumber, "value3": lowestQuote?.vendorName || UI_STRINGS.common.none, "toLocaleString": lowestQuoteTotal.toLocaleString() }),
-    });
+    if (invalidNegotiationRounds.size > 0) {
+      await writeStructuredLog('warn', 'procurement.negotiation_line_items_invalid', {
+        operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
+        requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+        rfqId: rfq.id, invalidRoundCount: invalidNegotiationRounds.size,
+        negotiationRoundIds: [...invalidNegotiationRounds].slice(0, 20),
+      });
+    }
 
     return apiSuccess({
       rfq: {
         id: rfq.id,
         rfqNumber: rfq.rfqNumber,
         title: rfq.title,
-        status: rfq.status,
+        status: responseStatus,
         project: rfq.project,
         boqRevision: rfq.boqRevision,
         pr: rfq.pr,
@@ -486,6 +705,7 @@ export async function GET(
       vendors: allRankedVendors,
       lines: lineComparison,
       activeNegotiation,
+      negotiationSummaries,
       awards: rfq.awards,
       summary: {
         packageTotal: benchmarkTotal,
@@ -496,12 +716,18 @@ export async function GET(
         savings: totalSavings,
         savingsPercent: Math.round(savingsPercent * 100) / 100,
         isFavorable: totalSavings >= 0,
-        hasApprovedRateCards: approvedRateCards.length > 0,
-        approvedRateCardsCount: approvedRateCards.length,
+        hasApprovedRateCards: approvedRateCardsCount > 0,
+        approvedRateCardsCount,
       },
     });
   } catch (error: any) {
-    console.error('Error generating quote comparison:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToCompareQuotes }), 500);
+    await writeStructuredLog('error', 'procurement.rfq_quote_comparison_failed', {
+      operation: 'compare_rfq_quotes', route: `/api/procurement/rfqs/${id}/compare`,
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+      tenantId: ctx.tenantId, userId: ctx.userId, rfqId: id,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
   }
 }

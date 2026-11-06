@@ -5,15 +5,21 @@ import { requireAuth, isApiContext, apiSuccess } from '../src/lib/api-utils';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     user: { findMany: jest.fn() },
     budget: { findMany: jest.fn() },
-    budgetContribution: { findMany: jest.fn(), count: jest.fn() },
-    procurementRequest: { findMany: jest.fn(), count: jest.fn() },
+    budgetContribution: { findMany: jest.fn(), count: jest.fn(), aggregate: jest.fn() },
+    procurementRequest: { findMany: jest.fn(), count: jest.fn(), aggregate: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(), isApiContext: jest.fn(),
   apiSuccess: jest.fn((data: unknown) => ({ ok: true, data })),
+  getListPageWindow: (params: URLSearchParams) => {
+    const page = Number(params.get('page')) || 1;
+    const pageSize = Number(params.get('pageSize')) || 50;
+    return { page, pageSize, skip: (page - 1) * pageSize };
+  },
 }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
@@ -34,11 +40,14 @@ describe('dual approval queues API', () => {
     isContext.mockReturnValue(true);
     successResponse.mockImplementation((data: unknown) => ({ ok: true, data }));
     db.user.findMany.mockResolvedValue(users);
+    (db as unknown as { $queryRaw: jest.Mock }).$queryRaw.mockResolvedValue([]);
     db.budget.findMany.mockResolvedValue([]);
     db.budgetContribution.findMany.mockResolvedValue([]);
     db.procurementRequest.findMany.mockResolvedValue([]);
     db.budgetContribution.count.mockResolvedValue(0);
     db.procurementRequest.count.mockResolvedValue(0);
+    db.budgetContribution.aggregate.mockResolvedValue({ _sum: { totalEstimatedValue: 0, acceptedEstimatedValue: 0 } });
+    db.procurementRequest.aggregate.mockResolvedValue({ _sum: { totalEstimatedValue: 0 } });
   });
 
   it('returns the auth response before reading queue data', async () => {
@@ -66,10 +75,16 @@ describe('dual approval queues API', () => {
         transactions: [], approvals: [],
       },
     ]);
+    (db as unknown as { $queryRaw: jest.Mock }).$queryRaw.mockResolvedValueOnce([
+      { entityId: 'contribution-1', category: 'Electrical', categoryCount: 1 },
+    ]);
     db.procurementRequest.findMany.mockResolvedValueOnce([
-      { id: 'pr-1', requestedBy: 'requester-1', lines: [{ category: 'Civil' }, { category: 'Civil' }, { category: null }], boq: { category: 'Fallback' }, approvals: [{ status: 'ENQUIRY', reason: 'More info' }] },
-      { id: 'pr-2', requestedBy: 'external-requester', lines: [], boq: { category: 'Mechanical' }, approvals: [] },
-      { id: 'pr-3', requestedBy: 'external-requester', lines: [], boq: { category: null }, approvals: [] },
+      { id: 'pr-1', requestedBy: 'requester-1', _count: { lines: 3, rfqs: 1 }, boq: { category: 'Fallback' }, approvals: [{ status: 'ENQUIRY', reason: 'More info' }] },
+      { id: 'pr-2', requestedBy: 'external-requester', _count: { lines: 0, rfqs: 0 }, boq: { category: 'Mechanical' }, approvals: [] },
+      { id: 'pr-3', requestedBy: 'external-requester', _count: { lines: 0, rfqs: 0 }, boq: { category: null }, approvals: [] },
+    ]);
+    (db as unknown as { $queryRaw: jest.Mock }).$queryRaw.mockResolvedValueOnce([
+      { entityId: 'pr-1', category: 'Civil', categoryCount: 1 },
     ]);
     db.budgetContribution.count.mockResolvedValueOnce(3).mockResolvedValueOnce(2).mockResolvedValueOnce(7).mockResolvedValueOnce(1);
     db.procurementRequest.count.mockResolvedValueOnce(4).mockResolvedValueOnce(2);
@@ -88,7 +103,7 @@ describe('dual approval queues API', () => {
         },
       ],
       prQueue: [
-        { id: 'pr-1', requesterName: 'Rory Requester', requesterEmail: 'rory@example.com', categories: ['Civil'], hasEnquiry: true },
+        { id: 'pr-1', totalLines: 3, totalRfqs: 1, requesterName: 'Rory Requester', requesterEmail: 'rory@example.com', categories: ['Civil'], hasEnquiry: true },
         { id: 'pr-2', requesterName: 'external-requester', requesterEmail: '', categories: ['Mechanical'], hasEnquiry: false },
         { id: 'pr-3', categories: ['Standard'] },
       ],
@@ -97,6 +112,21 @@ describe('dual approval queues API', () => {
     } });
     expect(db.budgetContribution.findMany).toHaveBeenCalledTimes(1);
     expect(db.procurementRequest.findMany).toHaveBeenCalledTimes(1);
+    const prQuery = db.procurementRequest.findMany.mock.calls.at(-1)?.[0];
+    expect(prQuery.include).not.toHaveProperty('lines');
+    expect(prQuery.include.approvals).toMatchObject({ take: 1 });
+    const categoryQueries = (db as unknown as { $queryRaw: jest.Mock }).$queryRaw.mock.calls
+      .map(([query]) => query as { sql: string; values: unknown[] });
+    expect(categoryQueries).toHaveLength(2);
+    expect(categoryQueries[0].sql).toContain('ROW_NUMBER() OVER (PARTITION BY "entityId"');
+    expect(categoryQueries[0].sql).toContain('WHERE "categoryRank" <= ?');
+    expect(categoryQueries[0].values).toContain('tenant-1');
+    expect(categoryQueries[0].values).toContain('contribution-1');
+    expect(categoryQueries[1].values).toContain('pr-1');
+    const budgetQuery = db.budgetContribution.findMany.mock.calls.at(-1)?.[0];
+    expect(budgetQuery.include.transactions).toBeUndefined();
+    expect(budgetQuery.include.boqRevision.select.lines).toBeUndefined();
+    expect(budgetQuery.include.approvals).toMatchObject({ take: 1 });
   });
 
   it('shows finance queues only to finance users and applies accepted value and project approval fallbacks', async () => {
@@ -115,6 +145,9 @@ describe('dual approval queues API', () => {
         submittedBy: null, createdBy: 'not-in-directory', projectApprovedBy: null, projectApprovedAt: new Date('2026-02-02'),
         transactions: [], approvals: [],
       },
+    ]);
+    (db as unknown as { $queryRaw: jest.Mock }).$queryRaw.mockResolvedValueOnce([
+      { entityId: 'finance-1', category: 'Civil', categoryCount: 1 },
     ]);
     db.budgetContribution.count.mockResolvedValueOnce(2).mockResolvedValueOnce(4).mockResolvedValueOnce(6).mockResolvedValueOnce(8);
     db.procurementRequest.count.mockResolvedValueOnce(10).mockResolvedValueOnce(1);
@@ -148,5 +181,34 @@ describe('dual approval queues API', () => {
     await GET(request(`?type=${type}`));
     expect(db.budgetContribution.findMany).toHaveBeenCalledTimes(expectedContributionCalls);
     expect(db.procurementRequest.findMany).toHaveBeenCalledTimes(expectedPrCalls);
+  });
+
+  it('bounds queue reads to a stable page and returns full counts and aggregate totals', async () => {
+    db.budgetContribution.count.mockResolvedValue(52);
+    db.procurementRequest.count.mockResolvedValue(3);
+    db.budgetContribution.aggregate.mockResolvedValueOnce({ _sum: { totalEstimatedValue: 1250 } });
+    db.procurementRequest.aggregate.mockResolvedValueOnce({ _sum: { totalEstimatedValue: 640 } });
+    await expect(GET(request('?type=PR&page=2&pageSize=25'))).resolves.toMatchObject({ ok: true, data: {
+      pagination: { page: 2, pageSize: 25, queues: { pr: { total: 3, totalPages: 1 } } },
+      totals: { budgetPendingAmount: 1250, prPendingAmount: 640, financePendingAmount: 0 },
+    } });
+    expect(db.procurementRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      skip: 25, take: 25, orderBy: [{ requestedDate: 'desc' }, { id: 'desc' }],
+    }));
+  });
+
+  it('caps free-text category previews per queue record while preserving the total count', async () => {
+    db.budgetContribution.findMany.mockResolvedValueOnce([
+      { id: 'contribution-many', costCentreId: 'cc-1', totalEstimatedValue: 10, submittedBy: 'submitter-1', createdBy: 'submitter-1', approvals: [] },
+    ]);
+    (db as unknown as { $queryRaw: jest.Mock }).$queryRaw.mockResolvedValueOnce(
+      Array.from({ length: 8 }, (_, index) => ({
+        entityId: 'contribution-many', category: `Category ${index + 1}`, categoryCount: 14,
+      })),
+    );
+
+    await expect(GET(request('?type=BUDGET'))).resolves.toMatchObject({ ok: true, data: {
+      budgetQueue: [{ categories: ['Category 1', 'Category 2', 'Category 3', 'Category 4', 'Category 5', 'Category 6', 'Category 7', 'Category 8'], remainingCategoryCount: 6 }],
+    } });
   });
 });

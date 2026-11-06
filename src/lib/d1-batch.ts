@@ -1,0 +1,143 @@
+import type { D1BatchDatabase, D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
+import {
+  D1_BATCH_STATEMENT_FAILED,
+  D1_BATCH_STATEMENT_LIMIT_EXCEEDED,
+  D1_BATCH_BINDING_LIMIT_EXCEEDED,
+  D1_STATEMENT_BINDING_LIMIT_EXCEEDED,
+  D1_BINDING_SIZE_LIMIT_EXCEEDED,
+  MAX_D1_BATCH_BINDINGS,
+  MAX_D1_BATCH_STATEMENTS,
+  MAX_D1_STATEMENT_BINDINGS,
+  MAX_D1_BINDING_BYTES,
+  RFQ_VENDOR_INVITATION_UPSERT_SQL,
+  RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+} from './d1-batch.constants';
+import { UI_STRINGS } from './ui-strings.constants';
+import { writeStructuredLog } from './observability/server-logger';
+
+export type D1BatchLimitViolation = 'statement_count' | 'batch_bindings' | 'statement_bindings' | 'binding_size';
+
+function getBindingSizeBytes(value: unknown): number {
+  if (typeof value === 'string') return new TextEncoder().encode(value).byteLength;
+  if (value instanceof Date) return new TextEncoder().encode(value.toISOString()).byteLength;
+  if (value instanceof ArrayBuffer) return value.byteLength;
+  if (ArrayBuffer.isView(value)) return value.byteLength;
+  return 0;
+}
+
+export function getD1BatchLimitViolation(input: D1BatchInputStatement[]): D1BatchLimitViolation | null {
+  if (input.length > MAX_D1_BATCH_STATEMENTS) return 'statement_count';
+  if (input.some(({ values }) => values.length > MAX_D1_STATEMENT_BINDINGS)) return 'statement_bindings';
+  if (input.some(({ values }) => values.some((value) => getBindingSizeBytes(value) > MAX_D1_BINDING_BYTES))) return 'binding_size';
+  const bindingCount = input.reduce((total, statement) => total + statement.values.length, 0);
+  return bindingCount > MAX_D1_BATCH_BINDINGS ? 'batch_bindings' : null;
+}
+
+export function isD1BatchWithinLimits(input: D1BatchInputStatement[]): boolean {
+  return getD1BatchLimitViolation(input) === null;
+}
+
+async function logD1BatchLimitViolation(input: D1BatchInputStatement[], violation: D1BatchLimitViolation): Promise<void> {
+  const bindingCount = input.reduce((total, statement) => total + statement.values.length, 0);
+  const maxBindingBytes = input.reduce((maximum, statement) => Math.max(
+    maximum,
+    ...statement.values.map(getBindingSizeBytes),
+  ), 0);
+  await writeStructuredLog('error', 'database.d1_batch_limit_exceeded', {
+    operation: 'execute_d1_batch',
+    violation,
+    statementCount: input.length,
+    bindingCount,
+    maxStatements: MAX_D1_BATCH_STATEMENTS,
+    maxBindings: MAX_D1_BATCH_BINDINGS,
+    maxBindingsPerStatement: MAX_D1_STATEMENT_BINDINGS,
+    maxBindingBytes,
+    safeBindingByteLimit: MAX_D1_BINDING_BYTES,
+  });
+}
+
+export function getD1BatchDatabase(): D1BatchDatabase {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getCloudflareContext } = require('@opennextjs/cloudflare') as typeof import('@opennextjs/cloudflare');
+  const context = getCloudflareContext() as unknown as { env?: { DB?: D1BatchDatabase } };
+  const database = context.env?.DB;
+  if (!database || typeof database.batch !== 'function') {
+    throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.d1BatchBindingUnavailable);
+  }
+  return database;
+}
+
+export async function runD1BatchAtomically(
+  database: D1BatchDatabase,
+  input: D1BatchInputStatement[],
+): Promise<D1BatchResult[]> {
+  if (input.length === 0) return [];
+  const violation = getD1BatchLimitViolation(input);
+  if (violation) {
+    try {
+      await logD1BatchLimitViolation(input, violation);
+    } catch {
+      // Preserve the limit rejection when optional log storage is unavailable.
+    }
+    if (violation === 'statement_count') throw new Error(D1_BATCH_STATEMENT_LIMIT_EXCEEDED);
+    if (violation === 'statement_bindings') throw new Error(D1_STATEMENT_BINDING_LIMIT_EXCEEDED);
+    if (violation === 'binding_size') throw new Error(D1_BINDING_SIZE_LIMIT_EXCEEDED);
+    throw new Error(D1_BATCH_BINDING_LIMIT_EXCEEDED);
+  }
+  const results = await database.batch(input.map(({ sql, values }) => database.prepare(sql).bind(
+    ...values.map((value) => value instanceof Date ? value.toISOString() : value),
+  )));
+  if (results.some((result) => result.success === false)) {
+    throw new Error(D1_BATCH_STATEMENT_FAILED);
+  }
+  return results;
+}
+
+export async function writeD1BatchAtomically(input: D1BatchInputStatement[]): Promise<D1BatchResult[]> {
+  return runD1BatchAtomically(getD1BatchDatabase(), input);
+}
+
+export async function upsertRfqVendorInvitations(
+  database: D1BatchDatabase,
+  input: { tenantId: string; rfqId: string; vendorIds: string[]; invitationStatus: string },
+): Promise<number> {
+  if (input.vendorIds.length === 0) return 0;
+  if (input.vendorIds.length > MAX_D1_BATCH_STATEMENTS) {
+    throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.maximumVendorInviteBatchLimit);
+  }
+
+  let results: D1BatchResult[];
+  try {
+    results = await runD1BatchAtomically(database, input.vendorIds.map((vendorId) => ({
+      sql: RFQ_VENDOR_INVITATION_UPSERT_SQL,
+      values: [crypto.randomUUID(), input.tenantId, input.rfqId, vendorId, input.invitationStatus],
+    })));
+  } catch (error) {
+    if (error instanceof Error && error.message === D1_BATCH_STATEMENT_FAILED) {
+      throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors);
+    }
+    throw error;
+  }
+  return results.reduce((total, result) => total + Number(result.meta?.changes || 0), 0);
+}
+
+export async function writeRfqVendorInvitationsAtomically(
+  input: { tenantId: string; rfqId: string; vendorIds: string[]; invitationStatus: string },
+): Promise<number> {
+  return upsertRfqVendorInvitations(getD1BatchDatabase(), input);
+}
+
+export async function writeRateCardTransitionAtomically(input: {
+  updateSql: string;
+  updateValues: unknown[];
+  approvalValues: unknown[];
+  auditValues: unknown[];
+}): Promise<boolean> {
+  const results = await runD1BatchAtomically(getD1BatchDatabase(), [
+    { sql: input.updateSql, values: input.updateValues },
+    { sql: RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL, values: input.approvalValues },
+    { sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: input.auditValues },
+  ]);
+  return results.every((result) => Number(result.meta?.changes || 0) === 1);
+}

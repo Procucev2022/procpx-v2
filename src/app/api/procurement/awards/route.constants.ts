@@ -1,0 +1,7 @@
+export const AWARD_RECOMMENDABLE_RFQ_STATUSES = Object.freeze([
+  'COMPARISON',
+  'FINAL_RATE_LOCKED',
+  'AWARD_RECOMMENDED',
+]);
+
+export const AWARD_DECISION_ACTIONS = Object.freeze(['APPROVE', 'REJECT']);

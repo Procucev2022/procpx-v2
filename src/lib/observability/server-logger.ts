@@ -133,7 +133,13 @@ export async function writeStructuredLog(
 ): Promise<LogRecord> {
   const record = createLogRecord(level, message, context, source, environment);
   const line = `${JSON.stringify(record)}\n`;
-  (level === 'error' ? process.stderr : process.stdout).write(line);
+  if (isCloudflareWorker()) {
+    const method = level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'log';
+    const logger = originalConsoleMethods[method] || console[method].bind(console);
+    logger(line.trimEnd());
+  } else {
+    (level === 'error' ? process.stderr : process.stdout).write(line);
+  }
 
   if (isFileLoggingEnabled(environment)) {
     await initializeLogging(environment);

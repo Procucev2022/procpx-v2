@@ -2,7 +2,7 @@
 // src/app/(app)/procurement/vendors/[id]/page.tsx
 // Corporate Vendor Profile — Enterprise Procucev Design System
 // Overview | Evaluation (6 Rubrics) | PPO Performance | Documents & Audit
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import VendorSourcingDashboard from '@/components/VendorSourcingDashboard';
@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { VendorData, PerformanceSummary } from "@app-types/app/(app)/procurement/vendors/[id]/page.types";
+import type { VendorPagePagination } from '@app-types/app/api/procurement/vendors.types';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -81,6 +82,13 @@ function VendorProfileContent() {
   const [vendor, setVendor] = useState<VendorData | null>(null);
   const [performanceSummary, setPerformanceSummary] = useState<PerformanceSummary | null>(null);
   const [eligiblePpos, setEligiblePpos] = useState<any[]>([]);
+  const [eligiblePposPagination, setEligiblePposPagination] = useState<VendorPagePagination>({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+  const [eligiblePposLoadingMore, setEligiblePposLoadingMore] = useState(false);
+  const [ppoRatings, setPpoRatings] = useState<any[]>([]);
+  const [ratingsPagination, setRatingsPagination] = useState<VendorPagePagination>({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+  const [ratingsLoadingMore, setRatingsLoadingMore] = useState(false);
+  const eligiblePposRequestSequence = useRef(0);
+  const ratingsRequestSequence = useRef(0);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,15 +155,17 @@ function VendorProfileContent() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/procurement/vendors/${vendorId}`);
+      const [res] = await Promise.all([
+        fetch(`/api/procurement/vendors/${vendorId}`),
+        fetchVendorRatings(),
+        fetchEligiblePpos(),
+      ]);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": data.error || UI_STRINGS.common.userMessages.failedToLoadVendorProfile }));
       }
       const v = data.vendor || data.data?.vendor;
       setVendor(v);
-      setPerformanceSummary(data.performanceSummary || data.data?.performanceSummary || null);
-      setEligiblePpos(data.eligiblePposToRate || data.data?.eligiblePposToRate || []);
       setAuditLogs(data.auditLogs || data.data?.auditLogs || []);
 
       try {
@@ -211,6 +221,101 @@ function VendorProfileContent() {
       setLoading(false);
     }
   }
+
+  async function fetchVendorRatings(page = 1, append = false) {
+    const requestSequence = ++ratingsRequestSequence.current;
+    if (append) setRatingsLoadingMore(true);
+    else {
+      setRatingsLoadingMore(false);
+      setPpoRatings([]);
+      setPerformanceSummary(null);
+      setRatingsPagination({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+    }
+    try {
+      const query = page > 1 ? `?page=${page}` : '';
+      const res = await fetch(`/api/procurement/vendors/${vendorId}/ppo-ratings${query}`);
+      if (requestSequence !== ratingsRequestSequence.current) return;
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchPpoRatings);
+      const data = await res.json();
+      const response = data.data || data;
+      const incoming = response.ratings || [];
+      setPpoRatings((current) => {
+        if (!append) return incoming;
+        const existingIds = new Set(current.map((rating) => rating.id));
+        return [...current, ...incoming.filter((rating: { id: string }) => !existingIds.has(rating.id))];
+      });
+      setPerformanceSummary(response.summary || null);
+      setRatingsPagination(response.pagination || {
+        page,
+        pageSize: incoming.length,
+        hasMore: false,
+        total: incoming.length,
+      });
+    } catch (err) {
+      if (requestSequence === ratingsRequestSequence.current && err instanceof Error && err.name !== 'AbortError') {
+        console.error('Failed to load vendor rating history', err);
+        if (!append) {
+          setPpoRatings([]);
+          setPerformanceSummary(null);
+          setRatingsPagination({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+        }
+      }
+    } finally {
+      if (requestSequence === ratingsRequestSequence.current) setRatingsLoadingMore(false);
+    }
+  }
+
+  async function fetchEligiblePpos(page = 1, append = false) {
+    const requestSequence = ++eligiblePposRequestSequence.current;
+    if (append) setEligiblePposLoadingMore(true);
+    else {
+      setEligiblePposLoadingMore(false);
+      setEligiblePpos([]);
+      setEligiblePposPagination({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+    }
+    try {
+      const query = page > 1 ? `?page=${page}` : '';
+      const res = await fetch(`/api/procurement/vendors/${vendorId}/eligible-ppos${query}`);
+      if (requestSequence !== eligiblePposRequestSequence.current) return;
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchEligiblePpos);
+      const data = await res.json();
+      const response = data.data || data;
+      const incoming = response.eligiblePpos || [];
+      setEligiblePpos((current) => {
+        if (!append) return incoming;
+        const existingIds = new Set(current.map((ppo) => ppo.id));
+        return [...current, ...incoming.filter((ppo: { id: string }) => !existingIds.has(ppo.id))];
+      });
+      setEligiblePposPagination(response.pagination || {
+        page,
+        pageSize: incoming.length,
+        hasMore: false,
+        total: incoming.length,
+      });
+    } catch (err) {
+      if (requestSequence === eligiblePposRequestSequence.current && err instanceof Error && err.name !== 'AbortError') {
+        console.error('Failed to load eligible vendor orders', err);
+        if (!append) {
+          setEligiblePpos([]);
+          setEligiblePposPagination({ page: 1, pageSize: 0, hasMore: false, total: 0 });
+        }
+      }
+    } finally {
+      if (requestSequence === eligiblePposRequestSequence.current) setEligiblePposLoadingMore(false);
+    }
+  }
+
+  const loadMoreVendorRatings = () => {
+    if (!loading && !ratingsLoadingMore && ratingsPagination.hasMore) {
+      void fetchVendorRatings(ratingsPagination.page + 1, true);
+    }
+  };
+
+  const loadMoreEligiblePpos = () => {
+    if (!loading && !eligiblePposLoadingMore && eligiblePposPagination.hasMore) {
+      void fetchEligiblePpos(eligiblePposPagination.page + 1, true);
+    }
+  };
 
   // Calculate live weighted score from rubric scores
   const calculatedOverallScore = Math.round(
@@ -747,11 +852,11 @@ function VendorProfileContent() {
               <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, lineHeight: 1.2 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.completedPPOsOrders}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#0d9488', fontFamily: 'monospace' }}>
-                  {performanceSummary?.ppoRatingsCount || vendor.ppos?.filter((p: any) => p.status === 'COMPLETED' || p.status === 'ACCEPTED').length || eligiblePpos.length || 0}
+                  {performanceSummary?.completedPpoCount || 0}
                 </span>
-                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.common.copybo0mse}{vendor.ppos?.length || (performanceSummary?.ppoRatingsCount ? performanceSummary.ppoRatingsCount : 0)}{UI_STRINGS.appAppProcurementVendorsIdPage.orders}</span>
+                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>{UI_STRINGS.common.copybo0mse}{performanceSummary?.ppoCount || 0}{UI_STRINGS.appAppProcurementVendorsIdPage.orders}</span>
                 <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>
-                  {eligiblePpos.length > 0 ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthEligible, { "length": eligiblePpos.length }) : UI_STRINGS.common.completed}
+                  {eligiblePposPagination.total > 0 ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthEligible, { "length": eligiblePposPagination.total }) : UI_STRINGS.common.completed}
                 </span>
               </div>
             </div>
@@ -1667,7 +1772,7 @@ function VendorProfileContent() {
                 <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.synthesizedAcross}{performanceSummary?.ppoRatingsCount || 0}{UI_STRINGS.appAppProcurementVendorsIdPage.completedProcurementOrders}</p>
               </div>
 
-              {eligiblePpos.length > 0 && currentUserRole !== 'PROCUREMENT_USER' && (
+              {eligiblePposPagination.total > 0 && currentUserRole !== 'PROCUREMENT_USER' && (
                 <button
                   onClick={openNewRatingModal}
                   className="btn btn-primary text-xs shrink-0"
@@ -1682,7 +1787,7 @@ function VendorProfileContent() {
                   }}
                 >
                   <Star size={14} />
-                  <span>{UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder}{eligiblePpos.length}{UI_STRINGS.appAppProcurementVendorsIdPage.available}</span>
+                  <span>{UI_STRINGS.appAppProcurementVendorsIdPage.rateCompletedOrder}{eligiblePposPagination.total}{UI_STRINGS.appAppProcurementVendorsIdPage.available}</span>
                 </button>
               )}
             </div>
@@ -1769,12 +1874,12 @@ function VendorProfileContent() {
               }}
             >
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.individualOrderRatingHistory}{vendor.ppoRatings?.length || 0}{UI_STRINGS.common.copyc7zu6c}</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppProcurementVendorsIdPage.individualOrderRatingHistory}{ratingsPagination.total}{UI_STRINGS.common.copyc7zu6c}</h3>
                 <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.pPOSpecificPerformanceEvaluationsAndApproverDecisions}</p>
               </div>
             </div>
 
-            {vendor.ppoRatings && vendor.ppoRatings.length > 0 ? (
+            {ppoRatings.length > 0 ? (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #B8C9DC', background: '#ffffff', fontSize: 12 }}>
                   <thead>
@@ -1789,7 +1894,7 @@ function VendorProfileContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {vendor.ppoRatings.map((rating: any) => {
+                    {ppoRatings.map((rating: any) => {
                       const isDraft = rating.status === 'DRAFT';
                       const isSubmitted = rating.status === 'SUBMITTED';
                       const isReturned = rating.status === 'RETURNED_FOR_CORRECTION';
@@ -1901,10 +2006,32 @@ function VendorProfileContent() {
                 <Star size={32} color="#cbd5e1" style={{ margin: '0 auto 10px auto' }} />
                 <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>{UI_STRINGS.appAppProcurementVendorsIdPage.noPPOPerformanceRatingsRecorded}</h4>
                 <p style={{ fontSize: 12, color: '#64748b', margin: 0, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
-                  {eligiblePpos.length > 0 && currentUserRole !== 'PROCUREMENT_USER'
-                    ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthCompletedPurchaseOrderSAreEligibleForPerformanceReviewClickRateCompletedOrderAbove, { "length": eligiblePpos.length })
+                  {eligiblePposPagination.total > 0 && currentUserRole !== 'PROCUREMENT_USER'
+                    ? interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.lengthCompletedPurchaseOrderSAreEligibleForPerformanceReviewClickRateCompletedOrderAbove, { "length": eligiblePposPagination.total })
                     : UI_STRINGS.appAppProcurementVendorsIdPage.ratingsAreRecordedAfterAnIssuedPurchaseOrderPPOReachesCompletionAndAreApprovedByTheProjectApprover}
                 </p>
+              </div>
+            )}
+            {ppoRatings.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3">
+                <span className="text-xs text-slate-600">
+                  {interpolateUiString(UI_STRINGS.appAppProcurementVendorsIdPage.showingRatingCountOfTotal, {
+                    loaded: ppoRatings.length,
+                    total: ratingsPagination.total,
+                  })}
+                </span>
+                {ratingsPagination.hasMore && (
+                  <button
+                    type="button"
+                    onClick={loadMoreVendorRatings}
+                    disabled={loading || ratingsLoadingMore}
+                    className="btn btn-secondary text-xs"
+                  >
+                    {ratingsLoadingMore
+                      ? UI_STRINGS.appAppProcurementVendorsIdPage.loadingMoreRatings
+                      : UI_STRINGS.appAppProcurementVendorsIdPage.loadMoreRatings}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2191,6 +2318,18 @@ function VendorProfileContent() {
                         {ppo.ppoNumber}{UI_STRINGS.common.copyq9aflv}{ppo.title}{UI_STRINGS.appAppProcurementVendorsIdPage.value}{ppo.totalValue?.toLocaleString() || 0}{UI_STRINGS.common.copyc7zu6c}</option>
                     ))}
                   </select>
+                )}
+                {!editingRating && eligiblePposPagination.hasMore && (
+                  <button
+                    type="button"
+                    onClick={loadMoreEligiblePpos}
+                    disabled={loading || eligiblePposLoadingMore}
+                    className="mt-2 text-xs font-semibold text-blue-700 underline disabled:cursor-not-allowed disabled:text-slate-400"
+                  >
+                    {eligiblePposLoadingMore
+                      ? UI_STRINGS.appAppProcurementVendorsIdPage.loadingMoreEligiblePpos
+                      : UI_STRINGS.appAppProcurementVendorsIdPage.loadMoreEligiblePpos}
+                  </button>
                 )}
               </div>
 

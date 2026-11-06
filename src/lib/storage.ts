@@ -32,6 +32,35 @@ export async function saveUpload(segments: string[], fileName: string, data: Buf
   return filePath;
 }
 
+/** Removes an upload created for the supplied tenant/project path after its database write fails. */
+export async function deleteUpload(ref: string, segments: string[] = []): Promise<void> {
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..' || /[\\/]/.test(segment))) {
+    throw new Error(UI_STRINGS.libStorage.uploadReferenceOutsideAllowedDirectory);
+  }
+  if (ref.startsWith(R2_PREFIX)) {
+    const key = ref.slice(R2_PREFIX.length);
+    const expectedPrefix = segments.length > 0 ? `${segments.join('/')}/` : '';
+    if (expectedPrefix && !key.startsWith(expectedPrefix)) {
+      throw new Error(UI_STRINGS.libStorage.uploadReferenceOutsideAllowedDirectory);
+    }
+    const bucket = getBucket();
+    if (!bucket.delete) throw new Error(UI_STRINGS.libStorage.uploadCleanupIsNotSupportedByThisStorageBinding);
+    await bucket.delete(key);
+    return;
+  }
+
+  if (isCloudflareWorker()) throw new Error(UI_STRINGS.libStorage.thisFileWasUploadedToALocalServerAndIsNotAvailableHere);
+  const uploadsRoot = path.resolve(/*turbopackIgnore: true*/ process.cwd(), LOCAL_UPLOADS_DIRECTORY);
+  const allowedRoot = path.resolve(uploadsRoot, ...segments);
+  const resolvedRef = path.resolve(ref);
+  const allowedPrefix = `${allowedRoot}${path.sep}`;
+  if (!resolvedRef.startsWith(allowedPrefix)) {
+    throw new Error(UI_STRINGS.libStorage.uploadReferenceOutsideAllowedDirectory);
+  }
+  const { unlink } = await import('fs/promises');
+  await unlink(resolvedRef);
+}
+
 /** Reads a file previously saved with saveUpload. */
 export async function readUpload(ref: string): Promise<Buffer> {
   if (ref.startsWith(R2_PREFIX)) {

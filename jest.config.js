@@ -31,6 +31,7 @@ module.exports = createJestConfig({
   testEnvironment: 'node',
   testTimeout: 30_000,
   testMatch: ['<rootDir>/unit-tests/**/*.test.ts', '<rootDir>/unit-tests/**/*.test.tsx'],
+  modulePathIgnorePatterns: ['<rootDir>/.next/'],
   setupFilesAfterEnv: ['<rootDir>/unit-tests/jest.setup.ts'],
   coverageProvider: 'v8',
   collectCoverageFrom: ['<rootDir>/src/**/*.{ts,tsx}'],

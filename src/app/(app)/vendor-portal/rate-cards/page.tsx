@@ -2,7 +2,7 @@
 // src/app/(app)/vendor-portal/rate-cards/page.tsx
 // Dedicated Vendor Master Rate Cards Register with Multi-Round Negotiation & Final Acceptance
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Tag,
   CheckCircle2,
@@ -24,16 +24,18 @@ import {
 } from 'lucide-react';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
 import StatusBadge from '@/components/ui/StatusBadge';
-import Section5VendorAcceptance from '@/components/rate-cards/Section5VendorAcceptance';
-import Section7FinalisedDetails from '@/components/rate-cards/Section7FinalisedDetails';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { VendorRateCardListItem } from '@app-types/app/(app)/vendor-portal/rate-cards/page.types';
 
 
 export default function VendorRateCardsPage() {
   const [rateCards, setRateCards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [totalRateCards, setTotalRateCards] = useState(0);
+  const [hasMoreRateCards, setHasMoreRateCards] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
@@ -46,22 +48,43 @@ export default function VendorRateCardsPage() {
   const [quoteRemarks, setQuoteRemarks] = useState<Record<string, string>>({});
   const [submittingCardId, setSubmittingCardId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const requestSequence = useRef(0);
+  const nextRateCardPage = useRef(2);
+  const currentSearchTerm = useRef(searchTerm);
+  useEffect(() => {
+    currentSearchTerm.current = searchTerm;
+  }, [searchTerm]);
+  const error = actionError ?? loadError;
 
-  const loadRateCards = async () => {
+  const loadRateCards = useCallback(async (append = false) => {
+    const sequence = ++requestSequence.current;
+    const page = append ? nextRateCardPage.current : 1;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
-      const res = await fetch('/api/vendor-portal/rate-cards');
+      const query = new URLSearchParams({ page: String(page), pageSize: '50' });
+      if (currentSearchTerm.current.trim()) query.set('search', currentSearchTerm.current.trim());
+      if (typeof window !== 'undefined') {
+        const rateCardId = new URLSearchParams(window.location.search).get('negotiate');
+        if (rateCardId && !append) query.set('rateCardId', rateCardId);
+      }
+      const res = await fetch(`/api/vendor-portal/rate-cards?${query.toString()}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadRateCards }));
       }
       const data = await res.json();
       const list = data.rateCards || [];
-      setRateCards(list);
+      if (sequence !== requestSequence.current) return;
+      setRateCards((current) => append
+        ? [...current, ...list.filter((incoming: VendorRateCardListItem) => !current.some((existing) => existing.id === incoming.id))]
+        : list);
+      setTotalRateCards(Number(data.total) || list.length);
+      setHasMoreRateCards(Boolean(data.hasMore));
+      nextRateCardPage.current = page + 1;
 
       // Auto-expand first card if any
-      if (list.length > 0) {
+      if (!append && list.length > 0) {
         setExpandedCards({ [list[0].id]: true });
       }
 
@@ -78,7 +101,7 @@ export default function VendorRateCardsPage() {
         });
         initialInputs[rc.id] = itemMap;
       });
-      setQuoteInputs(initialInputs);
+      setQuoteInputs((current) => append ? { ...current, ...initialInputs } : initialInputs);
 
       // Check URL query param ?negotiate=<rateCardId>
       if (typeof window !== 'undefined') {
@@ -94,15 +117,17 @@ export default function VendorRateCardsPage() {
         }
       }
     } catch (e: any) {
-      setError(e.message);
+      if (sequence !== requestSequence.current) return;
+      setLoadError(e.message);
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadRateCards();
-  }, []);
+    const timer = window.setTimeout(() => { void loadRateCards(); }, searchTerm ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRateCards, searchTerm]);
 
   const toggleExpand = (id: string) => {
     setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -121,7 +146,8 @@ export default function VendorRateCardsPage() {
   // Submit Quote 1 or Quote 2 Handler
   const handleSubmitVendorQuote = async (rc: any, roundNumber: 1 | 2) => {
     setSubmittingCardId(rc.id);
-    setError(null);
+    setActionError(null);
+    setLoadError(null);
     setSuccessMsg(null);
     try {
       const cardInputs = quoteInputs[rc.id] || {};
@@ -154,7 +180,7 @@ export default function VendorRateCardsPage() {
       setSuccessMsg(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.vendorRCQuoteRoundSubmittedSuccessfullyBuyerNotified, { roundNumber }));
       await loadRateCards();
     } catch (err: any) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setSubmittingCardId(null);
     }
@@ -163,7 +189,8 @@ export default function VendorRateCardsPage() {
   // Vendor Final Acceptance Handler (Section 5)
   const handleVendorAcceptAgreement = async (rc: any) => {
     setSubmittingCardId(rc.id);
-    setError(null);
+    setActionError(null);
+    setLoadError(null);
     setSuccessMsg(null);
     try {
       const res = await fetch('/api/vendor-portal/rate-cards', {
@@ -182,19 +209,13 @@ export default function VendorRateCardsPage() {
       setSuccessMsg(UI_STRINGS.appAppVendorPortalRateCardsPage.rateCardAgreementAndTermsAcceptedCategoryManagerSignOffPending);
       await loadRateCards();
     } catch (err: any) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setSubmittingCardId(null);
     }
   };
 
-  const filteredRateCards = rateCards.filter((rc) => {
-    return (
-      rc.rateCardNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rc.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rc.scope?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  const filteredRateCards = rateCards;
 
   // ── DEDICATED FULL-WINDOW RATE CARD NEGOTIATION WORKSPACE ───────────
   if (negotiatingRateCard) {
@@ -232,7 +253,7 @@ export default function VendorRateCardsPage() {
         </div>
         <button
           type="button"
-          onClick={loadRateCards}
+          onClick={() => void loadRateCards()}
           className="btn btn-secondary"
           style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
         >
@@ -267,37 +288,6 @@ export default function VendorRateCardsPage() {
           {successMsg}
         </div>
       )}
-
-      {/* ── APPROVED SECTION 5: VENDOR ACCEPTANCE (VENDOR PORTAL VIEW) ── */}
-      <div style={{ marginBottom: 24 }}>
-        <Section5VendorAcceptance
-          rateCardId="RC-2026-0006"
-          category="Interior Works"
-          validity="01 Oct 2026 - 30 Sep 2027"
-          onAccept={(remarks, signature) => {
-            if (signature) {
-              setSuccessMsg(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.rateCardAgreementAcceptedAndDigitallySignedByRoutedToApprover, {
-                signedBy: signature.signedBy,
-                signatureEvidenceId: signature.signatureEvidenceId,
-              }));
-            } else {
-              setSuccessMsg(UI_STRINGS.appAppVendorPortalRateCardsPage.rateCardAgreementAcceptedByVendorRoutedToApprover);
-            }
-          }}
-          onReject={(remarks) => {
-            setError(interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.rateCardRejectedWithRemarks, { remarks }));
-          }}
-        />
-      </div>
-
-      {/* ── APPROVED SECTION 7: FINALISED RATE CARD DETAILS (READ ONLY) ── */}
-      <div style={{ marginBottom: 24 }}>
-        <Section7FinalisedDetails
-          rateCardId="RC-2026-0006"
-          vendorName="Ramakrishna Interiors"
-          category="Interior Works"
-        />
-      </div>
 
       {/* ── RATE CARDS ACCORDION ────────────────────────────────────────── */}
       {loading ? (
@@ -575,6 +565,14 @@ export default function VendorRateCardsPage() {
               </div>
             );
           })}
+          {hasMoreRateCards && (
+            <button type="button" onClick={() => void loadRateCards(true)} disabled={loading} className="btn btn-secondary">
+              {loading ? UI_STRINGS.common.loading : UI_STRINGS.appAppVendorPortalRateCardsPage.loadMoreRateCards}
+            </button>
+          )}
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+            {interpolateUiString(UI_STRINGS.appAppVendorPortalRateCardsPage.showingRateCardsOfTotal, { shown: rateCards.length, total: totalRateCards })}
+          </div>
         </div>
       )}
     </div>

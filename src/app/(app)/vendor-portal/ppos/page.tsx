@@ -2,7 +2,7 @@
 // src/app/(app)/vendor-portal/ppos/page.tsx
 // Dedicated Vendor Orders & PPO Acceptance Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect } from 'react';
+import { Fragment, useCallback, useState, useEffect, useRef } from 'react';
 import {
   FileCheck,
   CheckCircle2,
@@ -11,21 +11,16 @@ import {
   RefreshCw,
   Search,
   Check,
-  XCircle,
-  Building2,
   FileText,
-  Calendar,
-  AlertCircle,
-  HelpCircle,
   ChevronDown,
   ChevronRight,
   Receipt,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import type { VendorPpoLineView } from '@app-types/app/api/vendor-portal-ppos.types';
 
 
 export default function VendorPposPage() {
@@ -33,6 +28,14 @@ export default function VendorPposPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hasMorePpos, setHasMorePpos] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadedPage, setLoadedPage] = useState(1);
+  const [registerSummary, setRegisterSummary] = useState<{ total: number; totalValue: number; pendingCount: number } | null>(null);
+  const [lineDetails, setLineDetails] = useState<Record<string, VendorPpoLineView[]>>({});
+  const [loadingLineDetails, setLoadingLineDetails] = useState<Record<string, boolean>>({});
+  const hasLoadedPposRef = useRef(false);
+  const listRequestVersionRef = useRef(0);
 
   // Expandable Lines state
   const [expandedPpos, setExpandedPpos] = useState<Record<string, boolean>>({});
@@ -49,30 +52,59 @@ export default function VendorPposPage() {
   const [issueRemarks, setIssueRemarks] = useState('');
   const [raisingIssue, setRaisingIssue] = useState(false);
 
-  const loadPpos = async () => {
-    setLoading(true);
+  const loadPpos = useCallback(async (options: { page?: number; append?: boolean; search?: string } = {}) => {
+    const page = options.page || 1;
+    const append = Boolean(options.append);
+    const requestVersion = append ? null : ++listRequestVersionRef.current;
+    if (append) setLoadingMore(true);
+    else if (!hasLoadedPposRef.current) setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/vendor-portal/ppos');
+      const query = new URLSearchParams({ page: String(page), pageSize: '50', search: options.search ?? searchTerm });
+      const res = await fetch(`/api/vendor-portal/ppos?${query.toString()}`);
+      if (requestVersion !== null && requestVersion !== listRequestVersionRef.current) return;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders }));
       }
       const data = await res.json();
-      setPpos(data.ppos || []);
-    } catch (e: any) {
-      setError(e.message);
+      const pagePpos = data.ppos || [];
+      setPpos((current) => append ? [...current, ...pagePpos] : pagePpos);
+      setLoadedPage(page);
+      setHasMorePpos(Boolean(data.hasMore));
+      setRegisterSummary(data.summary || null);
+      hasLoadedPposRef.current = true;
+    } catch (e: unknown) {
+      if (requestVersion !== null && requestVersion !== listRequestVersionRef.current) return;
+      setError(e instanceof Error ? e.message : UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else if (requestVersion === listRequestVersionRef.current) setLoading(false);
     }
-  };
+  }, [searchTerm]);
 
   useEffect(() => {
-    loadPpos();
-  }, []);
+    void loadPpos({ page: 1, search: searchTerm });
+  }, [loadPpos, searchTerm]);
 
-  const toggleExpand = (id: string) => {
-    setExpandedPpos((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleExpand = async (ppo: any) => {
+    const isExpanded = Boolean(expandedPpos[ppo.id]);
+    setExpandedPpos((prev) => ({ ...prev, [ppo.id]: !prev[ppo.id] }));
+    if (isExpanded || lineDetails[ppo.id] || (ppo.lines && ppo.lines.length > 0) || ppo.lineCount === 0) return;
+    setLoadingLineDetails((prev) => ({ ...prev, [ppo.id]: true }));
+    try {
+      const res = await fetch(`/api/vendor-portal/ppos?ppoId=${encodeURIComponent(ppo.id)}`);
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}));
+        throw new Error(result.error || UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders);
+      }
+      const result = await res.json();
+      setLineDetails((prev) => ({ ...prev, [ppo.id]: result.lines || [] }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders);
+    } finally {
+      setLoadingLineDetails((prev) => ({ ...prev, [ppo.id]: false }));
+    }
   };
 
   const handleAcceptSubmit = async (e: React.FormEvent) => {
@@ -95,8 +127,8 @@ export default function VendorPposPage() {
       setShowAcceptModal(false);
       setSelectedPpo(null);
       loadPpos();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : UI_STRINGS.common.userMessages.failedToAcceptPurchaseOrder);
     } finally {
       setAccepting(false);
     }
@@ -121,8 +153,8 @@ export default function VendorPposPage() {
       setShowIssueModal(false);
       setSelectedPpo(null);
       loadPpos();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : UI_STRINGS.common.userMessages.failedToReportFulfillmentIssue);
     } finally {
       setRaisingIssue(false);
     }
@@ -136,8 +168,8 @@ export default function VendorPposPage() {
     );
   });
 
-  const totalAmount = ppos.reduce((sum, p) => sum + (p.grossTotal || p.totalAmount || 0), 0);
-  const pendingCount = ppos.filter(p => !p.vendorAcceptedAt && p.vendorStatus !== 'ACCEPTED').length;
+  const totalAmount = registerSummary?.totalValue ?? ppos.reduce((sum, p) => sum + (p.grossTotal || p.totalAmount || 0), 0);
+  const pendingCount = registerSummary?.pendingCount ?? ppos.filter(p => !p.vendorAcceptedAt && p.vendorStatus !== 'ACCEPTED').length;
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1300, margin: '0 auto' }}>
@@ -149,7 +181,7 @@ export default function VendorPposPage() {
         actions={
           <button
             type="button"
-            onClick={loadPpos}
+            onClick={() => void loadPpos()}
             className="btn btn-secondary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40 }}
           >
@@ -163,7 +195,7 @@ export default function VendorPposPage() {
       <SummaryCardGrid columns={3} className="mb-6">
         <SummaryCard
           label={UI_STRINGS.appAppVendorPortalPposPage.totalPurchaseOrders}
-          value={loading ? '—' : `${ppos.length} Orders`}
+          value={loading ? '—' : `${registerSummary?.total ?? ppos.length} Orders`}
           secondary={UI_STRINGS.appAppVendorPortalPposPage.commercialCommitmentsIssued}
           icon={<Receipt size={16} />}
           accent="blue"
@@ -249,14 +281,16 @@ export default function VendorPposPage() {
                   const isExpanded = !!expandedPpos[ppo.id];
                   const isAccepted = ppo.vendorStatus === 'ACCEPTED_BY_VENDOR';
                   const isIssue = ppo.vendorStatus === 'ISSUE_RAISED';
+                  const lines = lineDetails[ppo.id] ?? ppo.lines ?? [];
+                  const lineCount = ppo.lineCount ?? ppo.lines?.length ?? 0;
 
                   return (
-                    <>
-                      <tr key={ppo.id} style={{ background: isExpanded ? 'var(--bg-subtle, #f8fafc)' : undefined }}>
+                    <Fragment key={ppo.id}>
+                      <tr style={{ background: isExpanded ? 'var(--bg-subtle, #f8fafc)' : undefined }}>
                         <td>
                           <button
                             type="button"
-                            onClick={() => toggleExpand(ppo.id)}
+                            onClick={() => void toggleExpand(ppo)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)' }}
                             title={UI_STRINGS.appAppVendorPortalPposPage.toggleLineItems}
                           >
@@ -266,7 +300,7 @@ export default function VendorPposPage() {
                         <td>
                           <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{ppo.ppoNumber}</div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {ppo.lines?.length || 0}{UI_STRINGS.common.lineItems}</div>
+                            {lineCount}{UI_STRINGS.common.lineItems}</div>
                         </td>
                         <td>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>{ppo.project?.name || UI_STRINGS.common.project}</div>
@@ -341,7 +375,7 @@ export default function VendorPposPage() {
 
                       {/* Line items expansion */}
                       {isExpanded && (
-                        <tr key={`${ppo.id}-lines`} style={{ background: '#f8fafc' }}>
+                        <tr style={{ background: '#f8fafc' }}>
                           <td colSpan={8} style={{ padding: '12px 24px' }}>
                             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#334155' }}>{UI_STRINGS.appAppVendorPortalPposPage.orderLineItemsDetail}</div>
                             <table className="table" style={{ margin: 0, background: '#ffffff', borderRadius: 4 }}>
@@ -356,7 +390,9 @@ export default function VendorPposPage() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {ppo.lines?.map((line: any) => (
+                                {loadingLineDetails[ppo.id] ? (
+                                  <tr><td colSpan={6} style={{ textAlign: 'center' }}>{UI_STRINGS.common.loading}</td></tr>
+                                ) : lines.map((line: any) => (
                                   <tr key={line.id}>
                                     <td style={{ fontSize: 12, fontWeight: 500 }}>{line.itemDescription}</td>
                                     <td style={{ textAlign: 'right', fontSize: 12 }}>{line.quantity}</td>
@@ -378,12 +414,20 @@ export default function VendorPposPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {hasMorePpos && !loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" disabled={loadingMore} onClick={() => loadPpos({ page: loadedPage + 1, append: true, search: searchTerm })}>
+            {loadingMore ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+          </button>
         </div>
       )}
 

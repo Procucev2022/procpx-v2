@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { uiStringPattern } from '@/lib/i18n';
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -56,7 +56,7 @@ const prs = [
     id: 'draft', prNumber: 'PR-DRAFT', title: 'Copper cable package', status: 'PR_DRAFT',
     projectId: 'project-1', project: { name: 'West Campus', projectCode: 'WC-01' },
     costCentreId: 'cc-1', costCentre: { name: 'Electrical', code: 'CC-01' }, boqId: 'boq-1', boq: { boqCode: 'BOQ-01' },
-    categories: ['Electrical', 'Cable'], totalLines: 3, totalEstimatedValue: 1200,
+    categories: ['Electrical', 'Cable'], remainingCategoryCount: 6, totalLines: 3, totalEstimatedValue: 1200,
   },
   {
     id: 'returned', prNumber: 'PR-RETURN', title: 'Returned panel order', status: 'PR_RETURNED_FOR_CORRECTION',
@@ -105,6 +105,7 @@ describe('PR register page', () => {
     expect(screen.getByText('Pending Approval: 1')).toBeInTheDocument();
     expect(screen.getByText('Draft / Corrections: 2')).toBeInTheDocument();
     expect(screen.getByRole('row', { name: /BOQ-01/ })).toHaveTextContent(`${UI_STRINGS.common.bOQ2}BOQ-01`);
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.additionalCategoryCount, { count: 6 })))).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.appAppPrPage.generalCapex))).toHaveLength(3);
     expect(screen.getByText('Attach a revised quote')).toBeInTheDocument();
     expect(screen.getByText('Budget exceeded')).toBeInTheDocument();
@@ -131,7 +132,7 @@ describe('PR register page', () => {
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.chat) })[0]);
     expect(screen.getByText('Chat PR-DRAFT')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Message sent' }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('page=1&pageSize=50')));
     fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
     expect(screen.queryByText('Chat PR-DRAFT')).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.chat) })[1]);
@@ -146,7 +147,7 @@ describe('PR register page', () => {
     render(<MyPrsPage />);
     await screen.findByText('PR-DRAFT');
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'PR_PENDING_PROJECT_APPROVAL' } });
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/pr?status=PR_PENDING_PROJECT_APPROVAL'));
+    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/pr?page=1&pageSize=50&status=PR_PENDING_PROJECT_APPROVAL'));
     expect(await screen.findByText('PR-PENDING')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
     await screen.findByText('PR-DRAFT');
@@ -184,5 +185,22 @@ describe('PR register page', () => {
     render(<MyPrsPage />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrPage.noPRsFound))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppPrPage.createAPROrDeriveOneFromABOQInBOQStudio))).toBeInTheDocument();
+  });
+
+  it('loads later PR pages without replacing previously loaded records', async () => {
+    const secondPage = { ...prs[1], id: 'later', prNumber: 'PR-LATER' };
+    (global.fetch as jest.Mock).mockImplementation(async (url: string) => {
+      const pageTwo = url.includes('page=2');
+      return { ok: true, json: async () => ({
+        data: pageTwo ? [secondPage] : [prs[0]], total: 51, page: pageTwo ? 2 : 1, pageSize: 50, totalPages: 2,
+        statusCounts: { PR_DRAFT: 1, PR_RETURNED_FOR_CORRECTION: 1 },
+      }) };
+    });
+    render(<MyPrsPage />);
+    expect(await screen.findByText('PR-DRAFT')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('PR-LATER')).toBeInTheDocument();
+    expect(screen.getByText('PR-DRAFT')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/pr?page=2&pageSize=50');
   });
 });

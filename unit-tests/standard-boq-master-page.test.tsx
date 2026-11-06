@@ -87,6 +87,25 @@ describe('standard BOQ master page', () => {
     fireEvent.click(modalClose);
   });
 
+  it('loads standard master pages in stable batches and preserves exact totals', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/auth/me') return Promise.resolve(response({ data: { user: { role: userRole } } }));
+      if (url === '/api/masters/categories') return Promise.resolve(response({ data: categories }));
+      const page = new URL(`http://localhost${url}`).searchParams.get('page');
+      return Promise.resolve(response(page === '2'
+        ? { items: [items[1]], total: 2, page: 2, pageSize: 50, hasMore: false }
+        : { items: [items[0]], total: 2, page: 1, pageSize: 50, hasMore: true }));
+    });
+
+    render(<StandardBoqCreationPage />);
+    expect(await screen.findByText('STD-EXIST')).toBeInTheDocument();
+    expect(screen.getByText(UI_STRINGS.appAppMastersStandardBoqPage.totalStandardBOQItems).parentElement).toHaveTextContent(String(items.length));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('STD-ZERO')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('page=2'));
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
+  });
+
   it('validates editable rows and submits a normalized multi-line standard BOQ', async () => {
     render(<StandardBoqCreationPage />);
     await screen.findByText('STD-EXIST');

@@ -15,11 +15,10 @@ jest.mock('next-auth/providers/credentials', () => ({
 }));
 jest.mock('bcryptjs', () => ({ __esModule: true, default: { compare: jest.fn() } }));
 jest.mock('../src/lib/prisma', () => ({
-  prisma: { user: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() } },
+  prisma: { user: { findMany: jest.fn(), update: jest.fn() } },
 }));
 
 const userModel = prisma.user as unknown as {
-  findFirst: jest.Mock;
   findMany: jest.Mock;
   update: jest.Mock;
 };
@@ -45,7 +44,6 @@ describe('NextAuth credentials provider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Reflect.set(process.env, 'NODE_ENV', 'test');
-    userModel.findFirst.mockResolvedValue(null);
     userModel.findMany.mockResolvedValue([]);
     userModel.update.mockResolvedValue(undefined);
     compare.mockResolvedValue(true);
@@ -72,11 +70,11 @@ describe('NextAuth credentials provider', () => {
     { email: '', password: 'password' },
   ])('rejects credentials with missing email or password', async (credentials) => {
     await expect(authorize(credentials)).resolves.toBeNull();
-    expect(userModel.findFirst).not.toHaveBeenCalled();
+    expect(userModel.findMany).not.toHaveBeenCalled();
   });
 
   it('normalizes email, validates the password, updates login time, and returns session fields', async () => {
-    userModel.findFirst.mockResolvedValue(dbUser);
+    userModel.findMany.mockResolvedValue([dbUser]);
 
     await expect(authorize({ email: '  USER@EXAMPLE.TEST  ', password: 'secret' })).resolves.toEqual({
       id: 'user-1',
@@ -88,8 +86,8 @@ describe('NextAuth credentials provider', () => {
       tenantSlug: 'tenant-one',
       vendorId: null,
     });
-    expect(userModel.findFirst).toHaveBeenCalledWith({
-      where: { email: 'user@example.test', status: UI_STRINGS.common.aCTIVE }, include: { tenant: true },
+    expect(userModel.findMany).toHaveBeenCalledWith({
+      where: { email: 'user@example.test', status: UI_STRINGS.common.aCTIVE }, include: { tenant: true }, take: 2,
     });
     expect(compare).toHaveBeenCalledWith('secret', 'hashed-password');
     expect(userModel.update).toHaveBeenCalledWith({
@@ -98,14 +96,27 @@ describe('NextAuth credentials provider', () => {
   });
 
   it('rejects an incorrect password without changing login history', async () => {
-    userModel.findFirst.mockResolvedValue(dbUser);
+    userModel.findMany.mockResolvedValue([dbUser]);
     compare.mockResolvedValue(false);
 
     await expect(authorize({ email: 'user@example.test', password: 'wrong' })).resolves.toBeNull();
     expect(userModel.update).not.toHaveBeenCalled();
   });
 
+  it('fails closed when the same active email belongs to multiple tenants', async () => {
+    userModel.findMany.mockResolvedValue([
+      dbUser,
+      { ...dbUser, id: 'user-2', tenantId: 'tenant-2', tenant: { name: 'Tenant Two', slug: 'tenant-two' } },
+    ]);
+
+    await expect(authorize({ email: 'user@example.test', password: 'secret' })).resolves.toBeNull();
+    expect(userModel.findMany).toHaveBeenCalledTimes(1);
+    expect(compare).not.toHaveBeenCalled();
+    expect(userModel.update).not.toHaveBeenCalled();
+  });
+
   it('matches normalized vendor names and user names in non-production', async () => {
+    userModel.findMany.mockResolvedValueOnce([]);
     userModel.findMany.mockResolvedValueOnce([{
       ...dbUser,
       name: '  Vendor   Contact ',
@@ -117,11 +128,12 @@ describe('NextAuth credentials provider', () => {
     await expect(authorize({ email: '  ACME SERVICES ', password: 'secret' })).resolves.toMatchObject({
       id: 'user-1', role: 'VENDOR', vendorId: 'vendor-1',
     });
-    expect(userModel.findMany).toHaveBeenCalledWith({
+    expect(userModel.findMany).toHaveBeenNthCalledWith(2, {
       where: { role: UI_STRINGS.common.vENDOR, status: UI_STRINGS.common.aCTIVE, vendorId: { not: null } },
       include: { tenant: true, vendor: true },
     });
 
+    userModel.findMany.mockResolvedValueOnce([]);
     userModel.findMany.mockResolvedValueOnce([{
       ...dbUser,
       name: '  Vendor   Contact ',
@@ -135,6 +147,7 @@ describe('NextAuth credentials provider', () => {
   });
 
   it('matches a vendor login by the contact user name when the vendor name differs', async () => {
+    userModel.findMany.mockResolvedValueOnce([]);
     userModel.findMany.mockResolvedValueOnce([{
       ...dbUser, name: 'Ravi  Kumar', role: 'VENDOR', vendorId: 'vendor-2',
       vendor: { name: 'Different Vendor Pvt Ltd', code: 'DIFF-01' },
@@ -146,6 +159,7 @@ describe('NextAuth credentials provider', () => {
   });
 
   it('disambiguates same-name vendors by a matching vendor code', async () => {
+    userModel.findMany.mockResolvedValueOnce([]);
     userModel.findMany.mockResolvedValueOnce([
       { ...dbUser, id: 'vendor-user-1', role: 'VENDOR', vendor: { name: 'Acme', code: 'OTHER' } },
       { ...dbUser, id: 'vendor-user-2', role: 'VENDOR', vendor: { name: 'Acme', code: 'ACME' } },
@@ -155,6 +169,7 @@ describe('NextAuth credentials provider', () => {
   });
 
   it('rejects ambiguous names, unlinked vendors, and invalid vendor passwords', async () => {
+    userModel.findMany.mockResolvedValueOnce([]);
     userModel.findMany.mockResolvedValueOnce([
       { ...dbUser, role: 'VENDOR', vendor: { name: 'Acme', code: null } },
       { ...dbUser, id: 'user-2', role: 'VENDOR', vendor: { name: 'Acme', code: 'TWO' } },
@@ -162,6 +177,7 @@ describe('NextAuth credentials provider', () => {
     ]);
     await expect(authorize({ email: 'acme', password: 'secret' })).resolves.toBeNull();
 
+    userModel.findMany.mockResolvedValueOnce([]);
     userModel.findMany.mockResolvedValueOnce([
       { ...dbUser, role: 'VENDOR', vendor: { name: 'Acme', code: 'ACME-01' } },
     ]);
@@ -172,7 +188,10 @@ describe('NextAuth credentials provider', () => {
   it('does not use vendor-name login in production', async () => {
     Reflect.set(process.env, 'NODE_ENV', 'production');
     await expect(authorize({ email: 'acme services', password: 'secret' })).resolves.toBeNull();
-    expect(userModel.findMany).not.toHaveBeenCalled();
+    expect(userModel.findMany).toHaveBeenCalledTimes(1);
+    expect(userModel.findMany).toHaveBeenCalledWith({
+      where: { email: 'acme services', status: UI_STRINGS.common.aCTIVE }, include: { tenant: true }, take: 2,
+    });
   });
 });
 

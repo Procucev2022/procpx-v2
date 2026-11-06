@@ -3,18 +3,25 @@ import { POST } from '../src/app/api/boq/drawing-extract/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { processDrawingFile } from '../src/lib/drawing-parser';
-import { saveUpload } from '../src/lib/storage';
+import { deleteUpload, saveUpload } from '../src/lib/storage';
+import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { UI_STRINGS } from '../src/lib/ui-strings.constants';
+import { interpolateUiString } from '../src/lib/i18n';
+import { MAX_DRAWING_BOQ_LINES } from '../src/app/api/boq/drawing-extract/route.constants';
+import { MAX_BOQ_UPLOAD_BYTES } from '../src/lib/boq-upload.constants';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     project: { findFirst: jest.fn() },
+    costCentre: { findFirst: jest.fn() },
     boq: { count: jest.fn(), create: jest.fn() },
     boqRevision: { create: jest.fn() },
     category: { findMany: jest.fn() },
     uomMaster: { findMany: jest.fn() },
     boqLine: { create: jest.fn() },
     auditLog: { create: jest.fn() },
-    projectDocument: { create: jest.fn() },
+    projectDocument: { create: jest.fn(), findFirst: jest.fn() },
   },
 }));
 
@@ -26,7 +33,9 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 
 jest.mock('../src/lib/drawing-parser', () => ({ processDrawingFile: jest.fn() }));
-jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn() }));
+jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn(), deleteUpload: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -35,28 +44,31 @@ const errorResult = apiError as jest.Mock;
 const successResult = apiSuccess as jest.Mock;
 const parseDrawing = processDrawingFile as jest.Mock;
 const storeUpload = saveUpload as jest.Mock;
+const removeUpload = deleteUpload as jest.Mock;
+const writeBatch = writeD1BatchAtomically as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 
 function jsonRequest(body: unknown) {
   return {
-    headers: { get: () => 'application/json; charset=utf-8' },
+    headers: { get: (name: string) => name === 'content-type' ? 'application/json; charset=utf-8' : null },
     json: jest.fn().mockResolvedValue(body),
   } as unknown as NextRequest;
 }
 
 function formRequest(values: Record<string, unknown> = {}) {
   return {
-    headers: { get: () => 'multipart/form-data; boundary=test' },
+    headers: { get: (name: string) => name === 'content-type' ? 'multipart/form-data; boundary=test' : null },
     formData: jest.fn().mockResolvedValue({ get: (key: string) => values[key] ?? null }),
   } as unknown as NextRequest;
 }
 
-function upload(name: string, type = 'application/pdf') {
+function upload(name: string, type = 'application/pdf', size?: number) {
   const bytes = Uint8Array.from([37, 80, 68, 70, 45, 49]);
   return {
     name,
     type,
-    size: bytes.byteLength,
+    size: size ?? bytes.byteLength,
     arrayBuffer: async () => bytes.buffer,
   };
 }
@@ -66,7 +78,8 @@ describe('BOQ drawing extraction route', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
-    db.project.findFirst.mockResolvedValue({ id: 'project-1', name: 'Clinic Extension' });
+    db.project.findFirst.mockResolvedValue({ id: 'project-1', name: 'Clinic Extension', projectCode: 'CLINIC' });
+    db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1' });
     db.boq.count.mockResolvedValue(4);
     db.boq.create.mockResolvedValue({ id: 'boq-1', boqCode: 'BOQ-000005' });
     db.boqRevision.create.mockResolvedValue({ id: 'revision-1', revisionCode: 'R0' });
@@ -75,8 +88,15 @@ describe('BOQ drawing extraction route', () => {
     db.boqLine.create.mockImplementation(({ data }: { data: unknown }) => Promise.resolve({ data }));
     db.auditLog.create.mockResolvedValue({ id: 'audit-1' });
     db.projectDocument.create.mockResolvedValue({ id: 'document-1' });
+    db.projectDocument.findFirst.mockResolvedValue({ id: 'document-1', filePath: 'uploads/plans.pdf', fileSize: 42, name: 'plans.pdf' });
     storeUpload.mockImplementation((segments: string[], fileName: string) =>
       Promise.resolve(`uploads/${segments.join('/')}/${fileName}`));
+    removeUpload.mockResolvedValue(undefined);
+    writeBatch.mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => statements.map((statement) => {
+      if (statement.sql.includes('INSERT INTO "boqs"')) return { success: true, meta: { changes: 1 }, results: [{ id: statement.values[0], boqCode: 'BOQ-CLINIC-001' }] };
+      if (statement.sql.includes('INSERT INTO "boq_revisions"')) return { success: true, meta: { changes: 1 }, results: [{ id: statement.values[0], revisionCode: 'R0' }] };
+      return { success: true, meta: { changes: 1 } };
+    }));
     parseDrawing.mockResolvedValue({
       parserUsed: 'native', providerMessage: 'schedule parsed', totalDetected: 1,
       explicitCount: 1, uncertainCount: 0, drawingReference: 'D-101',
@@ -91,16 +111,38 @@ describe('BOQ drawing extraction route', () => {
     await expect(POST(jsonRequest({}))).resolves.toBe(denied);
 
     await expect(POST(jsonRequest({ lines: [{}] }))).resolves.toEqual({
-      ok: false, error: 'Project ID is required to generate Draft BOQ.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.projectIDIsRequiredToGenerateDraftBOQ, status: 400,
     });
     await expect(POST(jsonRequest({ projectId: 'project-1', lines: [] }))).resolves.toEqual({
-      ok: false, error: 'At least one BOQ line item is required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.atLeastOneBOQLineItemIsRequired, status: 400,
     });
     db.project.findFirst.mockResolvedValueOnce(null);
     await expect(POST(jsonRequest({ projectId: 'foreign-project', lines: [{}] }))).resolves.toEqual({
-      ok: false, error: 'Project not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404,
     });
     expect(db.project.findFirst).toHaveBeenCalledWith({ where: { id: 'foreign-project', tenantId: 'tenant-1' } });
+  });
+
+  it('rejects oversized and malformed JSON draft requests before persistence', async () => {
+    const oversized = {
+      headers: { get: (name: string) => name === 'content-type' ? 'multipart/form-data' : name === 'content-length' ? String(MAX_BOQ_UPLOAD_BYTES + 65_537) : null },
+      formData: jest.fn(),
+    } as unknown as NextRequest;
+    await expect(POST(oversized)).resolves.toMatchObject({ ok: false, status: 413 });
+    expect(oversized.formData).not.toHaveBeenCalled();
+    await expect(POST(jsonRequest(null))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [null] }))).resolves.toMatchObject({ ok: false, status: 400, error: UI_STRINGS.common.invalidRequestBody });
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: Array.from({ length: MAX_DRAWING_BOQ_LINES + 1 }, () => ({ description: 'Line' })) }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.common.boqLineBatchLimitExceeded,
+    });
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: '   ' }] }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.common.descriptionIsRequired,
+    });
+    db.costCentre.findFirst.mockResolvedValueOnce(null);
+    await expect(POST(jsonRequest({ projectId: 'project-1', costCentreId: 'foreign-cc', lines: [{ description: 'Cable' }] }))).resolves.toMatchObject({
+      ok: false, status: 404, error: UI_STRINGS.common.costCentreNotFoundForThisProject,
+    });
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('creates a draft BOQ with matched and uncertain reviewed lines', async () => {
@@ -111,96 +153,145 @@ describe('BOQ drawing extraction route', () => {
     ];
     await expect(POST(jsonRequest({
       projectId: 'project-1', costCentreId: 'cc-1', drawingNumber: 'D-101', fileName: 'plans.pdf',
-      savedFilePath: 'uploads/plans.pdf', fileSize: 42, title: '  Package title  ', description: '  Reviewed drawing  ',
+      savedDocumentId: 'drawing-document-1', fileSize: 42, title: '  Package title  ', description: '  Reviewed drawing  ',
       purpose: 'TENDER', lines,
     }))).resolves.toEqual({
       ok: true,
-      data: { boqId: 'boq-1', revisionId: 'revision-1', boqCode: 'BOQ-000005', revisionCode: 'R0', totalLines: 3, validLines: 1, drawingNumber: 'D-101' },
+      data: { boqId: expect.any(String), revisionId: expect.any(String), boqCode: 'BOQ-CLINIC-001', revisionCode: 'R0', totalLines: 3, validLines: 1, drawingNumber: 'D-101' },
       status: 201,
     });
-    expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      boqCode: 'BOQ-000005', title: 'Package title', description: 'Reviewed drawing', purpose: 'TENDER',
-    }) });
-    expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      originalFileSize: 42, sourceFile: 'plans.pdf', sourceReference: 'D-101', totalLines: 3, validLines: 1, qualityScore: 33,
-    }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      lineNumber: '1', categoryId: 'cat-electrical', uomId: 'uom-ea', quantity: 4, validationStatus: 'VALID',
-      sourceReference: 'CT-01 - Cable tray', location: 'Roof',
-    }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      categoryId: null, uomId: null, quantity: null, validationStatus: 'WARNING',
-      validationMessages: JSON.stringify([{ level: 'WARNING', code: 'UNVERIFIED_QUANTITY', message: 'Scale is unclear' }]),
-    }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(3, { data: expect.objectContaining({ quantity: 0, validationStatus: 'WARNING' }) });
-    expect(db.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'DRAWING_BOQ_GENERATED' }) });
-    expect(successResult).toHaveBeenCalledWith(expect.objectContaining({ boqId: 'boq-1', totalLines: 3 }), 201);
+    expect(db.projectDocument.findFirst).toHaveBeenCalledWith({ where: { id: 'drawing-document-1', projectId: 'project-1', tenantId: 'tenant-1', category: 'DRAWING' }, select: { id: true, filePath: true, fileSize: true, name: true } });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(statements).toHaveLength(8);
+    expect(statements.every((statement) => (statement.sql.match(/\?/g) || []).length === statement.values.length)).toBe(true);
+    expect(statements[0].sql).toContain('INSERT INTO "boqs"');
+    expect(statements[1].values.slice(8, 15)).toEqual(['DRAWING_AI', 'plans.pdf', 'D-101', 0.9, 'plans.pdf', 'uploads/plans.pdf', 42]);
+    expect(statements[2].values[6]).toBe('DRAWING_BOQ_GENERATED');
+    expect(statements[3].values.slice(3, 14)).toEqual(['1', 'Cable tray', 'Cable tray', 'Hot dip galvanized', 'cat-electrical', null, 'uom-ea', 'ea', 4, 'Roof', 'D-101']);
+    expect(statements[4].values[25]).toBe('WARNING');
+    expect(statements[4].values[26]).toContain('Scale is unclear');
+    expect(statements[6].values.slice(0, 5)).toEqual([3, 1, 0, 2, 33]);
+    expect(statements[7].sql).toContain('json_extract');
+    expect(db.boq.create).not.toHaveBeenCalled();
+    expect(db.boqLine.create).not.toHaveBeenCalled();
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+    expect(successResult).toHaveBeenCalledWith(expect.objectContaining({ totalLines: 3 }), 201);
   });
 
   it('uses defaults for optional JSON fields and persists zero quantities as warnings', async () => {
     await expect(POST(jsonRequest({
       projectId: 'project-1',
       lines: [{ description: 'Unverified item', quantity: 0, drawingReference: 'ITEM-1' }, { description: 'No quantity', uom: 'EA' }],
-    }))).resolves.toMatchObject({ ok: true, data: { totalLines: 2, validLines: 0, drawingNumber: undefined } });
-    expect(db.boq.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      costCentreId: null, title: 'Architectural Drawing — Clinic Extension',
-      description: 'Extracted from architectural drawing DWG', purpose: 'BUDGET',
-    }) });
-    expect(db.boqRevision.create).toHaveBeenCalledWith({ data: expect.objectContaining({
-      sourceFile: 'drawing.pdf', sourceReference: 'DWG-A-101', originalFilePath: null, originalFileSize: 0,
-    }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
-      drawingReference: 'ITEM-1', sourceSheet: 'Sheet 01', sourceReference: 'Unverified item',
-      validationMessages: JSON.stringify([{ level: 'WARNING', code: 'UNVERIFIED_QUANTITY', message: 'Quantity unverified in drawing schedule. Field verification required.' }]),
-    }) });
-    expect(db.boqLine.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ quantity: null, uomRaw: 'EA' }) });
+    }))).resolves.toMatchObject({ ok: true, data: { totalLines: 2, validLines: 0, drawingNumber: 'DWG-A-101' } });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(statements[0].values).toContain('Architectural Drawing — Clinic Extension');
+    expect(statements[0].values).toContain('Extracted from architectural drawing DWG-A-101');
+    expect(statements[1].values.slice(8, 15)).toEqual(['DRAWING_AI', 'DWG-A-101.pdf', 'DWG-A-101', 0.9, 'DWG-A-101.pdf', null, 0]);
+    expect(statements[3].values).toEqual(expect.arrayContaining(['ITEM-1', 'Sheet 01', 'Unverified item']));
+    expect(statements[4].values[11]).toBeNull();
+    expect(statements[4].values[10]).toBe('EA');
+  });
+
+  it('persists negative quantities as errors and reports a failed atomic draft invariant', async () => {
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: 'Invalid count', quantity: -2, confidence: 'unknown' }] }))).resolves.toMatchObject({
+      ok: true, data: { totalLines: 1, validLines: 0 },
+    });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ values: unknown[] }>;
+    expect(statements[3].values[25]).toBe('ERROR');
+    expect(statements[3].values[11]).toBe(-2);
+
+    writeBatch.mockImplementationOnce(async (input: Array<{ sql: string }>) => input.map((statement) => ({
+      success: statement.sql.includes('INSERT INTO "boqs"'),
+      meta: { changes: 1 },
+      ...(statement.sql.includes('INSERT INTO "boqs"') ? { results: [{ boqCode: '' }] } : {}),
+    })));
+    await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: 'No generated code', quantity: 1 }] }))).resolves.toMatchObject({
+      ok: false, status: 409, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.drawing_draft_batch_invariant_failed', expect.objectContaining({ hasBoqCode: false }));
   });
 
   it('validates multipart uploads and tenant-scoped projects', async () => {
-    await expect(POST(formRequest())).resolves.toEqual({ ok: false, error: 'Drawing file and Project ID are required.', status: 400 });
+    await expect(POST(formRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, status: 400 });
     await expect(POST(formRequest({ file: upload('plan.pdf') }))).resolves.toEqual({
-      ok: false, error: 'Drawing file and Project ID are required.', status: 400,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, status: 400,
     });
     db.project.findFirst.mockResolvedValueOnce(null);
     await expect(POST(formRequest({ file: upload('plan.pdf'), projectId: 'foreign' }))).resolves.toEqual({
-      ok: false, error: 'Project not found.', status: 404,
+      ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404,
     });
     await expect(POST(formRequest({ file: upload('plan.svg'), projectId: 'project-1' }))).resolves.toEqual({
-      ok: false, error: 'Unsupported drawing format (.svg). Supported formats are PDF, PNG, JPG, and JPEG.', status: 400,
+      ok: false, error: interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { ext: 'svg' }), status: 400,
     });
     await expect(POST(formRequest({ file: upload('plan.'), projectId: 'project-1' }))).resolves.toMatchObject({
-      ok: false, error: expect.stringContaining('Unsupported drawing format (.).'), status: 400,
+      ok: false, error: expect.stringContaining(interpolateUiString(UI_STRINGS.appApiBoqDrawingExtractRoute.unsupportedDrawingFormatExtSupportedFormatsArePDFPNGJPGAndJPEG, { ext: '' })), status: 400,
     });
+    await expect(POST(formRequest({ file: { name: 'plan.pdf' }, projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired,
+    });
+    await expect(POST(formRequest({ file: { name: 'plan.pdf', size: 1 }, projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired,
+    });
+    await expect(POST(formRequest({ file: upload('empty.pdf', 'application/pdf', 0), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 413 });
+    await expect(POST(formRequest({ file: upload('large.pdf', 'application/pdf', MAX_BOQ_UPLOAD_BYTES + 1), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 413 });
+    await expect(POST(formRequest({ file: upload('x'.repeat(205) + '.pdf'), projectId: 'project-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired,
+    });
+  });
+
+  it('rejects drawing references that are not registered to the selected tenant and project', async () => {
+    db.projectDocument.findFirst.mockResolvedValueOnce(null);
+    await expect(POST(jsonRequest({
+      projectId: 'project-1', savedDocumentId: 'foreign-document', lines: [{ description: 'Cable', quantity: 1 }],
+    }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.uploadedDrawingNotFound, status: 404 });
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('stores and parses a supported drawing and returns parser details', async () => {
     const file = upload('floor-plan.pdf', '');
-    const now = jest.spyOn(Date, 'now').mockReturnValue(1234);
     const result = await POST(formRequest({ file, projectId: 'project-1', drawingNumber: 'A-22' }));
     expect(result).toEqual({ ok: true, data: expect.objectContaining({
-      success: true, fileName: 'floor-plan.pdf', fileSize: file.size, savedFilePath: expect.stringContaining('1234_floor-plan.pdf'),
+      success: true, fileName: 'floor-plan.pdf', fileSize: file.size, documentId: 'document-1',
       drawingNumber: 'D-101', parserUsed: 'native', totalDetected: 1, items: [{ description: 'Cable tray', quantity: 4 }],
     }), status: 200 });
-    expect(storeUpload).toHaveBeenCalledWith(['tenant-1', 'project-1', 'drawings'], '1234_floor-plan.pdf', expect.any(Buffer));
+    expect(storeUpload).toHaveBeenCalledWith(['tenant-1', 'project-1', 'drawings'], expect.stringMatching(/^[0-9a-f-]{36}\.pdf$/), expect.any(Buffer));
     expect(db.projectDocument.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       fileType: 'application/pdf', category: 'DRAWING', uploadedBy: 'user-1',
-      filePath: 'uploads/tenant-1/project-1/drawings/1234_floor-plan.pdf',
+      filePath: expect.stringMatching(/drawings[\\/][0-9a-f-]{36}\.pdf$/),
     }) });
     expect(parseDrawing).toHaveBeenCalledWith(expect.any(Buffer), 'floor-plan.pdf', 'A-22');
-    expect(now).toHaveBeenCalled();
-    now.mockRestore();
+  });
+
+  it('stores JPEG drawings with a safe basename and removes uploads when document persistence fails', async () => {
+    const result = await POST(formRequest({ file: upload('folder\\floor-plan.jpg', 'image/jpeg'), projectId: 'project-1' }));
+    expect(result).toMatchObject({ ok: true, status: 200, data: { success: true, fileName: 'floor-plan.jpg' } });
+    expect(db.projectDocument.create).toHaveBeenCalledWith({ data: expect.objectContaining({ name: 'floor-plan.jpg', fileType: 'image/jpeg' }) });
+
+    db.projectDocument.create.mockRejectedValueOnce(new Error('document row failed'));
+    await expect(POST(formRequest({ file: upload('orphan.pdf'), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(removeUpload).toHaveBeenCalledWith(expect.stringContaining('uploads/tenant-1/project-1/drawings/'), ['tenant-1', 'project-1', 'drawings']);
+
+    db.projectDocument.create.mockRejectedValueOnce({ code: 'D1_UNAVAILABLE' });
+    removeUpload.mockRejectedValueOnce(new Error('cleanup failed'));
+    await expect(POST(formRequest({ file: upload('orphan-again.pdf'), projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 500 });
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.drawing_upload_cleanup_failed', expect.objectContaining({
+      error: { name: 'Error', message: 'cleanup failed' },
+    }));
+    expect(structuredLog).toHaveBeenCalledWith('error', 'boq.drawing_processing_failed', expect.objectContaining({
+      error: { type: 'object' }, documentPersisted: false,
+    }));
   });
 
   it('returns server errors when parsing or persistence throws', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     parseDrawing.mockRejectedValueOnce(new Error('OCR unavailable'));
     await expect(POST(formRequest({ file: upload('plan.png', 'image/png'), projectId: 'project-1' }))).resolves.toEqual({
-      ok: false, error: 'OCR unavailable', status: 500,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingProcessingFailed, status: 500,
     });
-    db.boq.count.mockRejectedValueOnce(new Error('storage unavailable'));
+    writeBatch.mockRejectedValueOnce(new Error('D1 batch unavailable'));
     await expect(POST(jsonRequest({ projectId: 'project-1', lines: [{ description: 'Pipe', quantity: 1 }] }))).resolves.toEqual({
-      ok: false, error: 'storage unavailable', status: 500,
+      ok: false, error: UI_STRINGS.appApiBoqDrawingExtractRoute.drawingProcessingFailed, status: 500,
     });
-    expect(errorResult).toHaveBeenCalledWith('OCR unavailable', 500);
+    expect(errorResult).toHaveBeenCalledWith(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingProcessingFailed, 500);
   });
 });

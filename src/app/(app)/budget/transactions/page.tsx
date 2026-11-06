@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/budget/transactions/page.tsx - Budget Transactions Audit Ledger & BOQ Traceability
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -29,9 +29,21 @@ function BudgetTransactionsContent() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [costCentres, setCostCentres] = useState<any[]>([]);
+  const [costCentrePage, setCostCentrePage] = useState(1);
+  const [totalCostCentres, setTotalCostCentres] = useState(0);
+  const [costCentresHaveMore, setCostCentresHaveMore] = useState(false);
+  const [loadingMoreCostCentres, setLoadingMoreCostCentres] = useState(false);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const requestSequence = useRef(0);
+  const costCentreRequestSequence = useRef(0);
 
   // Filter States
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const selectedProjectIdRef = useRef(selectedProjectId);
   const [selectedCostCentreId, setSelectedCostCentreId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('');
@@ -52,7 +64,12 @@ function BudgetTransactionsContent() {
   }, []);
 
   useEffect(() => {
-    loadTransactions();
+    const timer = window.setTimeout(() => { void loadTransactions(1); }, search ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedProjectId, selectedCostCentreId, selectedCategory, selectedType, selectedStatus, search]);
+
+  useEffect(() => {
+    selectedProjectIdRef.current = selectedProjectId;
   }, [selectedProjectId]);
 
   const loadProjects = async () => {
@@ -73,20 +90,72 @@ function BudgetTransactionsContent() {
     }
   };
 
-  const loadTransactions = async () => {
-    setLoading(true);
+  const loadTransactions = async (requestedPage = 1, append = false) => {
+    const sequence = ++requestSequence.current;
+    ++costCentreRequestSequence.current;
+    setLoadingMoreCostCentres(false);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
-      const url = selectedProjectId ? `/api/budgets?projectId=${selectedProjectId}` : '/api/budgets';
-      const res = await fetch(url);
+      const params = new URLSearchParams({ page: String(requestedPage) });
+      if (selectedProjectId) params.set('projectId', selectedProjectId);
+      if (selectedCostCentreId) params.set('costCentreId', selectedCostCentreId);
+      if (selectedCategory) params.set('category', selectedCategory);
+      if (selectedType) params.set('type', selectedType);
+      if (selectedStatus) params.set('status', selectedStatus);
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(`/api/budgets/transactions?${params.toString()}`);
       if (res.ok) {
         const json = await res.json();
-        setTransactions(json.transactions || []);
-        setCostCentres(json.costCentres || []);
+        if (sequence !== requestSequence.current) return;
+        setTransactions((current) => append ? [...current, ...(json.transactions || [])] : (json.transactions || []));
+        if (!append) {
+          const options = json.costCentres || [];
+          setCostCentres(options);
+          setCostCentrePage(json.costCentrePagination?.page || 1);
+          setTotalCostCentres(json.costCentrePagination?.total ?? options.length);
+          setCostCentresHaveMore(Boolean(json.costCentrePagination?.hasMore));
+        }
+        setAvailableCategories(json.categories || []);
+        setTotalTransactions(json.pagination?.total || 0);
+        setPage(json.pagination?.page || requestedPage);
+        setTotalPages(json.pagination?.totalPages || 1);
       }
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    }
+  };
+
+  const loadMoreCostCentres = async () => {
+    if (!costCentresHaveMore || loadingMoreCostCentres) return;
+    const sequence = ++costCentreRequestSequence.current;
+    const requestedProjectId = selectedProjectIdRef.current;
+    const requestedPage = costCentrePage + 1;
+    setLoadingMoreCostCentres(true);
+    try {
+      const params = new URLSearchParams({ onlyCostCentres: 'true', costCentrePage: String(requestedPage) });
+      if (requestedProjectId) params.set('projectId', requestedProjectId);
+      const res = await fetch(`/api/budgets/transactions?${params.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchBudgetTransactions);
+      const json = await res.json();
+      if (sequence !== costCentreRequestSequence.current || requestedProjectId !== selectedProjectIdRef.current) return;
+      const nextOptions = json.costCentres || [];
+      setCostCentres((current) => {
+        const existingIds = new Set(current.map((costCentre) => costCentre.id));
+        return [...current, ...nextOptions.filter((costCentre: { id: string }) => !existingIds.has(costCentre.id))];
+      });
+      setCostCentrePage(json.costCentrePagination?.page || requestedPage);
+      setTotalCostCentres(json.costCentrePagination?.total ?? totalCostCentres);
+      setCostCentresHaveMore(Boolean(json.costCentrePagination?.hasMore));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      if (sequence === costCentreRequestSequence.current) setLoadingMoreCostCentres(false);
     }
   };
 
@@ -112,7 +181,7 @@ function BudgetTransactionsContent() {
       setReversalReason('');
       setTargetTx(null);
       setStatusMessage(interpolateUiString(UI_STRINGS.appAppBudgetTransactionsPage.transactionTransactionCodeReversedSuccessfully, { "transactionCode": targetTx.transactionCode }));
-      loadTransactions();
+      void loadTransactions(1);
     } catch (err: any) {
       setReversalError(err.message);
     } finally {
@@ -120,47 +189,19 @@ function BudgetTransactionsContent() {
     }
   };
 
-  // Available categories in data
-  const availableCategories = Array.from(new Set(transactions.map(t => t.category).filter(Boolean)));
-
-  // Filter transactions
-  const filtered = transactions.filter(tx => {
-    // Cost Centre filter
-    if (selectedCostCentreId && tx.costCentreId !== selectedCostCentreId) {
-      return false;
-    }
-    // Category filter
-    if (selectedCategory && tx.category !== selectedCategory) {
-      return false;
-    }
-    // Transaction type filter
-    if (selectedType) {
-      const isRev = tx.isReversal;
-      if (selectedType === 'REVERSAL' && !isRev) return false;
-      if (selectedType === 'ALLOCATION' && isRev) return false;
-    }
-    // Status filter
-    if (selectedStatus) {
-      if (selectedStatus === 'UNDER_APPROVAL') {
-        if (tx.status !== 'UNDER_APPROVAL' && tx.status !== 'PENDING_PROJECT_APPROVAL') return false;
-      } else if (selectedStatus === 'PENDING_FINANCE_APPROVAL') {
-        if (tx.status !== 'PENDING_FINANCE_APPROVAL' && tx.status !== 'PROJECT_APPROVED') return false;
-      } else if (tx.status !== selectedStatus) {
-        return false;
-      }
-    }
-    // Search
+  const filtered = transactions.filter((tx) => {
+    if (selectedCostCentreId && tx.costCentreId !== selectedCostCentreId) return false;
+    if (selectedCategory && tx.category !== selectedCategory) return false;
+    if (selectedType === 'REVERSAL' && !tx.isReversal) return false;
+    if (selectedType === 'ALLOCATION' && tx.isReversal) return false;
+    if (selectedStatus === 'UNDER_APPROVAL' && tx.status !== 'UNDER_APPROVAL' && tx.status !== 'PENDING_PROJECT_APPROVAL') return false;
+    if (selectedStatus === 'PENDING_FINANCE_APPROVAL' && tx.status !== 'PENDING_FINANCE_APPROVAL' && tx.status !== 'PROJECT_APPROVED') return false;
+    if (selectedStatus && selectedStatus !== 'UNDER_APPROVAL' && selectedStatus !== 'PENDING_FINANCE_APPROVAL' && tx.status !== selectedStatus) return false;
     if (search.trim()) {
       const term = search.toLowerCase();
-      const codeMatch = (tx.transactionCode || '').toLowerCase().includes(term);
-      const boqMatch = (tx.boqNumber || '').toLowerCase().includes(term);
-      const descMatch = (tx.description || '').toLowerCase().includes(term);
-      const refMatch = (tx.reference || '').toLowerCase().includes(term);
-      const catMatch = (tx.category || '').toLowerCase().includes(term);
-      const ccMatch = (tx.costCentreName || '').toLowerCase().includes(term);
-      if (!codeMatch && !boqMatch && !descMatch && !refMatch && !catMatch && !ccMatch) {
-        return false;
-      }
+      const matchesSearch = [tx.transactionCode, tx.boqNumber, tx.description, tx.reference, tx.category, tx.costCentreName]
+        .some((value) => String(value || '').toLowerCase().includes(term));
+      if (!matchesSearch) return false;
     }
     return true;
   });
@@ -218,19 +259,34 @@ function BudgetTransactionsContent() {
             </select>
 
             {/* Cost Centre Filter */}
-            <select
-              className="select-field"
-              value={selectedCostCentreId}
-              onChange={e => setSelectedCostCentreId(e.target.value)}
-              style={{ minWidth: 180, height: 36, fontSize: 13 }}
-            >
-              <option value="">{UI_STRINGS.common.allCostCentres}</option>
-              {costCentres.map(cc => (
-                <option key={cc.id} value={cc.id}>
-                  {cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}
-                </option>
-              ))}
-            </select>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <select
+                className="select-field"
+                value={selectedCostCentreId}
+                onChange={e => setSelectedCostCentreId(e.target.value)}
+                style={{ minWidth: 180, height: 36, fontSize: 13 }}
+              >
+                <option value="">{UI_STRINGS.common.allCostCentres}</option>
+                {costCentres.map(cc => (
+                  <option key={cc.id} value={cc.id}>
+                    {cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}
+                  </option>
+                ))}
+              </select>
+              {costCentresHaveMore && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={loadingMoreCostCentres}
+                  title={interpolateUiString(UI_STRINGS.appAppCostCentresPage.showingCostCentreCountOfTotal, {
+                    loaded: String(costCentres.length), total: String(totalCostCentres),
+                  })}
+                  onClick={() => { void loadMoreCostCentres(); }}
+                >
+                  {loadingMoreCostCentres ? UI_STRINGS.appAppCostCentresPage.loadingMoreCostCentres : UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres}
+                </button>
+              )}
+            </div>
 
             {/* Category Filter */}
             <select
@@ -291,7 +347,7 @@ function BudgetTransactionsContent() {
           <button
             type="button"
             className="btn btn-outline"
-            onClick={loadTransactions}
+            onClick={() => { void loadTransactions(1); }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, fontSize: 12 }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
@@ -301,7 +357,7 @@ function BudgetTransactionsContent() {
       {/* Transactions Table (Part E - Columns Preserved) */}
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppBudgetTransactionsPage.auditLedger}{filtered.length}{UI_STRINGS.appAppBudgetTransactionsPage.records}</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppBudgetTransactionsPage.auditLedger}{totalTransactions}{UI_STRINGS.appAppBudgetTransactionsPage.records}</h2>
         </div>
 
         {loading ? (
@@ -475,6 +531,16 @@ function BudgetTransactionsContent() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {!loading && filtered.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            <span style={{ color: '#64748b', fontSize: 12 }}>{interpolateUiString(UI_STRINGS.appAppBudgetTransactionsPage.showingTransactionsOfTotal, { shown: String(filtered.length), total: String(totalTransactions) })}</span>
+            {page < totalPages && (
+              <button type="button" className="btn btn-secondary btn-sm" disabled={loadingMore} onClick={() => { void loadTransactions(page + 1, true); }}>
+                {loadingMore ? UI_STRINGS.appAppBudgetTransactionsPage.loadingLedger : UI_STRINGS.common.loadMore}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -1,0 +1,2 @@
+export const PR_DETAIL_LINE_PAGE_SIZE = 25;
+export const PR_DETAIL_LINE_CURSOR_MAX_LENGTH = 512;

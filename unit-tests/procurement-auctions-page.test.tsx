@@ -77,7 +77,7 @@ const auctions = [
   },
 ];
 
-function configureFetch(opts: { role?: string; auctionRows?: unknown[]; rfqs?: unknown[]; projectUsers?: unknown[] } = {}) {
+function configureFetch(opts: { role?: string; auctionRows?: unknown[]; rfqs?: unknown[]; projectUsers?: unknown[]; projectUsersHasMore?: boolean; nextProjectUsers?: unknown[]; rfqHasMore?: boolean; nextRfqs?: unknown[] } = {}) {
   fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === '/api/auth/session') return response({ user: { role: opts.role ?? 'PROCUREMENT_USER' } });
@@ -85,7 +85,20 @@ function configureFetch(opts: { role?: string; auctionRows?: unknown[]; rfqs?: u
       auctions: opts.auctionRows ?? auctions,
       kpis: { total: 3, live: 1, upcoming: 1, draft: 1, completed: 1, pending: 1 },
     });
-    if (url === '/api/procurement/auctions/rfq-options') return response({ rfqs: opts.rfqs ?? [rfq], projectUsers: opts.projectUsers ?? [{ id: 'observer-1', name: 'Asha', role: 'PROJECT_MANAGER' }] });
+    if (url.includes('/api/procurement/auctions/rfq-options?usersOnly=true')) return response({
+      projectUsers: opts.nextProjectUsers ?? [{ id: 'observer-2', name: 'Bala', role: 'PROJECT_USER' }],
+      projectUsersPage: 2, projectUsersPageSize: 50, projectUsersHasMore: false,
+    });
+    if (url.includes('/api/procurement/auctions/rfq-options?rfqPage=')) return response({
+      rfqs: opts.nextRfqs ?? [], rfqPage: 2, rfqPageSize: 50, rfqHasMore: false,
+    });
+    if (url.includes('/api/procurement/auctions/rfq-options?rfqId=')) return response({ rfqs: opts.rfqs ?? [rfq] });
+    if (url === '/api/procurement/auctions/rfq-options') return response({
+      rfqs: opts.rfqs ?? [rfq],
+      rfqPage: 1, rfqPageSize: 50, rfqHasMore: opts.rfqHasMore ?? false,
+      projectUsers: opts.projectUsers ?? [{ id: 'observer-1', name: 'Asha', role: 'PROJECT_MANAGER' }],
+      projectUsersPage: 1, projectUsersPageSize: 50, projectUsersHasMore: opts.projectUsersHasMore ?? false,
+    });
     if (url === '/api/procurement/auctions' && init?.method === 'POST') return response({ message: 'Saved', auction: { auctionNumber: 'AUC-NEW' } });
     return response({});
   });
@@ -188,6 +201,7 @@ describe('procurement auctions workspace', () => {
 
     await screen.findByRole('option', { name: /RFQ-100/ });
     fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) })).toBeEnabled());
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: '  ' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     expect(mockToastError).toHaveBeenLastCalledWith({ title: 'Validation', message: 'Please enter an Auction Name.' });
@@ -204,6 +218,7 @@ describe('procurement auctions workspace', () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === '/api/auth/session') return response({ user: { role: 'PROCUREMENT_USER' } });
       if (String(input).startsWith('/api/procurement/auctions?')) return response({ auctions: [], kpis: {} });
+      if (String(input).includes('/api/procurement/auctions/rfq-options?rfqId=')) return response({ rfqs: [rfq] });
       if (String(input) === '/api/procurement/auctions/rfq-options') return response({ rfqs: [rfq], projectUsers: [] });
       if (String(input) === '/api/procurement/auctions' && init?.method === 'POST') return { ok: true, json: jest.fn().mockRejectedValue(new Error('bad response')) };
       return response({});
@@ -211,17 +226,32 @@ describe('procurement auctions workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Create","toLocaleString":"E-Auction"})) }));
     await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
     fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) })).toBeEnabled());
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Second auction' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) }));
     await waitFor(() => expect(mockToastError).toHaveBeenLastCalledWith({ title: 'Auction Creation Failed', message: 'bad response' }));
   });
 
+  it('loads the next bounded RFQ page without fetching expanded RFQ data for every option', async () => {
+    configureFetch({
+      rfqHasMore: true,
+      nextRfqs: [{ id: 'rfq-2', rfqNumber: 'RFQ-200', title: 'Lift package', quotedVendorCount: 2 }],
+    });
+    renderPage(new URLSearchParams('create=true'));
+    await screen.findByRole('option', { name: /RFQ-100/ });
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await screen.findByRole('option', { name: /RFQ-200/ });
+    expect(fetchMock).toHaveBeenCalledWith('/api/procurement/auctions/rfq-options?rfqPage=2&rfqPageSize=50&includeObservers=false');
+  });
+
   it('supports RFQ deep links, all six wizard steps, schedule presets, rules, vendor compliance, item review, and sealed-bid scheduling', async () => {
+    configureFetch({ projectUsersHasMore: true, nextProjectUsers: [{ id: 'observer-2', name: 'Bala', role: 'PROJECT_USER' }] });
     renderPage(new URLSearchParams('rfqId=rfq-1'));
     const dialogTitle = await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
     const modal = wizard();
     expect(dialogTitle).toBeInTheDocument();
     await waitFor(() => expect(within(modal).getByText(/PR-100/)).toBeInTheDocument());
+    await waitFor(() => expect(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) })).toBeEnabled());
     fireEvent.change(within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Sealed cable event' } });
     fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.common.itemWise)));
     fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.common.sealedBid)));
@@ -247,6 +277,9 @@ describe('procurement auctions workspace', () => {
     fireEvent.click(radio('inviteProjectUser', 0));
     await waitFor(() => expect(modal.querySelectorAll('select')).toHaveLength(1));
     const observerSelect = modal.querySelector('select')!;
+    fireEvent.click(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(within(modal).getByRole('option', { name: /Bala/ })).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith('/api/procurement/auctions/rfq-options?usersOnly=true&page=2&pageSize=50');
     fireEvent.change(observerSelect, { target: { value: 'observer-1' } });
     expect(within(modal).getByText('Asha (PROJECT_MANAGER)')).toBeInTheDocument();
     nextStep();
@@ -289,6 +322,7 @@ describe('procurement auctions workspace', () => {
     await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Configure","toLocaleString":"& Schedule E-Auction Event"})));
     await screen.findByRole('option', { name: /RFQ-100/ });
     fireEvent.change(within(modal).getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    await waitFor(() => expect(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) })).toBeEnabled());
     await waitFor(() => expect((within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)) as HTMLInputElement).value).toContain('Cable Package'));
     fireEvent.change(within(modal).getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction, "", false)), { target: { value: 'Validation auction' } });
     for (let i = 0; i < 3; i++) nextStep();
@@ -315,6 +349,7 @@ describe('procurement auctions workspace', () => {
     const modal = wizard();
     await screen.findByRole('option', { name: /RFQ-100/ });
     fireEvent.change(within(modal).getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.chooseApprovedRFQ)), { target: { value: 'rfq-1' } });
+    await waitFor(() => expect(within(modal).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveAsDraft) })).toBeEnabled());
     fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.common.rFQTotalWise)));
     fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.reverseAuction)));
     fireEvent.click(within(modal).getByText(uiStringPattern(UI_STRINGS.appAppProcurementAuctionsPage.forwardAuction)));

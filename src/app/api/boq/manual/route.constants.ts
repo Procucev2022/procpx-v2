@@ -1,0 +1,3 @@
+export const MANUAL_BOQ_CREATE_AUDIT_ACTION = 'MANUAL_BOQ_CREATED';
+export const MANUAL_BOQ_LINES_SAVED_AUDIT_ACTION = 'MANUAL_BOQ_LINES_SAVED';
+export const MANUAL_BOQ_CREATION_NOTES = 'Created via BOQ Studio Manual Line Workspace';

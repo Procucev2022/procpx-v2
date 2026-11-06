@@ -22,7 +22,8 @@ const originalFetch = global.fetch;
 const response = (data: unknown, ok = true) => ({ ok, json: jest.fn().mockResolvedValue(data) });
 const baseLog = (id: string, overrides: Record<string, unknown> = {}) => ({
   id, entityType: 'PROJECT', entityId: `entity-${id}`, action: 'UPDATE', description: `Audit event ${id}`,
-  createdAt: '2026-10-01T10:00:00.000Z', user: { name: 'Ada User', email: 'ada@example.test' }, ...overrides,
+  createdAt: '2026-10-01T10:00:00.000Z', hasDiff: true,
+  user: { name: 'Ada User', email: 'ada@example.test' }, ...overrides,
 });
 
 describe('audit trail page', () => {
@@ -55,11 +56,11 @@ describe('audit trail page', () => {
   it('renders users, known and fallback actions, and inspects parsed and legacy state diffs', async () => {
     const logs = [
       baseLog('old-values', {
-        action: 'UPDATE', oldValues: '{"previous":true}', newValue: 'not-json',
+      action: 'UPDATE', oldValues: '{"previous":true}', newValue: 'not-json',
         user: { name: null, email: 'fallback@example.test' },
       }),
-      baseLog('no-diff', { action: 'UNLISTED_ACTION', oldValue: null, newValue: null, oldValues: null, newValues: null, user: null }),
-      baseLog('parsed', { action: 'CREATE', oldValue: '{"before":1}', newValue: '{"after":2}' }),
+      baseLog('no-diff', { action: 'UNLISTED_ACTION', hasDiff: false, oldValue: null, newValue: null, oldValues: null, newValues: null, user: null }),
+      baseLog('parsed', { action: 'CREATE' }),
     ];
     fetchMock.mockResolvedValueOnce(response({ data: logs, total: 3, totalPages: 1 }));
     render(<AuditTrailPage />);
@@ -70,7 +71,10 @@ describe('audit trail page', () => {
     expect(screen.getByText('UNLISTED_ACTION')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.none))).toBeInTheDocument();
 
+    fetchMock.mockResolvedValueOnce(response({ data: { oldValue: '{"previous":true}', newValue: 'not-json' } }));
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) })[0]);
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/audit/old-values');
+    await screen.findByText(UI_STRINGS.appAppAuditPage.previousStateOldValue);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppAuditPage.auditEventStateDiff, '', false))).toBeInTheDocument();
     const oldAndNew = document.querySelectorAll('pre');
     expect(oldAndNew[0].textContent).toContain('previous');
@@ -78,7 +82,9 @@ describe('audit trail page', () => {
     fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppAuditPage.auditEventStateDiff, '', false)).parentElement!.querySelector('button')!);
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppAuditPage.auditEventStateDiff))).not.toBeInTheDocument();
 
+    fetchMock.mockResolvedValueOnce(response({ data: { oldValue: '{"before":1}', newValue: '{"after":2}' } }));
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) })[1]);
+    await waitFor(() => expect(document.querySelectorAll('pre')).toHaveLength(2));
     expect(document.querySelectorAll('pre')[0].textContent).toContain('before');
     expect(document.querySelectorAll('pre')[1].textContent).toContain('after');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.close) }));
@@ -125,5 +131,33 @@ describe('audit trail page', () => {
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAuditPage.noAuditRecordsMatchTheSelectedCriteria))).toBeInTheDocument();
     unmount();
+  });
+
+  it('shows an inline error when audit snapshot detail cannot be loaded', async () => {
+    fetchMock.mockResolvedValueOnce(response({ data: [baseLog('diff-failure')], total: 1, totalPages: 1 }));
+    render(<AuditTrailPage />);
+    await screen.findByText('Audit event diff-failure');
+    fetchMock.mockResolvedValueOnce(response({ error: 'unavailable' }, false));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.appAppAuditPage.failedToLoadAuditDiff);
+  });
+
+  it('ignores an old detail response after the modal closes and another event is opened', async () => {
+    fetchMock.mockResolvedValueOnce(response({ data: [baseLog('first'), baseLog('second')], total: 2, totalPages: 1 }));
+    render(<AuditTrailPage />);
+    await screen.findByText('Audit event first');
+
+    let resolveFirst!: (value: unknown) => void;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) })[0]);
+    expect(await screen.findByRole('status')).toHaveTextContent(UI_STRINGS.appAppAuditPage.loadingAuditDiff);
+    fireEvent.click(screen.getByText(UI_STRINGS.common.copymriixi));
+
+    fetchMock.mockResolvedValueOnce(response({ data: { oldValue: '{"event":"second"}', newValue: null } }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAuditPage.inspectDiff) })[1]);
+    await waitFor(() => expect(document.querySelector('pre')?.textContent).toContain('second'));
+    resolveFirst(response({ data: { oldValue: '{"event":"first"}', newValue: null } }));
+    await waitFor(() => expect(document.querySelector('pre')?.textContent).toContain('second'));
+    expect(document.querySelector('pre')?.textContent).not.toContain('first');
   });
 });

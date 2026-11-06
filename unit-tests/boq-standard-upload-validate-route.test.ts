@@ -24,7 +24,10 @@ const findUoms = prisma.uomMaster.findMany as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 
 function request(values: Record<string, unknown> = {}) {
-  return { formData: jest.fn().mockResolvedValue({ get: (name: string) => values[name] ?? null }) } as unknown as NextRequest;
+  return {
+    headers: { get: jest.fn(() => null) },
+    formData: jest.fn().mockResolvedValue({ get: (name: string) => values[name] ?? null }),
+  } as unknown as NextRequest;
 }
 
 function uploadFile(sheets: Array<{ name: string; rows: unknown[][] }>, name = 'standard.xlsx') {
@@ -95,7 +98,7 @@ describe('standard BOQ upload validation API', () => {
   it('rejects workbooks with no selected sheet, empty matrices, or only headers', async () => {
     const noSheet = { SheetNames: ['Inventory'], Sheets: {} };
     jest.spyOn(XLSX, 'read').mockReturnValueOnce(noSheet as any);
-    await expect(POST(request({ file: { name: 'empty.xlsx', size: 0, arrayBuffer: async () => new ArrayBuffer(0) } }))).resolves.toEqual({
+    await expect(POST(request({ file: { name: 'empty.xlsx', size: 1, arrayBuffer: async () => new ArrayBuffer(0) } }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiBoqStandardUploadValidateRoute.invalidSpreadsheetCouldNotFindDataSheetInWorkbook, status: 400,
     });
 

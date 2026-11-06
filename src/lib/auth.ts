@@ -23,18 +23,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const cleanEmail = rawInput.toLowerCase();
 
         // 1. Standard email lookup
-        let user = await prisma.user.findFirst({
+        const emailMatches = await prisma.user.findMany({
           where: {
             email: cleanEmail,
             status: 'ACTIVE',
           },
           include: { tenant: true },
+          take: 2,
         });
+        const emailIsAmbiguous = emailMatches.length > 1;
+        let user = emailMatches.length === 1 ? emailMatches[0] : null;
 
         // 2. Development & Test Environment Guard (Requirement 7):
         // Support simplified test vendor username convention (normalised vendor name)
         // In production, reject username-based matching and enforce standard email credentials
-        if (!user && process.env.NODE_ENV !== 'production') {
+        // Never let a username fallback choose an account when the email itself maps to
+        // multiple tenants; the login form has no tenant selector to disambiguate it.
+        if (!user && !emailIsAmbiguous && process.env.NODE_ENV !== 'production') {
           const normalisedInput = rawInput.replace(/\s+/g, ' ').toLowerCase();
 
           // Fetch active VENDOR users with linked vendor records

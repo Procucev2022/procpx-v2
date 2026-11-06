@@ -1,20 +1,33 @@
 // app/api/dashboard/route.ts - Role-aware dashboard stats
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { requireAuth, isApiContext, apiSuccess } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { prisma } from '@/lib/prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { writeStructuredLog } from '@/lib/observability/server-logger';
+import {
+  DASHBOARD_EXCEPTION_PREVIEW_LIMIT,
+  DASHBOARD_REGISTER_PREVIEW_LIMIT,
+  DASHBOARD_RFQ_PREVIEW_LIMIT,
+  DASHBOARD_SUBCATEGORY_PREVIEW_LIMIT,
+  DASHBOARD_TAXONOMY_PREVIEW_LIMIT,
+  DASHBOARD_UOM_PREVIEW_LIMIT,
+  DASHBOARD_VIEWER_PROJECT_PREVIEW_LIMIT,
+} from './route.constants';
 
 
-export async function GET() {
+export async function GET(request?: Request) {
   const ctx = await requireAuth('PROJECT_VIEW');
   if (!isApiContext(ctx)) return ctx;
 
   const tenantId = ctx.tenantId;
   const userId = ctx.userId;
+  try {
 
   // ── SUPER_ADMIN ──────────────────────────────────────────
   if (ctx.role === 'SUPER_ADMIN') {
+    const searchParams = request?.url ? new URL(request.url).searchParams : new URLSearchParams();
+    const { page, pageSize, skip } = getListPageWindow(searchParams);
     const [tenants, users, projects, recentLogs, tenantList] = await Promise.all([
       prisma.tenant.count(),
       prisma.user.count(),
@@ -25,6 +38,9 @@ export async function GET() {
         include: { user: { select: { name: true, email: true } }, tenant: { select: { name: true, slug: true } } },
       }),
       prisma.tenant.findMany({
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        skip,
+        take: pageSize,
         include: {
           _count: { select: { projects: true, users: true } },
         },
@@ -36,6 +52,10 @@ export async function GET() {
       users,
       projects,
       recentLogs,
+      tenantListPage: page,
+      tenantListPageSize: pageSize,
+      tenantListTotal: tenants,
+      tenantListTotalPages: Math.ceil(tenants / pageSize),
       tenantList: tenantList.map(t => ({
         id: t.id,
         name: t.name,
@@ -75,23 +95,14 @@ export async function GET() {
 
   // ── PROJECT_APPROVER ─────────────────────────────────────
   if (ctx.role === 'PROJECT_APPROVER') {
-    const users = await prisma.user.findMany({
-      where: { tenantId },
-      select: { id: true, name: true, role: true, email: true },
-    });
-    const userMap = new Map<string, { name: string; email: string }>();
-    users.forEach(u => {
-      userMap.set(u.id, { name: u.name, email: u.email });
-      userMap.set(u.email, { name: u.name, email: u.email });
-    });
-
     const [pendingPrCount, approvedPrCount, rejectedPrCount, rawPendingPrs] = await Promise.all([
       prisma.procurementRequest.count({ where: { tenantId, status: 'PR_PENDING_PROJECT_APPROVAL' } }),
       prisma.procurementRequest.count({ where: { tenantId, status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } }),
       prisma.procurementRequest.count({ where: { tenantId, status: { in: ['PR_REJECTED', 'PR_RETURNED_FOR_CORRECTION'] } } }),
       prisma.procurementRequest.findMany({
         where: { tenantId, status: 'PR_PENDING_PROJECT_APPROVAL' },
-        orderBy: { requestedDate: 'desc' },
+        orderBy: [{ requestedDate: 'desc' }, { id: 'desc' }],
+        take: 5,
         include: {
           project: { select: { id: true, projectCode: true, name: true, sector: true } },
           costCentre: { select: { id: true, code: true, name: true, areaSqFt: true } },
@@ -102,10 +113,21 @@ export async function GET() {
               boqLine: true,
             },
           },
-          approvals: { orderBy: { timestamp: 'desc' } },
+          approvals: { orderBy: { timestamp: 'desc' }, take: 1 },
         },
       }),
     ]);
+
+    const requesterIds = Array.from(new Set(rawPendingPrs.map((pr) => pr.requestedBy).filter(Boolean)));
+    const users = requesterIds.length > 0 ? await prisma.user.findMany({
+      where: { tenantId, id: { in: requesterIds } },
+      select: { id: true, name: true, email: true },
+    }) : [];
+    const userMap = new Map<string, { name: string; email: string }>();
+    users.forEach((user) => {
+      userMap.set(user.id, { name: user.name, email: user.email });
+      userMap.set(user.email, { name: user.name, email: user.email });
+    });
 
     const pendingPrs = rawPendingPrs.map(pr => {
       const requester = userMap.get(pr.requestedBy);
@@ -115,7 +137,7 @@ export async function GET() {
         requesterName: requester?.name || pr.requestedBy,
         requesterEmail: requester?.email || '',
         categories: categories.length > 0 ? categories : (pr.boq?.category ? [pr.boq.category] : ['Standard']),
-        hasEnquiry: (pr.approvals || []).some(a => a.status === 'ENQUIRY'),
+        hasEnquiry: pr.approvals?.[0]?.status === 'ENQUIRY',
         latestMessage: pr.approvals?.[0] || null,
       };
     });
@@ -207,7 +229,7 @@ export async function GET() {
       if (rfqs.some(r => r.status === 'FINAL_RATE_LOCKED' || r.status === 'NEGOTIATION' || (r.negotiations?.[0]?.rounds?.length || 0) > 0)) {
         return 'Negotiation';
       }
-      if (rfqs.some(r => r.status === 'RESPONSE_CLOSED' || r.status === 'COMPARISON' || (r.quotes?.length || 0) > 0)) {
+      if (rfqs.some(r => r.status === 'RESPONSE_CLOSED' || r.status === 'COMPARISON' || (r._count?.quotes ?? r.quotes?.length ?? 0) > 0)) {
         return 'Quotations';
       }
       if (rfqs.some(r => r.status === 'RELEASED' || r.status === 'VENDOR_RESPONSE_OPEN')) {
@@ -218,8 +240,8 @@ export async function GET() {
 
     // Helper to format linked RFQ items
     const formatRfqItem = (rfq: any) => {
-      const quotesCount = rfq.quotes?.length || 0;
-      const invitedCount = rfq.invitedVendors?.length || 0;
+      const quotesCount = rfq._count?.quotes ?? rfq.quotes?.length ?? 0;
+      const invitedCount = rfq._count?.invitedVendors ?? rfq.invitedVendors?.length ?? 0;
       const vendorInvitationProgress = `${quotesCount} submitted / ${invitedCount} invited`;
 
       let quotationStage = '—';
@@ -236,7 +258,8 @@ export async function GET() {
       if (rfq.status === 'FINAL_RATE_LOCKED') {
         negotiationStage = 'Rates Locked';
       } else if (rounds.length > 0) {
-        negotiationStage = `Round ${rounds.length} (${rounds[rounds.length - 1]?.status?.replace(/_/g, ' ') || 'Active'})`;
+        const latestRound = rounds[0];
+        negotiationStage = `Round ${latestRound?.roundNumber || rounds.length} (${latestRound?.status?.replace(/_/g, ' ') || 'Active'})`;
       } else if (rfq.status === 'NEGOTIATION') {
         negotiationStage = 'In Negotiation';
       }
@@ -278,17 +301,18 @@ export async function GET() {
 
     // A. Query Authoritative Eligible Approved BOQs
     // Only BOQs that have completed the approval process and are eligible for procurement sourcing
+    const eligibleRevisionWhere = {
+      OR: [
+        { status: 'APPROVED' },
+        { prStatus: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } },
+        { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
+        { boq: { status: 'APPROVED' } },
+      ],
+    };
     const approvedRevisions = await prisma.boqRevision.findMany({
-      where: {
-        tenantId,
-        OR: [
-          { status: 'APPROVED' },
-          { prStatus: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } },
-          { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
-          { boq: { status: 'APPROVED' } },
-        ],
-      },
+      where: { tenantId, ...eligibleRevisionWhere },
       include: {
+        _count: { select: { rfqs: true } },
         boq: {
           include: {
             project: { select: { id: true, projectCode: true, name: true, location: true, city: true, state: true } },
@@ -296,15 +320,10 @@ export async function GET() {
           },
         },
         costCentre: { select: { id: true, code: true, name: true } },
-        lines: {
-          where: { isDeleted: false },
-          include: {
-            category: { select: { id: true, name: true, code: true } },
-            uom: { select: { id: true, code: true, name: true } },
-          },
-        },
         prs: {
           where: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } },
+          take: 1,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           select: {
             id: true,
             prNumber: true,
@@ -316,29 +335,79 @@ export async function GET() {
             releasedAt: true,
             updatedAt: true,
             createdAt: true,
+            totalLines: true,
             costCentre: { select: { id: true, code: true, name: true } },
-            lines: { select: { id: true } },
           },
         },
         rfqs: {
+          take: DASHBOARD_RFQ_PREVIEW_LIMIT,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
           include: {
-            invitedVendors: { include: { vendor: { select: { id: true, name: true, code: true } } } },
-            quotes: { select: { id: true, quoteNumber: true, totalQuoteAmount: true, quoteVersion: true, vendorId: true } },
+            _count: { select: { invitedVendors: true, quotes: true } },
             negotiations: {
+              take: 1,
+              orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
               include: {
-                rounds: { select: { id: true, roundNumber: true, status: true, counterOfferAmount: true, revisedQuoteAmount: true } },
+                rounds: {
+                  take: 1,
+                  orderBy: [{ roundNumber: 'desc' }, { id: 'desc' }],
+                  select: { id: true, roundNumber: true, status: true, counterOfferAmount: true, revisedQuoteAmount: true },
+                },
               },
             },
             awards: {
+              take: 2,
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
               include: { recommendedVendor: { select: { id: true, name: true } } },
             },
-            ppos: { select: { id: true, ppoNumber: true, status: true, totalValue: true } },
+            ppos: {
+              take: 1,
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              select: { id: true, ppoNumber: true, status: true, totalValue: true },
+            },
           },
-          orderBy: { createdAt: 'desc' },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ approvedAt: 'desc' }, { id: 'desc' }],
+      take: DASHBOARD_REGISTER_PREVIEW_LIMIT,
     });
+
+    const [approvedBoqCount, awaitingRfqCount] = await Promise.all([
+      prisma.boq.count({
+        where: { tenantId, revisions: { some: eligibleRevisionWhere } },
+      }),
+      prisma.boq.count({
+        where: {
+          tenantId,
+          revisions: {
+            some: eligibleRevisionWhere,
+            none: { AND: [eligibleRevisionWhere, { rfqs: { some: {} } }] },
+          },
+        },
+      }),
+    ]);
+
+    const lineGroups = approvedRevisions.length > 0
+      ? await prisma.boqLine.groupBy({
+        by: ['boqRevisionId', 'aiUnitCost'],
+        where: {
+          tenantId,
+          boqRevisionId: { in: approvedRevisions.map((revision) => revision.id) },
+          isDeleted: false,
+        },
+        _count: { _all: true },
+        _sum: { quantity: true },
+      })
+      : [];
+    const lineSummaryByRevision = new Map<string, { count: number; amount: number }>();
+    for (const group of lineGroups) {
+      const current = lineSummaryByRevision.get(group.boqRevisionId) || { count: 0, amount: 0 };
+      current.count += Number(group._count._all || 0);
+      current.amount += Number(group._sum.quantity || 0) * (Number(group.aiUnitCost) > 0 ? Number(group.aiUnitCost) : 100);
+      lineSummaryByRevision.set(group.boqRevisionId, current);
+    }
+
+    const revisionLineCount = (revisionId: string, fallbackCount = 0) => lineSummaryByRevision.get(revisionId)?.count ?? fallbackCount;
 
     // Map each unique BOQ to its authoritative approved revision, prioritizing non-zero lines
     const boqMap = new Map<string, any>();
@@ -347,11 +416,11 @@ export async function GET() {
       if (!existing) {
         boqMap.set(r.boq.id, r);
       } else {
-        if (r.lines.length > 0 && existing.lines.length === 0) {
+        if (revisionLineCount(r.id, (r as unknown as { lines?: unknown[] }).lines?.length || 0) > 0 && revisionLineCount(existing.id, (existing as { lines?: unknown[] }).lines?.length || 0) === 0) {
           boqMap.set(r.boq.id, r);
-        } else if (existing.lines.length > 0 && r.lines.length === 0) {
+        } else if (revisionLineCount(existing.id, (existing as { lines?: unknown[] }).lines?.length || 0) > 0 && revisionLineCount(r.id, (r as unknown as { lines?: unknown[] }).lines?.length || 0) === 0) {
           // keep existing
-        } else if (r.rfqs.length > existing.rfqs.length) {
+        } else if ((r._count?.rfqs ?? r.rfqs.length) > (existing._count?.rfqs ?? existing.rfqs.length)) {
           boqMap.set(r.boq.id, r);
         } else if (r.revisionNumber > existing.revisionNumber) {
           boqMap.set(r.boq.id, r);
@@ -361,8 +430,10 @@ export async function GET() {
 
     // Collect all unique RFQs across revisions for each BOQ
     const boqRfqsMap = new Map<string, any[]>();
+    const boqRfqCountsMap = new Map<string, number>();
     for (const r of approvedRevisions) {
       const list = boqRfqsMap.get(r.boq.id) || [];
+      boqRfqCountsMap.set(r.boq.id, (boqRfqCountsMap.get(r.boq.id) || 0) + (r._count?.rfqs ?? r.rfqs.length));
       for (const rfq of r.rfqs) {
         if (!list.some(x => x.id === rfq.id)) {
           list.push(rfq);
@@ -375,13 +446,16 @@ export async function GET() {
     const boqRegister: any[] = [];
     for (const [, r] of boqMap.entries()) {
       const allRfqs = boqRfqsMap.get(r.boq.id) || [];
+      const fullRfqCount = boqRfqCountsMap.get(r.boq.id) || 0;
       const formattedRfqs = allRfqs.map(formatRfqItem);
       const stage = mapConciseStage(allRfqs);
       const costCentreCode = r.costCentre?.code || r.boq?.costCentre?.code || '—';
       const costCentreDisplay = r.costCentre ? `${r.costCentre.code} - ${r.costCentre.name}` : (r.boq?.costCentre ? `${r.boq.costCentre.code} - ${r.boq.costCentre.name}` : 'General');
-      const linesAmount = r.lines.reduce((s: number, l: any) => s + ((l.quantity || 0) * ((l as any).aiUnitCost || (l as any).benchmarkRate || 100)), 0);
+      const lineSummary = lineSummaryByRevision.get(r.id);
+      const legacyLines = (r as unknown as { lines?: Array<{ quantity?: number | null; aiUnitCost?: number | null; benchmarkRate?: number | null }> }).lines || [];
+      const linesAmount = lineSummary?.amount ?? legacyLines.reduce((sum, line) => sum + ((line.quantity || 0) * (line.aiUnitCost || line.benchmarkRate || 100)), 0);
       const amount = linesAmount > 0 ? linesAmount : (r.prs[0]?.totalEstimatedValue || 0);
-      const itemCount = r.lines.length > 0 ? r.lines.length : (r.prs[0]?.lines?.length || r.totalLines || 0);
+      const itemCount = revisionLineCount(r.id, legacyLines.length) > 0 ? revisionLineCount(r.id, legacyLines.length) : (r.prs[0]?.totalLines || r.totalLines || 0);
       const date = r.approvedAt || r.submittedAt || r.createdAt;
       const description = r.boq.title || r.boq.description || interpolateUiString(UI_STRINGS.common.commercialBaselineForProject, {
         projectName: r.boq.project?.name || UI_STRINGS.common.project,
@@ -406,8 +480,8 @@ export async function GET() {
         procurementStage: stage,
         sourcingStage: stage, // backwards compatibility
         currentStage: stage, // backwards compatibility
-        rfqCount: allRfqs.length,
-        canCreateRfq: !allRfqs.some((x: any) => x.status !== 'CANCELLED'),
+        rfqCount: fullRfqCount,
+        canCreateRfq: fullRfqCount === allRfqs.length && !allRfqs.some((x) => x.status !== 'CANCELLED'),
         hasRateCardMatch: rateCardsCount > 0,
         createRfqUrl: `/procurement/rfqs/new?revisionId=${r.id}&projectId=${r.boq.project.id}`,
         rfqs: formattedRfqs,
@@ -419,14 +493,12 @@ export async function GET() {
     // Sort by date descending
     boqRegister.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const awaitingRfqCount = boqRegister.filter(b => b.procurementStage === 'Awaiting RFQ' || b.rfqCount === 0).length;
-
     return apiSuccess({
       role: ctx.role,
       summaryCards: {
         boqsReceived: awaitingRfqCount,
         prsReceived: awaitingRfqCount, // backwards compatibility
-        approvedBoqs: boqRegister.length,
+        approvedBoqs: approvedBoqCount,
         rfqsInProgress: rfqsInProgressCount,
         negotiationsPending: negotiationsCount,
         awardsPpoPending: awardsPpoPendingCount,
@@ -434,7 +506,11 @@ export async function GET() {
       boqRegister,
       prRegister: boqRegister, // backwards compatibility
       consolidatedRegister: boqRegister, // backwards compatibility
-      approvedBoqsCount: boqRegister.length,
+      approvedBoqsCount: approvedBoqCount,
+      registerTotalCount: approvedBoqCount,
+      registerPreviewLimit: DASHBOARD_REGISTER_PREVIEW_LIMIT,
+      registerHasMore: approvedBoqCount > boqRegister.length,
+      awaitingRfqCount,
       activeRfqsCount: rfqsInProgressCount,
       negotiationsCount,
       awardsPendingCount: awardsPpoPendingCount,
@@ -444,43 +520,57 @@ export async function GET() {
 
   // ── FINANCE_USER ─────────────────────────────────────────
   if (ctx.role === 'FINANCE_USER') {
-    const projects = await prisma.project.findMany({
-      where: { tenantId },
-      include: {
-        boqs: {
-          include: {
-            revisions: {
-              orderBy: { revisionNumber: 'desc' },
-              take: 1,
-            },
-          },
+    const projectWhere = { tenantId };
+    const [projects, totalProjects, budgetAggregate, approvedProjects] = await Promise.all([
+      prisma.project.findMany({
+        where: projectWhere,
+        select: {
+          id: true,
+          projectCode: true,
+          name: true,
+          costCentre: true,
+          budget: true,
+          currency: true,
+          status: true,
+          projectOwner: true,
+          updatedAt: true,
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    const totalBudget = projects.reduce((acc, p) => acc + (p.budget || 0), 0);
-    const approvedCount = projects.filter(p => p.status === 'BOQ_APPROVED').length;
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 20,
+      }),
+      prisma.project.count({ where: projectWhere }),
+      prisma.project.aggregate({ where: projectWhere, _sum: { budget: true } }),
+      prisma.project.count({ where: { ...projectWhere, status: 'BOQ_APPROVED' } }),
+    ]);
 
     return apiSuccess({
       role: ctx.role,
       projects,
-      totalBudget,
-      totalProjects: projects.length,
-      approvedProjects: approvedCount,
+      totalBudget: Number(budgetAggregate._sum.budget || 0),
+      totalProjects,
+      approvedProjects,
+      projectPreviewLimit: 20,
     });
   }
 
   // ── CATEGORY_MANAGER ─────────────────────────────────────
   // ── CATEGORY_MANAGER ─────────────────────────────────────
   if (ctx.role === 'CATEGORY_MANAGER') {
+    const eligibleCategoryRevisionWhere = {
+      OR: [
+        { status: 'APPROVED' },
+        { prStatus: 'PR_RELEASED_TO_PROCUREMENT' },
+        { prStatus: 'PR_APPROVED' },
+        { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
+      ],
+    };
     const [
-      categories,
-      uoms,
+      categoryResults,
+      uomResults,
       revisionsWithExceptions,
       totalLines,
-      approvedRevisions,
-      approvedPrs,
+      approvedRevisionResults,
+      approvedPrResults,
       rateCardsCount,
       activeRfqsCount,
       negotiationsCount,
@@ -488,63 +578,81 @@ export async function GET() {
       approvedAwardsWithoutPpoCount,
     ] = await Promise.all([
       prisma.category.findMany({
-        where: { tenantId, isActive: true },
-        include: { children: true },
+        where: { tenantId, isActive: true, parentId: null },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        take: DASHBOARD_TAXONOMY_PREVIEW_LIMIT + 1,
+        include: {
+          children: {
+            where: { isActive: true },
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+            take: DASHBOARD_SUBCATEGORY_PREVIEW_LIMIT + 1,
+            select: { id: true, name: true, parentId: true },
+          },
+        },
       }),
-      prisma.uomMaster.findMany({ where: { tenantId, isActive: true } }),
+      prisma.uomMaster.findMany({
+        where: { tenantId, isActive: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        take: DASHBOARD_UOM_PREVIEW_LIMIT + 1,
+      }),
       prisma.boqRevision.findMany({
         where: { tenantId, OR: [{ warningLines: { gt: 0 } }, { errorLines: { gt: 0 } }] },
-        include: { boq: { include: { project: true } } },
-        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          revisionCode: true,
+          warningLines: true,
+          errorLines: true,
+          qualityScore: true,
+          updatedAt: true,
+          boq: { select: { boqCode: true, project: { select: { name: true } } } },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: DASHBOARD_EXCEPTION_PREVIEW_LIMIT,
       }),
       prisma.boqLine.count({ where: { tenantId, isDeleted: false } }),
       prisma.boqRevision.findMany({
-        where: {
-          tenantId,
-          OR: [
-            { status: 'APPROVED' },
-            { prStatus: 'PR_RELEASED_TO_PROCUREMENT' },
-            { prStatus: 'PR_APPROVED' },
-            { prs: { some: { status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] } } } },
-          ],
-        },
+        where: { tenantId, ...eligibleCategoryRevisionWhere },
+        take: DASHBOARD_REGISTER_PREVIEW_LIMIT + 1,
         include: {
+          _count: { select: { rfqs: true } },
           boq: {
             include: {
               project: { select: { id: true, projectCode: true, name: true, location: true, city: true } },
               costCentre: { select: { id: true, code: true, name: true } },
             },
           },
-          lines: {
-            where: { isDeleted: false },
-            include: {
-              category: { select: { id: true, name: true } },
-              uom: { select: { id: true, code: true } },
-            },
-          },
           rfqs: {
+            take: DASHBOARD_RFQ_PREVIEW_LIMIT,
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
             include: {
-              invitedVendors: { include: { vendor: { select: { id: true, name: true, code: true } } } },
+              _count: { select: { invitedVendors: true, quotes: true } },
               quotes: {
+                take: 1,
                 include: { vendor: { select: { id: true, name: true } } },
                 orderBy: { totalQuoteAmount: 'asc' },
               },
               negotiations: {
+                take: 1,
+                orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
                 include: {
                   rounds: {
-                    include: { vendor: { select: { id: true, name: true } } },
-                    orderBy: { roundNumber: 'desc' },
+                    take: 1,
+                    select: { roundNumber: true, status: true, nextResponsibleParty: true },
+                    orderBy: [{ roundNumber: 'desc' }, { id: 'desc' }],
                   },
                 },
               },
               awards: {
+                take: 2,
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
                 include: { recommendedVendor: { select: { id: true, name: true } } },
               },
               ppos: {
+                take: 1,
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
                 select: { id: true, ppoNumber: true, status: true, totalValue: true, createdAt: true },
               },
             },
-            orderBy: { createdAt: 'desc' },
           },
         },
         orderBy: { approvedAt: 'desc' },
@@ -554,38 +662,48 @@ export async function GET() {
           tenantId,
           status: { in: ['PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT'] },
         },
+        take: DASHBOARD_REGISTER_PREVIEW_LIMIT + 1,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         include: {
+          _count: { select: { lines: true, rfqs: true } },
           project: { select: { id: true, projectCode: true, name: true, location: true, city: true } },
           costCentre: { select: { id: true, code: true, name: true } },
           boq: { select: { id: true, boqCode: true, title: true } },
           boqRevision: { select: { id: true, revisionCode: true } },
-          lines: { select: { id: true, category: true, quantity: true, estimatedRate: true, estimatedValue: true } },
           rfqs: {
+            take: DASHBOARD_RFQ_PREVIEW_LIMIT,
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
             include: {
-              invitedVendors: { include: { vendor: { select: { id: true, name: true, code: true } } } },
+              _count: { select: { invitedVendors: true, quotes: true } },
               quotes: {
+                take: 1,
                 include: { vendor: { select: { id: true, name: true } } },
                 orderBy: { totalQuoteAmount: 'asc' },
               },
               negotiations: {
+                take: 1,
+                orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
                 include: {
                   rounds: {
-                    include: { vendor: { select: { id: true, name: true } } },
-                    orderBy: { roundNumber: 'desc' },
+                    take: 1,
+                    select: { roundNumber: true, status: true, nextResponsibleParty: true },
+                    orderBy: [{ roundNumber: 'desc' }, { id: 'desc' }],
                   },
                 },
               },
               awards: {
+                take: 2,
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
                 include: { recommendedVendor: { select: { id: true, name: true } } },
               },
               ppos: {
+                take: 1,
+                orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
                 select: { id: true, ppoNumber: true, status: true, totalValue: true, createdAt: true },
               },
             },
-            orderBy: { createdAt: 'desc' },
           },
         },
-        orderBy: { updatedAt: 'desc' },
       }),
       prisma.vendorRateCard.count({ where: { tenantId, status: 'APPROVED' } }),
       prisma.rfq.count({
@@ -607,9 +725,75 @@ export async function GET() {
       prisma.awardRecommendation.count({ where: { tenantId, status: 'APPROVED', ppos: { none: {} } } }),
     ]);
 
+    const [approvedBoqTotalCount, awaitingRfqTotalCount, exceptionTotalCount] = await Promise.all([
+      prisma.boq.count({ where: { tenantId, revisions: { some: eligibleCategoryRevisionWhere } } }),
+      prisma.boq.count({
+        where: {
+          tenantId,
+          revisions: {
+            some: eligibleCategoryRevisionWhere,
+            none: { AND: [eligibleCategoryRevisionWhere, { rfqs: { some: {} } }] },
+          },
+        },
+      }),
+      prisma.boqRevision.count({ where: { tenantId, OR: [{ warningLines: { gt: 0 } }, { errorLines: { gt: 0 } }] } }),
+    ]);
+
+    const taxonomyHasMore = categoryResults.length > DASHBOARD_TAXONOMY_PREVIEW_LIMIT ||
+      categoryResults.some((category) => (category.children?.length || 0) > DASHBOARD_SUBCATEGORY_PREVIEW_LIMIT) ||
+      uomResults.length > DASHBOARD_UOM_PREVIEW_LIMIT;
+    const categories = categoryResults.slice(0, DASHBOARD_TAXONOMY_PREVIEW_LIMIT).map((category) => ({
+      ...category,
+      children: (category.children || []).slice(0, DASHBOARD_SUBCATEGORY_PREVIEW_LIMIT),
+    }));
+    const uoms = uomResults.slice(0, DASHBOARD_UOM_PREVIEW_LIMIT);
+    const approvedRevisionHasMore = approvedRevisionResults.length > DASHBOARD_REGISTER_PREVIEW_LIMIT;
+    const approvedPrHasMore = approvedPrResults.length > DASHBOARD_REGISTER_PREVIEW_LIMIT;
+    const approvedRevisions = approvedRevisionResults.slice(0, DASHBOARD_REGISTER_PREVIEW_LIMIT);
+    const approvedPrs = approvedPrResults.slice(0, DASHBOARD_REGISTER_PREVIEW_LIMIT);
+
+    const [revisionLineGroups, prLineGroups] = await Promise.all([
+      approvedRevisions.length > 0
+        ? prisma.boqLine.groupBy({
+          by: ['boqRevisionId', 'categoryId', 'aiUnitCost'],
+          where: { tenantId, boqRevisionId: { in: approvedRevisions.map((revision) => revision.id) }, isDeleted: false },
+          _count: { _all: true },
+          _sum: { quantity: true },
+        })
+        : [],
+      approvedPrs.length > 0
+        ? prisma.pRLine.groupBy({
+          by: ['prId', 'category'],
+          where: { tenantId, prId: { in: approvedPrs.map((pr) => pr.id) } },
+          _count: { _all: true },
+        })
+        : [],
+    ]);
+    const categoryIds = Array.from(new Set(revisionLineGroups.map((group) => group.categoryId).filter((id): id is string => Boolean(id))));
+    const lineCategories = categoryIds.length > 0
+      ? await prisma.category.findMany({ where: { tenantId, id: { in: categoryIds } }, select: { id: true, name: true } })
+      : [];
+    const categoryNameById = new Map(lineCategories.map((category) => [category.id, category.name]));
+    const revisionLineSummary = new Map<string, { count: number; amount: number; categories: Set<string> }>();
+    for (const group of revisionLineGroups) {
+      const summary = revisionLineSummary.get(group.boqRevisionId) || { count: 0, amount: 0, categories: new Set<string>() };
+      summary.count += Number(group._count._all || 0);
+      summary.amount += Number(group._sum.quantity || 0) * (Number(group.aiUnitCost) > 0 ? Number(group.aiUnitCost) : 100);
+      if (group.categoryId) {
+        const name = categoryNameById.get(group.categoryId);
+        if (name) summary.categories.add(name);
+      }
+      revisionLineSummary.set(group.boqRevisionId, summary);
+    }
+    const prCategoriesById = new Map<string, Set<string>>();
+    for (const group of prLineGroups) {
+      const names = prCategoriesById.get(group.prId) || new Set<string>();
+      if (group.category) names.add(group.category);
+      prCategoriesById.set(group.prId, names);
+    }
+
     // Helpers to map lifecycle stages and pending actions
     const mapRfqLifecycleStage = (rfq: any): string => {
-      if (!rfq) return 'Approved BOQ — Awaiting RFQ';
       if (rfq.ppos?.length > 0 || rfq.status === 'AWARDED') return 'PPO Created';
       const hasApprovedAward = rfq.awards?.some((a: any) => a.status === 'APPROVED');
       if (hasApprovedAward || rfq.status === 'APPROVED') return 'Award Approved';
@@ -617,7 +801,7 @@ export async function GET() {
       if (hasPendingAward || rfq.status === 'AWARD_RECOMMENDED') return 'Award Pending Approval';
       if (rfq.status === 'FINAL_RATE_LOCKED') return 'Rates Locked';
       if (rfq.status === 'NEGOTIATION' || (rfq.negotiations?.[0]?.rounds?.length || 0) > 0) return 'Negotiation';
-      if (rfq.status === 'RESPONSE_CLOSED' || rfq.status === 'COMPARISON' || (rfq.quotes?.length || 0) > 0) return 'Quotation Comparison';
+      if (rfq.status === 'RESPONSE_CLOSED' || rfq.status === 'COMPARISON' || (rfq._count?.quotes ?? rfq.quotes?.length ?? 0) > 0) return 'Quotation Comparison';
       if (rfq.status === 'VENDOR_RESPONSE_OPEN' || rfq.status === 'RELEASED') return 'RFQ Issued / Awaiting Quotations';
       if (rfq.status === 'DRAFT') return 'RFQ Preparation';
       if (rfq.status === 'CANCELLED') return 'Closed / Cancelled';
@@ -656,7 +840,7 @@ export async function GET() {
       if (rfq.status === 'NEGOTIATION') {
         return { pendingAction: 'Commercial Negotiation Active', nextResponsibleParty: 'BUYER' };
       }
-      if ((rfq.quotes?.length || 0) > 0) {
+      if ((rfq._count?.quotes ?? rfq.quotes?.length ?? 0) > 0) {
         return { pendingAction: 'Quotation Comparison & Evaluation', nextResponsibleParty: 'BUYER' };
       }
       if (rfq.status === 'RELEASED' || rfq.status === 'VENDOR_RESPONSE_OPEN') {
@@ -669,8 +853,8 @@ export async function GET() {
     };
 
     const formatRfqItem = (rfq: any) => {
-      const quotesCount = rfq.quotes?.length || 0;
-      const invitedCount = rfq.invitedVendors?.length || 0;
+      const quotesCount = rfq._count?.quotes ?? rfq.quotes?.length ?? 0;
+      const invitedCount = rfq._count?.invitedVendors ?? rfq.invitedVendors?.length ?? 0;
       const { pendingAction, nextResponsibleParty } = deriveActionDetails(rfq);
       const stage = mapRfqLifecycleStage(rfq);
 
@@ -734,7 +918,8 @@ export async function GET() {
       if (pr.boqRevisionId) {
         representedRevisionIds.add(pr.boqRevisionId);
       }
-      const cats = Array.from(new Set(pr.lines.map((l: any) => l.category).filter(Boolean)));
+      const prLines = (pr as unknown as { lines?: Array<{ category?: string }> }).lines || [];
+      const cats = Array.from(prCategoriesById.get(pr.id) || new Set(prLines.map((line) => line.category).filter(Boolean)));
       const prRfqs = (pr.rfqs || []).map(formatRfqItem);
 
       let overallStage = 'Approved BOQ — Awaiting RFQ';
@@ -768,15 +953,15 @@ export async function GET() {
         projectId: pr.projectId,
         costCentreId: pr.costCentreId,
         approvedAt: pr.projectApprovedAt || pr.releasedAt || pr.updatedAt,
-        totalLines: pr.lines.length,
+        totalLines: pr.totalLines || pr._count?.lines || prLines.length || 0,
         benchmarkValue: pr.totalEstimatedValue || 0,
         amount: pr.totalEstimatedValue || 0,
         requestedValue: pr.totalEstimatedValue || 0,
-        rfqCount: prRfqs.length,
+        rfqCount: pr._count?.rfqs ?? prRfqs.length,
         sourcingStage: overallStage,
         currentStage: overallStage,
         overallStage,
-        canCreateRfq: !prRfqs.some((r: any) => r.status !== 'CANCELLED'),
+        canCreateRfq: (pr._count?.rfqs ?? prRfqs.length) === prRfqs.length && !prRfqs.some((r) => r.status !== 'CANCELLED'),
         hasRateCardMatch: rateCardsCount > 0,
         createRfqUrl: `/procurement/rfqs/new?prId=${pr.id}`,
         rfqs: prRfqs,
@@ -798,7 +983,7 @@ export async function GET() {
                 existingRfqIds.add(rfq.id);
               }
             }
-            item.rfqCount = item.rfqs.length;
+            item.rfqCount = Math.max(item.rfqCount || item.rfqs.length, rev._count?.rfqs ?? rev.rfqs.length);
             if (item.rfqs.some((r: any) => r.stage === 'PPO Created')) item.overallStage = 'PPO Created';
             else if (item.rfqs.some((r: any) => r.stage === 'Award Approved')) item.overallStage = 'Award Approved';
             else if (item.rfqs.some((r: any) => r.stage === 'Award Pending Approval')) item.overallStage = 'Award Pending Approval';
@@ -807,16 +992,19 @@ export async function GET() {
             else if (item.rfqs.some((r: any) => r.stage === 'Quotation Comparison')) item.overallStage = 'Quotation Comparison';
             item.sourcingStage = item.overallStage;
             item.currentStage = item.overallStage;
-            item.canCreateRfq = !item.rfqs.some((r: any) => r.status !== 'CANCELLED');
+            item.canCreateRfq = item.rfqCount === item.rfqs.length && !item.rfqs.some((r: any) => r.status !== 'CANCELLED');
           }
         }
         continue;
       }
 
       const boqCode = rev.boq.boqCode;
-      const categories = Array.from(new Set(rev.lines.map((l: any) => l.category?.name).filter(Boolean)));
-      const benchmarkVal = rev.lines.reduce((s: number, l: any) => s + ((l.quantity || 0) * ((l as any).benchmarkRate || 100)), 0);
+      const lineSummary = revisionLineSummary.get(rev.id);
+      const revisionLines = (rev as unknown as { lines?: Array<{ category?: { name: string } | null; quantity?: number | null; aiUnitCost?: number | null; benchmarkRate?: number | null }> }).lines || [];
+      const categories = Array.from(lineSummary?.categories || new Set(revisionLines.map((line) => line.category?.name).filter(Boolean)));
+      const benchmarkVal = lineSummary?.amount ?? revisionLines.reduce((sum, line) => sum + ((line.quantity || 0) * (line.aiUnitCost || line.benchmarkRate || 100)), 0);
       const rfqs = (rev.rfqs || []).map(formatRfqItem);
+      const rfqCount = rev._count?.rfqs ?? rfqs.length;
 
       let overallStage = 'Approved BOQ — Awaiting RFQ';
       if (rfqs.some(r => r.stage === 'PPO Created')) overallStage = 'PPO Created';
@@ -837,7 +1025,7 @@ export async function GET() {
         prNumber: boqCode,
         title: interpolateUiString(UI_STRINGS.common.value1, { "value1": rev.boq.title || `${rev.boq.project.name} — Commercial Baseline` }),
         description: interpolateUiString(UI_STRINGS.common.value1, { "value1": rev.boq.title || `${rev.boq.project.name} — Commercial Baseline` }),
-        itemCount: rev.lines.length,
+        itemCount: lineSummary?.count ?? (revisionLines.length || rev.totalLines || 0),
         projectName: rev.boq.project.name,
         projectCode: rev.boq.project.projectCode,
         costCentre: rev.boq.costCentre ? `${rev.boq.costCentre.code} - ${rev.boq.costCentre.name}` : 'General',
@@ -849,15 +1037,15 @@ export async function GET() {
         projectId: rev.boq.project.id,
         costCentreId: rev.boq.costCentre?.id || null,
         approvedAt: rev.approvedAt || rev.updatedAt,
-        totalLines: rev.lines.length,
+        totalLines: lineSummary?.count ?? (revisionLines.length || rev.totalLines || 0),
         benchmarkValue: benchmarkVal,
         amount: benchmarkVal,
         requestedValue: benchmarkVal,
-        rfqCount: rfqs.length,
+        rfqCount,
         sourcingStage: overallStage,
         currentStage: overallStage,
         overallStage,
-        canCreateRfq: !rfqs.some((r: any) => r.status !== 'CANCELLED'),
+        canCreateRfq: rfqCount === rfqs.length && !rfqs.some((r) => r.status !== 'CANCELLED'),
         hasRateCardMatch: rateCardsCount > 0,
         createRfqUrl: `/procurement/rfqs/new?revisionId=${rev.id}&projectId=${rev.boq.project.id}`,
         rfqs,
@@ -866,23 +1054,15 @@ export async function GET() {
     }
 
     const boqRegister = Array.from(boqMap.values());
-    const awaitingRfqCount = boqRegister.filter(
-      (b) =>
-        b.sourcingStage.includes('Awaiting RFQ') ||
-        b.sourcingStage === 'RFQ Preparation' ||
-        !b.rfqs ||
-        b.rfqs.length === 0
-    ).length;
     const awardsPpoPendingCount = pendingAwardsCount + approvedAwardsWithoutPpoCount;
-    const topCategories = categories.filter(c => !c.parentId);
-    const totalSubcategories = categories.filter(c => c.parentId).length;
+    const topCategories = categories;
 
     return apiSuccess({
       role: ctx.role,
       summaryCards: {
-        approvedBoqs: boqRegister.length,
-        prsReceived: awaitingRfqCount,
-        awaitingRfq: awaitingRfqCount,
+        approvedBoqs: approvedBoqTotalCount,
+        prsReceived: awaitingRfqTotalCount,
+        awaitingRfq: awaitingRfqTotalCount,
         rfqsInProgress: activeRfqsCount,
         negotiationsPending: negotiationsCount,
         awardsPpoPending: awardsPpoPendingCount,
@@ -891,14 +1071,19 @@ export async function GET() {
       prRegister: boqRegister,
       consolidatedRegister: boqRegister,
       approvedBoqsList: boqRegister,
-      approvedBoqsCount: boqRegister.length,
+      approvedBoqsCount: approvedBoqTotalCount,
+      awaitingRfqCount: awaitingRfqTotalCount,
+      registerPreviewLimit: DASHBOARD_REGISTER_PREVIEW_LIMIT * 2,
+      registerHasMore: approvedRevisionHasMore || approvedPrHasMore,
+      exceptionTotalCount,
+      taxonomyHasMore,
       activeRfqsCount,
       negotiationsCount,
       awardsPendingCount: awardsPpoPendingCount,
       // Retain taxonomy & quality controls for category manager governance
-      categoryCount: topCategories.length,
+      categoryCount: categories.length,
       categories: topCategories,
-      subcategoryCount: totalSubcategories,
+      subcategoryCount: categories.reduce((count, category) => count + category.children.length, 0),
       uomCount: uoms.length,
       uoms,
       revisionsWithExceptions,
@@ -908,26 +1093,41 @@ export async function GET() {
 
   // ── VIEWER ───────────────────────────────────────────────
   if (ctx.role === 'VIEWER') {
-    const projects = await prisma.project.findMany({
-      where: { tenantId },
-      include: {
-        boqs: {
-          include: {
-            revisions: {
-              select: { id: true, revisionCode: true, status: true, totalLines: true, qualityScore: true },
-              orderBy: { revisionNumber: 'desc' },
-              take: 1,
+    const projectWhere = { tenantId };
+    const [projects, totalProjects] = await Promise.all([
+      prisma.project.findMany({
+        where: projectWhere,
+        select: {
+          id: true,
+          projectCode: true,
+          name: true,
+          sector: true,
+          status: true,
+          boqs: {
+            select: {
+              id: true,
+              revisions: {
+                select: { id: true, revisionCode: true, status: true, totalLines: true, qualityScore: true },
+                orderBy: [{ revisionNumber: 'desc' }, { id: 'desc' }],
+                take: 1,
+              },
             },
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
           },
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: DASHBOARD_VIEWER_PROJECT_PREVIEW_LIMIT,
+      }),
+      prisma.project.count({ where: projectWhere }),
+    ]);
 
     return apiSuccess({
       role: ctx.role,
       projects,
-      totalProjects: projects.length,
+      totalProjects,
+      projectPreviewLimit: DASHBOARD_VIEWER_PROJECT_PREVIEW_LIMIT,
+      projectsHasMore: totalProjects > projects.length,
     });
   }
 
@@ -962,26 +1162,27 @@ export async function GET() {
 
   // Fallback if no contributions registered yet
   if (totalProposedBudget === 0) {
-    const boqsWithLines = await prisma.boq.findMany({
-      where: { tenantId },
-      include: {
-        revisions: {
-          orderBy: { revisionNumber: 'desc' },
-          take: 1,
-          include: {
-            lines: {
-              where: { isDeleted: false },
-              select: { aiTotalCost: true, quantity: true, aiUnitCost: true },
-            },
-          },
-        },
-      },
-    });
-    totalProposedBudget = boqsWithLines.reduce((acc, b) => {
-      const rev = b.revisions[0];
-      const val = rev?.lines?.reduce((s, l) => s + (l.aiTotalCost || (l.quantity && l.aiUnitCost ? l.quantity * l.aiUnitCost : 0) || 0), 0) || 0;
-      return acc + val;
-    }, 0);
+    const fallbackBudget = await prisma.$queryRaw<Array<{ total: number | bigint | null }>>`
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN line.aiTotalCost IS NOT NULL AND line.aiTotalCost != 0 THEN line.aiTotalCost
+          WHEN line.quantity IS NOT NULL AND line.quantity != 0
+            AND line.aiUnitCost IS NOT NULL AND line.aiUnitCost != 0 THEN line.quantity * line.aiUnitCost
+          ELSE 0
+        END
+      ), 0) AS total
+      FROM boq_lines AS line
+      INNER JOIN boq_revisions AS revision
+        ON revision.id = line.boqRevisionId AND revision.tenantId = line.tenantId
+      WHERE line.tenantId = ${tenantId}
+        AND line.isDeleted = 0
+        AND revision.revisionNumber = (
+          SELECT MAX(latest.revisionNumber)
+          FROM boq_revisions AS latest
+          WHERE latest.boqId = revision.boqId AND latest.tenantId = revision.tenantId
+        )
+    `;
+    totalProposedBudget = Number(fallbackBudget[0]?.total || 0);
   }
 
   if (totalApprovedBudget === 0) {
@@ -1074,30 +1275,6 @@ export async function GET() {
       severity: b.status === 'REJECTED' ? 'danger' : 'warning',
       updatedAt: b.updatedAt,
     }));
-  } else if ((ctx.role as string) === 'PROJECT_APPROVER') {
-    const reviewBoqs = await prisma.boq.findMany({
-      where: {
-        tenantId,
-        status: { in: ['SUBMITTED', 'UNDER_REVIEW'] },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 5,
-      include: {
-        costCentre: { select: { code: true, name: true } },
-      },
-    });
-
-    pendingActions = reviewBoqs.map((b) => ({
-      id: b.id,
-      boqCode: b.boqCode,
-      title: interpolateUiString(UI_STRINGS.common.value1, { "value1": b.title || 'Untitled BOQ' }),
-      description: interpolateUiString(UI_STRINGS.common.value1, { "value1": b.description || '' }),
-      status: b.status,
-      actionText: UI_STRINGS.appApiDashboardRoute.reviewAndApprovePendingBOQSubmission,
-      link: `/boq/studio?boqId=${b.id}`,
-      severity: 'warning',
-      updatedAt: b.updatedAt,
-    }));
   }
 
   return apiSuccess({
@@ -1114,5 +1291,19 @@ export async function GET() {
     // Pending Actions based on role
     pendingActions,
   });
+  } catch (error) {
+    await writeStructuredLog('error', 'dashboard.read_failed', {
+      operation: 'load_role_dashboard',
+      route: '/api/dashboard',
+      requestId: request?.headers.get('x-request-id') || null,
+      tenantId,
+      userId,
+      role: ctx.role,
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 400) }
+        : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToFetchDashboardData, 500);
+  }
 }
 

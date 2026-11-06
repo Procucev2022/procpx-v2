@@ -38,4 +38,8 @@ export interface HomeWorkspaceProps {
   onNegotiateClick: (cardId: string) => void;
   onBuyerAcceptClick: (cardId: string) => void;
   onDetailsClick: (cardId: string) => void;
+  hasMoreData?: boolean;
+  loadingMoreData?: boolean;
+  onLoadMore?: () => void;
+  serverSummary?: { finalised: number; inProgress: number };
 }

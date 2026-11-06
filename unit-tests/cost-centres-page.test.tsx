@@ -45,7 +45,28 @@ function apiResponse(body: unknown, ok = true, status = 200) {
 function defaultFetch(url: string, init?: RequestInit) {
   if (url === '/api/auth/me') return Promise.resolve(apiResponse({ data: { user: { role: 'PROJECT_USER' } } }));
   if (url.startsWith('/api/cost-centres') && init?.method === 'POST') return Promise.resolve(apiResponse({ id: 'cc-new' }, true, 201));
-  if (url.startsWith('/api/cost-centres')) return Promise.resolve(apiResponse(centres));
+  if (url.startsWith('/api/cost-centres')) {
+    const params = new URL(url, 'http://localhost').searchParams;
+    const projectId = params.get('projectId');
+    const search = (params.get('search') || '').toLowerCase();
+    const rows = centres.filter((centre) => {
+      if (projectId && centre.projectId !== projectId) return false;
+      if (!search) return true;
+      return [centre.code, centre.name, centre.location, centre.floorZone, centre.project?.name]
+        .some((value) => String(value || '').toLowerCase().includes(search));
+    });
+    const summary = {
+      totalAreaSqFt: rows.reduce((sum, centre) => sum + (centre.areaSqFt || 0), 0),
+      totalBudget: rows.reduce((sum, centre) => sum + (centre.totalBudget || 0), 0),
+      approvedBudget: rows.reduce((sum, centre) => sum + (centre.approvedBudget || 0), 0),
+      pendingBudget: 0,
+    };
+    return Promise.resolve(apiResponse({
+      costCentres: rows,
+      pagination: { page: Number(params.get('page')) || 1, pageSize: 50, total: rows.length, hasMore: false },
+      summary,
+    }));
+  }
   if (url === '/api/projects') return Promise.resolve(apiResponse({ data: projects }));
   return Promise.resolve(apiResponse({}));
 }
@@ -64,15 +85,21 @@ describe('cost centres page', () => {
   it('loads cost centres, shows KPI totals, filters rows, and filters by project', async () => {
     let resolveCentres!: (value: ReturnType<typeof apiResponse>) => void;
     let directProjectResponse = false;
-    mockFetch.mockImplementation((url: string) => {
+    let delayFirstRegisterRead = true;
+    mockFetch.mockImplementation((url: string, init?: RequestInit) => {
       if (url === '/api/auth/me') return Promise.resolve(apiResponse({ user: { role: 'CLIENT_ADMIN' } }));
-      if (url.startsWith('/api/cost-centres')) return new Promise((resolve) => { resolveCentres = resolve; });
+      if (url.startsWith('/api/cost-centres') && delayFirstRegisterRead) {
+        delayFirstRegisterRead = false;
+        return new Promise((resolve) => { resolveCentres = resolve; });
+      }
+      if (url.startsWith('/api/cost-centres')) return defaultFetch(url, init);
       if (url === '/api/projects') return Promise.resolve(apiResponse(directProjectResponse ? projects : { data: projects }));
       return Promise.resolve(apiResponse({}));
     });
 
     render(<CostCentresPage />);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadingCostCentres))).toBeInTheDocument();
+    await waitFor(() => expect(resolveCentres).toBeDefined());
     await act(async () => resolveCentres(apiResponse(centres)));
     expect(await screen.findByText('North Electrical')).toBeInTheDocument();
     expect(screen.getByText('Storage')).toBeInTheDocument();
@@ -82,22 +109,46 @@ describe('cost centres page', () => {
 
     const search = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation));
     fireEvent.change(search, { target: { value: 'cc-north' } });
-    expect(screen.getByText('North Electrical')).toBeInTheDocument();
-    expect(screen.queryByText('Storage')).not.toBeInTheDocument();
+    expect(await screen.findByText('North Electrical')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Storage')).not.toBeInTheDocument());
     fireEvent.change(search, { target: { value: 'chennai' } });
-    expect(screen.getByText('Other area')).toBeInTheDocument();
+    expect(await screen.findByText('Other area')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'level 3' } });
-    expect(screen.getByText('Other area')).toBeInTheDocument();
+    expect(await screen.findByText('Other area')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'south hub' } });
-    expect(screen.getByText('Other area')).toBeInTheDocument();
+    expect(await screen.findByText('Other area')).toBeInTheDocument();
     fireEvent.change(search, { target: { value: 'missing' } });
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.noCostCentresFoundMatchingCriteria))).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppCostCentresPage.noCostCentresFoundMatchingCriteria))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
 
     directProjectResponse = true;
     fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.common.allProjects)), { target: { value: 'project-1' } });
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/cost-centres?projectId=project-1'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/cost-centres?page=1&pageSize=50&projectId=project-1'));
     expect(screen.getByRole('option', { name: /North Mall/ })).toBeInTheDocument();
+  });
+
+  it('loads the next stable page and appends rows without replacing the first page', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === '/api/auth/me') return Promise.resolve(apiResponse({ data: { user: { role: 'CLIENT_ADMIN' } } }));
+      if (url === '/api/projects') return Promise.resolve(apiResponse({ data: projects }));
+      if (url.startsWith('/api/cost-centres')) {
+        const page = Number(new URL(url, 'http://localhost').searchParams.get('page')) || 1;
+        return Promise.resolve(apiResponse({
+          costCentres: page === 1 ? [centres[0]] : [centres[1]],
+          pagination: { page, pageSize: 50, total: 2, hasMore: page === 1 },
+          summary: { totalAreaSqFt: 1_000, totalBudget: 600_000, approvedBudget: 500_000, pendingBudget: 0 },
+        }));
+      }
+      return Promise.resolve(apiResponse({}));
+    });
+
+    render(<CostCentresPage />);
+    expect(await screen.findByText('North Electrical')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) }));
+
+    expect(await screen.findByText('Storage')).toBeInTheDocument();
+    expect(screen.getByText('North Electrical')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/cost-centres?page=2&pageSize=50');
   });
 
   it('hides create actions for read-only users and handles unavailable list endpoints', async () => {
@@ -119,7 +170,7 @@ describe('cost centres page', () => {
       ? Promise.reject(new Error('auth offline'))
       : Promise.reject(new Error('list offline')));
     fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.common.allProjects)), { target: { value: 'project-2' } });
-    await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
+    await waitFor(() => expect(consoleError).toHaveBeenCalledWith('Failed to load cost centre register', expect.any(Error)));
     consoleError.mockRestore();
   });
 
