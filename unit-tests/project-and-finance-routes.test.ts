@@ -207,6 +207,37 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     }));
   });
 
+  it('covers document request ID, filename, MIME fallback, and unknown D1 failure branches', async () => {
+    db.project.findFirst.mockRejectedValueOnce(new Error('read failed'));
+    await expect(getProjectDocuments(request(), projectParams())).resolves.toMatchObject({ status: 500 });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'project.documents_read_failed', expect.objectContaining({
+      requestId: undefined, error: { name: 'Error' },
+    }));
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    await expect(addProjectDocument(uploadRequest(uploadFile({ name: '/' })), projectParams())).resolves.toMatchObject({ status: 415 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    await expect(addProjectDocument(uploadRequest(uploadFile({ type: '' }), 'INVALID'), projectParams())).resolves.toMatchObject({ status: 400 });
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    (saveUpload as jest.Mock).mockResolvedValueOnce('uploads/tenant-1/project-1/unknown-failure.pdf');
+    (writeD1BatchAtomically as jest.Mock)
+      .mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }])
+      .mockRejectedValueOnce({ database: 'unavailable' });
+    await expect(addProjectDocument(uploadRequest(uploadFile()), projectParams())).resolves.toMatchObject({ status: 500 });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'project.document_upload_compensation_failed', expect.objectContaining({
+      storagePreserved: true, error: { name: 'UnknownError' },
+    }));
+
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    (saveUpload as jest.Mock).mockRejectedValueOnce({ storage: 'offline' });
+    await expect(addProjectDocument(uploadRequest(uploadFile()), projectParams())).resolves.toMatchObject({ status: 500 });
+    expect(writeStructuredLog).toHaveBeenLastCalledWith('error', 'project.document_upload_failed', expect.objectContaining({
+      error: { name: 'UnknownError' },
+    }));
+  });
+
   it('reads and updates project details with tenant checks and keeps omitted values', async () => {
     auth.mockResolvedValueOnce({ status: 403 });
     isContext.mockReturnValueOnce(false);
