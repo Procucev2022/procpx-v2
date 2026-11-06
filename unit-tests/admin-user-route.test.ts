@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { createAuditLog } from '../src/lib/audit';
+import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { isApiContext, requireAuth } from '../src/lib/api-utils';
 import bcrypt from 'bcryptjs';
 import { GET as listUsers, POST as createUser } from '../src/app/api/admin/users/route';
@@ -13,6 +14,7 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: { user: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() } },
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('bcryptjs', () => ({ hash: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -35,6 +37,7 @@ const userDb = prisma.user as unknown as {
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const auditedUpdate = runAuditedD1UpdateAtomically as jest.Mock;
 const passwordHash = bcrypt.hash as jest.Mock;
 const logger = writeStructuredLog as jest.Mock;
 const ctx = { tenantId: 'tenant-1', userId: 'editor-1', role: 'ADMIN' };
@@ -50,6 +53,7 @@ describe('admin user update route', () => {
     auth.mockResolvedValue(ctx);
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
+    auditedUpdate.mockResolvedValue(undefined);
     passwordHash.mockResolvedValue('hashed-secret');
   });
 
@@ -145,29 +149,32 @@ describe('admin user update route', () => {
   it('trims supplied names, preserves nullish fields and audits the change', async () => {
     userDb.findFirst.mockResolvedValue({ id: 'user-1', email: 'member@example.test', name: 'Old name', role: 'BUYER', status: 'ACTIVE' });
     const updated = { id: 'user-1', email: 'member@example.test', name: 'New name', role: 'BUYER', status: 'ACTIVE', updatedAt: new Date('2026-01-01') };
-    userDb.update.mockResolvedValue(updated);
+    auditedUpdate.mockResolvedValue(updated);
 
     await expect(PUT(makeRequest({ name: ' New name ', role: null, status: undefined }), params)).resolves.toEqual({
       ok: true, data: updated, status: 200,
     });
-    expect(userDb.update).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+    expect(auditedUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'user', id: 'user-1', tenantId: 'tenant-1',
       data: { name: 'New name', role: 'BUYER', status: UI_STRINGS.common.aCTIVE, updatedBy: 'editor-1' },
-      select: { id: true, email: true, name: true, role: true, status: true, updatedAt: true },
-    });
-    expect(audit).toHaveBeenCalledWith({
-      tenantId: 'tenant-1', userId: 'editor-1', entityType: UI_STRINGS.appAppAuditPage.uSER, entityId: 'user-1', action: UI_STRINGS.appAppAuditPage.uPDATE,
+      route: '/api/admin/users/[id]',
+      audit: expect.objectContaining({
+        tenantId: 'tenant-1', userId: 'editor-1', entityType: UI_STRINGS.appAppAuditPage.uSER, entityId: 'user-1', action: UI_STRINGS.appAppAuditPage.uPDATE,
       description: 'User member@example.test updated (Role: BUYER, Status: ACTIVE)',
       oldValue: { role: 'BUYER', status: UI_STRINGS.common.aCTIVE }, newValue: { role: 'BUYER', status: UI_STRINGS.common.aCTIVE },
-    });
+      }),
+    }));
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('keeps prior user values when fields are nullish and applies supplied role and status', async () => {
     userDb.findFirst.mockResolvedValue({ id: 'user-1', email: 'member@example.test', name: 'Prior', role: 'BUYER', status: 'ACTIVE' });
     userDb.update.mockResolvedValue({ id: 'user-1', name: 'Prior', role: 'MANAGER', status: 'INACTIVE' });
     await PUT(makeRequest({ name: null, role: 'MANAGER', status: 'INACTIVE' }), params);
-    expect(userDb.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(auditedUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'user', id: 'user-1', tenantId: 'tenant-1', route: '/api/admin/users/[id]',
       data: { name: 'Prior', role: 'MANAGER', status: 'INACTIVE', updatedBy: 'editor-1' },
+      audit: expect.objectContaining({ entityType: 'USER', entityId: 'user-1' }),
     }));
   });
 });

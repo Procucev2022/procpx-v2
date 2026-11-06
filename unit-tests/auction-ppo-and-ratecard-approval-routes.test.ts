@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { notifyNextResponsibleParty } from '../src/lib/notifications';
 import { writeD1BatchAtomically, writeRateCardTransitionAtomically } from '../src/lib/d1-batch';
 import { POST as acceptAuctionTerms } from '../src/app/api/procurement/auctions/[id]/terms-accept/route';
@@ -32,6 +33,7 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn(), dispatchPreparedWorkflowNotification: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn(), writeRateCardTransitionAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
@@ -40,6 +42,7 @@ const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const auditedUpdate = runAuditedD1UpdateAtomically as jest.Mock;
 const notify = notifyNextResponsibleParty as jest.Mock;
 const transition = writeRateCardTransitionAtomically as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
@@ -78,6 +81,7 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
+    auditedUpdate.mockResolvedValue({ id: 'participant-1' });
     notify.mockResolvedValue(undefined);
     transition.mockResolvedValue(true);
     batch.mockImplementation(async (statements: unknown[]) => statements.map(() => ({ meta: { changes: 1 } })));
@@ -113,15 +117,19 @@ describe('auction terms, vendor PPO actions, and rate card approval routes', () 
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1', name: 'Acme' });
     db.auction.findFirst.mockResolvedValueOnce({ id: 'auction-1', auctionNumber: 'AUC-001', rfq: { projectId: 'project-1' } });
     db.auctionVendor.findFirst.mockResolvedValueOnce({ id: 'participant-1', vendor: { name: 'Acme' } });
-    db.auctionVendor.update.mockResolvedValueOnce({ id: 'participant-1' });
     await expect(acceptAuctionTerms(request(), params('auction-1'))).resolves.toMatchObject({
       ok: true, data: { message: expect.stringContaining('eligible to place bids'), termsAcceptedAt: expect.any(String) },
     });
     expect(db.vendor.findFirst).toHaveBeenLastCalledWith({ where: {
       tenantId: 'tenant-1', OR: [{ email: 'vendor@example.test' }, { id: 'vendor-1' }, { id: 'user-1' }],
     } });
-    expect(db.auctionVendor.update).toHaveBeenCalledWith({ where: { id: 'participant-1' }, data: { termsAccepted: true, termsAcceptedAt: expect.any(Date) } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'AUCTION_TERMS_ACCEPTED', entityId: 'auction-1' }));
+    expect(auditedUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'auctionVendor', id: 'participant-1', tenantId: 'tenant-1',
+      data: { termsAccepted: true, termsAcceptedAt: expect.any(Date) },
+      route: '/api/procurement/auctions/[id]/terms-accept',
+      audit: expect.objectContaining({ action: 'AUCTION_TERMS_ACCEPTED', entityId: 'auction-1' }),
+    }));
+    expect(audit).not.toHaveBeenCalled();
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROJECT_USER', vendorId: undefined });
     db.auction.findFirst.mockRejectedValueOnce(new Error('auction database error'));

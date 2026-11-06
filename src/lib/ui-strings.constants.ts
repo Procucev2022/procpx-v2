@@ -703,6 +703,11 @@ export const UI_STRINGS = {
     vendorNameCodeOnboardedAsValue3StatusOnboardingStatus: "Vendor {{name}} ({{code}}) onboarded as {{value3}} (Status: {{onboardingStatus}})",
     vendorNameCodeOnboardingUpdatedStatusOnboardingStatus: "Vendor {{name}} ({{code}}) onboarding updated (Status: {{onboardingStatus}})",
   },
+  appLibAuditedUpdate: {
+    tenantMismatch: "Audited D1 update tenant mismatch",
+    unsupportedField: "Audited D1 update contains an unsupported field",
+    recordMissingAfterUpdate: "Audited D1 update returned no record",
+  },
   appApiProjectsIdDocumentsRoute: {
     documentNameIsRequired: "Document name is required",
     projectDocumentAddedNameCategory: "Project document added: {{name}} ({{category}})",

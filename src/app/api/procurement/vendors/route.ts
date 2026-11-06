@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
+import { runAuditedD1UpdateAtomically } from '@/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { getListPageWindow } from '@/lib/api-utils';
@@ -310,9 +310,7 @@ export async function POST(req: NextRequest) {
         : 'PROFILE_INCOMPLETE';
 
     if (existingVendor) {
-      const updated = await prisma.vendor.update({
-        where: { id: existingVendor.id },
-        data: {
+      const updateData = {
           name: name ? name.trim() : existingVendor.name,
           vendorType: vendorType || existingVendor.vendorType,
           contactPerson: contactPerson ? contactPerson.trim() : existingVendor.contactPerson,
@@ -335,23 +333,29 @@ export async function POST(req: NextRequest) {
           clientReferences: clientReferences !== undefined ? (typeof clientReferences === 'string' ? clientReferences : JSON.stringify(clientReferences)) : existingVendor.clientReferences,
           certifications: certifications !== undefined ? certifications : existingVendor.certifications,
           onboardingStatus,
+      };
+      const updated = await runAuditedD1UpdateAtomically({
+        table: 'vendor',
+        id: existingVendor.id,
+        tenantId: ctx.tenantId,
+        data: updateData,
+        route: '/api/procurement/vendors',
+        requestId: req.headers.get('x-request-id'),
+        audit: {
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityType: 'VENDOR',
+          entityId: existingVendor.id,
+          action: 'VENDOR_UPDATED',
+          description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameCodeOnboardingUpdatedStatusOnboardingStatus, { "name": updateData.name, "code": existingVendor.code, "onboardingStatus": onboardingStatus }),
+          newValue: {
+            name: updateData.name,
+            code: existingVendor.code,
+            onboardingStatus: updateData.onboardingStatus,
+          },
         },
       });
       vendorId = updated.id;
-
-      await createAuditLog({
-        tenantId: ctx.tenantId,
-        userId: ctx.userId,
-        entityType: 'VENDOR',
-        entityId: updated.id,
-        action: 'VENDOR_UPDATED',
-        description: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameCodeOnboardingUpdatedStatusOnboardingStatus, { "name": updated.name, "code": updated.code, "onboardingStatus": onboardingStatus }),
-        newValue: {
-          name: updated.name,
-          code: updated.code,
-          onboardingStatus: updated.onboardingStatus,
-        },
-      });
 
       return apiSuccess({ vendor: updated, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardingUpdatedSuccessfully, { "code": updated.code }) }, 200);
     }

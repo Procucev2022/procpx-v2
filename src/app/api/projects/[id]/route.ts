@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
+import { runAuditedD1UpdateAtomically } from '@/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
@@ -110,9 +110,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!existing) return apiError(UI_STRINGS.common.projectNotFound, 404);
 
   const body = await req.json();
-  const updated = await prisma.project.update({
-    where: { id },
-    data: {
+  const updateData = {
       name: body.name ?? existing.name,
       description: body.description ?? existing.description,
       sector: body.sector ?? existing.sector,
@@ -129,19 +127,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       currency: body.currency ?? existing.currency,
       status: body.status ?? existing.status,
       updatedBy: ctx.userId,
-    },
-  });
-
-  await createAuditLog({
+  };
+  const updated = await runAuditedD1UpdateAtomically({
+    table: 'project',
+    id,
     tenantId: ctx.tenantId,
-    userId: ctx.userId,
-    projectId: id,
-    entityType: 'PROJECT',
-    entityId: id,
-    action: 'UPDATE',
-    description: interpolateUiString(UI_STRINGS.appApiProjectsIdRoute.projectProjectCodeUpdated, { "projectCode": existing.projectCode }),
-    oldValue: { status: existing.status, name: existing.name },
-    newValue: { status: updated.status, name: updated.name },
+    data: updateData,
+    route: '/api/projects/[id]',
+    requestId: req.headers.get('x-request-id'),
+    audit: {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      projectId: id,
+      entityType: 'PROJECT',
+      entityId: id,
+      action: 'UPDATE',
+      description: interpolateUiString(UI_STRINGS.appApiProjectsIdRoute.projectProjectCodeUpdated, { "projectCode": existing.projectCode }),
+      oldValue: { status: existing.status, name: existing.name },
+      newValue: { status: updateData.status, name: updateData.name },
+    },
   });
 
   return apiSuccess(updated);

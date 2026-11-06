@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { writeD1BatchAtomically, writeRfqVendorInvitationsAtomically } from '../src/lib/d1-batch';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { GET as getVendorProfile, PATCH as updateVendorProfile } from '../src/app/api/vendor-portal/me/route';
@@ -28,6 +29,7 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn(), writeRfqVendorInvitationsAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
 
@@ -35,6 +37,7 @@ const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const auditedUpdate = runAuditedD1UpdateAtomically as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const writeInvitations = writeRfqVendorInvitationsAtomically as jest.Mock;
 const writeLog = writeStructuredLog as jest.Mock;
@@ -55,6 +58,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     auth.mockResolvedValue(baseContext);
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
+    auditedUpdate.mockImplementation(async ({ id, data }: { id: string; data: Record<string, unknown> }) => ({ id, ...data }));
     writeBatch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     writeInvitations.mockResolvedValue(0);
     writeLog.mockResolvedValue(undefined);
@@ -114,33 +118,33 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
       legalStructure: 'Private Limited', experienceYears: '12', turnoverCrores: '5.5', qualificationScore: 99, status: 'DISABLED',
     };
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1' });
-    db.vendor.update.mockResolvedValueOnce({ id: 'vendor-1', phone: body.phone });
     await expect(updateVendorProfile(request(body))).resolves.toMatchObject({
       ok: true, data: { vendor: { phone: '9876543210' }, message: 'Company profile updated successfully' },
     });
-    expect(db.vendor.update).toHaveBeenLastCalledWith({ where: { id: 'vendor-1' }, data: {
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      table: 'vendor', id: 'vendor-1', tenantId: 'tenant-1', route: '/api/vendor-portal/me', data: {
       contactPerson: 'Buyer Contact', phone: '9876543210', website: 'https://acme.test', address: 'Main Road', city: 'Pune',
       state: 'Maharashtra', country: UI_STRINGS.common.india, operatingLocation: 'West', capabilities: ['electrical'], serviceCoverage: ['MH'],
       clientReferences: ['Client A'], certifications: ['ISO'], documents: [{ name: 'certificate.pdf' }], gstin: 'GST-1', pan: 'PAN-1',
       legalStructure: 'Private Limited', experienceYears: 12, turnoverCrores: 5.5,
-    } });
-    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'VENDOR_PROFILE_SELF_UPDATED', entityId: 'vendor-1' }));
+      },
+      audit: expect.objectContaining({ action: 'VENDOR_PROFILE_SELF_UPDATED', entityId: 'vendor-1' }),
+    }));
+    expect(audit).not.toHaveBeenCalled();
 
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1' });
-    db.vendor.update.mockResolvedValueOnce({ id: 'vendor-1' });
     await updateVendorProfile(request({ experienceYears: null, turnoverCrores: '' }));
-    expect(db.vendor.update).toHaveBeenLastCalledWith({ where: { id: 'vendor-1' }, data: { experienceYears: null, turnoverCrores: null } });
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ data: { experienceYears: null, turnoverCrores: null } }));
 
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1' });
-    db.vendor.update.mockResolvedValueOnce({ id: 'vendor-1' });
     await updateVendorProfile(request({ qualificationScore: 100, status: 'ACTIVE' }));
-    expect(db.vendor.update).toHaveBeenLastCalledWith({ where: { id: 'vendor-1' }, data: {} });
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ data: {} }));
 
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1' });
-    db.vendor.update.mockRejectedValueOnce(new Error('profile update error'));
+    auditedUpdate.mockRejectedValueOnce(new Error('profile update error'));
     await expect(updateVendorProfile(request({ phone: '111' }))).resolves.toEqual({ ok: false, error: 'profile update error', status: 500 });
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1' });
-    db.vendor.update.mockRejectedValueOnce({});
+    auditedUpdate.mockRejectedValueOnce({});
     await expect(updateVendorProfile(request({ phone: '111' }))).resolves.toEqual({ ok: false, error: 'Failed to update company profile', status: 500 });
   });
 

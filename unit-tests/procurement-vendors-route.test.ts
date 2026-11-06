@@ -3,6 +3,7 @@ import { GET, POST } from '../src/app/api/procurement/vendors/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 const mockWriteStructuredLog = jest.fn();
@@ -30,6 +31,7 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: (...args: unknown[]) => mockWriteD1BatchAtomically(...args) }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: (...args: unknown[]) => mockWriteStructuredLog(...args) }));
 
@@ -37,6 +39,7 @@ const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const auditedUpdate = runAuditedD1UpdateAtomically as jest.Mock;
 const atomicBatch = mockWriteD1BatchAtomically;
 const structuredLog = mockWriteStructuredLog;
 const context = { tenantId: 'tenant-1', userId: 'user-1', role: 'ADMIN' };
@@ -72,6 +75,9 @@ describe('procurement vendor directory API', () => {
     db.vendor.update.mockReset().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'vendor-1', code: 'VND-0001', ...data }));
     db.vendor.create.mockReset().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'vendor-new', ...data }));
     audit.mockReset().mockResolvedValue(undefined);
+    auditedUpdate.mockReset().mockImplementation(async ({ id, data }: { id: string; data: Record<string, unknown> }) => ({
+      ...existingVendor, ...data, id,
+    }));
     atomicBatch.mockReset().mockImplementation(async (statements: Array<{ values: unknown[] }>) => [
       { success: true, meta: { changes: 1 }, results: [{ id: statements[0].values[1], code: 'VND-0001', name: 'Acme Systems' }] },
       { success: true, meta: { changes: 1 } },
@@ -213,14 +219,18 @@ describe('procurement vendor directory API', () => {
       certifications: null,
     }));
     expect(result).toMatchObject({ ok: true, status: 200, data: { message: 'Vendor VND-0001 onboarding updated successfully.' } });
-    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: {
+    expect(auditedUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      table: 'vendor', id: 'vendor-1', tenantId: 'tenant-1', route: '/api/procurement/vendors',
+      data: {
       name: 'New Name', vendorType: 'PROCUCEV_VENDOR', contactPerson: 'Pat', email: 'pat@example.test', phone: null,
       categories: 'New Category', operatingLocation: 'Old Location', city: 'New City', state: null, country: 'US',
       legalStructure: 'LLC', gstin: null, pan: null, website: null, address: null, experienceYears: 0,
       turnoverCrores: null, capabilities: '["design","install"]', serviceCoverage: '  Remote  ',
       clientReferences: '[{"customer":"One"}]', certifications: null, onboardingStatus: 'PROFILE_INCOMPLETE',
-    } });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'VENDOR_UPDATED', entityId: 'vendor-1' }));
+      },
+      audit: expect.objectContaining({ action: 'VENDOR_UPDATED', entityId: 'vendor-1' }),
+    }));
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('updates a partial vendor profile as onboarded and uses provided city/location values', async () => {
@@ -229,10 +239,12 @@ describe('procurement vendor directory API', () => {
       id: 'vendor-1', name: 'Changed', vendorType: 'CLIENT_VENDOR', contactPerson: 'New Contact', phone: ' 123 ',
       category: 'Safety', city: '  Surat ', gstin: ' gst-1 ', legalStructure: ' Private Ltd ', country: '',
     }));
-    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: expect.objectContaining({
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
       name: 'Changed', phone: '123', email: 'old@example.test', city: 'Surat', operatingLocation: 'Old Location',
       country: UI_STRINGS.common.india, legalStructure: ' Private Ltd ', gstin: 'GST-1', onboardingStatus: 'ONBOARDED',
-    }) });
+      }),
+    }));
   });
 
   it('normalizes full updates while retaining omitted values and serializing string or object fields', async () => {
@@ -244,12 +256,16 @@ describe('procurement vendor directory API', () => {
       experienceYears: '', turnoverCrores: '', capabilities: 'legacy text', serviceCoverage: { zones: ['west'] },
       clientReferences: 'Reference text', certifications: [],
     }));
-    expect(db.vendor.update).toHaveBeenCalledWith({ where: { id: 'vendor-1' }, data: expect.objectContaining({
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      table: 'vendor', id: 'vendor-1', tenantId: 'tenant-1', route: '/api/procurement/vendors',
+      data: expect.objectContaining({
       operatingLocation: 'New Site, West', city: 'New Site', phone: '9999999999', state: 'TX', country: 'Canada',
       legalStructure: ' Inc ', gstin: 'GST-2', pan: 'PAN-2', website: 'https://new.test', address: 'New Office',
       experienceYears: null, turnoverCrores: null, capabilities: 'legacy text',
       serviceCoverage: '{"zones":["west"]}', clientReferences: 'Reference text', certifications: [],
-    }) });
+      }),
+      audit: expect.objectContaining({ action: 'VENDOR_UPDATED', entityId: 'vendor-1' }),
+    }));
   });
 
   it('creates vendor and audit together with a D1 allocated code and serialized structured capabilities', async () => {

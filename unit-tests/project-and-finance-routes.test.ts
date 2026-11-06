@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
+import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { GET as getProjectDocuments, POST as addProjectDocument } from '../src/app/api/projects/[id]/documents/route';
 import { GET as getProject, PUT as updateProject } from '../src/app/api/projects/[id]/route';
 import { POST as createNewRevision } from '../src/app/api/boq/[revisionId]/new-revision/route';
@@ -50,11 +51,13 @@ jest.mock('../src/lib/api-utils', () => ({
   getListPageWindow: jest.fn(() => ({ page: 1, pageSize: 50, skip: 0 })),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
+jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const auditedUpdate = runAuditedD1UpdateAtomically as jest.Mock;
 const context = {
   tenantId: 'tenant-1', userId: 'user-1', userName: 'Project User', userEmail: 'user@example.test', role: 'ADMIN',
 };
@@ -81,6 +84,7 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
+    auditedUpdate.mockResolvedValue({});
     db.rateCardApproval.findMany.mockReset().mockResolvedValue([]);
     (writeD1BatchAtomically as jest.Mock).mockResolvedValue(Array.from({ length: 10 }, () => ({ meta: { changes: 1 } })));
   });
@@ -225,23 +229,26 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     };
     db.project.findFirst.mockResolvedValueOnce(existing);
     const updated = { ...existing, name: 'New', areaSqFt: 250.5, budget: 2000, updatedBy: 'user-1' };
-    db.project.update.mockResolvedValueOnce(updated);
+    auditedUpdate.mockResolvedValueOnce(updated);
     await expect(updateProject(request({
       name: 'New', description: 'New description', sector: 'Health', projectType: 'Expansion', location: 'West', address: 'New address',
       city: 'Mumbai', state: 'MH', country: 'IN', areaSqFt: '250.5', costCentre: 'CC-2', projectOwner: 'New owner', budget: '2000',
       currency: 'USD', status: 'ON_HOLD',
     }), projectParams())).resolves.toEqual({ ok: true, data: updated, status: 200 });
-    expect(db.project.update).toHaveBeenLastCalledWith({ where: { id: 'project-1' }, data: expect.objectContaining({
-      name: 'New', areaSqFt: 250.5, budget: 2000, status: 'ON_HOLD', updatedBy: 'user-1',
-    }) });
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      table: 'project', id: 'project-1', tenantId: 'tenant-1', route: '/api/projects/[id]',
+      data: expect.objectContaining({ name: 'New', areaSqFt: 250.5, budget: 2000, status: 'ON_HOLD', updatedBy: 'user-1' }),
+      audit: expect.objectContaining({ entityType: 'PROJECT', entityId: 'project-1', oldValue: { status: UI_STRINGS.common.aCTIVE, name: 'Old' } }),
+    }));
 
     db.project.findFirst.mockResolvedValueOnce(existing);
-    db.project.update.mockResolvedValueOnce(existing);
+    auditedUpdate.mockResolvedValueOnce(existing);
     await updateProject(request({ areaSqFt: 0, budget: 0 }), projectParams());
-    expect(db.project.update).toHaveBeenLastCalledWith({ where: { id: 'project-1' }, data: expect.objectContaining({
-      name: 'Old', description: 'Old description', areaSqFt: 10, budget: 100, status: UI_STRINGS.common.aCTIVE,
-    }) });
-    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.uPDATE, oldValue: { status: UI_STRINGS.common.aCTIVE, name: 'Old' } }));
+    expect(auditedUpdate).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ name: 'Old', description: 'Old description', areaSqFt: 10, budget: 100, status: UI_STRINGS.common.aCTIVE }),
+      audit: expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.uPDATE, oldValue: { status: UI_STRINGS.common.aCTIVE, name: 'Old' } }),
+    }));
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it('creates revisions only from approved BOQs and copies available source lines', async () => {
