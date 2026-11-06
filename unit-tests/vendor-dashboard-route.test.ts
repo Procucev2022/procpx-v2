@@ -33,7 +33,7 @@ const errorResult = apiError as jest.Mock;
 const { runD1BatchAtomically } = jest.requireMock('../src/lib/d1-batch') as { runD1BatchAtomically: jest.Mock };
 const context = { tenantId: 'tenant-1', userId: 'user-1', role: 'PROCUREMENT_USER', vendorId: null };
 const params = (id = 'vendor-1') => ({ params: Promise.resolve({ id }) });
-const request = () => new NextRequest('http://localhost/api/procurement/vendors/vendor-1/dashboard');
+const request = (query = '') => new NextRequest(`http://localhost/api/procurement/vendors/vendor-1/dashboard${query}`);
 const nowPlusDay = () => new Date(Date.now() + 86_400_000);
 
 function rfq(id: string, extra: Record<string, any> = {}) {
@@ -97,6 +97,35 @@ describe('vendor dashboard API', () => {
     db.vendor.findFirst.mockResolvedValueOnce(null);
     await expect(GET(request(), params('missing'))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.vendorNotFoundOrAccessDenied, status: 404 });
     expect(db.vendor.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'missing', tenantId: 'tenant-1' } }));
+  });
+
+  it('validates sections and returns independently paginated dashboard sections', async () => {
+    await expect(GET(request('?section=unknown'), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+
+    const rfqs = await GET(request('?section=rfqs&pageSize=999&rfqPage=2'), params());
+    expect(rfqs).toMatchObject({ ok: true, data: {
+      counts: undefined,
+      pagination: { rfqs: { page: 2, pageSize: 50, total: 0, hasMore: false } },
+    } });
+    expect(db.rfq.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 50, take: 50 }));
+    expect(db.ppo.findMany).not.toHaveBeenCalled();
+    expect(db.vendorRateCard.findMany).not.toHaveBeenCalled();
+    expect(runD1BatchAtomically).not.toHaveBeenCalled();
+
+    const ppos = await GET(request('?section=ppos&pageSize=0&ppoPage=10001'), params());
+    expect(ppos).toMatchObject({ ok: true, data: {
+      pagination: { ppos: { page: 10000, pageSize: 25, total: 0, hasMore: false } },
+    } });
+    expect(db.ppo.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 249975, take: 25 }));
+    expect(db.rfq.findMany).toHaveBeenCalledTimes(1);
+
+    const rateCards = await GET(request('?section=rateCards&rateCardPage=invalid'), params());
+    expect(rateCards).toMatchObject({ ok: true, data: {
+      pagination: { rateCards: { page: 1, pageSize: 25, total: 0, hasMore: false } },
+    } });
+    expect(db.vendorRateCard.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0, take: 25 }));
   });
 
   it('maps quote, negotiation, decision, PPO, counts, dates, and permitted commercial details', async () => {
