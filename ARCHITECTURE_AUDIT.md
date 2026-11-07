@@ -1,12 +1,19 @@
 # proCPX Architecture Audit
 
-Audit date: 2026-11-06
+Audit date: 2026-11-07
 
 ## Scope and evidence
 
 This audit covers the current app and migrations in this checkout, the installed Cloudflare D1/Next runtime configuration, unit coverage, local D1 integrity, and a real local D1 workflow run. It does not certify production behavior: Cloudflare production credentials and production log/analytics access were not available in this run.
 
 The current local database is a Wrangler D1 SQLite state. The Prisma SQLite provider is schema dialect only; the app runtime uses the Cloudflare D1 adapter. The legacy `prisma/dev.db` is removed under the user's one-time authorization and was not imported or recreated.
+
+## Continuation on 2026-11-07
+
+- The local D1 integrity checker now compares Prisma scalar/enum columns with `PRAGMA table_info` and all currently declared migration indexes with `sqlite_master`. Missing columns and migration indexes fail the check; extra local columns and untracked indexes are reported as warnings so the guard does not imply that retained data is safe to delete. Three helper tests cover Prisma name mapping, ordered index create/drop parsing, and drift detection.
+- Next uncaught-request logs now reuse the incoming `x-request-id`, fall back to Cloudflare `cf-ray`, and create a UUID only when both are absent. Header lookup is case-insensitive, trims values, and caps IDs at 128 characters. Regression tests cover these paths.
+- The native D1 batch boundary now logs `database.d1_batch_failed` on thrown batches and failed results, including safe counts, duration, and failed statement positions without SQL or bound values. Optional log failure does not replace the database error. Successful batches emit `database.d1_batch_slow` only when wall-clock or D1-reported duration reaches 1,000 ms, with D1 read/write counts when returned.
+- Four full `npm run check:quality` runs on 2026-11-07 passed after these changes. The latest run reports all 331 source files meeting the strict per-file 90% statements, branches, functions, and lines thresholds: 99.33% statements/lines, 93.72% branches, and 98.57% functions overall. Build, performance, i18n, typecheck, lint no-regression, D1 mutation boundaries (156 handlers), safe migration check, and local D1 integrity all passed. The lint baseline still contains 1,252 existing errors and 445 warnings across 707 files; no per-file count increased. No schema migration was pending, and local D1 remains at 44 tables/493 records, with 75/75 migration indexes, zero missing columns, zero duplicate groups, zero FK violations, and zero cross-tenant references. No records were added, modified, or deleted by this continuation.
 
 ## Findings resolved in this work
 
@@ -216,8 +223,8 @@ These are real unresolved findings; this audit does not claim the architecture i
 
 ### P1: production D1 observability
 
-- Local integrity and workflow checks pass, but production query frequency, slow-query distribution, invocation-level query counts, D1 read/write usage, and production log retention were not inspectable without Cloudflare access. Cloudflare's [expensive query guidance](https://developers.cloudflare.com/d1/observability/find-expensive-queries/) and [pricing/usage model](https://developers.cloudflare.com/d1/platform/pricing/) should be used with production Insights before setting production query budgets.
-- Remote D1 row counts and stable IDs were not captured because credentials/database ID were not configured in this environment. No remote read, write, or migration was attempted.
+- Slow native D1 batches now produce warning logs with execution duration and read/write counts when metadata is available. This provides local/production evidence for batch writes, but production query frequency, read-query latency, invocation-level query counts, total D1 read/write usage, and log retention remain unmeasured without Cloudflare access. Cloudflare's [expensive query guidance](https://developers.cloudflare.com/d1/observability/find-expensive-queries/) and [pricing/usage model](https://developers.cloudflare.com/d1/platform/pricing/) should be used with production Insights before setting production query budgets.
+- The remote integrity command could not authenticate because usable Cloudflare credentials/database configuration were unavailable in this environment. It failed before issuing a remote query; no remote write or migration was attempted.
 
 ### P2: transaction semantics across the whole app
 
@@ -229,7 +236,7 @@ These are real unresolved findings; this audit does not claim the architecture i
 
 - The D1 E2E scenario now covers the central sourcing lifecycle through PPO issuance. It does not yet prove auctions, rate-card matching/direct PPO, vendor qualification/rating, actual-cost reconciliation, PPO completion, cancellation/reversal, and all return/reject branches end to end. Some have unit coverage, but production-like D1 workflows remain unverified.
 - The product has implemented modules for masters, projects/cost centres, BOQ authoring/import, approvals, budget allocation, PR, procurement sourcing, vendor portal, quote comparison/negotiation, awards/PPOs, rate cards, auctions, actual costs, and budget-vs-actual reporting. The repository scan did not identify an explicit product requirements backlog that can distinguish intentionally deferred features from missing requirements. These workflows should be checked against an approved acceptance checklist before claiming feature completeness.
-- The latest full quality run on 2026-11-06, after resolving PR #9 against the updated `main`, passed the production build, performance budgets, i18n, typecheck, the checked-in per-file lint baseline, D1 mutation boundaries (156 handlers), safe local migration check, and local D1 integrity. The full command remains red only on repository-wide per-file coverage: 283 of 331 source files meet all four 90% thresholds; 48 remain below at least one metric. Aggregate statements/lines are 98.75%, branches are 91.09%, and functions are 97.88%. The new D1 query helpers each pass at 100% across all four metrics. The PR detail modal passes at 99.77% statements, 94.90% branches, 100% functions, and 99.77% lines. Lint observed 1,252 existing errors and 446 warnings across 705 files, with no per-file rule count increase. No migration was pending, and integrity remained at 44 tables/493 records, 25 logical duplicate checks, zero foreign-key violations, and zero cross-tenant references. See `unit-test-coverage-report.md` for the complete file-level report.
+- The latest full quality run on 2026-11-07 passed every workspace stage. All 331 source files meet all four 90% thresholds; aggregate statements/lines are 99.33%, branches are 93.72%, and functions are 98.57%. Lint observed 1,252 existing errors and 445 warnings across 707 files, with no per-file rule count increase. No migration was pending, and integrity remained at 44 tables/493 records, 25 logical duplicate checks, 75/75 migration indexes present, zero missing Prisma columns, zero foreign-key violations, and zero cross-tenant references. See `unit-test-coverage-report.md` for the complete file-level report.
 
 ## Data safety and test records
 
@@ -245,6 +252,6 @@ These are real unresolved findings; this audit does not claim the architecture i
 2. Complete isolated D1 delivery, retry, and crash-recovery coverage for the outbox, including post-commit failure scenarios.
 3. Complete the indirect multi-write call-graph audit and strengthen the static guard to cover helper-dispatched Prisma writes and explicit consistency boundaries.
 4. Extend isolated D1 workflow coverage to actual-cost reconciliation, PPO completion, auctions, rate cards, and rejection/reversal paths.
-5. Bring all 48 source files below the enforced 90% statements, branches, functions, and lines floor up to threshold without exclusions; continue with the nearest remaining files listed in `unit-test-coverage-report.md`.
+5. Keep the strict per-file coverage gate at 90% or higher; all 331 source files now pass. Reduce the remaining lint-baseline debt incrementally, prioritizing `no-explicit-any` in workflow API boundaries and React-hook immutability/state-in-effect violations.
 6. Reconcile `PRODUCT_ACCEPTANCE_CHECKLIST.md` against an approved product requirements backlog; the repository does not currently contain that source of truth.
 7. Obtain authorized Cloudflare production Insights/log access, capture read-only remote D1 integrity evidence, then set measured query/latency budgets.
