@@ -6,6 +6,7 @@ import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_DETAIL_LATEST_REVISION_LIMIT } from './route.constants';
+import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
 
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
@@ -41,15 +42,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
               areaSqFt: true,
             },
           },
-        },
-      },
-      lines: {
-        where: { isDeleted: false },
-        orderBy: [{ lineNumber: 'asc' }],
-        include: {
-          category: { select: { id: true, name: true } },
-          subcategory: { select: { id: true, name: true } },
-          uom: { select: { id: true, code: true, name: true } },
         },
       },
     },
@@ -88,17 +80,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
         revisions: {
           orderBy: { revisionNumber: 'desc' },
           take: BOQ_DETAIL_LATEST_REVISION_LIMIT,
-          include: {
-            lines: {
-              where: { isDeleted: false },
-              orderBy: [{ lineNumber: 'asc' }],
-              include: {
-                category: { select: { id: true, name: true } },
-                subcategory: { select: { id: true, name: true } },
-                uom: { select: { id: true, code: true, name: true } },
-              },
-            },
-          },
         },
       },
     });
@@ -112,7 +93,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQOrRevisionNotFound, 404, { route: '/api/boq/[revisionId]', method: 'GET' });
   }
 
-  const rawLines = revision?.lines || [];
+  const lineWhere = revision
+    ? { boqRevisionId: revision.id, tenantId: ctx.tenantId, isDeleted: false }
+    : null;
+  const [lineSummary, rawLines] = lineWhere
+    ? await Promise.all([
+      prisma.boqLine.aggregate({
+        where: lineWhere,
+        _count: { _all: true },
+        _sum: { aiTotalCost: true },
+      }),
+      prisma.boqLine.findMany({
+        where: lineWhere,
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        take: BOQ_LINE_DETAIL_PAGE_SIZE,
+        include: {
+          category: { select: { id: true, name: true } },
+          subcategory: { select: { id: true, name: true } },
+          uom: { select: { id: true, code: true, name: true } },
+        },
+      }),
+    ])
+    : [null, []];
   const lines = rawLines.map((l: any) => {
     let costBreakdown = null;
     if (l.aiReason) {
@@ -134,7 +136,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
       costBreakdown,
     };
   });
-  const totalValue = lines.reduce((sum: number, l: any) => sum + (l.aiTotalCost || 0), 0);
+  const totalLines = lineSummary?._count._all ?? 0;
+  const totalValue = Number(lineSummary?._sum.aiTotalCost ?? 0);
 
   return apiSuccess({
     boq: {
@@ -143,7 +146,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
     revision,
     lines,
-    totalLines: lines.length,
+    totalLines,
+    linesTruncated: totalLines > lines.length,
     qualityScore: revision?.qualityScore ?? 100,
   });
 }

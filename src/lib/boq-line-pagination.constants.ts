@@ -1,0 +1,1 @@
+export const BOQ_LINE_DETAIL_PAGE_SIZE = 100;

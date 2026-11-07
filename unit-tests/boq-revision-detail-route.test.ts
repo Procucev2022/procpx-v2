@@ -9,6 +9,7 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: {
     boqRevision: { findFirst: jest.fn() },
     boq: { findFirst: jest.fn(), update: jest.fn() },
+    boqLine: { aggregate: jest.fn(), findMany: jest.fn() },
   },
 }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -45,27 +46,39 @@ describe('BOQ revision detail API', () => {
     await expect(PATCH(patchRequest({}), params())).resolves.toBe(denied);
     expect(db.boqRevision.findFirst).not.toHaveBeenCalled();
     expect(db.boq.findFirst).not.toHaveBeenCalled();
+    expect(db.boqLine.aggregate).not.toHaveBeenCalled();
   });
 
   it('loads a revision directly and formats line costs from saved details or computed estimates', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce({
       id: 'revision-1', qualityScore: 0,
       boq: { id: 'boq-1', boqCode: 'BOQ-1', project: { id: 'project-1' }, costCentre: { id: 'cc-1' } },
-      lines: [
-        { id: 'line-1', aiReason: JSON.stringify({ costBreakdown: { labor: 2 } }), aiUnitCost: null, aiTotalCost: 25 },
-        { id: 'line-2', aiReason: '{bad json', aiUnitCost: 12, aiTotalCost: 48, quantity: 4, category: { name: 'Electrical' }, originalDescription: 'Cable' },
-        { id: 'line-3', aiReason: null, aiUnitCost: 0, aiTotalCost: null },
-      ],
     });
+    db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 3 }, _sum: { aiTotalCost: 73 } });
+    db.boqLine.findMany.mockResolvedValueOnce([
+      { id: 'line-1', aiReason: JSON.stringify({ costBreakdown: { labor: 2 } }), aiUnitCost: null, aiTotalCost: 25 },
+      { id: 'line-2', aiReason: '{bad json', aiUnitCost: 12, aiTotalCost: 48, quantity: 4, category: { name: 'Electrical' }, originalDescription: 'Cable' },
+      { id: 'line-3', aiReason: null, aiUnitCost: 0, aiTotalCost: null },
+    ]);
     const result = await GET(getRequest(), params());
     expect(result).toMatchObject({ ok: true, data: {
-      boq: { estimatedValue: 73 }, totalLines: 3, qualityScore: 0,
+      boq: { estimatedValue: 73 }, totalLines: 3, linesTruncated: false, qualityScore: 0,
       lines: [
         { id: 'line-1', costBreakdown: { labor: 2 } },
         { id: 'line-2', costBreakdown: expect.any(Object) },
         { id: 'line-3', costBreakdown: null },
       ],
     } });
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      take: 100,
+    }));
+    expect(db.boqLine.aggregate).toHaveBeenCalledWith({
+      where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
+      _count: { _all: true },
+      _sum: { aiTotalCost: true },
+    });
     expect(db.boq.findFirst).not.toHaveBeenCalled();
   });
 
@@ -73,11 +86,13 @@ describe('BOQ revision detail API', () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({
       id: 'boq-2', boqCode: 'BOQ-2', revisions: [
-        { id: 'revision-latest', qualityScore: null, lines: [{ id: 'line-1', aiTotalCost: 10, aiUnitCost: null }] },
+        { id: 'revision-latest', qualityScore: null },
       ],
     });
+    db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 1 }, _sum: { aiTotalCost: 10 } });
+    db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-1', aiTotalCost: 10, aiUnitCost: null }]);
     await expect(GET(getRequest(), params('boq-2'))).resolves.toMatchObject({
-      ok: true, data: { boq: { estimatedValue: 10 }, revision: { id: 'revision-latest' }, totalLines: 1, qualityScore: 100 },
+      ok: true, data: { boq: { estimatedValue: 10 }, revision: { id: 'revision-latest' }, totalLines: 1, linesTruncated: false, qualityScore: 100 },
     });
     expect(db.boq.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'boq-2', tenantId: 'tenant-1' },
@@ -90,11 +105,25 @@ describe('BOQ revision detail API', () => {
     }));
   });
 
+  it('bounds the detail line preview while preserving exact totals for the studio continuation request', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', boq: { id: 'boq-1' } });
+    db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 101 }, _sum: { aiTotalCost: 9876 } });
+    db.boqLine.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `line-${index + 1}`, aiTotalCost: 10, aiUnitCost: null,
+    })));
+
+    await expect(GET(getRequest(), params())).resolves.toMatchObject({
+      ok: true,
+      data: { boq: { estimatedValue: 9876 }, totalLines: 101, linesTruncated: true, lines: expect.any(Array) },
+    });
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+  });
+
   it('returns an empty BOQ payload when the BOQ has no revisions and a 404 when neither identifier exists', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce({ id: 'boq-empty', revisions: [] });
     await expect(GET(getRequest(), params('boq-empty'))).resolves.toMatchObject({
-      ok: true, data: { boq: { estimatedValue: 0 }, revision: null, lines: [], totalLines: 0, qualityScore: 100 },
+      ok: true, data: { boq: { estimatedValue: 0 }, revision: null, lines: [], totalLines: 0, linesTruncated: false, qualityScore: 100 },
     });
     db.boqRevision.findFirst.mockResolvedValueOnce(null);
     db.boq.findFirst.mockResolvedValueOnce(null);

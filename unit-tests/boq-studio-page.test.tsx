@@ -103,6 +103,29 @@ describe('BOQ studio page', () => {
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges, "", false) })).toBeInTheDocument();
   });
 
+  it('loads BOQ detail continuation pages when the bounded preview is incomplete', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const previewLines = Array.from({ length: 100 }, (_, index) => ({
+      ...lines[0],
+      id: `line-${index + 1}`,
+      lineNumber: String(index + 1),
+    }));
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq/boq-1' && init?.method !== 'PATCH') return response({ boq, revision, lines: previewLines, totalLines: 101, linesTruncated: true });
+      if (url === '/api/boq/revision-1/lines?page=2&pageSize=100') return response({ data: [{ ...lines[1], id: 'line-101', lineNumber: '101' }], total: 101 });
+      if (url === '/api/masters/categories') return response({ data: [] });
+      if (url === '/api/projects') return response({ data: [project] });
+      if (url === '/api/boq') return response({ data: [boq] });
+      if (url.startsWith('/api/cost-centres?')) return response([costCentre]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<BoqStudioPage />);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/revision-1/lines?page=2&pageSize=100'));
+    expect(await screen.findByText('Copper cable')).toBeInTheDocument();
+  });
+
   it('loads project cost centres in stable pages and supports a bounded search', async () => {
     const laterCentre = { ...costCentre, id: 'cc-2', code: 'CC-2', name: 'Operations' };
     const searchedCentre = { ...costCentre, id: 'cc-3', code: 'CC-3', name: 'Warehouse' };
