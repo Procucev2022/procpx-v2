@@ -11,6 +11,7 @@ import { D1_QUOTE_INSERT_RESULT_MISSING, MAX_D1_BATCH_STATEMENTS, QUOTE_AUDIT_IN
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { getListPageWindow } from '@/lib/api-utils';
 import { prepareQuoteNotificationOutbox } from '@/lib/notification-outbox';
+import type { Prisma } from '@prisma/client';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
   const startedAt = Date.now();
 
   try {
-    const where: any = {
+    const where: Prisma.QuoteWhereInput = {
       tenantId: ctx.tenantId,
     };
 
@@ -329,7 +330,7 @@ export async function POST(req: NextRequest) {
     }
 
     return apiSuccess({ quote, message: interpolateUiString(UI_STRINGS.appApiProcurementQuotesRoute.quoteVNextVersionSubmittedSuccessfully, { "nextVersion": nextVersion }) }, 201);
-  } catch (error: any) {
+  } catch (error: unknown) {
     await writeStructuredLog('error', 'procurement.quote_submission_failed', {
       operation: 'submit_quote',
       route: '/api/procurement/quotes',
