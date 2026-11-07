@@ -1,6 +1,7 @@
 import { uiStringPattern } from '@/lib/i18n';
 import {
   createLogRecord,
+  getRequestCorrelationId,
   redactText,
   safeRequestPath,
   sanitizeLogValue,
@@ -83,5 +84,16 @@ describe('shared observability helpers', () => {
     expect(safeRequestPath('/api/pr')).toBe('/api/pr');
     expect(safeRequestPath('https://example.test/login?email=a@example.test')).toBe('/login?email=%5BREDACTED%5D');
     expect(safeRequestPath('http://[invalid')).toBe('http://[invalid');
+  });
+
+  it('reads and bounds case-insensitive request correlation headers', () => {
+    expect(getRequestCorrelationId({ 'X-Request-ID': ' trace-from-proxy ' })).toBe('trace-from-proxy');
+    expect(getRequestCorrelationId({ 'x-request-id': ['first-id', 'second-id'] })).toBe('first-id');
+    expect(getRequestCorrelationId({ 'x-request-id': 'x'.repeat(160) })).toBe('x'.repeat(128));
+  });
+
+  it('falls back to Cloudflare ray IDs and returns undefined when absent', () => {
+    expect(getRequestCorrelationId({ 'x-request-id': ' ', 'CF-Ray': 'ray-123' })).toBe('ray-123');
+    expect(getRequestCorrelationId({})).toBeUndefined();
   });
 });

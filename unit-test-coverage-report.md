@@ -6,10 +6,10 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.34% (97555/98202) |
-| branches | 93.71% (22165/23651) |
-| functions | 98.57% (1863/1890) |
-| lines | 99.34% (97555/98202) |
+| statements | 99.34% (97567/98214) |
+| branches | 93.71% (22172/23658) |
+| functions | 98.57% (1865/1892) |
+| lines | 99.34% (97567/98214) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -282,7 +282,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.80% | 92.85% | 99.06% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.78% | 92.85% | 99.06% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -318,9 +318,9 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/lib/observability/edge-logger.ts` | 94.36% | 94.73% | 100.00% | 94.36% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.94% | 95.94% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 95.77% | 100.00% | 98.94% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/shared.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
+| `src/lib/observability/shared.ts` | 100.00% | 98.46% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/pr-line-detail.ts` | 100.00% | 95.65% | 100.00% | 100.00% | PASS |
