@@ -3,6 +3,7 @@ export const MAX_D1_STATEMENT_BINDINGS = 100;
 export const MAX_D1_BATCH_BINDINGS = 4_500;
 export const MAX_D1_BINDING_BYTES = 1_800_000;
 export const D1_BATCH_SLOW_LOG_THRESHOLD_MS = 1_000;
+export const MAX_RFQ_VENDOR_INVITE_COUNT = 500;
 export const MAX_RATE_CARD_ITEMS = 200;
 export const MAX_PPO_COMPLETION_LINES = 90;
 export const MAX_PPO_CREATE_LINES = 140;
@@ -240,12 +241,26 @@ export const BOQ_DUPLICATE_AUDIT_INSERT_AFTER_CHANGE_SQL = `
   WHERE duplicate."id" = ? AND duplicate."tenantId" = ? AND changes() = 1
 `;
 
-export const RFQ_VENDOR_INVITATION_UPSERT_SQL = `
+export const RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL = `
+  WITH input AS (
+    SELECT json_extract(value, '$.id') AS "id", json_extract(value, '$.vendorId') AS "vendorId"
+    FROM json_each(?)
+  ), eligible AS (
+    SELECT input."id", input."vendorId"
+    FROM input
+    JOIN "vendors" v ON v."id" = input."vendorId" AND v."tenantId" = ? AND v."isBlacklisted" = 0
+  )
   INSERT INTO "rfq_vendors"
     ("id", "tenantId", "rfqId", "vendorId", "invitationStatus", "submissionStatus")
-  VALUES (?, ?, ?, ?, ?, 'PENDING')
+  SELECT eligible."id", ?, ?, eligible."vendorId", ?, 'PENDING'
+  FROM eligible
+  WHERE EXISTS (
+    SELECT 1 FROM "rfqs" r WHERE r."id" = ? AND r."tenantId" = ?
+  )
+    AND (SELECT COUNT(*) FROM input) = (SELECT COUNT(*) FROM eligible)
   ON CONFLICT ("rfqId", "vendorId") DO UPDATE SET
     "invitationStatus" = excluded."invitationStatus"
+  WHERE "rfq_vendors"."tenantId" = excluded."tenantId"
 `;
 
 export const RFQ_INSERT_IF_VALID_SQL = `
@@ -329,6 +344,14 @@ export const AUDIT_LOG_INSERT_FAIL_CLOSED_SQL = `
     "description", "oldValue", "newValue", "ipAddress", "userAgent", "createdAt"
   )
   SELECT CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+`;
+
+export const RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL = `
+  INSERT INTO "audit_logs" (
+    "id", "tenantId", "userId", "projectId", "entityType", "entityId", "action",
+    "description", "oldValue", "newValue", "ipAddress", "userAgent", "createdAt"
+  )
+  SELECT CASE WHEN changes() > 0 THEN ? ELSE NULL END, ?, ?, ?, 'RFQ', ?, 'VENDOR_INVITED', ?, NULL, ?, NULL, NULL, ?
 `;
 
 export const D1_BATCH_STATEMENT_FAILED = 'D1 batch statement failed';

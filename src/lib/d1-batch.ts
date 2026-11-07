@@ -1,4 +1,9 @@
-import type { D1BatchDatabase, D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
+import type {
+  D1BatchDatabase,
+  D1BatchInputStatement,
+  D1BatchResult,
+  RfqVendorInvitationWriteInput,
+} from '@app-types/lib/d1-batch.types';
 import {
   D1_BATCH_STATEMENT_FAILED,
   D1_BATCH_STATEMENT_LIMIT_EXCEEDED,
@@ -10,7 +15,9 @@ import {
   MAX_D1_BATCH_STATEMENTS,
   MAX_D1_STATEMENT_BINDINGS,
   MAX_D1_BINDING_BYTES,
-  RFQ_VENDOR_INVITATION_UPSERT_SQL,
+  MAX_RFQ_VENDOR_INVITE_COUNT,
+  RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
+  RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,
   RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
 } from './d1-batch.constants';
@@ -165,34 +172,39 @@ export async function writeD1BatchAtomically(input: D1BatchInputStatement[]): Pr
   return runD1BatchAtomically(getD1BatchDatabase(), input);
 }
 
-export async function upsertRfqVendorInvitations(
-  database: D1BatchDatabase,
-  input: { tenantId: string; rfqId: string; vendorIds: string[]; invitationStatus: string },
-): Promise<number> {
-  if (input.vendorIds.length === 0) return 0;
-  if (input.vendorIds.length > MAX_D1_BATCH_STATEMENTS) {
+export async function writeRfqVendorInvitationsAtomically(input: RfqVendorInvitationWriteInput): Promise<number> {
+  const vendorIds = [...new Set(input.vendorIds)];
+  if (vendorIds.length === 0) return 0;
+  if (vendorIds.length > MAX_RFQ_VENDOR_INVITE_COUNT) {
     throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.maximumVendorInviteBatchLimit);
   }
 
+  const createdAt = input.createdAt || new Date();
+  const invitationRows = vendorIds.map((vendorId) => ({ id: crypto.randomUUID(), vendorId }));
   let results: D1BatchResult[];
   try {
-    results = await runD1BatchAtomically(database, input.vendorIds.map((vendorId) => ({
-      sql: RFQ_VENDOR_INVITATION_UPSERT_SQL,
-      values: [crypto.randomUUID(), input.tenantId, input.rfqId, vendorId, input.invitationStatus],
-    })));
+    results = await runD1BatchAtomically(getD1BatchDatabase(), [
+      {
+        sql: RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
+        values: [JSON.stringify(invitationRows), input.tenantId, input.tenantId, input.rfqId,
+          input.invitationStatus, input.rfqId, input.tenantId],
+      },
+      {
+        sql: RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,
+        values: [crypto.randomUUID(), input.tenantId, input.audit.userId || null, input.audit.projectId || null,
+          input.rfqId, input.audit.description, JSON.stringify({ vendorIds }), createdAt],
+      },
+    ]);
   } catch (error) {
     if (error instanceof Error && error.message === D1_BATCH_STATEMENT_FAILED) {
       throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors);
     }
     throw error;
   }
-  return results.reduce((total, result) => total + Number(result.meta?.changes || 0), 0);
-}
-
-export async function writeRfqVendorInvitationsAtomically(
-  input: { tenantId: string; rfqId: string; vendorIds: string[]; invitationStatus: string },
-): Promise<number> {
-  return upsertRfqVendorInvitations(getD1BatchDatabase(), input);
+  if (Number(results[1]?.meta?.changes || 0) !== 1) {
+    throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors);
+  }
+  return Number(results[0]?.meta?.changes || 0);
 }
 
 export async function writeRateCardTransitionAtomically(input: {

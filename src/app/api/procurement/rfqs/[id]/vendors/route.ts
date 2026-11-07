@@ -3,9 +3,8 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { createAuditLog } from '@/lib/audit';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import { MAX_D1_BATCH_STATEMENTS } from '@/lib/d1-batch.constants';
+import { MAX_RFQ_VENDOR_INVITE_COUNT } from '@/lib/d1-batch.constants';
 import { writeRfqVendorInvitationsAtomically } from '@/lib/d1-batch';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -32,7 +31,7 @@ export async function POST(
       return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400);
     }
 
-    if (vendorIds.length > MAX_D1_BATCH_STATEMENTS) {
+    if (vendorIds.length > MAX_RFQ_VENDOR_INVITE_COUNT) {
       return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.maximumVendorInviteBatchLimit, 400);
     }
 
@@ -59,22 +58,18 @@ export async function POST(
 
     // Create RFQ vendor invitations
     const invitationStatus = rfq.status === 'DRAFT' ? 'PENDING' : 'INVITED';
+    const description = interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.invitedLengthVendorsToRFQRfqNumberJoin, { "length": eligibleVendors.length, "rfqNumber": rfq.rfqNumber, "join": eligibleVendors.map((v) => v.name).join(', ') });
     const invitedCount = await writeRfqVendorInvitationsAtomically({
       tenantId: ctx.tenantId,
       rfqId: id,
       vendorIds: eligibleVendors.map((vendor) => vendor.id),
       invitationStatus,
-    });
-
-    await createAuditLog({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: rfq.projectId,
-      entityType: 'RFQ',
-      entityId: rfq.id,
-      action: 'VENDOR_INVITED',
-      description: interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.invitedLengthVendorsToRFQRfqNumberJoin, { "length": eligibleVendors.length, "rfqNumber": rfq.rfqNumber, "join": eligibleVendors.map((v) => v.name).join(', ') }),
-      newValue: { vendorIds: eligibleVendors.map((v) => v.id) },
+      audit: {
+        userId: ctx.userId,
+        projectId: rfq.projectId,
+        description,
+      },
+      createdAt: new Date(),
     });
 
     return apiSuccess({

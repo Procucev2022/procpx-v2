@@ -22,3 +22,18 @@ export type D1BatchDatabase = {
   prepare(sql: string): D1BatchStatement;
   batch(statements: D1BatchStatement[]): Promise<D1BatchResult[]>;
 };
+
+export interface RfqVendorInvitationAuditContext {
+  userId?: string | null;
+  projectId?: string | null;
+  description: string;
+}
+
+export interface RfqVendorInvitationWriteInput {
+  tenantId: string;
+  rfqId: string;
+  vendorIds: string[];
+  invitationStatus: string;
+  audit: RfqVendorInvitationAuditContext;
+  createdAt?: Date;
+}

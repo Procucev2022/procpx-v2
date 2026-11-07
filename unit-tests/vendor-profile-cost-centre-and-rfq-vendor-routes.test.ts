@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
-import { createAuditLog } from '../src/lib/audit';
 import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { writeD1BatchAtomically, writeRfqVendorInvitationsAtomically } from '../src/lib/d1-batch';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
@@ -28,7 +27,6 @@ jest.mock('../src/lib/api-utils', () => ({
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
-jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn(), writeRfqVendorInvitationsAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
@@ -36,7 +34,6 @@ jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog:
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
-const audit = createAuditLog as jest.Mock;
 const auditedUpdate = runAuditedD1UpdateAtomically as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const writeInvitations = writeRfqVendorInvitationsAtomically as jest.Mock;
@@ -57,7 +54,6 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(baseContext);
     isContext.mockReturnValue(true);
-    audit.mockResolvedValue(undefined);
     auditedUpdate.mockImplementation(async ({ id, data }: { id: string; data: Record<string, unknown> }) => ({ id, ...data }));
     writeBatch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     writeInvitations.mockResolvedValue(0);
@@ -130,7 +126,6 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
       },
       audit: expect.objectContaining({ action: 'VENDOR_PROFILE_SELF_UPDATED', entityId: 'vendor-1' }),
     }));
-    expect(audit).not.toHaveBeenCalled();
 
     db.vendor.findFirst.mockResolvedValueOnce({ id: 'vendor-1' });
     await updateVendorProfile(request({ experienceYears: null, turnoverCrores: '' }));
@@ -269,6 +264,10 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     });
     expect(writeInvitations).toHaveBeenLastCalledWith({
       tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1', 'vendor-2'], invitationStatus: UI_STRINGS.common.pENDING,
+      audit: {
+        userId: 'user-1', projectId: 'project-1',
+        description: 'Invited 2 vendors to RFQ RFQ-001: Acme, BuildCo',
+      }, createdAt: expect.any(Date),
     });
 
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', status: 'RELEASED', projectId: 'project-1', rfqNumber: 'RFQ-001' });
@@ -277,6 +276,10 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     await inviteRfqVendors(request({ vendorIds: ['vendor-3'] }), idParams('rfq-1'));
     expect(writeInvitations).toHaveBeenLastCalledWith({
       tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-3'], invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED,
+      audit: {
+        userId: 'user-1', projectId: 'project-1',
+        description: 'Invited 1 vendors to RFQ RFQ-001: OtherCo',
+      }, createdAt: expect.any(Date),
     });
 
     await expect(inviteRfqVendors(request(), idParams('rfq-1'))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors, status: 500 });
