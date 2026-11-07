@@ -76,6 +76,7 @@ model User {
   @@unique([tenantId, email])
   @@index([vendorId], map: "users_vendorId_idx")
   @@index([tenantId, vendorId, role, status, id])
+  @@index([role, status, vendorId], map: "users_role_status_vendor_idx")
   @@map("users")
 }
 

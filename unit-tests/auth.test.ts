@@ -2,6 +2,8 @@ import NextAuth from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
 import { handlers, signIn, signOut, auth } from '../src/lib/auth';
+import { AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from '../src/lib/auth.constants';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -17,6 +19,7 @@ jest.mock('bcryptjs', () => ({ __esModule: true, default: { compare: jest.fn(), 
 jest.mock('../src/lib/prisma', () => ({
   prisma: { user: { findMany: jest.fn(), update: jest.fn() } },
 }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const userModel = prisma.user as unknown as {
   findMany: jest.Mock;
@@ -146,7 +149,8 @@ describe('NextAuth credentials provider', () => {
     });
     expect(userModel.findMany).toHaveBeenNthCalledWith(2, {
       where: { role: UI_STRINGS.common.vENDOR, status: UI_STRINGS.common.aCTIVE, vendorId: { not: null } },
-      include: { tenant: true, vendor: true },
+      include: { tenant: true, vendor: { select: { name: true, code: true } } },
+      take: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1,
     });
 
     userModel.findMany.mockResolvedValueOnce([]);
@@ -199,6 +203,32 @@ describe('NextAuth credentials provider', () => {
     ]);
     compare.mockResolvedValueOnce(false);
     await expect(authorize({ email: 'acme', password: 'wrong' })).resolves.toBeNull();
+  });
+
+  it('fails closed and logs when the non-production vendor candidate query reaches its cap', async () => {
+    userModel.findMany.mockResolvedValueOnce([]);
+    userModel.findMany.mockResolvedValueOnce(Array.from(
+      { length: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1 },
+      (_, index) => ({
+        ...dbUser,
+        id: `vendor-user-${index}`,
+        role: 'VENDOR',
+        vendorId: `vendor-${index}`,
+        vendor: { name: 'Acme', code: `ACME-${index}` },
+      }),
+    ));
+
+    await expect(authorize({ email: 'acme', password: 'secret' })).resolves.toBeNull();
+    expect(userModel.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      take: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1,
+    }));
+    expect(logEvent).toHaveBeenCalledWith('warn', 'auth.vendor_username_fallback_candidates_exceeded', {
+      operation: 'authorize_vendor_username_fallback',
+      candidateLimit: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT,
+      candidateCount: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1,
+    });
+    expect(compare).not.toHaveBeenCalled();
+    expect(userModel.update).not.toHaveBeenCalled();
   });
 
   it('does not use vendor-name login in production', async () => {

@@ -2,6 +2,8 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from './password';
+import { AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from './auth.constants';
+import { logEvent } from './observability/server-logger';
 import { prisma } from './prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -49,8 +51,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               status: 'ACTIVE',
               vendorId: { not: null },
             },
-            include: { tenant: true, vendor: true },
+            include: { tenant: true, vendor: { select: { name: true, code: true } } },
+            take: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1,
           });
+          if (candidateUsers.length > AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT) {
+            logEvent('warn', 'auth.vendor_username_fallback_candidates_exceeded', {
+              operation: 'authorize_vendor_username_fallback',
+              candidateLimit: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT,
+              candidateCount: candidateUsers.length,
+            });
+            return null;
+          }
 
           // Match by normalised vendor name or normalised user name
           const matched = candidateUsers.filter((u) => {
