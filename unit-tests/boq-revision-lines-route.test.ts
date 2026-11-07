@@ -8,6 +8,7 @@ import { computeLineCostBreakdown } from '../src/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -136,6 +137,57 @@ describe('BOQ revision lines API', () => {
     await GET(request('/api/boq/revision-1/lines?page=-2&pageSize=10000&search=%20wire%20'), params);
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 100 }));
     expect(db.boqLine.count).toHaveBeenCalledWith({ where: expect.objectContaining({ OR: expect.arrayContaining([{ originalDescription: { contains: 'wire' } }]) }) });
+  });
+
+  it('continues line reads with a stable line-number and ID cursor', async () => {
+    const cursor = encodeBoqLineCursor({ id: 'line-1', lineNumber: '2' });
+    db.boqLine.count.mockResolvedValueOnce(5);
+    db.boqLine.findMany.mockResolvedValueOnce([
+      { id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null },
+      { id: 'line-4', lineNumber: '4', aiReason: null, aiUnitCost: null },
+      { id: 'line-5', lineNumber: '5', aiReason: null, aiUnitCost: null },
+    ]);
+
+    const result = await GET(request(`/api/boq/revision-1/lines?cursor=${encodeURIComponent(cursor)}&pageSize=2`), params) as unknown as {
+      data: { data: Array<{ id: string }>; total: number; hasMore: boolean; nextCursor: string | null };
+    };
+
+    expect(db.boqLine.count).toHaveBeenCalledWith({
+      where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
+    });
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        AND: [
+          { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
+          { OR: [
+            { lineNumber: { gt: '2' } },
+            { lineNumber: '2', id: { gt: 'line-1' } },
+          ] },
+        ],
+      },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      take: 3,
+    }));
+    expect(result.data).toMatchObject({
+      data: [{ id: 'line-3' }, { id: 'line-4' }],
+      total: 5,
+      hasMore: true,
+      nextCursor: encodeBoqLineCursor({ id: 'line-4', lineNumber: '4' }),
+    });
+  });
+
+  it('rejects malformed cursors and returns no continuation for the final cursor page', async () => {
+    await expect(GET(request('/api/boq/revision-1/lines?cursor=invalid'), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    expect(db.boqLine.count).not.toHaveBeenCalled();
+
+    const cursor = encodeBoqLineCursor({ id: 'line-1', lineNumber: '2' });
+    db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null }]);
+    const result = await GET(request(`/api/boq/revision-1/lines?cursor=${encodeURIComponent(cursor)}&pageSize=2`), params) as unknown as {
+      data: { data: Array<{ id: string }>; hasMore: boolean; nextCursor: string | null };
+    };
+    expect(result.data).toMatchObject({ data: [{ id: 'line-3' }], hasMore: false, nextCursor: null });
   });
 
   it('blocks unauthorized, missing, and approved revision updates', async () => {

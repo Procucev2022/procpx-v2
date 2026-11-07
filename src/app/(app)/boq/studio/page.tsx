@@ -47,7 +47,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES } from "./page.constants";
-import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
+import { fetchBoqLineContinuationPages } from '@/lib/boq-line-pagination';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLookupOption } from '@app-types/app/api/cost-centres.types';
@@ -422,15 +422,8 @@ export default function BoqStudioPage() {
         let lineItems = d.lines || d.data?.lines || [];
         const totalLines = Number(d.totalLines ?? d.data?.totalLines ?? lineItems.length);
         if (revData?.id && lineItems.length < totalLines) {
-          const totalPages = Math.ceil(totalLines / BOQ_LINE_DETAIL_PAGE_SIZE);
-          for (let page = 2; page <= totalPages; page += 1) {
-            const linesRes = await fetch(`/api/boq/${revData.id}/lines?page=${page}&pageSize=${BOQ_LINE_DETAIL_PAGE_SIZE}`);
-            if (!linesRes.ok) throw new Error(UI_STRINGS.common.userMessages.failedToLoadLineItemDetails);
-            const linesData = await linesRes.json();
-            const pageLines = linesData.data;
-            if (!Array.isArray(pageLines)) throw new Error(UI_STRINGS.common.userMessages.failedToLoadLineItemDetails);
-            lineItems = lineItems.concat(pageLines);
-          }
+          const nextCursor = d.nextCursor ?? d.data?.nextCursor ?? null;
+          lineItems = lineItems.concat(await fetchBoqLineContinuationPages(revData.id, nextCursor));
         }
 
         if (boqData) {

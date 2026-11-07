@@ -7,6 +7,7 @@ import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_LINE_DEFAULT_PAGE_SIZE, BOQ_LINE_MAX_PAGE_NUMBER, BOQ_LINE_MAX_PAGE_SIZE } from './route.constants';
+import { decodeBoqLineCursor, encodeBoqLineCursor } from '@/lib/boq-line-pagination';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
@@ -69,6 +70,9 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
   const pageSize = Number.isSafeInteger(requestedPageSize) && requestedPageSize > 0
     ? Math.min(requestedPageSize, BOQ_LINE_MAX_PAGE_SIZE)
     : BOQ_LINE_DEFAULT_PAGE_SIZE;
+  const cursorParam = searchParams.get('cursor');
+  const cursor = cursorParam === null ? null : decodeBoqLineCursor(cursorParam);
+  if (cursorParam !== null && !cursor) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
   const validationStatus = searchParams.get('validationStatus') || '';
   const search = (searchParams.get('search') || '').trim().slice(0, 120);
 
@@ -85,14 +89,27 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
       { itemCode: { contains: search } },
     ];
   }
+  const pagedWhere = cursor
+    ? {
+      AND: [
+        where,
+        {
+          OR: [
+            { lineNumber: { gt: cursor.lineNumber } },
+            { lineNumber: cursor.lineNumber, id: { gt: cursor.id } },
+          ],
+        },
+      ],
+    }
+    : where;
 
   const [total, lines] = await Promise.all([
     prisma.boqLine.count({ where }),
     prisma.boqLine.findMany({
-      where,
+      where: pagedWhere,
       orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      ...(!cursor ? { skip: (page - 1) * pageSize } : {}),
+      take: pageSize + (cursor ? 1 : 0),
       include: {
         category: { select: { id: true, name: true } },
         subcategory: { select: { id: true, name: true } },
@@ -101,7 +118,12 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     }),
   ]);
 
-  const enrichedLines = lines.map(l => {
+  const hasMore = cursor ? lines.length > pageSize : total > page * pageSize;
+  const pageLines = lines.slice(0, pageSize);
+  const nextCursor = hasMore && pageLines.length > 0
+    ? encodeBoqLineCursor(pageLines[pageLines.length - 1])
+    : null;
+  const enrichedLines = pageLines.map(l => {
     let costBreakdown = null;
     if (l.aiReason) {
       try {
@@ -129,6 +151,8 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     page,
     pageSize,
     totalPages: Math.ceil(total / pageSize),
+    hasMore,
+    nextCursor,
     revision,
   });
 }

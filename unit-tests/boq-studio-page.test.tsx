@@ -3,6 +3,7 @@
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
+import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BoqStudioPage from '../src/app/(app)/boq/studio/page';
@@ -110,9 +111,11 @@ describe('BOQ studio page', () => {
       id: `line-${index + 1}`,
       lineNumber: String(index + 1),
     }));
+    const previewCursor = encodeBoqLineCursor({ id: 'line-100', lineNumber: '100' });
+    const continuationUrl = `/api/boq/revision-1/lines?${new URLSearchParams({ cursor: previewCursor, pageSize: '100' })}`;
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/boq/boq-1' && init?.method !== 'PATCH') return response({ boq, revision, lines: previewLines, totalLines: 101, linesTruncated: true });
-      if (url === '/api/boq/revision-1/lines?page=2&pageSize=100') return response({ data: [{ ...lines[1], id: 'line-101', lineNumber: '101' }], total: 101 });
+      if (url === '/api/boq/boq-1' && init?.method !== 'PATCH') return response({ boq, revision, lines: previewLines, totalLines: 101, linesTruncated: true, nextCursor: previewCursor });
+      if (url === continuationUrl) return response({ data: [{ ...lines[1], id: 'line-101', lineNumber: '101' }], nextCursor: null, total: 101 });
       if (url === '/api/masters/categories') return response({ data: [] });
       if (url === '/api/projects') return response({ data: [project] });
       if (url === '/api/boq') return response({ data: [boq] });
@@ -122,7 +125,7 @@ describe('BOQ studio page', () => {
 
     render(<BoqStudioPage />);
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/revision-1/lines?page=2&pageSize=100'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(continuationUrl));
     expect(await screen.findByText('Copper cable')).toBeInTheDocument();
   });
 

@@ -7,6 +7,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_DETAIL_LATEST_REVISION_LIMIT } from './route.constants';
 import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
+import { encodeBoqLineCursor } from '@/lib/boq-line-pagination';
 
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
@@ -138,6 +139,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
   });
   const totalLines = lineSummary?._count._all ?? 0;
   const totalValue = Number(lineSummary?._sum.aiTotalCost ?? 0);
+  const nextCursor = totalLines > lines.length && lines.length > 0
+    ? encodeBoqLineCursor(lines[lines.length - 1])
+    : null;
 
   return apiSuccess({
     boq: {
@@ -148,6 +152,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     lines,
     totalLines,
     linesTruncated: totalLines > lines.length,
+    nextCursor,
     qualityScore: revision?.qualityScore ?? 100,
   });
 }

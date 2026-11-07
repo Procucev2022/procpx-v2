@@ -3,6 +3,7 @@ import { GET, PATCH } from '../src/app/api/boq/[revisionId]/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { decodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -109,14 +110,16 @@ describe('BOQ revision detail API', () => {
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', boq: { id: 'boq-1' } });
     db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 101 }, _sum: { aiTotalCost: 9876 } });
     db.boqLine.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
-      id: `line-${index + 1}`, aiTotalCost: 10, aiUnitCost: null,
+      id: `line-${index + 1}`, lineNumber: String(index + 1), aiTotalCost: 10, aiUnitCost: null,
     })));
 
-    await expect(GET(getRequest(), params())).resolves.toMatchObject({
+    const result = await GET(getRequest(), params()) as unknown as { data: { nextCursor: string } };
+    expect(result).toMatchObject({
       ok: true,
       data: { boq: { estimatedValue: 9876 }, totalLines: 101, linesTruncated: true, lines: expect.any(Array) },
     });
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+    expect(decodeBoqLineCursor(result.data.nextCursor)).toEqual({ id: 'line-100', lineNumber: '100' });
   });
 
   it('returns an empty BOQ payload when the BOQ has no revisions and a 404 when neither identifier exists', async () => {
