@@ -243,6 +243,15 @@ describe('notification outbox dispatch', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain('user@example.com');
   });
 
+  it('returns cleanly when the log sink also fails during a claim failure', async () => {
+    runBatch.mockRejectedValueOnce(new Error('database unavailable'));
+    log.mockRejectedValueOnce(new Error('log storage unavailable'));
+
+    await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
+      claimed: 0, delivered: 0, retried: 0, dead: 0,
+    });
+  });
+
   it('marks malformed or cross-tenant payloads dead after the maximum attempts', async () => {
     const malformed = { ...outboxRow(), payload: '{not-json' };
     runBatch
@@ -307,6 +316,20 @@ describe('notification outbox dispatch', () => {
     });
     expect(log).toHaveBeenCalledWith('error', 'notification.outbox_retry_state_failed', expect.any(Object), 'application', undefined);
     expect(log).toHaveBeenCalledWith('error', 'notification.outbox_dispatch_failed', expect.any(Object), 'application', undefined);
+  });
+
+  it('continues processing sibling rows when optional failure logging rejects', async () => {
+    runBatch
+      .mockResolvedValueOnce([{ results: [outboxRow(), { ...outboxRow(), id: 'outbox-2' }] }])
+      .mockRejectedValueOnce(new Error('delivery failed'))
+      .mockResolvedValueOnce([{ results: [{ status: 'PENDING' }] }])
+      .mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    log.mockRejectedValueOnce(new Error('log storage unavailable'));
+
+    await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
+      claimed: 2, delivered: 1, retried: 1, dead: 0,
+    });
+    expect(runBatch).toHaveBeenCalledTimes(4);
   });
 
   it('sanitizes unknown errors and rejects unrecognized retry states', async () => {

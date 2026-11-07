@@ -63,6 +63,14 @@ function getSafeError(error: unknown): string {
   return 'Unknown notification dispatch failure';
 }
 
+async function logOutboxFailure(message: string, context: Record<string, unknown>): Promise<void> {
+  try {
+    await writeRuntimeStructuredLog('error', message, context, 'application');
+  } catch {
+    // Optional log persistence must not prevent the outbox from recovering or processing sibling rows.
+  }
+}
+
 export function prepareNotificationOutbox(
   payload: NotificationOutboxPayload,
   createdAt = new Date(),
@@ -185,10 +193,10 @@ export async function dispatchNotificationOutbox(
     rows = (claim[0]?.results || []) as unknown as NotificationOutboxRow[];
     result.claimed = rows.length;
   } catch (error) {
-    await writeRuntimeStructuredLog('error', 'notification.outbox_claim_failed', {
+    await logOutboxFailure('notification.outbox_claim_failed', {
       operation: 'claim_notification_outbox', route: 'scheduled_worker',
       batchSize, onlyId: options.onlyId, error: getSafeError(error),
-    }, 'application');
+    });
     return result;
   }
 
@@ -231,17 +239,17 @@ export async function dispatchNotificationOutbox(
         if (status === 'DEAD') result.dead += 1;
         else result.retried += 1;
       } catch (retryError) {
-        await writeRuntimeStructuredLog('error', 'notification.outbox_retry_state_failed', {
+        await logOutboxFailure('notification.outbox_retry_state_failed', {
           operation: 'reschedule_notification_outbox', route: 'scheduled_worker',
           outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
           error: getSafeError(retryError),
-        }, 'application');
+        });
       }
-      await writeRuntimeStructuredLog('error', 'notification.outbox_dispatch_failed', {
+      await logOutboxFailure('notification.outbox_dispatch_failed', {
         operation: 'deliver_notification_outbox', route: 'scheduled_worker',
         outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
         error: getSafeError(error),
-      }, 'application');
+      });
     }
   }
 
