@@ -37,29 +37,6 @@ export async function GET(
           select: {
             id: true,
             revisionCode: true,
-            lines: {
-              select: {
-                id: true,
-                lineNumber: true,
-                itemCode: true,
-                standardDescription: true,
-                originalDescription: true,
-                specification: true,
-                category: { select: { name: true } },
-                subcategory: { select: { name: true } },
-                uom: { select: { code: true } },
-                costSource: true,
-                costDate: true,
-                aiUnitCost: true,
-                location: true,
-                drawingReference: true,
-                brand: true,
-                model: true,
-                material: true,
-                grade: true,
-                remarks: true,
-              },
-            },
           },
         },
         pr: {
@@ -128,6 +105,35 @@ export async function GET(
     if (!rfq) {
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET' });
     }
+
+    const needsRevisionBoqFallback = rfq.lines.some((line) => !line.boqLine && !line.prLine?.boqLine);
+    const fallbackBoqLines = rfq.boqRevision?.id && needsRevisionBoqFallback
+      ? await prisma.boqLine.findMany({
+        where: { tenantId: ctx.tenantId, boqRevisionId: rfq.boqRevision.id },
+        select: {
+          id: true,
+          lineNumber: true,
+          itemCode: true,
+          standardDescription: true,
+          originalDescription: true,
+          specification: true,
+          category: { select: { name: true } },
+          subcategory: { select: { name: true } },
+          uom: { select: { code: true } },
+          costSource: true,
+          costDate: true,
+          aiUnitCost: true,
+          location: true,
+          drawingReference: true,
+          brand: true,
+          model: true,
+          material: true,
+          grade: true,
+          remarks: true,
+        },
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      })
+      : [];
 
     // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.
     const latestQuoteRows = await prisma.$queryRaw<RfqLatestCompareQuoteRow[]>(Prisma.sql`
@@ -551,7 +557,7 @@ export async function GET(
       const sourceBoq =
         rfqLine.boqLine ||
         rfqLine.prLine?.boqLine ||
-        rfq.boqRevision?.lines?.find((b: any) =>
+        fallbackBoqLines.find((b) =>
           b.id === rfqLine.boqLineId ||
           (b.itemCode && b.itemCode === (rfqLine as any).itemCode) ||
           b.lineNumber === rfqLine.lineNumber ||
@@ -697,7 +703,7 @@ export async function GET(
         title: rfq.title,
         status: responseStatus,
         project: rfq.project,
-        boqRevision: rfq.boqRevision,
+        boqRevision: rfq.boqRevision ? { id: rfq.boqRevision.id, revisionCode: rfq.boqRevision.revisionCode } : null,
         pr: rfq.pr,
         submissionDeadline: rfq.submissionDeadline,
         commercialValidityDays: rfq.commercialValidityDays,

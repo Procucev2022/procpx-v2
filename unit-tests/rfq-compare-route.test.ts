@@ -12,6 +12,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     rfq: { findFirst: jest.fn(), update: jest.fn() },
+    boqLine: { findMany: jest.fn() },
     ppoLine: { findMany: jest.fn() },
     vendorRateCard: { count: jest.fn() },
     $queryRaw: jest.fn(),
@@ -29,6 +30,7 @@ jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog:
 
 const db = prisma as unknown as {
   rfq: Record<string, jest.Mock>;
+  boqLine: Record<string, jest.Mock>;
   ppoLine: Record<string, jest.Mock>;
   vendorRateCard: Record<string, jest.Mock>;
   $queryRaw: jest.Mock;
@@ -150,6 +152,7 @@ describe('RFQ quote comparison API', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     db.rfq.findFirst.mockReset().mockResolvedValue(fullRfq());
+    db.boqLine.findMany.mockReset().mockResolvedValue([]);
     db.rfq.update.mockReset().mockResolvedValue({});
     db.ppoLine.findMany.mockReset().mockResolvedValue([
       { itemDescription: ' copper cable ', orderedUnitRate: 90, orderedAmount: 900, uom: 'M', orderDate: new Date('2026-08-01'), ppo: null },
@@ -198,7 +201,9 @@ describe('RFQ quote comparison API', () => {
     expect(db.$queryRaw).toHaveBeenCalledTimes(3);
     const rfqQuery = db.rfq.findFirst.mock.calls[0][0];
     expect(rfqQuery.include).not.toHaveProperty('quotes');
+    expect(rfqQuery.include.boqRevision.select).not.toHaveProperty('lines');
     expect(rfqQuery.include.negotiations.select).not.toHaveProperty('rounds');
+    expect(db.boqLine.findMany).not.toHaveBeenCalled();
     const latestQuoteQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
     expect(latestQuoteQuery).toBeDefined();
     if (!latestQuoteQuery) throw new Error('Latest quote query was not executed');
@@ -219,7 +224,7 @@ describe('RFQ quote comparison API', () => {
     expect(negotiationRoundQuery.sql).toContain('negotiation."rfqId" = ?');
     expect(negotiationRoundQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     expect(result).toMatchObject({ ok: true, data: {
-      rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' } },
+      rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' }, boqRevision: { id: 'rev-1', revisionCode: 'R2' } },
       vendors: [
         { vendorId: 'v1', vendorType: 'CLIENT_VENDOR', qualificationStatus: 'NOT_EVALUATED', quoteId: 'v1-new', quoteVersion: 2,
           versionCount: 2, completenessPercent: 100, rank: 1, rankLabel: 'L1' },
@@ -308,7 +313,7 @@ describe('RFQ quote comparison API', () => {
 
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq({
       status: 'COMPARISON', estimatedBenchmarkValue: 0, quotes: [], negotiations: [{ id: 'closed-neg', status: 'CONCLUDED', currentRound: 1 }],
-      boqRevision: { lines: [
+      boqRevision: { id: 'rev-1', revisionCode: 'R2', lines: [
         { id: 'revision-line', lineNumber: '3', itemCode: 'REV-3', standardDescription: 'Revision source', originalDescription: 'Other wording' },
         { id: 'standard-line', lineNumber: '4', standardDescription: 'Standard match', originalDescription: 'Standard source wording' },
         { id: 'original-line', lineNumber: '5', standardDescription: 'Other standard', originalDescription: 'Original match' },
@@ -320,6 +325,11 @@ describe('RFQ quote comparison API', () => {
         { id: 'line-none', lineNumber: '99', description: '', itemCode: 'FALLBACK-99', quantity: 2, uom: 'EA' },
       ],
     }));
+    db.boqLine.findMany.mockResolvedValueOnce([
+      { id: 'revision-line', lineNumber: '3', itemCode: 'REV-3', standardDescription: 'Revision source', originalDescription: 'Other wording' },
+      { id: 'standard-line', lineNumber: '4', standardDescription: 'Standard match', originalDescription: 'Standard source wording' },
+      { id: 'original-line', lineNumber: '5', standardDescription: 'Other standard', originalDescription: 'Original match' },
+    ]);
     await expect(GET(request(), params())).resolves.toMatchObject({ ok: true, data: {
       activeNegotiation: { id: 'closed-neg' },
       lines: [
@@ -334,6 +344,10 @@ describe('RFQ quote comparison API', () => {
       summary: { packageTotal: 0, benchmarkTotal: 0, lowestQuoteTotal: 0, lowestVendor: '—', savings: 0,
         savingsPercent: 0, isFavorable: true },
     } });
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', boqRevisionId: 'rev-1' },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    }));
 
     db.ppoLine.findMany.mockRejectedValueOnce(new Error('history unavailable'));
     await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
