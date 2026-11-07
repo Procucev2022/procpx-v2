@@ -14,6 +14,8 @@ import { BOQ_REFINEMENT_AUDIT_INSERT_AFTER_UPDATE_SQL, BOQ_REFINEMENT_LINES_UPDA
 import { BOQ_STANDARDISE_LINES_UPDATE_JSON_SQL, BOQ_STANDARDISE_REVISION_UPDATE_SQL } from '../src/app/api/boq/[revisionId]/standardise/route.constants';
 import { BOQ_VALIDATE_LINES_UPDATE_JSON_SQL, BOQ_VALIDATE_REVISION_UPDATE_SQL } from '../src/app/api/boq/[revisionId]/validate/route.constants';
 import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
+import { MAX_ACTIVE_CATEGORY_RESULTS } from '../src/app/api/masters/categories/route.constants';
+import { MAX_ACTIVE_UOM_RESULTS } from '../src/app/api/masters/uom/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -71,6 +73,8 @@ describe('BOQ revision standardisation', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     writeLog.mockResolvedValue(undefined);
+    db.uomMaster.findMany.mockResolvedValue([]);
+    db.category.findMany.mockResolvedValue([]);
     mockSuccessfulWorkflowBatch();
   });
 
@@ -93,7 +97,10 @@ describe('BOQ revision standardisation', () => {
     ];
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', status: 'DRAFT', revisionCode: 'R0', updatedAt: new Date('2026-01-01T00:00:00.000Z'), boq: { projectId: 'project-1' }, lines });
     db.uomMaster.findMany.mockResolvedValueOnce([{ id: 'uom-sqft', code: 'SQFT' }]);
-    db.category.findMany.mockResolvedValueOnce([{ id: 'cat-floor', name: 'Civil & Interior', children: [{ id: 'sub-floor', name: 'Flooring' }] }]);
+    db.category.findMany.mockResolvedValueOnce([
+      { id: 'cat-floor', name: 'Civil & Interior', parentId: null },
+      { id: 'sub-floor', name: 'Flooring', parentId: 'cat-floor' },
+    ]);
     standardiseDesc.mockImplementation((description: string) => description === 'tile'
       ? { matched: true, standardDescription: 'Commercial tile', category: 'Civil & Interior', subcategory: 'Flooring' }
       : { matched: false });
@@ -121,6 +128,53 @@ describe('BOQ revision standardisation', () => {
     expect(db.boqLine.update).not.toHaveBeenCalled();
     expect(db.boqRevision.update).not.toHaveBeenCalled();
     expect(audit).not.toHaveBeenCalled();
+    expect(db.uomMaster.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: MAX_ACTIVE_UOM_RESULTS + 1, orderBy: [{ code: 'asc' }, { id: 'asc' }],
+    }));
+    expect(db.category.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      take: MAX_ACTIVE_CATEGORY_RESULTS + 1, orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      select: { id: true, name: true, parentId: true },
+    }));
+  });
+
+  it('fails closed and logs when the active category catalog exceeds its bounded lookup', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', status: 'DRAFT', lines: [] });
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce(Array.from({ length: MAX_ACTIVE_CATEGORY_RESULTS + 1 }, (_, index) => ({
+      id: `category-${index}`, name: `Category ${index}`, parentId: null,
+    })));
+
+    await expect(standardiseRevision(request('http://localhost/api/boq/revision-1/standardise'), params)).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiMastersCategoriesRoute.activeCategoryListExceedsMaximumSize.replace('{{maxItems}}', String(MAX_ACTIVE_CATEGORY_RESULTS)),
+      status: 413,
+    });
+    expect(writeLog).toHaveBeenCalledWith('warn', 'boq.standardise_reference_catalog_limit_exceeded', expect.objectContaining({
+      operation: 'load_active_categories', route: '/api/boq/[revisionId]/standardise',
+      tenantId: 'tenant-1', userId: 'user-1', resultCountAtLeast: MAX_ACTIVE_CATEGORY_RESULTS + 1,
+      maxItems: MAX_ACTIVE_CATEGORY_RESULTS, durationMs: expect.any(Number),
+    }));
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('fails closed and logs when the active UOM catalog exceeds its bounded lookup', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', status: 'DRAFT', lines: [] });
+    db.uomMaster.findMany.mockResolvedValueOnce(Array.from({ length: MAX_ACTIVE_UOM_RESULTS + 1 }, (_, index) => ({
+      id: `uom-${index}`, code: `UOM-${index}`,
+    })));
+    db.category.findMany.mockResolvedValueOnce([]);
+
+    await expect(standardiseRevision(request('http://localhost/api/boq/revision-1/standardise'), params)).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiMastersUomRoute.activeUomListExceedsMaximumSize.replace('{{maxItems}}', String(MAX_ACTIVE_UOM_RESULTS)),
+      status: 413,
+    });
+    expect(writeLog).toHaveBeenCalledWith('warn', 'boq.standardise_reference_catalog_limit_exceeded', expect.objectContaining({
+      operation: 'load_active_uoms', route: '/api/boq/[revisionId]/standardise',
+      tenantId: 'tenant-1', userId: 'user-1', resultCountAtLeast: MAX_ACTIVE_UOM_RESULTS + 1,
+      maxItems: MAX_ACTIVE_UOM_RESULTS, durationMs: expect.any(Number),
+    }));
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('enforces the standardisation batch limit and detects partial atomic writes', async () => {

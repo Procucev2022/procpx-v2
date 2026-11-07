@@ -6,10 +6,10 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98269/98926) |
-| branches | 93.72% (22404/23905) |
+| statements | 99.33% (98303/98960) |
+| branches | 93.71% (22411/23913) |
 | functions | 98.60% (1902/1929) |
-| lines | 99.33% (98269/98926) |
+| lines | 99.33% (98303/98960) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -100,7 +100,7 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 | `src/app/api/boq/[revisionId]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/route.ts` | 99.15% | 95.45% | 100.00% | 99.15% | PASS |
 | `src/app/api/boq/[revisionId]/standardise/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/[revisionId]/standardise/route.ts` | 91.50% | 95.83% | 100.00% | 91.50% | PASS |
+| `src/app/api/boq/[revisionId]/standardise/route.ts` | 92.73% | 94.64% | 100.00% | 92.73% | PASS |
 | `src/app/api/boq/[revisionId]/submit/route.ts` | 100.00% | 92.30% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/validate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/validate/route.ts` | 98.98% | 96.15% | 100.00% | 98.98% | PASS |
