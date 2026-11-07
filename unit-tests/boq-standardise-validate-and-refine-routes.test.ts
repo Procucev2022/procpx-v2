@@ -5,7 +5,7 @@ import { standardiseDescription, standardiseUom } from '../src/lib/uom-standardi
 import { validateBoqLine, computeQualityScore, summarizeIssues } from '../src/lib/boq-validate';
 import { createAuditLog } from '../src/lib/audit';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { POST as standardiseRevision } from '../src/app/api/boq/[revisionId]/standardise/route';
 import { GET as getValidation, POST as validateRevision } from '../src/app/api/boq/[revisionId]/validate/route';
 import { POST as refineRevision } from '../src/app/api/boq/refine-ai/route';
@@ -38,7 +38,10 @@ jest.mock('../src/lib/uom-standardise', () => ({ standardiseDescription: jest.fn
 jest.mock('../src/lib/boq-validate', () => ({ validateBoqLine: jest.fn(), computeQualityScore: jest.fn(), summarizeIssues: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../src/lib/observability/server-logger', () => ({
+  logEvent: jest.fn(),
+  writeStructuredLog: jest.fn().mockResolvedValue(undefined),
+}));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -51,6 +54,7 @@ const summarize = summarizeIssues as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const writeLog = writeStructuredLog as jest.Mock;
+const eventLog = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', role: 'CLIENT_ADMIN' };
 const request = (url = 'http://localhost/api/test', body: unknown = {}) => new NextRequest(url, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -73,6 +77,7 @@ describe('BOQ revision standardisation', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     writeLog.mockResolvedValue(undefined);
+    eventLog.mockReset();
     db.uomMaster.findMany.mockResolvedValue([]);
     db.category.findMany.mockResolvedValue([]);
     mockSuccessfulWorkflowBatch();
@@ -149,9 +154,9 @@ describe('BOQ revision standardisation', () => {
       error: UI_STRINGS.appApiMastersCategoriesRoute.activeCategoryListExceedsMaximumSize.replace('{{maxItems}}', String(MAX_ACTIVE_CATEGORY_RESULTS)),
       status: 413,
     });
-    expect(writeLog).toHaveBeenCalledWith('warn', 'boq.standardise_reference_catalog_limit_exceeded', expect.objectContaining({
-      operation: 'load_active_categories', route: '/api/boq/[revisionId]/standardise',
-      tenantId: 'tenant-1', userId: 'user-1', resultCountAtLeast: MAX_ACTIVE_CATEGORY_RESULTS + 1,
+    expect(eventLog).toHaveBeenCalledWith('warn', 'boq.reference_catalog_limit_exceeded', expect.objectContaining({
+      operation: 'load_active_category_references', route: '/api/boq/[revisionId]/standardise',
+      tenantId: 'tenant-1', userId: 'user-1', catalog: 'category', resultCountAtLeast: MAX_ACTIVE_CATEGORY_RESULTS + 1,
       maxItems: MAX_ACTIVE_CATEGORY_RESULTS, durationMs: expect.any(Number),
     }));
     expect(writeBatch).not.toHaveBeenCalled();
@@ -169,9 +174,9 @@ describe('BOQ revision standardisation', () => {
       error: UI_STRINGS.appApiMastersUomRoute.activeUomListExceedsMaximumSize.replace('{{maxItems}}', String(MAX_ACTIVE_UOM_RESULTS)),
       status: 413,
     });
-    expect(writeLog).toHaveBeenCalledWith('warn', 'boq.standardise_reference_catalog_limit_exceeded', expect.objectContaining({
-      operation: 'load_active_uoms', route: '/api/boq/[revisionId]/standardise',
-      tenantId: 'tenant-1', userId: 'user-1', resultCountAtLeast: MAX_ACTIVE_UOM_RESULTS + 1,
+    expect(eventLog).toHaveBeenCalledWith('warn', 'boq.reference_catalog_limit_exceeded', expect.objectContaining({
+      operation: 'load_active_uom_references', route: '/api/boq/[revisionId]/standardise',
+      tenantId: 'tenant-1', userId: 'user-1', catalog: 'uom', resultCountAtLeast: MAX_ACTIVE_UOM_RESULTS + 1,
       maxItems: MAX_ACTIVE_UOM_RESULTS, durationMs: expect.any(Number),
     }));
     expect(writeBatch).not.toHaveBeenCalled();
@@ -295,6 +300,24 @@ describe('BOQ validation route', () => {
         ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
       });
     }
+  });
+
+  it('rejects validation when the active UOM reference catalog exceeds its bound', async () => {
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-1', revisionCode: 'R1', updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      boq: { projectId: 'project-1' },
+      lines: [{ id: 'line-1', lineNumber: '1', originalDescription: 'Cable', quantity: 1 }],
+    });
+    db.uomMaster.findMany.mockResolvedValueOnce(Array.from({ length: MAX_ACTIVE_UOM_RESULTS + 1 }, (_, index) => ({
+      id: `uom-${index}`, code: `UOM-${index}`, aliases: null,
+    })));
+
+    await expect(validateRevision(request(), params)).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiMastersUomRoute.activeUomListExceedsMaximumSize.replace('{{maxItems}}', String(MAX_ACTIVE_UOM_RESULTS)),
+      status: 413,
+    });
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('logs validation and quality-read failures while keeping logging failures contained', async () => {

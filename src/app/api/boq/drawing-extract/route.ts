@@ -18,6 +18,7 @@ import {
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 import { DRAWING_BOQ_AUDIT_ACTION, DRAWING_BOQ_SOURCE_TYPE, MAX_DRAWING_BOQ_LINES, SUPPORTED_DRAWING_EXTENSIONS } from './route.constants';
 
 class InvalidDrawingRequestError extends Error {}
@@ -165,10 +166,12 @@ export async function POST(req: NextRequest) {
         savedFilePath = String(document.filePath);
       }
 
-      const [categories, uoms] = await Promise.all([
-        prisma.category.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
-        prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, code: true } }),
-      ]);
+      const references = await loadActiveBoqReferenceCatalog({
+        tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/drawing-extract',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+      });
+      if (!references.ok) return apiError(references.message, 413);
+      const { categories, uoms } = references;
       const prepared = prepareDrawingLines(lines, categories, uoms, drawingNumber);
       lineCount = prepared.lines.length;
       const qualityScore = Math.round((prepared.validCount / prepared.lines.length) * 100) || 0;

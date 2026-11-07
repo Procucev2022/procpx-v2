@@ -16,6 +16,7 @@ import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import type { StandardLibraryBoqItemInput, StandardLibraryBoqRequest } from '@app-types/app/api/boq/from-standard-library.types';
 import { STANDARD_LIBRARY_BOQ_AUDIT_ACTION, STANDARD_LIBRARY_BOQ_SOURCE_REFERENCE, STANDARD_LIBRARY_BOQ_SOURCE_TYPE } from './route.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 
 function optionalNumber(value: unknown): number | null {
   if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) return null;
@@ -67,10 +68,12 @@ export async function POST(req: NextRequest) {
       if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
     }
 
-    const [categories, uoms] = await Promise.all([
-      prisma.category.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
-      prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, code: true } }),
-    ]);
+    const references = await loadActiveBoqReferenceCatalog({
+      tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/from-standard-library',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+    });
+    if (!references.ok) return apiError(references.message, 413);
+    const { categories, uoms } = references;
     const categoryByName = new Map(categories.map((category) => [category.name.toLowerCase(), category.id]));
     const uomByCode = new Map(uoms.map((uom) => [uom.code.toUpperCase(), uom.id]));
     const now = new Date();

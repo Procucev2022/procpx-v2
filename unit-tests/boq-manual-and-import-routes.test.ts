@@ -13,6 +13,7 @@ import { MANUAL_BOQ_CREATE_AUDIT_ACTION, MANUAL_BOQ_CREATION_NOTES, MANUAL_BOQ_L
 import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
 import { MAX_BOQ_UPLOAD_BYTES } from '../src/lib/boq-upload.constants';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { MAX_ACTIVE_BOQ_UOM_REFERENCES } from '../src/lib/boq-reference-catalog.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -35,7 +36,7 @@ jest.mock('../src/lib/uom-standardise', () => ({ standardiseUom: jest.fn() }));
 jest.mock('../src/lib/boq-validate', () => ({ validateBoqLine: jest.fn(), computeQualityScore: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 jest.mock('fs/promises', () => ({ readFile: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
@@ -332,6 +333,12 @@ describe('BOQ spreadsheet import', () => {
       ok: true, data: { imported: 2, valid: 1, warnings: 0, errors: 1, qualityScore: 50 }, status: 200,
     });
     expect(readUploadedFile).toHaveBeenCalledWith('upload.xlsx');
+    expect(db.uomMaster.findMany).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1', isActive: true },
+      select: { id: true, code: true, aliases: true },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      take: MAX_ACTIVE_BOQ_UOM_REFERENCES + 1,
+    });
     const statements = writeBatch.mock.calls[0][0];
     expect(statements).toHaveLength(6);
     expect(statements.every((statement: { sql: string; values: unknown[] }) => (statement.sql.match(/\?/g) || []).length === statement.values.length)).toBe(true);
@@ -369,6 +376,26 @@ describe('BOQ spreadsheet import', () => {
     expect(statements[3].values[21]).toBe(2);
     expect(statements[3].values[25]).toBe('WARNING');
     expect(statements[4].values.slice(1, 6)).toEqual([1, 0, 0, 1, 80]);
+  });
+
+  it('rejects import when the active UOM reference catalog exceeds its bound', async () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ['Description', 'UOM', 'Quantity'], ['Cable', 'mtr', '2'],
+    ]), 'Items');
+    db.boqRevision.findFirst.mockResolvedValueOnce({
+      id: 'revision-1', tenantId: 'tenant-1', status: 'DRAFT', updatedAt: new Date(),
+      originalFilePath: 'upload.xlsx', boq: { projectId: 'project-1', boqCode: 'BOQ-001' },
+    });
+    readUploadedFile.mockResolvedValueOnce(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+    db.uomMaster.findMany.mockResolvedValueOnce(Array.from({ length: MAX_ACTIVE_BOQ_UOM_REFERENCES + 1 }, (_, index) => ({
+      id: `uom-${index}`, code: `UOM-${index}`, aliases: null,
+    })));
+
+    await expect(importBoq(request({
+      revisionId: 'revision-1', columnMapping: { description: 'Description', uom: 'UOM', quantity: 'Quantity' },
+    }))).resolves.toMatchObject({ ok: false, status: 413 });
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('guards malformed mappings and files, duplicate lines, stale revisions, and partial writes', async () => {

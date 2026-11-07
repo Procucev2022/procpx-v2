@@ -4,6 +4,7 @@ import { POST } from '../src/app/api/boq/standard/upload-validate/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { MAX_ACTIVE_BOQ_UOM_REFERENCES } from '../src/lib/boq-reference-catalog.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { uomMaster: { findMany: jest.fn() } } }));
@@ -135,7 +136,12 @@ describe('standard BOQ upload validation API', () => {
     const result = await POST(request({ file: uploadFile([{ name: 'BOQ', rows }]), projectId: 'project-form', costCentreId: 'cc-form' })) as any;
 
     expect(result).toMatchObject({ ok: true, status: 200 });
-    expect(findUoms).toHaveBeenCalledWith({ where: { tenantId: context.tenantId }, select: { code: true, aliases: true } });
+    expect(findUoms).toHaveBeenCalledWith({
+      where: { tenantId: context.tenantId, isActive: true },
+      select: { id: true, code: true, aliases: true },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      take: MAX_ACTIVE_BOQ_UOM_REFERENCES + 1,
+    });
     expect(result.data).toMatchObject({
       fileName: 'standard.xlsx', totalRows: 12, validRows: 7, warningRows: 6, errorRows: 4,
       pendingQuantityCount: 1, validQuantityCount: 4, canGenerate: true,

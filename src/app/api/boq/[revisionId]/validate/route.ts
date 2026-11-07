@@ -7,6 +7,7 @@ import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, MAX_BOQ_BATCH_LINES } from '@/lib/d1
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 import type { BoqRevisionLinesRouteContext } from '@app-types/app/api/boq/revision-lines.types';
 import type { BoqLineInput } from '@app-types/lib/boq-validate.types';
 import { BOQ_VALIDATE_LINES_UPDATE_JSON_SQL, BOQ_VALIDATE_REVISION_UPDATE_SQL } from './route.constants';
@@ -37,10 +38,12 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
       if (line.lineNumber) lineNumberCounts[line.lineNumber] = (lineNumberCounts[line.lineNumber] || 0) + 1;
     }
 
-    const validUoms = await prisma.uomMaster.findMany({
-      where: { tenantId: ctx.tenantId, isActive: true },
-      select: { id: true, code: true },
-    });
+    const referenceCatalog = await loadActiveBoqReferenceCatalog({
+      tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/[revisionId]/validate',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+    }, { categories: false, uoms: true });
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const validUoms = referenceCatalog.uoms;
     const validUomIds = new Set(validUoms.map((uom) => uom.id));
     const validationInputs: BoqLineInput[] = revision.lines.map((line) => ({
       originalDescription: line.originalDescription,

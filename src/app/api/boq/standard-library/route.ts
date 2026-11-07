@@ -6,6 +6,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import {
   DEFAULT_STANDARD_BOQ_PAGE_SIZE,
@@ -118,10 +119,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate all items before saving
-    const existingCategories = await prisma.category.findMany({
-      where: { tenantId: ctx.tenantId, isActive: true },
-      select: { name: true },
-    });
+    const referenceCatalog = await loadActiveBoqReferenceCatalog({
+      tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/standard-library',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+    }, { categories: true, uoms: false });
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const existingCategories = referenceCatalog.categories;
     const validCatNames = new Set(existingCategories.map(c => c.name.toLowerCase()));
 
     const seenCodes = new Set<string>();

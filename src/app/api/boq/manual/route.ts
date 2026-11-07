@@ -19,6 +19,7 @@ import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-bat
 import type { ManualBoqLineInput, ManualBoqRequest } from '@app-types/app/api/boq/manual.types';
 import { MANUAL_BOQ_CREATE_AUDIT_ACTION, MANUAL_BOQ_CREATION_NOTES, MANUAL_BOQ_LINES_SAVED_AUDIT_ACTION } from './route.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 
 type PreparedLine = {
   lineNumber: string;
@@ -270,11 +271,14 @@ export async function POST(req: NextRequest) {
     }
 
     const lines = submittedLines ? submittedLines as ManualBoqLineInput[] : [];
-    const [categories, uoms] = lines.length > 0 ? await Promise.all([
-      prisma.category.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
-      prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, code: true } }),
-    ]) : [[], []];
-    const preparedResult = createPreparedLines(lines, isReplace ? 0 : currentLineCounts.total, categories, uoms);
+    const referenceCatalog = lines.length > 0
+      ? await loadActiveBoqReferenceCatalog({
+        tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/manual',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+      })
+      : { ok: true as const, categories: [], uoms: [] };
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const preparedResult = createPreparedLines(lines, isReplace ? 0 : currentLineCounts.total, referenceCatalog.categories, referenceCatalog.uoms);
     const lineNumbers = new Set<string>();
     for (const line of preparedResult.lines) {
       if (lineNumbers.has(line.lineNumber)) return apiError(UI_STRINGS.common.invalidRequestBody, 400);

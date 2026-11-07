@@ -21,6 +21,7 @@ import {
 import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
 import type { TemplateBoqException, TemplateBoqLine, TemplateValidationMessage } from '@app-types/app/api/boq/upload-template/route.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 import { BOQ_TEMPLATE_AUDIT_ACTION, BOQ_TEMPLATE_CREATE_NOTES, BOQ_TEMPLATE_SOURCE_TYPE } from './route.constants';
 
 class InvalidTemplateError extends Error {}
@@ -194,11 +195,16 @@ export async function POST(req: NextRequest) {
     }
     if (rows.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
 
-    const [allCostCentres, allCategories, allUoms] = await Promise.all([
+    const [allCostCentres, referenceCatalog] = await Promise.all([
       prisma.costCentre.findMany({ where: { projectId, tenantId: ctx.tenantId } }),
-      prisma.category.findMany({ where: { tenantId: ctx.tenantId } }),
-      prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId } }),
+      loadActiveBoqReferenceCatalog({
+        tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/upload-template',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+      }),
     ]);
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const allCategories = referenceCatalog.categories;
+    const allUoms = referenceCatalog.uoms;
     const ccByCode = new Map(allCostCentres.map((centre) => [centre.code.toUpperCase(), centre]));
     let costCentreId = requestedCostCentreId;
     if (!costCentreId && allCostCentres.length > 0) {

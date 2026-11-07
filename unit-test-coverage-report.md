@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
+Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98303/98960) |
-| branches | 93.71% (22411/23913) |
-| functions | 98.60% (1902/1929) |
-| lines | 99.33% (98303/98960) |
+| statements | 99.33% (98392/99049) |
+| branches | 93.69% (22438/23947) |
+| functions | 98.60% (1904/1931) |
+| lines | 99.33% (98392/99049) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -100,40 +100,40 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 | `src/app/api/boq/[revisionId]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/route.ts` | 99.15% | 95.45% | 100.00% | 99.15% | PASS |
 | `src/app/api/boq/[revisionId]/standardise/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/[revisionId]/standardise/route.ts` | 92.73% | 94.64% | 100.00% | 92.73% | PASS |
+| `src/app/api/boq/[revisionId]/standardise/route.ts` | 91.70% | 94.54% | 100.00% | 91.70% | PASS |
 | `src/app/api/boq/[revisionId]/submit/route.ts` | 100.00% | 92.30% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/validate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/[revisionId]/validate/route.ts` | 98.98% | 96.15% | 100.00% | 98.98% | PASS |
+| `src/app/api/boq/[revisionId]/validate/route.ts` | 99.00% | 96.36% | 100.00% | 99.00% | PASS |
 | `src/app/api/boq/add-to-budget/route.ts` | 98.25% | 94.84% | 100.00% | 98.25% | PASS |
 | `src/app/api/boq/create-pr/route.ts` | 95.80% | 94.49% | 100.00% | 95.80% | PASS |
 | `src/app/api/boq/drawing-extract/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/drawing-extract/route.ts` | 100.00% | 95.83% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/drawing-extract/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/duplicate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/duplicate/route.ts` | 100.00% | 98.21% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/estimate-cost/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/estimate-cost/route.ts` | 100.00% | 97.19% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/from-standard-library/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/from-standard-library/route.ts` | 100.00% | 96.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/import/route.ts` | 98.31% | 96.72% | 100.00% | 98.31% | PASS |
+| `src/app/api/boq/from-standard-library/route.ts` | 100.00% | 94.87% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/import/route.ts` | 98.34% | 96.80% | 100.00% | 98.34% | PASS |
 | `src/app/api/boq/lines/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/manual/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/manual/route.ts` | 100.00% | 94.70% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/manual/route.ts` | 100.00% | 94.24% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/refine-ai/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/refine-ai/route.ts` | 100.00% | 94.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/route.ts` | 100.00% | 95.27% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/simple-template/download/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard-library/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/standard-library/route.ts` | 100.00% | 94.11% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/standard-library/route.ts` | 100.00% | 93.47% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/download/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/download/route.ts` | 100.00% | 94.52% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/error-report/route.ts` | 100.00% | 94.44% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/generate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/generate/route.ts` | 100.00% | 95.60% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/standard/upload-validate/route.ts` | 98.14% | 95.93% | 100.00% | 98.14% | PASS |
+| `src/app/api/boq/standard/upload-validate/route.ts` | 98.15% | 95.23% | 100.00% | 98.15% | PASS |
 | `src/app/api/boq/template/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/upload-template/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/upload-template/route.ts` | 95.33% | 90.99% | 100.00% | 95.33% | PASS |
+| `src/app/api/boq/upload-template/route.ts` | 95.40% | 90.65% | 100.00% | 95.40% | PASS |
 | `src/app/api/boq/upload/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/upload/route.ts` | 100.00% | 90.24% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -303,6 +303,8 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
 | `src/lib/boq-line-pagination.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-line-pagination.ts` | 100.00% | 94.87% | 100.00% | 100.00% | PASS |
+| `src/lib/boq-reference-catalog.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/boq-reference-catalog.ts` | 100.00% | 93.75% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-upload.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
@@ -330,7 +332,7 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.76% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.71% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
