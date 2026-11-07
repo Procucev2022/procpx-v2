@@ -18,6 +18,7 @@ import {
   MAX_AUCTION_VENDOR_INVITES,
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function GET(req: NextRequest) {
@@ -397,14 +398,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const validatedRfqId = rfqId;
     const linkedRfqLineIds = [...new Set(normalizedItems
       .map((item) => item?.rfqLineId)
       .filter((id): id is string => Boolean(id)))];
     if (linkedRfqLineIds.length > 0) {
-      const validRfqLines = await prisma.rfqLine.findMany({
-        where: { tenantId: ctx.tenantId, rfqId, id: { in: linkedRfqLineIds } },
+      const validRfqLines = await readByD1FilterChunks(linkedRfqLineIds, (chunk) => prisma.rfqLine.findMany({
+        where: { tenantId: ctx.tenantId, rfqId: validatedRfqId, id: { in: chunk } },
         select: { id: true },
-      });
+      }));
       if (validRfqLines.length !== linkedRfqLineIds.length) {
         return apiError(UI_STRINGS.common.invalidRequestBody, 400);
       }

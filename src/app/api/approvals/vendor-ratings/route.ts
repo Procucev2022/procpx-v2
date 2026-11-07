@@ -15,6 +15,7 @@ import {
   VENDOR_RATING_DECISION_UPDATE_SQL,
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import { VENDOR_RATING_DEFAULT_PAGE_SIZE, VENDOR_RATING_MAX_PAGE_SIZE } from './route.constants';
 
 
@@ -82,10 +83,10 @@ export async function GET(req: NextRequest) {
     const pageRatings = rawRatings.slice(0, pageSize);
     // Resolve submitters
     const userIds = Array.from(new Set(pageRatings.map((r) => r.ratedBy).filter(Boolean)));
-    const users = userIds.length > 0 ? await prisma.user.findMany({
-      where: { tenantId: ctx.tenantId, id: { in: userIds } },
+    const users = userIds.length > 0 ? await readByD1FilterChunks(userIds, (chunk) => prisma.user.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: chunk } },
       select: { id: true, name: true, role: true, email: true },
-    }) : [];
+    })) : [];
     const userMap = new Map(users.map((u) => [u.id, u.name]));
 
     const ratings = pageRatings.map((r) => {

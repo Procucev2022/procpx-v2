@@ -6,6 +6,7 @@ import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } fr
 import { isUserAuthorizedForProject } from '@/lib/project-auth';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, PPO_MARK_COMPLETED_AFTER_AUDIT_SQL, PPO_VENDOR_RATING_UPSERT_IF_ELIGIBLE_SQL } from '@/lib/d1-batch.constants';
@@ -101,10 +102,10 @@ export async function GET(
     // Resolve user names for ratedBy
     const userIds = Array.from(new Set(rawRatings.map((r) => r.ratedBy).filter(Boolean)));
     const users = userIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
+      ? await readByD1FilterChunks(userIds, (chunk) => prisma.user.findMany({
+          where: { tenantId: ctx.tenantId, id: { in: chunk } },
           select: { id: true, name: true },
-        })
+        }))
       : [];
     const userMap = new Map(users.map((u) => [u.id, u.name]));
 

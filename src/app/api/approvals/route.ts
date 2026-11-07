@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, getListPageWindow } from '@/lib/api-utils';
 import { getCategoryPreviews } from '@/lib/category-preview';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
@@ -33,10 +34,10 @@ export async function GET(req: NextRequest) {
   const addQueueUsers = async (userIds: Array<string | null | undefined>) => {
     const ids = Array.from(new Set(userIds.filter((value): value is string => Boolean(value))));
     if (ids.length === 0) return;
-    const users = await prisma.user.findMany({
-      where: { tenantId: ctx.tenantId, id: { in: ids } },
+    const users = await readByD1FilterChunks(ids, (chunk) => prisma.user.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: chunk } },
       select: { id: true, name: true, role: true, email: true },
-    });
+    }));
     for (const user of users) {
       userMap.set(user.id, { name: user.name, role: user.role, email: user.email });
       userMap.set(user.email, { name: user.name, role: user.role, email: user.email });
@@ -45,10 +46,10 @@ export async function GET(req: NextRequest) {
   const addQueueBudgets = async (costCentreIds: Array<string | null | undefined>) => {
     const ids = Array.from(new Set(costCentreIds.filter((value): value is string => Boolean(value))));
     if (ids.length === 0) return;
-    const budgets = await prisma.budget.findMany({
-      where: { tenantId: ctx.tenantId, costCentreId: { in: ids } },
+    const budgets = await readByD1FilterChunks(ids, (chunk) => prisma.budget.findMany({
+      where: { tenantId: ctx.tenantId, costCentreId: { in: chunk } },
       select: { costCentreId: true, approvedAmount: true, pendingAmount: true, totalAmount: true },
-    });
+    }));
     for (const budget of budgets) {
       if (budget.costCentreId) budgetMap.set(budget.costCentreId, budget);
     }

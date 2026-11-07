@@ -22,6 +22,18 @@ describe('D1 query filter chunking', () => {
     expect(order).toEqual(['a', 'c']);
   });
 
+  it('keeps default filter chunks below the D1 binding limit', async () => {
+    const values = Array.from({ length: MAX_D1_QUERY_FILTER_VALUES + 6 }, (_, index) => `id-${index}`);
+    const seen: string[][] = [];
+    const result = await readByD1FilterChunks(values, async (chunk) => {
+      seen.push(chunk);
+      return chunk;
+    });
+
+    expect(result).toEqual(values);
+    expect(seen.map((chunk) => chunk.length)).toEqual([MAX_D1_QUERY_FILTER_VALUES, 6]);
+  });
+
   it('sums count queries across chunks and uses safe D1-derived defaults', async () => {
     const seen: string[][] = [];
     await expect(countByD1FilterChunks(['v1', 'v2', 'v3'], async (values) => {

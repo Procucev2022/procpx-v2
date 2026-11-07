@@ -15,6 +15,7 @@ import { prepareRfqNotificationOutbox } from '@/lib/notification-outbox';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import type { RfqLineWrite } from '@app-types/app/api/procurement/rfqs.types';
 import {
   RFQ_CREATE_ACTIONS,
@@ -353,10 +354,10 @@ export async function createRfq(req: NextRequest) {
     }
     if (rfqLinesData.length === 0) return apiError(UI_STRINGS.appApiProcurementRfqsRoute.atLeastOneBOQLineMustBeSelectedForTheRFQScope, 400);
     if (uniqueVendorIds.length > 0) {
-      const matchedVendors = await prisma.vendor.findMany({
-        where: { tenantId: ctx.tenantId, id: { in: uniqueVendorIds } },
+      const matchedVendors = await readByD1FilterChunks(uniqueVendorIds, (chunk) => prisma.vendor.findMany({
+        where: { tenantId: ctx.tenantId, id: { in: chunk } },
         select: { id: true },
-      });
+      }));
       if (matchedVendors.length !== uniqueVendorIds.length) {
         return apiError(UI_STRINGS.appApiProcurementRfqsRoute.oneOrMoreVendorsNotFoundInThisTenant, 400);
       }

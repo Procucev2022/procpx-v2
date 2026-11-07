@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import {
   DASHBOARD_EXCEPTION_PREVIEW_LIMIT,
   DASHBOARD_REGISTER_PREVIEW_LIMIT,
@@ -771,7 +772,7 @@ export async function GET(request?: Request) {
     ]);
     const categoryIds = Array.from(new Set(revisionLineGroups.map((group) => group.categoryId).filter((id): id is string => Boolean(id))));
     const lineCategories = categoryIds.length > 0
-      ? await prisma.category.findMany({ where: { tenantId, id: { in: categoryIds } }, select: { id: true, name: true } })
+      ? await readByD1FilterChunks(categoryIds, (chunk) => prisma.category.findMany({ where: { tenantId, id: { in: chunk } }, select: { id: true, name: true } }))
       : [];
     const categoryNameById = new Map(lineCategories.map((category) => [category.id, category.name]));
     const revisionLineSummary = new Map<string, { count: number; amount: number; categories: Set<string> }>();

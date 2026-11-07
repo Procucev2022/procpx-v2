@@ -5,6 +5,7 @@ import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import { MAX_D1_BINDING_BYTES } from '@/lib/d1-batch.constants';
 import type { ReRfqRouteParams } from '@app-types/app/api/procurement/rfqs/re-rfq.types';
 import {
@@ -123,14 +124,14 @@ export async function POST(req: NextRequest, { params }: ReRfqRouteParams) {
     }
 
     if (targetVendorIds.length > 0) {
-      const eligibleVendors = await prisma.vendor.findMany({
+      const eligibleVendors = await readByD1FilterChunks(targetVendorIds, (chunk) => prisma.vendor.findMany({
         where: {
-          id: { in: targetVendorIds },
+          id: { in: chunk },
           OR: [{ tenantId: ctx.tenantId }, { vendorType: 'PROCUCEV_VENDOR' }],
           isBlacklisted: false,
         },
         select: { id: true },
-      });
+      }));
       if (eligibleVendors.length !== targetVendorIds.length) {
         return apiError(UI_STRINGS.common.invalidRequestBody, 400);
       }

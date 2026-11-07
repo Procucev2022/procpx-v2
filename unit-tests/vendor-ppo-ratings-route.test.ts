@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../src/app/api/procurement/vendors/[id]/ppo-ratings/route';
 import { prisma } from '../src/lib/prisma';
-import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { requireAuth, isApiContext, getListPageWindow } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
@@ -36,6 +36,7 @@ jest.mock('../src/lib/notifications', () => ({ dispatchPreparedWorkflowNotificat
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
+const pageWindow = getListPageWindow as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const projectAuth = isUserAuthorizedForProject as jest.Mock;
 const writeLog = writeStructuredLog as jest.Mock;
@@ -131,7 +132,7 @@ describe('vendor PPO ratings API', () => {
       where: { vendorId: 'vendor-1', tenantId: 'tenant-1' }, skip: 0, take: 51,
       orderBy: [{ ratedAt: 'desc' }, { id: 'desc' }],
     }));
-    expect(db.user.findMany).toHaveBeenCalledWith({ where: { id: { in: ['user-1', 'missing-user'] } }, select: { id: true, name: true } });
+    expect(db.user.findMany).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', id: { in: ['user-1', 'missing-user'] } }, select: { id: true, name: true } });
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_USER' });
     await GET(getRequest(), params());
@@ -161,6 +162,20 @@ describe('vendor PPO ratings API', () => {
     } });
     const resultBody = result as unknown as { data: { ratings: unknown[] } };
     expect(resultBody.data.ratings).toHaveLength(50);
+  });
+
+  it('chunks user lookups for a full 100-rating page and keeps them tenant-scoped', async () => {
+    pageWindow.mockReturnValueOnce({ page: 1, pageSize: 100, skip: 0 });
+    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => rating({
+      id: `rating-${index}`,
+      ratedBy: `user-${index}`,
+    })));
+
+    await GET(getRequest(), params());
+
+    expect(db.user.findMany).toHaveBeenCalledTimes(2);
+    expect(db.user.findMany.mock.calls.map(([query]) => query.where.id.in.length)).toEqual([90, 10]);
+    expect(db.user.findMany.mock.calls.every(([query]) => query.where.tenantId === 'tenant-1')).toBe(true);
   });
 
   it('rejects malformed bodies and invalid assessment actions before PPO lookup', async () => {

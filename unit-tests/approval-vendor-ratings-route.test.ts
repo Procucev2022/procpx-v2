@@ -146,7 +146,10 @@ describe('vendor rating approval queue API', () => {
   });
 
   it('caps vendor-rating pages and reports whether more rows are available', async () => {
-    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 101 }, (_, index) => rating({ id: `rating-${index}` })));
+    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 101 }, (_, index) => rating({
+      id: `rating-${index}`,
+      ratedBy: `user-${index}`,
+    })));
     const result = await GET(getRequest('?page=2&pageSize=1000'));
 
     expect(result).toMatchObject({
@@ -155,6 +158,8 @@ describe('vendor rating approval queue API', () => {
     });
     expect((result as unknown as { data: { ratings: unknown[] } }).data.ratings).toHaveLength(100);
     expect(db.ppoVendorRating.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 100, take: 101 }));
+    expect(db.user.findMany).toHaveBeenCalledTimes(2);
+    expect(db.user.findMany.mock.calls.map(([query]) => query.where.id.in.length)).toEqual([90, 10]);
   });
 
   it('validates approval requests, access, review state, and mandatory return or reject comments', async () => {
