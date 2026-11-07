@@ -6,10 +6,10 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (97631/98282) |
-| branches | 93.72% (22193/23680) |
-| functions | 98.57% (1868/1895) |
-| lines | 99.33% (97631/98282) |
+| statements | 99.33% (97641/98290) |
+| branches | 93.72% (22202/23689) |
+| functions | 98.57% (1869/1896) |
+| lines | 99.33% (97641/98290) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -61,7 +61,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.78% | 90.38% | 97.05% | 99.78% | PASS |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/vendors/[id]/page.tsx` | 99.23% | 90.59% | 100.00% | 99.23% | PASS |
-| `src/app/(app)/procurement/vendors/page.tsx` | 99.43% | 91.68% | 98.61% | 99.43% | PASS |
+| `src/app/(app)/procurement/vendors/page.tsx` | 99.46% | 91.70% | 98.61% | 99.46% | PASS |
 | `src/app/(app)/projects/[id]/page.tsx` | 99.07% | 96.94% | 90.00% | 99.07% | PASS |
 | `src/app/(app)/projects/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/projects/new/page.tsx` | 100.00% | 96.77% | 95.45% | 100.00% | PASS |
@@ -282,8 +282,8 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.76% | 92.85% | 99.06% | PASS |
-| `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.90% | 96.77% | 99.91% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.78% | 92.85% | 99.06% | PASS |
+| `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 98.79% | 100.00% | 100.00% | PASS |
@@ -313,12 +313,12 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/lib/negotiation-history.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/negotiation-history.ts` | 95.91% | 92.00% | 100.00% | 95.91% | PASS |
 | `src/lib/notification-outbox.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/notification-outbox.ts` | 100.00% | 92.13% | 100.00% | 100.00% | PASS |
+| `src/lib/notification-outbox.ts` | 100.00% | 92.39% | 100.00% | 100.00% | PASS |
 | `src/lib/notifications.ts` | 100.00% | 97.40% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/edge-logger.ts` | 94.36% | 94.73% | 100.00% | 94.36% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.94% | 95.77% | 100.00% | 98.94% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.94% | 95.94% | 100.00% | 98.94% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.46% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
