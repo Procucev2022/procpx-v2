@@ -3983,6 +3983,8 @@ export const UI_STRINGS = {
     currencyAmount: "{{currency}}{{amount}}",
     current: "Current",
     pageValue1OfValue2: "Page {{value1}} of {{value2}}",
+    nextPage: "Next Page",
+    previousPage: "Previous Page",
     loadMore: "Load more",
     indianRupeeSymbol: "₹",
     approveReleaseToProcurement: " Approve & Release to Procurement",

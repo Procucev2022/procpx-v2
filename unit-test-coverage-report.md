@@ -6,10 +6,10 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98547/99204) |
-| branches | 93.70% (22484/23994) |
-| functions | 98.60% (1905/1932) |
-| lines | 99.33% (98547/99204) |
+| statements | 99.34% (98645/99300) |
+| branches | 93.70% (22527/24040) |
+| functions | 98.55% (1907/1935) |
+| lines | 99.34% (98645/99300) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -57,7 +57,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/app/(app)/procurement/ppos/page.tsx` | 100.00% | 95.19% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/quotes/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rate-cards/page.tsx` | 99.48% | 94.58% | 100.00% | 99.48% | PASS |
-| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.32% | 90.04% | 93.10% | 98.32% | PASS |
+| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.33% | 90.19% | 93.22% | 98.33% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.78% | 90.38% | 97.05% | 99.78% | PASS |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
@@ -207,7 +207,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/app/api/procurement/rate-cards/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/route.ts` | 100.00% | 95.86% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/compare/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.46% | 93.38% | 100.00% | 99.46% | PASS |
+| `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.48% | 93.63% | 100.00% | 99.48% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/messages/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -257,7 +257,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/components/observability/ClientObservability.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/observability/ErrorFallback.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/PrDetailModal.tsx` | 99.77% | 94.90% | 100.00% | 99.77% | PASS |
-| `src/components/ProcurementCommercialWorkspace.tsx` | 98.70% | 90.46% | 100.00% | 98.70% | PASS |
+| `src/components/ProcurementCommercialWorkspace.tsx` | 98.81% | 90.35% | 97.56% | 98.81% | PASS |
 | `src/components/rate-cards/AgreementPreviewModal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/BuyerAcceptanceWorkspace.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/HomeWorkspace.tsx` | 100.00% | 96.80% | 100.00% | 100.00% | PASS |
@@ -332,7 +332,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.79% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

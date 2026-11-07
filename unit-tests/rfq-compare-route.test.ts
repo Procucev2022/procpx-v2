@@ -42,7 +42,7 @@ const writeBatch = writeD1BatchAtomically as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1' };
 const params = (id = 'rfq-1') => ({ params: Promise.resolve({ id }) });
-const request = () => new NextRequest('http://localhost/api/procurement/rfqs/rfq-1/compare');
+const request = (query = '') => new NextRequest(`http://localhost/api/procurement/rfqs/rfq-1/compare${query}`);
 
 const fullRfq = (overrides: Record<string, any> = {}) => {
   const sourceOne = { id: 'boq-line-1', itemCode: 'CAB-1', standardDescription: 'Copper cable', originalDescription: 'Copper cable 4 core',
@@ -114,7 +114,7 @@ const latestNegotiationRoundRows = () => [
     pendingRevisedQuoteAmount: null, pendingStatus: null, pendingNextResponsibleParty: null, pendingBuyerDecision: null },
 ];
 
-const latestCompareQuoteRows = (rfq = fullRfq()) => {
+const latestCompareQuoteRows = (rfq = fullRfq(), visibleLineIds = new Set(rfq.lines.map((line) => line.id))) => {
   const latestByVendor = new Map<string, typeof rfq.quotes[number]>();
   const versionCounts = new Map<string, number>();
   for (const quote of rfq.quotes) {
@@ -132,14 +132,16 @@ const latestCompareQuoteRows = (rfq = fullRfq()) => {
     const header = {
       quoteId: quote.id, vendorId: quote.vendorId, quoteNumber: quote.quoteNumber, quoteVersion: quote.quoteVersion,
       versionCount: versionCounts.get(quote.vendorId), totalQuoteAmount: quote.totalQuoteAmount,
+      quotedCount: new Set(quote.lines.filter((line) => line.unitRate > 0).map((line) => line.rfqLineId)).size,
       submittedAt: quote.submittedAt, status: quote.status, commercialTerms: quote.commercialTerms,
       paymentTermsOffered: quote.paymentTermsOffered, deliveryLeadTimeDays: quote.deliveryLeadTimeDays,
       vendorName: vendor.name, vendorCode: vendor.code, vendorType: vendor.vendorType ?? null,
       qualificationStatus: vendor.qualificationStatus ?? null, complianceStatus: vendor.complianceStatus ?? null,
       performanceScore: vendor.performanceScore ?? null,
     };
-    return quote.lines.length > 0
-      ? quote.lines.map((line) => ({ ...header, quoteLineId: line.id, ...line }))
+    const visibleQuoteLines = quote.lines.filter((line) => visibleLineIds.has(line.rfqLineId));
+    return visibleQuoteLines.length > 0
+      ? visibleQuoteLines.map((line) => ({ ...header, quoteLineId: line.id, ...line }))
       : [{ ...header, quoteLineId: null, rfqLineId: null, unitRate: null, lineTotal: null, discountPercent: null, taxPercent: null }];
   });
 };
@@ -260,6 +262,69 @@ describe('RFQ quote comparison API', () => {
       expect.objectContaining({ sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: expect.arrayContaining(['QUOTE_COMPARED', 'rfq-1']) }),
     ]));
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it('pages the vendor-by-line matrix while retaining whole-RFQ totals and quote completeness', async () => {
+    const base = fullRfq();
+    const lines = Array.from({ length: 52 }, (_, index) => ({
+      ...base.lines[0],
+      id: `page-line-${String(index + 1).padStart(3, '0')}`,
+      lineNumber: String(index + 1).padStart(3, '0'),
+      description: `Package line ${index + 1}`,
+      boqLine: null,
+      boqLineId: null,
+      prLine: null,
+      benchmarkRate: 100,
+      quantity: 1,
+    }));
+    const pagedRfq = {
+      ...base,
+      estimatedBenchmarkValue: 0,
+      lines,
+      quotes: base.quotes.map((quote) => quote.vendorId === 'v1' && quote.quoteVersion === 2
+        ? {
+          ...quote,
+          lines: lines.map((line, index) => ({
+            id: `quote-line-${index + 1}`,
+            rfqLineId: line.id,
+            unitRate: 100,
+            lineTotal: 100,
+            discountPercent: 0,
+            taxPercent: 0,
+          })),
+        }
+        : quote),
+    } as unknown as ReturnType<typeof fullRfq>;
+    const pageLineIds = new Set(lines.slice(50).map((line) => line.id));
+    db.rfq.findFirst.mockResolvedValueOnce(pagedRfq);
+    db.$queryRaw.mockImplementation((query: { sql: string }) => query.sql.includes('latest_quotes')
+      ? latestCompareQuoteRows(pagedRfq, pageLineIds)
+      : query.sql.includes('negotiation_round_summaries')
+        ? latestNegotiationRoundRows()
+        : []);
+
+    const result = await GET(request('?page=2'), params());
+    const response = result as unknown as { data: {
+      lines: Array<{ id: string }>;
+      vendors: Array<{ vendorId: string; quotedCount: number; completenessPercent: number }>;
+      pagination: { page: number; pageSize: number; totalItems: number; totalPages: number; hasPreviousPage: boolean; hasNextPage: boolean };
+      summary: { benchmarkTotal: number };
+    } };
+    expect(response.data.lines.map((line) => line.id)).toEqual(['page-line-051', 'page-line-052']);
+    expect(response.data.pagination).toEqual({
+      page: 2, pageSize: 50, totalItems: 52, totalPages: 2, hasPreviousPage: true, hasNextPage: false,
+    });
+    expect(response.data.summary.benchmarkTotal).toBe(5200);
+    expect(response.data.vendors.find((vendor) => vendor.vendorId === 'v1')).toMatchObject({
+      quotedCount: 52,
+      completenessPercent: 100,
+    });
+
+    const latestQuoteQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
+    expect(latestQuoteQuery?.sql).toContain('latest_quote_line_summaries');
+    expect(latestQuoteQuery?.sql).toContain('quoteLine."rfqLineId" IN (?,?)');
+    expect(latestQuoteQuery?.values).toEqual(expect.arrayContaining(['page-line-051', 'page-line-052']));
+    expect(latestQuoteQuery?.values).not.toContain('page-line-001');
   });
 
   it('keeps vendors when the latest quote has no lines and captures latest-quote query failures', async () => {

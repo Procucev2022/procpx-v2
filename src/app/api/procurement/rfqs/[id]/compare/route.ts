@@ -8,7 +8,11 @@ import { createAuditLog } from '@/lib/audit';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE_SQL } from './route.constants';
+import {
+  RFQ_COMPARE_LINE_PAGE_SIZE,
+  RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE,
+  RFQ_COMPARE_STATUS_UPDATE_SQL,
+} from './route.constants';
 import type {
   RfqCompareRateCardRow,
   RfqLatestCompareNegotiationRoundRow,
@@ -82,7 +86,7 @@ export async function GET(
               },
             },
           },
-          orderBy: { lineNumber: 'asc' },
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
         },
         negotiations: {
           select: {
@@ -106,7 +110,19 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET' });
     }
 
-    const needsRevisionBoqFallback = rfq.lines.some((line) => !line.boqLine && !line.prLine?.boqLine);
+    const totalLineCount = rfq.lines.length;
+    const totalLinePages = Math.max(1, Math.ceil(totalLineCount / RFQ_COMPARE_LINE_PAGE_SIZE));
+    const requestedLinePage = Number(req.nextUrl.searchParams.get('page'));
+    const linePage = Number.isSafeInteger(requestedLinePage) && requestedLinePage > 0
+      ? Math.min(requestedLinePage, totalLinePages)
+      : 1;
+    const linePageOffset = (linePage - 1) * RFQ_COMPARE_LINE_PAGE_SIZE;
+    const comparisonSourceLines = rfq.lines.slice(linePageOffset, linePageOffset + RFQ_COMPARE_LINE_PAGE_SIZE);
+    const comparisonLineIds = comparisonSourceLines.length > 0
+      ? comparisonSourceLines.map((line) => line.id)
+      : ['__empty_rfq_comparison_page__'];
+
+    const needsRevisionBoqFallback = comparisonSourceLines.some((line) => !line.boqLine && !line.prLine?.boqLine);
     const fallbackBoqLines = rfq.boqRevision?.id && needsRevisionBoqFallback
       ? await prisma.boqLine.findMany({
         where: { tenantId: ctx.tenantId, boqRevisionId: rfq.boqRevision.id },
@@ -143,9 +159,20 @@ export async function GET(
         FROM "quotes" AS quote
         WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${id}
         GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+      ), latest_quote_line_summaries AS (
+        SELECT latest."tenantId", latest."id" AS "quoteId",
+          COUNT(DISTINCT CASE WHEN quoteLine."unitRate" > 0 THEN quoteLine."rfqLineId" END) AS "quotedCount"
+        FROM latest_quotes AS summary
+        INNER JOIN "quotes" AS latest
+          ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
+            AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
+        LEFT JOIN "quote_lines" AS quoteLine
+          ON quoteLine."tenantId" = latest."tenantId" AND quoteLine."quoteId" = latest."id"
+        GROUP BY latest."tenantId", latest."id"
       )
       SELECT latest."id" AS "quoteId", latest."vendorId", latest."quoteNumber", latest."quoteVersion",
-        summary."versionCount", latest."totalQuoteAmount", latest."submittedAt", latest."status",
+        summary."versionCount", COALESCE(lineSummary."quotedCount", 0) AS "quotedCount",
+        latest."totalQuoteAmount", latest."submittedAt", latest."status",
         latest."commercialTerms", latest."paymentTermsOffered", latest."deliveryLeadTimeDays",
         vendor."name" AS "vendorName", vendor."code" AS "vendorCode", vendor."vendorType",
         vendor."qualificationStatus", vendor."complianceStatus", vendor."performanceScore",
@@ -157,8 +184,11 @@ export async function GET(
           AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
       LEFT JOIN "vendors" AS vendor
         ON vendor."id" = latest."vendorId" AND vendor."tenantId" = latest."tenantId"
+      LEFT JOIN latest_quote_line_summaries AS lineSummary
+        ON lineSummary."tenantId" = latest."tenantId" AND lineSummary."quoteId" = latest."id"
       LEFT JOIN "quote_lines" AS quoteLine
         ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
+          AND quoteLine."rfqLineId" IN (${Prisma.join(comparisonLineIds)})
     `);
     const latestQuotesById = new Map<string, {
       id: string;
@@ -166,6 +196,7 @@ export async function GET(
       quoteNumber: string;
       quoteVersion: number;
       versionCount: number;
+      quotedCount: number;
       totalQuoteAmount: number;
       submittedAt: string | Date;
       status: string;
@@ -199,6 +230,7 @@ export async function GET(
           quoteNumber: row.quoteNumber,
           quoteVersion: Number(row.quoteVersion),
           versionCount: Number(row.versionCount),
+          quotedCount: Number(row.quotedCount || 0),
           totalQuoteAmount: Number(row.totalQuoteAmount),
           submittedAt: row.submittedAt,
           status: row.status,
@@ -347,7 +379,7 @@ export async function GET(
 
     // 3. Fetch active approved rate cards in the tenant
     const now = new Date();
-    const rateCardDescriptions = [...new Set(rfq.lines.map((line) => line.description.toLowerCase().trim()).filter(Boolean))];
+    const rateCardDescriptions = [...new Set(comparisonSourceLines.map((line) => line.description.toLowerCase().trim()).filter(Boolean))];
     const descriptionChunks: string[][] = [];
     for (let offset = 0; offset < rateCardDescriptions.length; offset += RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE) {
       descriptionChunks.push(rateCardDescriptions.slice(offset, offset + RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE));
@@ -401,9 +433,8 @@ export async function GET(
 
     // 4. Vendors participating in comparison
     const vendors = evaluatedQuotes.map((q) => {
-      const quotedLineIds = new Set(q.lines.filter((l) => l.unitRate > 0).map((l) => l.rfqLineId));
-      const totalRfqLines = rfq.lines.length;
-      const quotedCount = quotedLineIds.size;
+      const totalRfqLines = totalLineCount;
+      const quotedCount = q.quotedCount;
       const completenessPercent = totalRfqLines > 0 ? Math.round((quotedCount / totalRfqLines) * 100) : 0;
       const missingLineCount = totalRfqLines - quotedCount;
 
@@ -432,17 +463,16 @@ export async function GET(
     });
 
     // 5. Line-level comparison matrix
-    let totalAiBenchmark = 0;
-    const vendorTotals: Record<string, number> = {};
+    const totalAiBenchmark = rfq.lines.reduce((total, line) => {
+      const aiCost = line.boqLine?.aiUnitCost || line.benchmarkRate || line.prLine?.estimatedRate || null;
+      return total + (aiCost !== null ? aiCost * line.quantity : 0);
+    }, 0);
     const invalidNegotiationRounds = new Set<string>();
-    vendors.forEach((v) => (vendorTotals[v.vendorId] = 0));
 
-    const lineComparison = rfq.lines.map((rfqLine) => {
+    const lineComparison = comparisonSourceLines.map((rfqLine) => {
       // AI Estimated Unit Cost
       const aiCost = rfqLine.boqLine?.aiUnitCost || rfqLine.benchmarkRate || rfqLine.prLine?.estimatedRate || null;
       const aiTotal = aiCost !== null ? aiCost * rfqLine.quantity : null;
-      if (aiTotal !== null) totalAiBenchmark += aiTotal;
-
       const aiSource = rfqLine.boqLine?.costSource || (aiCost ? 'AI Costing Engine / Baseline Benchmark' : null);
       const aiDate = rfqLine.boqLine?.costDate ? rfqLine.boqLine.costDate.toISOString().split('T')[0] : null;
 
@@ -542,7 +572,6 @@ export async function GET(
         };
 
         if (quoted) {
-          vendorTotals[q.vendorId] = (vendorTotals[q.vendorId] || 0) + amount;
           if (rate < lowestRate) {
             lowestRate = rate;
             lowestVendorId = q.vendorId;
@@ -712,6 +741,14 @@ export async function GET(
       },
       vendors: allRankedVendors,
       lines: lineComparison,
+      pagination: {
+        page: linePage,
+        pageSize: RFQ_COMPARE_LINE_PAGE_SIZE,
+        totalItems: totalLineCount,
+        totalPages: totalLinePages,
+        hasPreviousPage: linePage > 1,
+        hasNextPage: linePage < totalLinePages,
+      },
       activeNegotiation,
       negotiationSummaries,
       awards: rfq.awards,

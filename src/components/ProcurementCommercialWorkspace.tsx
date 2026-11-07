@@ -33,7 +33,11 @@ import type {
   ProcurementCommercialWorkspaceProps,
   ProcurementNegotiationHistoryRound,
 } from "@app-types/components/ProcurementCommercialWorkspace.types";
-import type { RfqCompareNegotiationSummary } from "@app-types/app/api/procurement/rfqs/compare.types";
+import type {
+  RfqCompareLine,
+  RfqCompareNegotiationSummary,
+  RfqCompareVendorSummary,
+} from "@app-types/app/api/procurement/rfqs/compare.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -49,6 +53,8 @@ export default function ProcurementCommercialWorkspace({
   onOpenRateCards,
   onReleaseRfq,
   onNegotiationSubmitted,
+  onComparisonPageChange,
+  comparisonLoading = false,
   actionLoading = false,
 }: ProcurementCommercialWorkspaceProps) {
   const toast = useToast();
@@ -56,6 +62,18 @@ export default function ProcurementCommercialWorkspace({
   // All RFQ lines
   const allLines: any[] = useMemo(() => rfq.lines || [], [rfq.lines]);
   const totalRfqLines = allLines.length;
+  const allLinesById = useMemo(() => new Map(allLines.map((line) => [line.id, line])), [allLines]);
+  const allLineIndexesById = useMemo(() => new Map(allLines.map((line, index) => [line.id, index])), [allLines]);
+  const comparisonLinesById = useMemo(
+    () => new Map(((comparison?.lines || []) as RfqCompareLine[]).map((line) => [line.id, line])),
+    [comparison?.lines],
+  );
+  const visibleLines = useMemo(() => {
+    if (!comparison?.pagination) return allLines;
+    return ((comparison?.lines || []) as RfqCompareLine[])
+      .map((line) => allLinesById.get(line.id))
+      .filter(Boolean);
+  }, [allLines, allLinesById, comparison?.lines, comparison?.pagination]);
 
   // Selected vendor IDs for offer dispatch (from Table 1 checkboxes)
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
@@ -241,11 +259,12 @@ export default function ProcurementCommercialWorkspace({
       if (latestQuote?.lines && latestQuote.lines.length > 0) {
         quotedCount = latestQuote.lines.filter((l: any) => l.unitRate > 0).length;
       } else {
-        (comparison?.lines || []).forEach((cl: any) => {
-          if (cl.vendorQuotes?.[vId]?.quoted) {
-            quotedCount++;
-          }
-        });
+        const comparedVendor = (comparison?.vendors as RfqCompareVendorSummary[] | undefined)
+          ?.find((vendor) => vendor.vendorId === vId);
+        quotedCount = comparedVendor?.quotedCount ?? (comparison?.lines || []).reduce(
+          (count: number, line: any) => count + (line.vendorQuotes?.[vId]?.quoted ? 1 : 0),
+          0,
+        );
       }
 
       // Quote status calculation
@@ -331,7 +350,7 @@ export default function ProcurementCommercialWorkspace({
       ...m,
       rank: rankMap[m.vendorId] || null,
     }));
-  }, [rfq.invitedVendors, rfq.quotes, totalRfqLines, aiBenchmarkTotal, allNegotiationRounds, comparison?.lines, comparison?.negotiationSummaries]);
+  }, [rfq.invitedVendors, rfq.quotes, totalRfqLines, aiBenchmarkTotal, allNegotiationRounds, comparison?.lines, comparison?.negotiationSummaries, comparison?.vendors]);
 
   // L1 vendor (Lowest complete quote)
   const l1Vendor = useMemo(() => {
@@ -1221,10 +1240,9 @@ export default function ProcurementCommercialWorkspace({
             </thead>
 
             <tbody>
-              {allLines.map((line: any, idx: number) => {
-                const compLine = comparison?.lines?.find(
-                  (cl: any) => cl.id === line.id || cl.lineNumber === line.lineNumber
-                );
+              {visibleLines.map((line, idx) => {
+                const absoluteIndex = allLineIndexesById.get(line.id) ?? idx;
+                const compLine = comparisonLinesById.get(line.id);
 
                 const sourceBoq =
                   line.boqLine ||
@@ -1273,7 +1291,7 @@ export default function ProcurementCommercialWorkspace({
 
                     {/* 2. S.No. */}
                     <td style={{ border: '1px solid #B8C9DC', padding: '6px 6px', textAlign: 'center', color: '#64748b', fontFamily: 'monospace' }}>
-                      {line.lineNumber || idx + 1}
+                      {line.lineNumber || absoluteIndex + 1}
                     </td>
 
                     {/* 3. Item Code */}
@@ -1389,6 +1407,33 @@ export default function ProcurementCommercialWorkspace({
             </tfoot>
           </table>
         </div>
+
+        {comparison?.pagination?.totalPages > 1 && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-3 py-2">
+            <span className="text-xs text-slate-600">
+              {interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {
+                value1: comparison.pagination.page,
+                value2: comparison.pagination.totalPages,
+              })}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={UI_STRINGS.common.previousPage}
+                disabled={!comparison.pagination.hasPreviousPage || comparisonLoading}
+                onClick={() => onComparisonPageChange?.(comparison.pagination.page - 1)}
+                className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >{UI_STRINGS.common.previousPage}</button>
+              <button
+                type="button"
+                aria-label={UI_STRINGS.common.nextPage}
+                disabled={!comparison.pagination.hasNextPage || comparisonLoading}
+                onClick={() => onComparisonPageChange?.(comparison.pagination.page + 1)}
+                className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >{UI_STRINGS.common.nextPage}</button>
+            </div>
+          </div>
+        )}
 
         {/* SECTION 5: Action Controls */}
         <div className="p-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">

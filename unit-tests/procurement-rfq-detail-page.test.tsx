@@ -4,7 +4,7 @@ import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import RfqDetailPage from '../src/app/(app)/procurement/rfqs/[id]/page';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), refresh: jest.fn() };
@@ -46,7 +46,16 @@ jest.mock('../src/components/ui/BoqDescriptionCell', () => ({ __esModule: true, 
 jest.mock('../src/components/RfqChatDrawer', () => ({ __esModule: true, default: ({ isOpen, rfqNumber, onClose }: any) => isOpen ? <aside>{rfqNumber}<button onClick={onClose}>Close chat</button></aside> : null }));
 jest.mock('../src/components/ProcurementCommercialWorkspace', () => ({
   __esModule: true,
-  default: ({ rfq, onRecordQuote, onOpenRateCards, onReleaseRfq, onNegotiationSubmitted }: any) => <div data-testid="commercial-workspace">{rfq.rfqNumber}<button onClick={onRecordQuote}>Record quote from workspace</button><button onClick={onOpenRateCards}>Open rate cards</button><button onClick={onReleaseRfq}>Release RFQ from workspace</button><button onClick={onNegotiationSubmitted}>Refresh after negotiation</button></div>,
+  default: ({ rfq, comparison, onRecordQuote, onOpenRateCards, onReleaseRfq, onNegotiationSubmitted, onComparisonPageChange }: any) => <div data-testid="commercial-workspace">
+    {rfq.rfqNumber}
+    {comparison?.pagination && <span data-testid="comparison-page">{interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: comparison.pagination.page, value2: comparison.pagination.totalPages })}</span>}
+    {comparison?.marker && <span data-testid="comparison-marker">{comparison.marker}</span>}
+    {comparison?.pagination?.hasNextPage && <button data-testid="load-comparison-page" onClick={() => onComparisonPageChange(comparison.pagination.page + 1)} />}
+    <button onClick={onRecordQuote}>Record quote from workspace</button>
+    <button onClick={onOpenRateCards}>Open rate cards</button>
+    <button onClick={onReleaseRfq}>Release RFQ from workspace</button>
+    <button onClick={onNegotiationSubmitted}>Refresh after negotiation</button>
+  </div>,
 }));
 
 const originalFetch = global.fetch;
@@ -98,6 +107,92 @@ describe('RFQ detail lifecycle page', () => {
       : { ok: true, json: async () => ({ rfq: null }) });
     renderRfq('rfq-vendor');
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/vendor-portal/rfqs/rfq-vendor'));
+  });
+
+  it('loads the next RFQ comparison page on demand', async () => {
+    const rfq = {
+      id: 'rfq-comparison-page', rfqNumber: 'RFQ-COMPARE-PAGE', title: 'Paged comparison', status: 'COMPARISON',
+      lines: [], invitedVendors: [], quotes: [], negotiations: [{ id: 'neg-page', currentRound: 1, rounds: [] }], awards: [], ppos: [],
+    };
+    const pageOne = {
+      vendors: [], lines: [], pagination: {
+        page: 1, pageSize: 50, totalItems: 51, totalPages: 2, hasPreviousPage: false, hasNextPage: true,
+      },
+    };
+    const pageTwo = {
+      vendors: [], lines: [], pagination: {
+        page: 2, pageSize: 50, totalItems: 51, totalPages: 2, hasPreviousPage: true, hasNextPage: false,
+      },
+    };
+    const reply = (body: unknown) => ({ ok: true, json: async () => body });
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/auth/session') return reply({ user: { role: 'BUYER' } });
+      if (url === '/api/procurement/rfqs/rfq-comparison-page'
+        || url === '/api/procurement/rfqs/rfq-comparison-page?includeNegotiationHistory=true') return reply({ rfq });
+      if (url === '/api/procurement/rfqs/rfq-comparison-page/compare') return reply(pageOne);
+      if (url === '/api/procurement/rfqs/rfq-comparison-page/compare?page=2') return reply(pageTwo);
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-comparison-page&page=1') return reply({ matchedRateCards: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderRfq('rfq-comparison-page');
+    expect(await screen.findByRole('heading', { name: 'Paged comparison' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) }));
+    fireEvent.click(await screen.findByTestId('load-comparison-page'));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/rfqs/rfq-comparison-page/compare?page=2'));
+    await waitFor(() => expect(screen.getByTestId('comparison-page')).toHaveTextContent(
+      uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: 2, value2: 2 })),
+    ));
+  });
+
+  it('ignores an older comparison response when a release refresh returns first', async () => {
+    const draft = {
+      id: 'rfq-compare-race', rfqNumber: 'RFQ-COMPARE-RACE', title: 'Comparison race package', status: 'DRAFT',
+      lines: [{ id: 'line-1', lineNumber: 1, description: 'Cable', quantity: 2, uom: 'MTR' }],
+      invitedVendors: [{ vendorId: 'vendor-1', vendor: { name: 'Vendor One', code: 'V1' } }],
+      quotes: [], negotiations: [], awards: [], ppos: [], estimatedBenchmarkValue: 100,
+    };
+    const reply = (body: unknown) => ({ ok: true, json: async () => body });
+    let resolveFirstComparison!: (response: ReturnType<typeof reply>) => void;
+    const firstComparison = new Promise<ReturnType<typeof reply>>((resolve) => { resolveFirstComparison = resolve; });
+    let comparisonRequests = 0;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/auth/session') return reply({ user: { role: 'BUYER' } });
+      if (url === '/api/procurement/rfqs/rfq-compare-race' && init?.method === 'PUT') return reply({});
+      if (url === '/api/procurement/rfqs/rfq-compare-race'
+        || url === '/api/procurement/rfqs/rfq-compare-race?includeNegotiationHistory=true') return reply({ rfq: draft });
+      if (url === '/api/procurement/rfqs/rfq-compare-race/compare') {
+        comparisonRequests += 1;
+        return comparisonRequests === 1 ? firstComparison : reply({ vendors: [], lines: [], marker: 'latest' });
+      }
+      if (url === '/api/procurement/rate-cards/match?rfqId=rfq-compare-race&page=1') return reply({ matchedRateCards: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderRfq('rfq-compare-race');
+    expect(await screen.findByRole('heading', { name: 'Comparison race package' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.copylkr9nk, '', false) }));
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Release', toLocaleString: 'RFQ' })) })[0]);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rFQIssuedSuccessfully))).toBeInTheDocument();
+    await waitFor(() => expect(comparisonRequests).toBe(2));
+    expect(await screen.findByTestId('comparison-marker')).toHaveTextContent('latest');
+
+    let resolveStaleJson!: () => void;
+    const staleJsonRead = new Promise<void>((resolve) => { resolveStaleJson = resolve; });
+    await act(async () => {
+      resolveFirstComparison({
+        ok: true,
+        json: async () => {
+          resolveStaleJson();
+          return { vendors: [], lines: [], marker: 'stale' };
+        },
+      });
+      await staleJsonRead;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.getByTestId('comparison-marker')).toHaveTextContent('latest');
   });
 
   it('loads negotiation history only after opening a negotiation or award tab', async () => {

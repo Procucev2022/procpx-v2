@@ -9,6 +9,8 @@ export interface ProcurementCommercialWorkspaceProps {
   onOpenRateCards: () => void;
   onReleaseRfq?: () => void;
   onNegotiationSubmitted?: () => void;
+  onComparisonPageChange?: (page: number) => void;
+  comparisonLoading?: boolean;
   actionLoading?: boolean;
 }
 

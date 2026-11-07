@@ -95,6 +95,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState<any>(null);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const comparisonRequestSequenceRef = useRef(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -264,21 +265,29 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  const fetchComparison = async () => {
+  const fetchComparison = async (page = 1) => {
+    const requestSequence = comparisonRequestSequenceRef.current + 1;
+    comparisonRequestSequenceRef.current = requestSequence;
     setLoadingCompare(true);
     try {
-      const res = await fetch(`/api/procurement/rfqs/${id}/compare`);
+      const pageQuery = page > 1 ? `?page=${page}` : '';
+      const res = await fetch(`/api/procurement/rfqs/${id}/compare${pageQuery}`);
       const data = await res.json();
+      if (requestSequence !== comparisonRequestSequenceRef.current) return;
       setComparison(data);
-      if (data.vendors?.length > 0) {
+      if (page === 1 && data.vendors?.length > 0) {
         // Default to L1 vendor
         const l1 = data.vendors[0];
         setAwardVendorId(l1.vendorId);
       }
     } catch (err) {
-      console.error('Failed to load quote comparison:', err);
+      if (requestSequence === comparisonRequestSequenceRef.current) {
+        console.error('Failed to load quote comparison:', err);
+      }
     } finally {
-      setLoadingCompare(false);
+      if (requestSequence === comparisonRequestSequenceRef.current) {
+        setLoadingCompare(false);
+      }
     }
   };
 
@@ -1428,6 +1437,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
               fetchRfq();
               fetchComparison();
             }}
+            onComparisonPageChange={(page) => { void fetchComparison(page); }}
+            comparisonLoading={loadingCompare}
             actionLoading={actionLoading}
           />
         </div>
