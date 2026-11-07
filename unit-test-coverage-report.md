@@ -6,10 +6,10 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98437/99094) |
+| statements | 99.33% (98438/99095) |
 | branches | 93.70% (22466/23974) |
 | functions | 98.60% (1904/1931) |
-| lines | 99.33% (98437/99094) |
+| lines | 99.33% (98438/99095) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |

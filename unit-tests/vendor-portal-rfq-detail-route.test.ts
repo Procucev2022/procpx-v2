@@ -126,7 +126,12 @@ describe('vendor portal RFQ detail and quote API', () => {
         project: { select: { id: true, name: true, projectCode: true } },
         lines: { orderBy: { lineNumber: 'asc' } },
         invitedVendors: { where: { vendorId: 'vendor-1' } },
-        quotes: { where: { vendorId: 'vendor-1' }, orderBy: { quoteVersion: 'desc' }, include: { lines: true } },
+        quotes: {
+          where: { vendorId: 'vendor-1' },
+          orderBy: [{ quoteVersion: 'desc' }, { id: 'desc' }],
+          take: 1,
+          include: { lines: true },
+        },
         negotiations: {
           take: 1,
           orderBy: { updatedAt: 'desc' },

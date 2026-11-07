@@ -73,7 +73,8 @@ export async function GET(
         },
         quotes: {
           where: { vendorId },
-          orderBy: { quoteVersion: 'desc' },
+          orderBy: [{ quoteVersion: 'desc' }, { id: 'desc' }],
+          take: 1,
           include: { lines: true },
         },
         negotiations: {
