@@ -6,10 +6,10 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (97598/98247) |
-| branches | 93.71% (22183/23670) |
-| functions | 98.57% (1866/1893) |
-| lines | 99.33% (97598/98247) |
+| statements | 99.33% (97631/98282) |
+| branches | 93.72% (22193/23680) |
+| functions | 98.57% (1868/1895) |
+| lines | 99.33% (97631/98282) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -61,7 +61,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.78% | 90.38% | 97.05% | 99.78% | PASS |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/vendors/[id]/page.tsx` | 99.23% | 90.59% | 100.00% | 99.23% | PASS |
-| `src/app/(app)/procurement/vendors/page.tsx` | 99.46% | 91.70% | 98.61% | 99.46% | PASS |
+| `src/app/(app)/procurement/vendors/page.tsx` | 99.43% | 91.68% | 98.61% | 99.43% | PASS |
 | `src/app/(app)/projects/[id]/page.tsx` | 99.07% | 96.94% | 90.00% | 99.07% | PASS |
 | `src/app/(app)/projects/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/projects/new/page.tsx` | 100.00% | 96.77% | 95.45% | 100.00% | PASS |
@@ -282,8 +282,8 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.80% | 92.85% | 99.06% | PASS |
-| `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.76% | 92.85% | 99.06% | PASS |
+| `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.90% | 96.77% | 99.91% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 98.79% | 100.00% | 100.00% | PASS |
@@ -301,7 +301,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/d1-batch.ts` | 100.00% | 97.56% | 100.00% | 100.00% | PASS |
+| `src/lib/d1-batch.ts` | 100.00% | 97.91% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-query.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

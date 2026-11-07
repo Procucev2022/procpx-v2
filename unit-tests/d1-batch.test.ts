@@ -1,5 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import type { D1BatchDatabase, D1BatchStatement } from '@app-types/lib/d1-batch.types';
+import type { D1BatchDatabase, D1BatchResult, D1BatchStatement } from '@app-types/lib/d1-batch.types';
 import {
   getD1BatchDatabase,
   runD1BatchAtomically,
@@ -30,7 +30,7 @@ jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog:
 
 const getContextMock = getCloudflareContext as jest.Mock;
 
-function createDatabase(results: Array<{ success?: boolean; meta?: { changes?: number } }> = []) {
+function createDatabase(results: D1BatchResult[] = []) {
   const bound: Array<{ sql: string; values: unknown[] }> = [];
   const database: D1BatchDatabase = {
     prepare: jest.fn((sql: string) => ({
@@ -150,6 +150,30 @@ describe('native D1 batch writes', () => {
     expect(context).not.toHaveProperty('sql');
     expect(context).not.toHaveProperty('values');
     expect(JSON.stringify(context)).not.toContain('sensitive-value');
+  });
+
+  it('warns on slow successful batches with D1 read and write metrics', async () => {
+    const { database } = createDatabase([{
+      success: true,
+      meta: { duration: 1_200, rows_read: 35, rows_written: 4 },
+    }]);
+
+    await expect(runD1BatchAtomically(database, [{ sql: 'UPDATE workflow SET state = ?', values: ['ACTIVE'] }]))
+      .resolves.toHaveLength(1);
+
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'database.d1_batch_slow', expect.objectContaining({
+      operation: 'execute_d1_batch', statementCount: 1, bindingCount: 1,
+      durationMs: expect.any(Number), d1DurationMs: 1_200, rowsRead: 35, rowsWritten: 4,
+      slowThresholdMs: 1_000,
+    }));
+  });
+
+  it('keeps a successful batch successful when slow-batch logging fails', async () => {
+    const { database } = createDatabase([{ success: true, meta: { duration: 1_500 } }]);
+    (writeStructuredLog as jest.Mock).mockRejectedValueOnce(new Error('log storage unavailable'));
+
+    await expect(runD1BatchAtomically(database, [{ sql: 'UPDATE workflow SET state = ?', values: ['ACTIVE'] }]))
+      .resolves.toHaveLength(1);
   });
 
   it('preserves a D1 failure when central logging also fails', async () => {

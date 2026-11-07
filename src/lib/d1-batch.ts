@@ -5,6 +5,7 @@ import {
   D1_BATCH_BINDING_LIMIT_EXCEEDED,
   D1_STATEMENT_BINDING_LIMIT_EXCEEDED,
   D1_BINDING_SIZE_LIMIT_EXCEEDED,
+  D1_BATCH_SLOW_LOG_THRESHOLD_MS,
   MAX_D1_BATCH_BINDINGS,
   MAX_D1_BATCH_STATEMENTS,
   MAX_D1_STATEMENT_BINDINGS,
@@ -80,6 +81,34 @@ async function logD1BatchFailure(
   }
 }
 
+function getBatchMetricTotal(results: D1BatchResult[], metric: 'duration' | 'rows_read' | 'rows_written'): number | undefined {
+  const values = results.map((result) => result.meta?.[metric])
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return values.length > 0 ? values.reduce((total, value) => total + value, 0) : undefined;
+}
+
+async function logSlowD1Batch(
+  input: D1BatchInputStatement[],
+  durationMs: number,
+  results: D1BatchResult[],
+): Promise<void> {
+  const bindingCount = input.reduce((total, statement) => total + statement.values.length, 0);
+  try {
+    await writeStructuredLog('warn', 'database.d1_batch_slow', {
+      operation: 'execute_d1_batch',
+      statementCount: input.length,
+      bindingCount,
+      durationMs,
+      d1DurationMs: getBatchMetricTotal(results, 'duration'),
+      rowsRead: getBatchMetricTotal(results, 'rows_read'),
+      rowsWritten: getBatchMetricTotal(results, 'rows_written'),
+      slowThresholdMs: D1_BATCH_SLOW_LOG_THRESHOLD_MS,
+    });
+  } catch {
+    // Preserve the successful database write when optional log storage is unavailable.
+  }
+}
+
 export function getD1BatchDatabase(): D1BatchDatabase {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { getCloudflareContext } = require('@opennextjs/cloudflare') as typeof import('@opennextjs/cloudflare');
@@ -123,6 +152,11 @@ export async function runD1BatchAtomically(
     const error = new Error(D1_BATCH_STATEMENT_FAILED);
     await logD1BatchFailure(input, startedAt, error, failedStatementIndexes);
     throw error;
+  }
+  const durationMs = Date.now() - startedAt;
+  const d1DurationMs = getBatchMetricTotal(results, 'duration');
+  if (durationMs >= D1_BATCH_SLOW_LOG_THRESHOLD_MS || (d1DurationMs ?? 0) >= D1_BATCH_SLOW_LOG_THRESHOLD_MS) {
+    await logSlowD1Batch(input, durationMs, results);
   }
   return results;
 }

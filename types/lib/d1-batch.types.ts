@@ -9,7 +9,12 @@ export type D1BatchInputStatement = {
 
 export type D1BatchResult = {
   success?: boolean;
-  meta?: { changes?: number };
+  meta?: {
+    changes?: number;
+    duration?: number;
+    rows_read?: number;
+    rows_written?: number;
+  };
   results?: Array<Record<string, unknown>>;
 };
 
