@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const { analyzeD1MutationBoundaries } = require('./d1-mutation-boundary-analysis.cjs');
 
 const root = path.resolve(__dirname, '..');
 const sourceRoot = path.join(root, 'src');
@@ -40,8 +41,13 @@ function getHandlerName(node) {
   return declaration?.name.getText() || 'anonymous handler';
 }
 
-for (const filePath of sourceFiles(sourceRoot)) {
-  const text = fs.readFileSync(filePath, 'utf8');
+const sourcePaths = sourceFiles(sourceRoot);
+const sourceUnits = sourcePaths.map((filePath) => ({ filePath, text: fs.readFileSync(filePath, 'utf8') }));
+const mutationAnalysis = analyzeD1MutationBoundaries(sourceUnits, root);
+
+for (let fileIndex = 0; fileIndex < sourcePaths.length; fileIndex += 1) {
+  const filePath = sourcePaths[fileIndex];
+  const text = sourceUnits[fileIndex].text;
   const source = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true);
 
   function findForbiddenTransactions(node) {
@@ -89,11 +95,24 @@ for (const filePath of sourceFiles(sourceRoot)) {
 
     inspectHandler(statement);
     const handlerName = getHandlerName(statement);
-    if (directMutations.length > 1) {
-      failures.push(`${path.relative(root, filePath)} ${handlerName}: multiple Prisma mutations must use one atomic D1 batch (${directMutations.join(', ')}).`);
+    const callGraphResult = mutationAnalysis.handlers.get(`${path.resolve(filePath)}#${handlerName}`)
+      || { mutations: [], nestedMutations: [] };
+    const graphMutationKeys = new Set(callGraphResult.mutations.map((mutation) => mutation.key));
+    const directMutationsMissingFromGraph = directMutations.filter((mutation) => {
+      const match = mutation.match(/^([A-Za-z0-9_]+\.[A-Za-z0-9_]+)@(\d+)$/);
+      return !match || !graphMutationKeys.has(`${path.resolve(filePath)}:${match[2]}:${match[1]}`);
+    });
+    const mutationCallCount = callGraphResult.mutations.length + directMutationsMissingFromGraph.length;
+    if (mutationCallCount > 1) {
+      const mutationSummary = [
+        ...callGraphResult.mutations.map((mutation) => mutation.display),
+        ...directMutationsMissingFromGraph.map((mutation) => `${path.relative(root, filePath)} ${mutation}`),
+      ];
+      failures.push(`${path.relative(root, filePath)} ${handlerName}: multiple Prisma mutations across handler/helper calls must use one atomic D1 batch (${mutationSummary.join(', ')}).`);
     }
-    if (nestedMutations.length > 0) {
-      failures.push(`${path.relative(root, filePath)} ${handlerName}: nested Prisma writes must be moved into an explicit D1 batch (${[...new Set(nestedMutations)].join(', ')}).`);
+    const allNestedMutations = [...new Set([...nestedMutations, ...callGraphResult.nestedMutations])];
+    if (allNestedMutations.length > 0) {
+      failures.push(`${path.relative(root, filePath)} ${handlerName}: nested Prisma writes must be moved into an explicit D1 batch (${allNestedMutations.join(', ')}).`);
     }
   }
 }
@@ -102,5 +121,5 @@ if (failures.length > 0) {
   for (const failure of failures) process.stderr.write(`FAIL: ${failure}\n`);
   process.exitCode = 1;
 } else {
-  process.stdout.write(`PASS: ${checkedHandlers} API handlers have no D1-unsafe Prisma transaction, multiple direct mutation, or nested write patterns.\n`);
+  process.stdout.write(`PASS: ${checkedHandlers} API handlers have no D1-unsafe Prisma transaction, multiple direct or helper-dispatched mutations, or nested write patterns.\n`);
 }
