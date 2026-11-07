@@ -70,6 +70,9 @@ function createDatabase(): { database: NotificationOutboxDatabase; sqlite: Local
           const { sql, values } = statement as BoundStatement;
           const prepared = sqlite.prepare(sql);
           const parameters = values.map((value) => value instanceof Date ? value.toISOString() : value) as never[];
+          if (/^\s*SELECT\b/i.test(sql)) {
+            return { success: true, results: prepared.all(...parameters) as Array<Record<string, unknown>> };
+          }
           if (/\bRETURNING\b/i.test(sql)) {
             const rows = prepared.all(...parameters) as Array<Record<string, unknown>>;
             const changes = sqlite.prepare('SELECT changes() AS changes').get() as { changes: number };
@@ -165,6 +168,39 @@ describe('notification outbox against isolated SQLite D1 semantics', () => {
     expect(readRow(sqlite,
       'SELECT status, attemptCount FROM notification_outbox WHERE id = ?', outboxId,
     )).toEqual({ status: 'DELIVERED', attemptCount: 2 });
+    expect(readRow<{ total: number }>(sqlite, 'SELECT COUNT(*) AS total FROM notifications'))
+      .toEqual({ total: 1 });
+  });
+
+  it('reconciles a delivery committed before the worker lost its D1 acknowledgement', async () => {
+    const outboxId = await addOutboxRow(database);
+    let lostDeliveryAcknowledgement = false;
+    const ambiguousCommitDatabase: NotificationOutboxDatabase = {
+      prepare: (sql) => database.prepare(sql),
+      async batch(statements) {
+        const results = await database.batch(statements);
+        const containsDelivery = statements.some((statement) =>
+          (statement as BoundStatement).sql.includes('INSERT INTO "notifications"'));
+        if (!lostDeliveryAcknowledgement && containsDelivery) {
+          lostDeliveryAcknowledgement = true;
+          throw new Error('D1 response was lost after commit.');
+        }
+        return results;
+      },
+    };
+
+    await expect(dispatchNotificationOutbox(ambiguousCommitDatabase, { now: STARTED_AT, onlyId: outboxId }))
+      .resolves.toEqual({ claimed: 1, delivered: 1, retried: 0, dead: 0 });
+    expect(readRow(sqlite,
+      'SELECT status, attemptCount, deliveredAt FROM notification_outbox WHERE id = ?', outboxId,
+    )).toEqual({ status: 'DELIVERED', attemptCount: 1, deliveredAt: STARTED_AT.toISOString() });
+    expect(readRow<{ total: number }>(sqlite, 'SELECT COUNT(*) AS total FROM notifications'))
+      .toEqual({ total: 1 });
+
+    await expect(dispatchNotificationOutbox(ambiguousCommitDatabase, {
+      now: new Date(STARTED_AT.getTime() + NOTIFICATION_OUTBOX_LEASE_MS + 1),
+      onlyId: outboxId,
+    })).resolves.toEqual({ claimed: 0, delivered: 0, retried: 0, dead: 0 });
     expect(readRow<{ total: number }>(sqlite, 'SELECT COUNT(*) AS total FROM notifications'))
       .toEqual({ total: 1 });
   });

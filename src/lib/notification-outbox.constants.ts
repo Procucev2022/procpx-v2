@@ -111,3 +111,10 @@ export const NOTIFICATION_OUTBOX_RESCHEDULE_SQL = `
   WHERE "id" = ? AND "status" = 'PROCESSING' AND "lockToken" = ?
   RETURNING "status"
 `;
+
+export const NOTIFICATION_OUTBOX_INSPECT_STATE_SQL = `
+  SELECT "status", "lockToken"
+  FROM "notification_outbox"
+  WHERE "id" = ? AND "tenantId" = ?
+  LIMIT 1
+`;

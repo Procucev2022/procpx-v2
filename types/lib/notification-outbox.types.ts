@@ -11,6 +11,13 @@ export interface NotificationOutboxRow {
   attemptCount: number;
 }
 
+export interface NotificationOutboxLeaseState {
+  status: string;
+  lockToken: string | null;
+}
+
+export type NotificationOutboxRecoveryStatus = 'PENDING' | 'DEAD' | 'DELIVERED' | 'OWNERSHIP_LOST';
+
 export interface NotificationOutboxDispatchOptions {
   now?: Date;
   batchSize?: number;
