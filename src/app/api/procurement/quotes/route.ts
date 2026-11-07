@@ -46,7 +46,6 @@ export async function GET(req: NextRequest) {
     const include = {
       vendor: { select: { id: true, name: true, code: true } },
       rfq: { select: { id: true, rfqNumber: true, title: true, status: true } },
-      ...(rfqId ? { lines: { include: { rfqLine: true } } } : {}),
     };
     const quoteRead = useCursorPagination
       ? prisma.quote.findMany({

@@ -6,10 +6,10 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98539/99198) |
-| branches | 93.70% (22479/23990) |
+| statements | 99.33% (98540/99197) |
+| branches | 93.70% (22475/23985) |
 | functions | 98.60% (1905/1932) |
-| lines | 99.33% (98539/99198) |
+| lines | 99.33% (98540/99197) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -193,7 +193,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/app/api/procurement/ppos/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/ppos/route.ts` | 97.30% | 91.59% | 100.00% | 97.30% | PASS |
 | `src/app/api/procurement/ppos/vendor-action.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/quotes/route.ts` | 95.66% | 90.07% | 100.00% | 95.66% | PASS |
+| `src/app/api/procurement/quotes/route.ts` | 96.23% | 90.64% | 100.00% | 96.23% | PASS |
 | `src/app/api/procurement/rate-cards/[id]/approve/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/[id]/message/route.ts` | 100.00% | 93.75% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/[id]/reject/route.ts` | 100.00% | 96.29% | 100.00% | 100.00% | PASS |
@@ -332,7 +332,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.79% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

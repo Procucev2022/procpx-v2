@@ -114,7 +114,10 @@ describe('procurement quote routes', () => {
     expect(db.quote.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: 5, take: 5,
-      include: expect.objectContaining({ lines: { include: { rfqLine: true } } }),
+      include: {
+        vendor: { select: { id: true, name: true, code: true } },
+        rfq: { select: { id: true, rfqNumber: true, title: true, status: true } },
+      },
     }));
     await GET(getRequest());
     expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -145,6 +148,7 @@ describe('procurement quote routes', () => {
     expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1' }, cursor: { id: 'quote-cursor' }, skip: 1, take: 3,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: expect.not.objectContaining({ lines: expect.anything() }),
     }));
 
     db.quote.findMany.mockResolvedValueOnce([{ id: 'quote-first' }, { id: 'quote-second' }]);
@@ -172,6 +176,9 @@ describe('procurement quote routes', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest(quoteBody()))).resolves.toBe(denied);
+    await expect(POST(postRequest([]))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, status: 400,
+    });
     await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'vendor-1', lines: [] }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, status: 400,
     });
