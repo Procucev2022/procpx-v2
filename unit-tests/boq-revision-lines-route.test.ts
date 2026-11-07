@@ -7,7 +7,7 @@ import { createAuditLog } from '../src/lib/audit';
 import { computeLineCostBreakdown } from '../src/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 
 
@@ -28,7 +28,9 @@ jest.mock('../src/lib/boq-validate', () => ({ validateBoqLine: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/boq-cost-breakdown', () => ({ computeLineCostBreakdown: jest.fn(() => ({ material: 2, labour: 1 })) }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../src/lib/observability/server-logger', () => ({
+  logEvent: jest.fn(), writeStructuredLog: jest.fn().mockResolvedValue(undefined),
+}));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -38,6 +40,7 @@ const audit = createAuditLog as jest.Mock;
 const computeCost = computeLineCostBreakdown as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
+const log = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const revision = { id: 'revision-1', status: 'DRAFT', validLines: 4, boq: { projectId: 'project-1' } };
 const existingLine = {
@@ -109,7 +112,7 @@ describe('BOQ revision lines API', () => {
       { id: 'line-a', aiReason: '{"costBreakdown":{"material":8}}', aiUnitCost: 10, quantity: 2 },
       { id: 'line-b', aiReason: '{invalid', aiUnitCost: 12, quantity: 3, category: { name: 'Electrical' }, originalDescription: 'Wire' },
       { id: 'line-c', aiReason: '{"other":true}', aiUnitCost: 15, quantity: 1, standardDescription: 'Switch' },
-      { id: 'line-d', aiReason: null, aiUnitCost: null, quantity: null },
+      { id: 'line-d', aiReason: 'Legacy free-text reason', aiUnitCost: null, quantity: null },
       { id: 'line-e', aiReason: null, aiUnitCost: 0, quantity: 1 },
     ]);
     const result = await GET(request('/api/boq/revision-1/lines?page=2&pageSize=5&validationStatus=VALID&search=wire'), params) as any;
@@ -118,6 +121,12 @@ describe('BOQ revision lines API', () => {
       { material: 8 }, { material: 2, labour: 1 }, { material: 2, labour: 1 }, null, null,
     ]);
     expect(computeCost).toHaveBeenCalledTimes(2);
+    expect(log).toHaveBeenCalledWith('warn', 'boq.cost_breakdown_parse_failed', expect.objectContaining({
+      operation: 'parse_saved_cost_breakdown', route: '/api/boq/[revisionId]/lines',
+      tenantId: 'tenant-1', revisionId: 'revision-1', durationMs: expect.any(Number), status: 'degraded', malformedLineCount: 1,
+      fallbackAppliedCount: 1, fallbackUnavailableCount: 0, lineIds: ['line-b'], omittedLineIdCount: 0,
+      errorType: 'SyntaxError',
+    }));
     expect(db.boqLine.count).toHaveBeenCalledWith({ where: expect.objectContaining({
       boqRevisionId: 'revision-1', tenantId: context.tenantId, isDeleted: false, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
       OR: expect.arrayContaining([{ originalDescription: { contains: 'wire' } }]),

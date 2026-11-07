@@ -4,6 +4,7 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { decodeBoqLineCursor } from '../src/lib/boq-line-pagination';
+import { logEvent } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -19,10 +20,12 @@ jest.mock('../src/lib/api-utils', () => ({
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
+const log = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const params = (revisionId = 'revision-1') => ({ params: Promise.resolve({ revisionId }) });
 const getRequest = () => new NextRequest('http://localhost/api/boq/revision-1');
@@ -80,6 +83,12 @@ describe('BOQ revision detail API', () => {
       _count: { _all: true },
       _sum: { aiTotalCost: true },
     });
+    expect(log).toHaveBeenCalledWith('warn', 'boq.cost_breakdown_parse_failed', expect.objectContaining({
+      operation: 'parse_saved_cost_breakdown', route: '/api/boq/[revisionId]',
+      tenantId: 'tenant-1', revisionId: 'revision-1', durationMs: expect.any(Number), status: 'degraded', malformedLineCount: 1,
+      fallbackAppliedCount: 1, fallbackUnavailableCount: 0, lineIds: ['line-2'], omittedLineIdCount: 0,
+      errorType: 'SyntaxError',
+    }));
     expect(db.boq.findFirst).not.toHaveBeenCalled();
   });
 

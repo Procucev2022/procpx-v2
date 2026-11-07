@@ -23,7 +23,7 @@ import {
   BOQ_LINE_UPDATE_EDIT_SQL,
   BOQ_REVISION_RECALCULATE_LINE_COUNTS_AFTER_AUDIT_SQL,
 } from './route.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -57,6 +57,7 @@ async function resolveRevision(idOrBoqId: string, tenantId: string) {
 }
 
 export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteContext) {
+  const startedAt = Date.now();
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
   const { revisionId } = await params;
@@ -123,13 +124,22 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
   const nextCursor = hasMore && pageLines.length > 0
     ? encodeBoqLineCursor(pageLines[pageLines.length - 1])
     : null;
+  let malformedCostBreakdownCount = 0;
+  let fallbackAppliedCount = 0;
+  let fallbackUnavailableCount = 0;
+  const malformedCostBreakdownLineIds: string[] = [];
   const enrichedLines = pageLines.map(l => {
     let costBreakdown = null;
-    if (l.aiReason) {
+    let malformedCostBreakdown = false;
+    if (typeof l.aiReason === 'string' && l.aiReason.trimStart().startsWith('{')) {
       try {
         const parsed = JSON.parse(l.aiReason);
         if (parsed.costBreakdown) costBreakdown = parsed.costBreakdown;
-      } catch {}
+      } catch {
+        malformedCostBreakdown = true;
+        malformedCostBreakdownCount += 1;
+        if (malformedCostBreakdownLineIds.length < 20) malformedCostBreakdownLineIds.push(l.id);
+      }
     }
     if (!costBreakdown && l.aiUnitCost !== null && l.aiUnitCost !== undefined && Number(l.aiUnitCost) > 0) {
       costBreakdown = computeLineCostBreakdown(
@@ -138,12 +148,33 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
         l.category?.name,
         l.standardDescription || l.originalDescription
       );
+      if (malformedCostBreakdown) fallbackAppliedCount += 1;
+    } else if (malformedCostBreakdown) {
+      fallbackUnavailableCount += 1;
     }
     return {
       ...l,
       costBreakdown,
     };
   });
+  if (malformedCostBreakdownCount > 0) {
+    const requestId = (req.headers.get('x-request-id') || req.headers.get('cf-ray') || '').trim().slice(0, 128);
+    logEvent('warn', 'boq.cost_breakdown_parse_failed', {
+      operation: 'parse_saved_cost_breakdown',
+      route: '/api/boq/[revisionId]/lines',
+      ...(requestId ? { requestId } : {}),
+      tenantId: ctx.tenantId,
+      revisionId: revision.id,
+      durationMs: Date.now() - startedAt,
+      status: 'degraded',
+      malformedLineCount: malformedCostBreakdownCount,
+      fallbackAppliedCount,
+      fallbackUnavailableCount,
+      lineIds: malformedCostBreakdownLineIds,
+      omittedLineIdCount: Math.max(0, malformedCostBreakdownCount - malformedCostBreakdownLineIds.length),
+      errorType: 'SyntaxError',
+    });
+  }
 
   return apiSuccess({
     data: enrichedLines,
