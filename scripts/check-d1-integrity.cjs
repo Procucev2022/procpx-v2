@@ -6,13 +6,22 @@ const {
   DATABASE_NAME,
   EXPECTED_D1_TABLE_NAMES,
   LOGICAL_DUPLICATE_CHECKS,
+  MIGRATIONS_DIRECTORY,
 } = require('./database.constants.cjs');
+const {
+  expectedColumnsByTable,
+  expectedIndexNamesFromMigrations,
+  findMissingColumns,
+  findMissingIndexes,
+} = require('./d1-schema-integrity.cjs');
+const { Prisma } = require('@prisma/client');
 
 const root = path.resolve(__dirname, '..');
 const wranglerCli = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const mode = process.argv.includes('--remote') ? '--remote' : '--local';
 const configPath = path.join(root, 'wrangler.jsonc');
 const inventorySql = "SELECT name AS tableName FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations' AND substr(name, 1, 4) <> '_cf_' ORDER BY name";
+const indexInventorySql = "SELECT name AS indexName FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name";
 
 function remoteEnvironment() {
   const values = {};
@@ -100,6 +109,23 @@ if (missingTables.length > 0 || unexpectedTables.length > 0) {
   fail(`Prisma and D1 table inventory differs; missing in D1: ${missingTables.join(', ') || 'none'}; unexpected in D1: ${unexpectedTables.join(', ') || 'none'}`);
 }
 
+const migrationFiles = fs.readdirSync(path.join(root, MIGRATIONS_DIRECTORY))
+  .filter((filename) => filename.endsWith('.sql'))
+  .sort()
+  .map((filename) => ({
+    filename,
+    sql: fs.readFileSync(path.join(root, MIGRATIONS_DIRECTORY, filename), 'utf8'),
+  }));
+const expectedIndexes = expectedIndexNamesFromMigrations(migrationFiles);
+const actualIndexRows = collectRows(execute(indexInventorySql), (row) => typeof row.indexName === 'string');
+const actualIndexes = new Set(actualIndexRows.map((row) => row.indexName));
+const missingIndexes = findMissingIndexes(expectedIndexes, actualIndexes);
+if (missingIndexes.length > 0) fail(`D1 is missing migration-defined indexes: ${missingIndexes.join(', ')}`);
+const untrackedIndexes = [...actualIndexes].filter((indexName) => !expectedIndexes.has(indexName)).sort();
+if (untrackedIndexes.length > 0) {
+  process.stderr.write(`D1 integrity warning: indexes absent from tracked migrations: ${untrackedIndexes.join(', ')}\n`);
+}
+
 const countSelects = tables.map((tableName) => {
   const quotedName = tableName.replace(/"/g, '""');
   return `(SELECT COUNT(*) FROM "${quotedName}") AS "${quotedName}"`;
@@ -120,12 +146,31 @@ if (duplicateFailures.length > 0) {
 
 let foreignKeyViolations = null;
 let crossTenantViolations = null;
+let missingColumnCount = null;
+let untrackedColumnCount = null;
 if (mode === '--local') {
   foreignKeyViolations = collectRows(execute('PRAGMA foreign_key_check'), (row) => typeof row.table === 'string').length;
   if (foreignKeyViolations > 0) fail(`local D1 reported ${foreignKeyViolations} foreign-key violations`);
 
   const quoteIdentifier = (identifier) => `"${String(identifier).replace(/"/g, '""')}"`;
   const tableInfoResults = execute(tables.map((tableName) => `PRAGMA table_info(${quoteIdentifier(tableName)})`).join(';'));
+  const actualColumns = new Map(tables.map((tableName, index) => [
+    tableName,
+    new Set((tableInfoResults[index]?.results || []).map((row) => row.name)),
+  ]));
+  const expectedColumns = expectedColumnsByTable(Prisma.dmmf.datamodel.models);
+  const missingColumns = findMissingColumns(expectedColumns, actualColumns);
+  missingColumnCount = missingColumns.length;
+  if (missingColumns.length > 0) {
+    fail(`Prisma and local D1 columns differ; missing in D1: ${missingColumns.map(({ tableName, columnName }) => `${tableName}.${columnName}`).join(', ')}`);
+  }
+  untrackedColumnCount = [...actualColumns].reduce((total, [tableName, columns]) => {
+    const expected = expectedColumns.get(tableName) || new Set();
+    return total + [...columns].filter((columnName) => !expected.has(columnName)).length;
+  }, 0);
+  if (untrackedColumnCount > 0) {
+    process.stderr.write(`D1 integrity warning: ${untrackedColumnCount} local columns are absent from the current Prisma schema; retained columns may contain data.\n`);
+  }
   const tenantScopedTables = new Set(tables.filter((tableName, index) => {
     const resultRows = tableInfoResults[index]?.results || [];
     return resultRows.some((row) => row.name === 'tenantId');
@@ -159,6 +204,7 @@ if (mode === '--local') {
 
 const totalRows = Object.values(rowCounts).reduce((total, count) => total + count, 0);
 process.stdout.write(`D1 ${mode === '--local' ? 'local' : 'remote'} schema integrity passed: ${tables.length} application tables, ${totalRows} records, ${LOGICAL_DUPLICATE_CHECKS.length} logical duplicate checks passed, ${foreignKeyViolations === null ? 'remote foreign-key scan not run' : `${foreignKeyViolations} foreign-key violations`}, ${crossTenantViolations === null ? 'remote cross-tenant scan not run' : `${crossTenantViolations} cross-tenant references`}.\n`);
+process.stdout.write(`Schema drift checks: ${expectedIndexes.size} migration indexes expected, ${actualIndexes.size} indexes present, ${missingColumnCount === null ? 'remote column scan not run' : `${missingColumnCount} missing Prisma columns`}${untrackedColumnCount === null ? '' : `, ${untrackedColumnCount} retained extra columns`}.\n`);
 console.table(Object.entries(rowCounts).map(([tableName, rowCount]) => ({ tableName, rowCount })));
 
 if (mode === '--local') {
@@ -172,6 +218,10 @@ if (mode === '--local') {
     foreignKeyViolations,
     crossTenantViolations,
     logicalDuplicateChecks: LOGICAL_DUPLICATE_CHECKS.length,
+    expectedIndexCount: expectedIndexes.size,
+    actualIndexCount: actualIndexes.size,
+    missingColumnCount,
+    untrackedColumnCount,
     rowCounts,
   }, null, 2), 'utf8');
   process.stdout.write(`D1 integrity snapshot written to ${path.relative(root, snapshotPath)}.\n`);
