@@ -8,7 +8,7 @@ import { hasPermission } from '../src/lib/permissions';
 import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '../src/lib/project-auth';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
-import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, PPO_INSERT_IF_VALID_SQL, PPO_LINE_INSERT_SQL, RFQ_MARK_AWARDED_AFTER_PPO_INSERT_SQL } from '../src/lib/d1-batch.constants';
+import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, MAX_PPO_CREATE_LINES, PPO_INSERT_IF_VALID_SQL, PPO_LINE_INSERT_SQL, RFQ_MARK_AWARDED_AFTER_PPO_INSERT_SQL } from '../src/lib/d1-batch.constants';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
@@ -17,9 +17,11 @@ jest.mock('../src/lib/prisma', () => ({
     ppo: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn(), aggregate: jest.fn() },
     ppoVendorRating: { groupBy: jest.fn() },
     rfq: { findFirst: jest.fn() },
+    quote: { findFirst: jest.fn() },
     awardRecommendation: { findFirst: jest.fn() },
     vendor: { findFirst: jest.fn() },
     rfqVendor: { findFirst: jest.fn() },
+    $queryRaw: jest.fn(),
     $transaction: jest.fn(),
   },
 }));
@@ -66,6 +68,10 @@ const postRequest = (body: unknown) => new NextRequest('http://localhost/api/pro
 const quote = (vendorId: string, amount: number, quoteVersion = 1, lines: any[] = [], name = vendorId) => ({
   vendorId, totalQuoteAmount: amount, quoteVersion, vendor: { id: vendorId, name }, lines,
 });
+const lastResolvedRfq = async () => {
+  const results = db.rfq.findFirst.mock.results;
+  return await results[results.length - 1]?.value;
+};
 const rfqRecord = (overrides: Record<string, any> = {}) => ({
   id: 'rfq-1', tenantId: 'tenant-1', rfqNumber: 'RFQ-001', title: 'Electrical package', projectId: 'project-1', status: 'APPROVED',
   project: { id: 'project-1', name: 'Campus' }, boqRevisionId: 'revision-1',
@@ -99,6 +105,27 @@ describe('procurement PPO collection API', () => {
     db.ppo.aggregate.mockResolvedValue({ _sum: { totalValue: 0 } });
     db.ppoVendorRating.groupBy.mockResolvedValue([]);
     db.rfq.findFirst.mockResolvedValue(rfqRecord());
+    db.quote.findFirst.mockImplementation(async ({ where }: { where: { vendorId: string; quoteVersion: number } }) => {
+      const record = await lastResolvedRfq();
+      return record?.quotes?.find((item: { vendorId: string; quoteVersion: number }) =>
+        item.vendorId === where.vendorId && item.quoteVersion === where.quoteVersion) || null;
+    });
+    db.$queryRaw.mockImplementation(async () => {
+      const record = await lastResolvedRfq();
+      const latestByVendor = new Map<string, { vendorId: string; quoteVersion: number; totalQuoteAmount: number }>();
+      for (const item of record?.quotes || []) {
+        const current = latestByVendor.get(item.vendorId);
+        if (!current || item.quoteVersion > current.quoteVersion) {
+          latestByVendor.set(item.vendorId, {
+            vendorId: item.vendorId,
+            quoteVersion: item.quoteVersion,
+            totalQuoteAmount: item.totalQuoteAmount,
+          });
+        }
+      }
+      return [...latestByVendor.values()].sort((left, right) =>
+        left.totalQuoteAmount - right.totalQuoteAmount || left.vendorId.localeCompare(right.vendorId));
+    });
     db.awardRecommendation.findFirst.mockResolvedValue(null);
     db.vendor.findFirst.mockImplementation(({ where }: { where: { id: string } }) => Promise.resolve({ id: where.id, name: where.id === 'vendor-2' ? 'Beta' : 'Acme' }));
     db.rfqVendor.findFirst.mockResolvedValue({ id: 'invited-1' });
@@ -214,6 +241,19 @@ describe('procurement PPO collection API', () => {
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
     await expect(POST(postRequest({ rfqId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
+    const quoteSummaryCallsBeforeOverflow = db.$queryRaw.mock.calls.length;
+    db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({
+      lines: Array.from({ length: MAX_PPO_CREATE_LINES + 1 }, (_, index) => ({
+        id: `rfq-line-${index + 1}`, quantity: 1,
+      })),
+    }));
+    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiProcurementPposRoute.ppoHasTooManyLineItemsToCreateAtomically,
+      status: 400,
+    });
+    expect(db.$queryRaw).toHaveBeenCalledTimes(quoteSummaryCallsBeforeOverflow);
+
     db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({ quotes: [] }));
     await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, status: 400 });
 
@@ -240,6 +280,14 @@ describe('procurement PPO collection API', () => {
     });
     db.rfq.findFirst.mockResolvedValueOnce(rankedRfq);
     await expect(POST(postRequest({ rfqId: 'rfq-1', targetVendorId: 'vendor-1' }))).resolves.toMatchObject({
+      ok: false, status: 400, error: expect.stringContaining('mandatory commercial justification'),
+    });
+
+    db.rfq.findFirst.mockResolvedValueOnce(rfqRecord({
+      awards: [{ id: 'award-tied', rfqId: 'rfq-1', recommendedVendorId: 'vendor-2', finalNegotiatedAmount: 60, status: 'APPROVED', justification: '' }],
+      quotes: [quote('vendor-2', 60), quote('vendor-1', 60)],
+    }));
+    await expect(POST(postRequest({ rfqId: 'rfq-1', targetVendorId: 'vendor-2' }))).resolves.toMatchObject({
       ok: false, status: 400, error: expect.stringContaining('mandatory commercial justification'),
     });
 
@@ -319,6 +367,23 @@ describe('procurement PPO collection API', () => {
     expect(audit).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'PPO_CREATED', recordNumber: 'PPO-2026-000001' }), { prepareOnly: true });
     expect(dispatchPrepared).toHaveBeenCalledWith(outboxStatement?.values[0], expect.any(Date), expect.objectContaining({ entityId: expect.any(String) }));
+    const rfqQuery = db.rfq.findFirst.mock.calls.at(-1)?.[0];
+    expect(rfqQuery.include.lines).toEqual({
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      take: MAX_PPO_CREATE_LINES + 1,
+    });
+    expect(rfqQuery.include).not.toHaveProperty('quotes');
+    const latestQuoteSql = (db.$queryRaw.mock.calls.at(-1)?.[0] as TemplateStringsArray).join(' ');
+    expect(latestQuoteSql).toContain('MAX(quote."quoteVersion")');
+    expect(latestQuoteSql).toContain('GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"');
+    expect(db.quote.findFirst).toHaveBeenLastCalledWith({
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1', quoteVersion: 1 },
+      select: {
+        quoteVersion: true,
+        totalQuoteAmount: true,
+        lines: { select: { rfqLineId: true, unitRate: true, lineTotal: true } },
+      },
+    });
   });
 
   it('retries a concurrent PPO number collision with the next number', async () => {

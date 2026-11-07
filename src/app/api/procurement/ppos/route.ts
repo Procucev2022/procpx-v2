@@ -20,6 +20,7 @@ import {
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
+import type { LatestPpoQuoteSummary } from '@app-types/app/api/procurement/ppos.types';
 import {
   D1_PPO_AUDIT_RESULT_MISSING,
   D1_PPO_NOTIFICATION_PAYLOAD_MISSING,
@@ -229,10 +230,9 @@ export async function POST(req: NextRequest) {
       include: {
         project: true,
         boqRevision: true,
-        lines: true,
-        quotes: {
-          orderBy: [{ quoteVersion: 'desc' }, { createdAt: 'desc' }],
-          include: { lines: true, vendor: true },
+        lines: {
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: MAX_PPO_CREATE_LINES + 1,
         },
         awards: {
           where: { status: 'APPROVED' },
@@ -249,6 +249,9 @@ export async function POST(req: NextRequest) {
     }
     if (!(PPO_CREATION_RFQ_STATUSES as readonly string[]).includes(rfq.status)) {
       return apiError(UI_STRINGS.appApiProcurementPposRoute.rFQMustHaveAnApprovedAwardBeforePpoCreation, 409);
+    }
+    if (rfq.lines.length > MAX_PPO_CREATE_LINES) {
+      return apiError(UI_STRINGS.appApiProcurementPposRoute.ppoHasTooManyLineItemsToCreateAtomically, 400);
     }
 
     let award: any = null;
@@ -294,13 +297,40 @@ export async function POST(req: NextRequest) {
     });
     if (!invitation) return apiError(UI_STRINGS.appApiProcurementAwardsRoute.recommendedVendorWasNotInvitedToThisRFQ, 409);
 
-    const latestQuoteByVendor = new Map<string, typeof rfq.quotes[number]>();
-    for (const quote of rfq.quotes) {
-      if (!latestQuoteByVendor.has(quote.vendorId)) latestQuoteByVendor.set(quote.vendorId, quote);
+    const latestQuoteSummaries = await prisma.$queryRaw<LatestPpoQuoteSummary[]>`
+      WITH latest_vendor_quotes AS (
+        SELECT quote."tenantId", quote."rfqId", quote."vendorId",
+          MAX(quote."quoteVersion") AS "latestVersion"
+        FROM "quotes" AS quote
+        WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${rfqId}
+        GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+      )
+      SELECT quote."vendorId", quote."quoteVersion", quote."totalQuoteAmount"
+      FROM latest_vendor_quotes AS latest
+      INNER JOIN "quotes" AS quote
+        ON quote."tenantId" = latest."tenantId" AND quote."rfqId" = latest."rfqId"
+          AND quote."vendorId" = latest."vendorId" AND quote."quoteVersion" = latest."latestVersion"
+    `;
+    const rankedQuotes = [...latestQuoteSummaries].sort((left, right) =>
+      Number(left.totalQuoteAmount) - Number(right.totalQuoteAmount)
+      || left.vendorId.localeCompare(right.vendorId));
+    const selectedQuoteSummary = rankedQuotes.find((quote) => quote.vendorId === vendorId);
+    if (!selectedQuoteSummary) {
+      return apiError(UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, 400);
     }
-    const rankedQuotes = Array.from(latestQuoteByVendor.values())
-      .sort((left, right) => left.totalQuoteAmount - right.totalQuoteAmount);
-    const selectedQuote = latestQuoteByVendor.get(vendorId);
+    const selectedQuote = await prisma.quote.findFirst({
+      where: {
+        tenantId: ctx.tenantId,
+        rfqId,
+        vendorId,
+        quoteVersion: selectedQuoteSummary.quoteVersion,
+      },
+      select: {
+        quoteVersion: true,
+        totalQuoteAmount: true,
+        lines: { select: { rfqLineId: true, unitRate: true, lineTotal: true } },
+      },
+    });
     if (!selectedQuote) {
       return apiError(UI_STRINGS.appApiProcurementPposRoute.cannotGeneratePPONoValidQuotationFoundForTheSelectedVendor, 400);
     }
