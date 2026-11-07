@@ -6,10 +6,10 @@ Files included: **343**. Files meeting all four 90% thresholds: **343/343**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98053/98706) |
-| branches | 93.73% (22308/23798) |
+| statements | 99.33% (98063/98716) |
+| branches | 93.74% (22313/23803) |
 | functions | 98.59% (1896/1923) |
-| lines | 99.33% (98053/98706) |
+| lines | 99.33% (98063/98716) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -170,7 +170,7 @@ Files included: **343**. Files meeting all four 90% thresholds: **343/343**.
 | `src/app/api/pr/[id]/release-to-procurement/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/revert/route.ts` | 100.00% | 95.45% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/pr/[id]/route.ts` | 100.00% | 92.85% | 100.00% | 100.00% | PASS |
+| `src/app/api/pr/[id]/route.ts` | 100.00% | 94.73% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/submit/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/route.ts` | 95.17% | 92.53% | 100.00% | 95.17% | PASS |
 | `src/app/api/procurement/approved-boqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
