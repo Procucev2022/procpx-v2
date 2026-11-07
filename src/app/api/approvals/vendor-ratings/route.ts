@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
 
     if (!ratingId) return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.ratingIDIsRequired, 400);
     if (!['ACCEPT', 'RETURN', 'REJECT'].includes(action)) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.invalidDecisionActionMustBeACCEPTRETURNOrREJECT, 400);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.invalidDecisionActionMustBeACCEPTRETURNOrREJECT, 400, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
 
     const rating = await prisma.ppoVendorRating.findFirst({
@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
 
     const isAuthorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, rating.projectId || rating.ppo?.projectId, ctx.tenantId);
     if (!isAuthorized) {
-      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.accessDeniedYouAreNotAuthorisedToReviewAssessmentsForThisProject, 403);
+      return apiError(UI_STRINGS.appApiApprovalsVendorRatingsRoute.accessDeniedYouAreNotAuthorisedToReviewAssessmentsForThisProject, 403, { route: '/api/approvals/vendor-ratings', method: 'POST' });
     }
     if (rating.status !== 'SUBMITTED') {
       return apiError(interpolateUiString(

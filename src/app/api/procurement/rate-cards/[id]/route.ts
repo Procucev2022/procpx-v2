@@ -557,7 +557,7 @@ export async function PUT(
         'ROUND_2_BUYER_OFFER',
       ];
       if (!allowedSourceStatuses.includes(rateCard.status)) {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.cannotPerformCategoryManagerAcceptanceFromStatusStatus, { "status": rateCard.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.cannotPerformCategoryManagerAcceptanceFromStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
       }
 
       // Handle optional formal agreement attached by Category Manager
@@ -602,7 +602,7 @@ export async function PUT(
     // ── ACTION 4: CATEGORY_MANAGER_SIGNOFF ─────────────────────
     if (body.action === 'CATEGORY_MANAGER_SIGNOFF') {
       if (rateCard.status !== 'VENDOR_ACCEPTED') {
-        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignOffRequiresPriorVendorAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400);
+        return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.categoryManagerSignOffRequiresPriorVendorAcceptanceCurrentStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
       }
 
       if (typeof body.remarks !== 'undefined' && (typeof body.remarks !== 'string' || body.remarks.length > MAX_RATE_CARD_TEXT_LENGTH)) {
@@ -641,7 +641,7 @@ export async function PUT(
     // Editable if DRAFT, RETURNED_FOR_CORRECTION, or NEGOTIATION
     const editableStatuses = ['DRAFT', 'RETURNED_FOR_CORRECTION', 'NEGOTIATION', 'UNDER_REVIEW', 'ROUND_1_BUYER_OFFER'];
     if (!editableStatuses.includes(rateCard.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardCannotBeEditedInStatusStatus, { "status": rateCard.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRateCardsIdRoute.rateCardCannotBeEditedInStatusStatus, { "status": rateCard.status }), 400, { route: '/api/procurement/rate-cards/[id]', method: 'PUT' });
     }
 
     if (body.status !== undefined && body.status !== rateCard.status) {
@@ -798,7 +798,7 @@ export async function DELETE(
     }
 
     if (rateCard.status !== 'DRAFT') {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsIdRoute.onlyDraftRateCardsCanBeDeleted, 400, { route: '/api/procurement/rate-cards/[id]', method: 'DELETE' });
     }
 
     const now = new Date();

@@ -22,9 +22,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { costCentre: true },
   });
 
-  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+  if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/submit', method: 'POST' });
   if (pr.status !== 'PR_DRAFT' && pr.status !== 'PR_RETURNED_FOR_CORRECTION') {
-    return apiError(interpolateUiString(UI_STRINGS.appApiPrIdSubmitRoute.cannotSubmitPRInStatusStatusExpectedPRDRAFTOrPRRETURNEDFORCORRECTION, { "status": pr.status }), 400);
+    return apiError(interpolateUiString(UI_STRINGS.appApiPrIdSubmitRoute.cannotSubmitPRInStatusStatusExpectedPRDRAFTOrPRRETURNEDFORCORRECTION, { "status": pr.status }), 400, { route: '/api/pr/[id]/submit', method: 'POST' });
   }
 
   const isResubmission = pr.status === 'PR_RETURNED_FOR_CORRECTION';

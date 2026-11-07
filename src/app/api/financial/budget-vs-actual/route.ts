@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
   const startedAt = Date.now();
 
   if (!projectId) {
-    return apiError(UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, 400);
+    return apiError(UI_STRINGS.appApiFinancialBudgetVsActualRoute.projectIdIsRequired, 400, { route: '/api/financial/budget-vs-actual', method: 'GET' });
   }
 
   try {
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!project) {
-      return apiError(UI_STRINGS.common.projectNotFound, 404);
+      return apiError(UI_STRINGS.common.projectNotFound, 404, { route: '/api/financial/budget-vs-actual', method: 'GET' });
     }
 
     // Detail aggregates only need to cover the requested line page. Project-wide

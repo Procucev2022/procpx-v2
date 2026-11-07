@@ -11,7 +11,7 @@ import {
   setTestAuthContext,
 } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/auth', () => ({ auth: jest.fn() }));
@@ -19,8 +19,8 @@ jest.mock('../src/lib/prisma', () => ({
   prisma: { user: { findFirst: jest.fn(), findUnique: jest.fn() } },
 }));
 jest.mock('next/headers', () => ({ headers: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
-const structuredLog = writeStructuredLog as jest.Mock;
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
+const structuredLog = logEvent as jest.Mock;
 
 const authMock = auth as jest.Mock;
 const headersMock = headers as jest.Mock;
@@ -60,7 +60,7 @@ describe('API response helpers', () => {
     expect(structuredLog).toHaveBeenCalledWith('error', 'http.api_error_response', {
       operation: 'api_error_response', status: 500,
       publicError: UI_STRINGS.common.userMessages.anUnexpectedErrorOccurred, error: 'internal failure',
-    }, 'next');
+    });
     await expect(responseJson(apiError(UI_STRINGS.common.userMessages.failedToCreatePr, 500))).resolves.toEqual({
       status: 500, body: { error: UI_STRINGS.common.userMessages.failedToCreatePr },
     });
@@ -209,6 +209,7 @@ describe('requireAuth', () => {
     userModel.findUnique.mockRejectedValueOnce(new Error('lookup failed'));
     authMock.mockResolvedValueOnce({ user: { id: 'vendor', tenantId: 'tenant-1', role: 'VENDOR' } });
     await expect(requireAuth()).resolves.toMatchObject({ vendorId: undefined });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'auth.vendor_lookup_failed', expect.objectContaining({ userId: 'vendor', tenantId: 'tenant-1' }));
 
     userModel.findUnique.mockResolvedValueOnce(null);
     authMock.mockResolvedValueOnce({ user: { id: 'vendor', tenantId: 'tenant-1', role: 'VENDOR' } });

@@ -5796,6 +5796,12 @@ export const UI_STRINGS = {
     receptionCounterWallPanellingBespoke: "Reception Counter & Wall Panelling (Bespoke)",
     vitrifiedFloorTiling600x600mm: "Vitrified Floor Tiling (600x600mm)",
   },
+  appErrorBoundary: {
+    title: "Something went wrong",
+    description: "This page could not be displayed. The problem has been logged.",
+    reference: "Reference: {{digest}}",
+    retry: "Try again",
+  },
   libUomStandardiseConstants: {
     cubicMetres: "Cubic Metres",
     feet: "Feet",

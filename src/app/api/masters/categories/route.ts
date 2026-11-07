@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
         select: { id: true, code: true },
       });
       if (!parentCategory) {
-        return apiError(UI_STRINGS.appApiMastersCategoriesRoute.selectedParentCategoryDoesNotExist, 404);
+        return apiError(UI_STRINGS.appApiMastersCategoriesRoute.selectedParentCategoryDoesNotExist, 404, { route: '/api/masters/categories', method: 'POST' });
       }
     }
 

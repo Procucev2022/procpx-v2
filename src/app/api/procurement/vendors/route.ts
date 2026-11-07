@@ -268,22 +268,22 @@ export async function POST(req: NextRequest) {
 
     // Validate Step 1 Mandatory Fields
     if (!name || name.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorLegalBusinessNameIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorLegalBusinessNameIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!vendorType || !['CLIENT_VENDOR', 'PROCUCEV_VENDOR'].includes(vendorType)) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorTypeMustBeEitherClientVendorOrProcucevVendor, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorTypeMustBeEitherClientVendorOrProcucevVendor, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!contactPerson || contactPerson.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryContactNameIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryContactNameIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if ((!email || email.trim() === '') && (!phone || phone.trim() === '')) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryMobileNumberOrEmailIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryMobileNumberOrEmailIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!category || category.trim() === '') {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryProductServiceCategoryIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.primaryProductServiceCategoryIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
     if (!operatingLocation && !city) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.operatingLocationIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.operatingLocationIsRequired, 400, { route: '/api/procurement/vendors', method: 'POST' });
     }
 
     // Check if an existing vendor record was supplied to update rather than creating a duplicate

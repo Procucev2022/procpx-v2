@@ -101,15 +101,15 @@ export async function POST(req: NextRequest) {
     const { commercialTerms, paymentTermsOffered, deliveryLeadTimeDays, validUntil } = body;
 
     if (!rfqId || !vendorId || !lines.length) {
-      return apiError(UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, 400, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     if (ctx.role === 'VENDOR') {
       if (!ctx.vendorId) {
-        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorRecordNotAssociatedWithThisUserAccount, 403, { route: '/api/procurement/quotes', method: 'POST' });
       }
       if (vendorId !== ctx.vendorId) {
-        return apiError(UI_STRINGS.appApiProcurementQuotesRoute.forbiddenYouCanOnlySubmitQuotesForYourOwnVendorAccount, 403);
+        return apiError(UI_STRINGS.appApiProcurementQuotesRoute.forbiddenYouCanOnlySubmitQuotesForYourOwnVendorAccount, 403, { route: '/api/procurement/quotes', method: 'POST' });
       }
     }
 
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     if (ctx.role === 'VENDOR') {
@@ -128,12 +128,12 @@ export async function POST(req: NextRequest) {
         where: { rfqId, vendorId: ctx.vendorId!, tenantId: ctx.tenantId },
       });
       if (!isInvited) {
-        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403);
+        return apiError(UI_STRINGS.common.forbiddenVendorIsNotInvitedToThisRFQ, 403, { route: '/api/procurement/quotes', method: 'POST' });
       }
     }
 
     if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
-      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     // 2. Verify vendor exists
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
     if (commercialTerms !== undefined && commercialTerms !== null && typeof commercialTerms !== 'string') {

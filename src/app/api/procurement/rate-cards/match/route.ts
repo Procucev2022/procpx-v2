@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!pr) return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.procurementRequestNotFound, 404);
+      if (!pr) return apiError(UI_STRINGS.appApiProcurementRateCardsMatchRoute.procurementRequestNotFound, 404, { route: '/api/procurement/rate-cards/match', method: 'GET' });
       referenceEntity = {
         type: 'PR',
         id: pr.id,
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!rfq) return apiError(UI_STRINGS.common.rFQNotFound, 404);
+      if (!rfq) return apiError(UI_STRINGS.common.rFQNotFound, 404, { route: '/api/procurement/rate-cards/match', method: 'GET' });
       referenceEntity = {
         type: 'RFQ',
         id: rfq.id,

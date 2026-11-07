@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const reason = body && typeof body === 'object' && typeof body.reason === 'string' ? body.reason : undefined;
 
     if (!reason || !reason.trim()) {
-      return apiError(UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, 400);
+      return apiError(UI_STRINGS.common.mandatoryRejectionReasonMustBeProvided, 400, { route: '/api/pr/[id]/reject', method: 'POST' });
     }
 
     const pr = await prisma.procurementRequest.findFirst({

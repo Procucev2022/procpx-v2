@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const beforeTimestampRaw = searchParams.get('beforeTimestamp');
   const pageSize = getListPageWindow(searchParams).pageSize;
   if (!prId && !contributionId) {
-    return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400);
+    return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400, { route: '/api/approvals/messages', method: 'GET' });
   }
   if (Boolean(beforeId) !== Boolean(beforeTimestampRaw)) {
     return apiError(UI_STRINGS.common.invalidRequestBody, 400);
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
     const text = typeof body.message === 'string' ? body.message.trim() : '';
     if (!text) return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.messageContentCannotBeEmpty, 400);
     if (!prId && !contributionId) {
-      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400);
+      return apiError(UI_STRINGS.appApiApprovalsMessagesRoute.eitherPrIdOrContributionIdMustBeProvided, 400, { route: '/api/approvals/messages', method: 'POST' });
     }
     const messageType = body.type === 'ENQUIRY' ? 'ENQUIRY' : 'MESSAGE';
     const now = new Date();

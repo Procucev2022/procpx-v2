@@ -3,11 +3,10 @@ import { NextResponse } from 'next/server';
 import type { Session } from 'next-auth';
 import { auth } from './auth';
 import { hasPermission, UserRole, Permission } from './permissions';
-import type { ApiContext, AuthenticatedSessionUser } from "@app-types/lib/api-utils.types";
+import type { ApiContext, ApiErrorDetails, AuthenticatedSessionUser, ListPageWindow } from "@app-types/lib/api-utils.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { writeStructuredLog } from './observability/server-logger';
+import { logEvent } from './observability/server-logger';
 import { DEFAULT_LIST_PAGE_SIZE, MAX_LIST_PAGE_NUMBER, MAX_LIST_PAGE_SIZE } from './api-utils.constants';
-import type { ListPageWindow } from '@app-types/lib/api-utils.types';
 
 export type { ApiContext };
 
@@ -117,8 +116,9 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
         select: { vendorId: true },
       });
       vendorId = dbUser?.vendorId || null;
-    } catch {
-      // ignore
+    } catch (error) {
+      // The vendor portal then shows no vendor data, so record why.
+      logEvent('warn', 'auth.vendor_lookup_failed', { userId: user.id, tenantId: user.tenantId, error });
     }
   }
 
@@ -137,15 +137,23 @@ export function isApiContext(val: unknown): val is ApiContext {
   return typeof val === 'object' && val !== null && 'userId' in val;
 }
 
-export function apiError(message: string, status = 400) {
+/**
+ * Builds an error response and records it. Server failures (5xx) are logged as
+ * errors and only expose static catalog messages to the client; rejected
+ * requests (4xx other than 401) are logged as warnings so failing workflows are
+ * visible even when the UI recovers.
+ */
+export function apiError(message: string, status = 400, details: ApiErrorDetails = {}) {
   const safeMessage = status >= 500 ? publicErrorMessage(message) : message;
-  if (status >= 500) {
-    void writeStructuredLog('error', 'http.api_error_response', {
+  if (status !== 401) {
+    const { event, ...context } = details;
+    logEvent(status >= 500 ? 'error' : 'warn', event ?? (status >= 500 ? 'http.api_error_response' : 'api.request_rejected'), {
       operation: 'api_error_response',
       status,
       publicError: safeMessage,
-      error: message,
-    }, 'next');
+      ...(status >= 500 ? { error: message } : {}),
+      ...context,
+    });
   }
   return NextResponse.json({ error: safeMessage }, { status });
 }

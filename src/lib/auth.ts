@@ -1,7 +1,7 @@
 // lib/auth.ts - NextAuth configuration
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import bcrypt from 'bcryptjs';
+import { hashPassword, passwordNeedsRehash, verifyPassword } from './password';
 import { prisma } from './prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -76,16 +76,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user) return null;
 
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        );
+        const password = credentials.password as string;
+        const isValid = await verifyPassword(password, user.passwordHash);
         if (!isValid) return null;
 
-        // Update last login
+        // Update last login. Hashes created with a higher bcrypt cost are replaced
+        // once so later logins stay within the Cloudflare Workers CPU budget.
+        const loginUpdate: { lastLoginAt: Date; passwordHash?: string } = { lastLoginAt: new Date() };
+        if (passwordNeedsRehash(user.passwordHash)) {
+          loginUpdate.passwordHash = await hashPassword(password);
+        }
         await prisma.user.update({
           where: { id: user.id },
-          data: { lastLoginAt: new Date() },
+          data: loginUpdate,
         });
 
         return {

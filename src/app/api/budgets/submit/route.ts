@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       include: { boqRevision: true, boq: true, costCentre: true },
     });
 
-    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404);
+    if (!contribution) return apiError(UI_STRINGS.common.budgetContributionNotFound, 404, { route: '/api/budgets/submit', method: 'POST' });
     if (contribution.status !== 'DRAFT') {
       return apiError(interpolateUiString(UI_STRINGS.appApiBudgetsSubmitRoute.cannotSubmitContributionInStateStatus, { status: contribution.status }), 400);
     }

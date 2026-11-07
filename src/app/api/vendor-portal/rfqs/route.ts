@@ -14,12 +14,12 @@ export async function GET(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/rfqs', method: 'GET' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/rfqs', method: 'GET' });
   }
 
   const { searchParams } = new URL(req.url);

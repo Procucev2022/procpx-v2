@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const replay = await getReplayResponse(ctx.tenantId, ppoId, idempotencyKey, fingerprint);
     if (replay) return replay;
     if (ppo.status === 'CANCELLED') {
-      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, 400);
+      return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.cannotCompleteACancelledOrder, 400, { route: '/api/procurement/ppos/[id]/complete', method: 'POST' });
     }
     if (!['ISSUED', 'CONFIRMED', 'PARTIALLY_COMPLETED'].includes(ppo.status)) {
       return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.completionCannotBeRecordedInCurrentStatus, 409);

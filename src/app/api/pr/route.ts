@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
     const costCentre = await prisma.costCentre.findFirst({
       where: { id: targetCostCentreId, projectId: targetProjectId, tenantId: ctx.tenantId },
     });
-    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
+    if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/pr', method: 'POST' });
 
     const authorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, targetProjectId, ctx.tenantId);
     if (!authorized) {
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
 
     const targetLines = revision.lines;
     if (targetLines.length === 0) {
-      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400);
+      return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/pr', method: 'POST' });
     }
     if (targetLines.length > MAX_PR_BATCH_LINES) {
       return apiError(interpolateUiString(UI_STRINGS.common.prExceedsAtomicWriteLimitMaxLines, { maxLines: MAX_PR_BATCH_LINES }), 400);

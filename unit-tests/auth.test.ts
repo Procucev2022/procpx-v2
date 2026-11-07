@@ -13,7 +13,7 @@ jest.mock('next-auth/providers/credentials', () => ({
   __esModule: true,
   default: jest.fn((options) => options),
 }));
-jest.mock('bcryptjs', () => ({ __esModule: true, default: { compare: jest.fn() } }));
+jest.mock('bcryptjs', () => ({ __esModule: true, default: { compare: jest.fn(), hash: jest.fn(), getRounds: jest.fn() } }));
 jest.mock('../src/lib/prisma', () => ({
   prisma: { user: { findMany: jest.fn(), update: jest.fn() } },
 }));
@@ -23,6 +23,8 @@ const userModel = prisma.user as unknown as {
   update: jest.Mock;
 };
 const compare = bcrypt.compare as jest.Mock;
+const hash = bcrypt.hash as unknown as jest.Mock;
+const getRounds = bcrypt.getRounds as jest.Mock;
 const authOptions = (NextAuth as jest.Mock).mock.calls[0][0];
 const authorize = authOptions.providers[0].authorize as (credentials: unknown) => Promise<unknown>;
 
@@ -47,6 +49,7 @@ describe('NextAuth credentials provider', () => {
     userModel.findMany.mockResolvedValue([]);
     userModel.update.mockResolvedValue(undefined);
     compare.mockResolvedValue(true);
+    getRounds.mockReturnValue(10);
   });
 
   afterEach(() => {
@@ -92,6 +95,19 @@ describe('NextAuth credentials provider', () => {
     expect(compare).toHaveBeenCalledWith('secret', 'hashed-password');
     expect(userModel.update).toHaveBeenCalledWith({
       where: { id: 'user-1' }, data: { lastLoginAt: expect.any(Date) },
+    });
+  });
+
+  it('replaces a higher-cost password hash once after a successful login', async () => {
+    userModel.findMany.mockResolvedValue([dbUser]);
+    getRounds.mockReturnValue(12);
+    hash.mockResolvedValue('rehashed-password');
+
+    await expect(authorize({ email: 'user@example.test', password: 'secret' })).resolves.toMatchObject({ id: 'user-1' });
+    expect(getRounds).toHaveBeenCalledWith('hashed-password');
+    expect(hash).toHaveBeenCalledWith('secret', 10);
+    expect(userModel.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' }, data: { lastLoginAt: expect.any(Date), passwordHash: 'rehashed-password' },
     });
   });
 

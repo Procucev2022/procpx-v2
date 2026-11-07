@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
   if (!hasPermission(ctx.role, 'PPO_VIEW') && !hasPermission(ctx.role, 'VENDOR_RATE_PPO')) {
-    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+    return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/ppos', method: 'GET' });
   }
 
   const startedAt = Date.now();

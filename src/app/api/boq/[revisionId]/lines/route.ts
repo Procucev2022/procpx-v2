@@ -73,7 +73,7 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
   const search = (searchParams.get('search') || '').trim().slice(0, 120);
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/lines', method: 'GET' });
 
   const where: any = { boqRevisionId: revision.id, tenantId: ctx.tenantId, isDeleted: false };
   if (validationStatus) where.validationStatus = validationStatus;
@@ -139,7 +139,7 @@ export async function PUT(req: NextRequest, { params }: BoqRevisionLinesRouteCon
   const { revisionId } = await params;
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/lines', method: 'PUT' });
   if (revision.status === 'APPROVED') {
     return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead);
   }
@@ -304,7 +304,7 @@ export async function PUT(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     return apiError(UI_STRINGS.common.invalidRequestBody, 400);
   }
   if (updatedQty !== null && updatedQty !== undefined && updatedQty <= 0) {
-    return apiError(UI_STRINGS.common.quantityMustBeGreaterThanZero, 400);
+    return apiError(UI_STRINGS.common.quantityMustBeGreaterThanZero, 400, { route: '/api/boq/[revisionId]/lines', method: 'PUT' });
   }
 
   const updatedDesc = updates.standardDescription !== undefined ? updates.standardDescription : (updates.originalDescription ?? line.originalDescription);
@@ -399,7 +399,7 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
   const { revisionId } = await params;
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/lines', method: 'POST' });
   if (revision.status === 'APPROVED') {
     return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead);
   }
@@ -415,7 +415,7 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
 
   const desc = typeof body.description === 'string' ? body.description.trim() : '';
   if (!desc) {
-    return apiError(UI_STRINGS.common.descriptionIsRequired, 400);
+    return apiError(UI_STRINGS.common.descriptionIsRequired, 400, { route: '/api/boq/[revisionId]/lines', method: 'POST' });
   }
 
   const quantityInput = body.quantity === undefined || body.quantity === null || body.quantity === ''
@@ -496,19 +496,19 @@ export async function DELETE(req: NextRequest, { params }: BoqRevisionLinesRoute
   const { revisionId } = await params;
 
   const revision = await resolveRevision(revisionId, ctx.tenantId);
-  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404);
+  if (!revision) return apiError(UI_STRINGS.common.revisionNotFound, 404, { route: '/api/boq/[revisionId]/lines', method: 'DELETE' });
   if (revision.status === 'APPROVED') {
     return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.approvedBOQsCannotBeEditedCreateANewRevisionInstead);
   }
 
   const { searchParams } = new URL(req.url);
   const lineId = searchParams.get('lineId');
-  if (!lineId) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDIsRequired, 400);
+  if (!lineId) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineIDIsRequired, 400, { route: '/api/boq/[revisionId]/lines', method: 'DELETE' });
 
   const line = await prisma.boqLine.findFirst({
     where: { id: lineId, boqRevisionId: revision.id, tenantId: ctx.tenantId, isDeleted: false },
   });
-  if (!line) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineNotFound, 404);
+  if (!line) return apiError(UI_STRINGS.appApiBoqRevisionIdLinesRoute.lineNotFound, 404, { route: '/api/boq/[revisionId]/lines', method: 'DELETE' });
 
   const deletedAt = new Date();
   const auditId = crypto.randomUUID();

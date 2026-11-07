@@ -25,9 +25,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       include: { costCentre: true },
     });
 
-    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
+    if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404, { route: '/api/pr/[id]/approve', method: 'POST' });
     if (pr.status !== 'PR_PENDING_PROJECT_APPROVAL') {
-      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.cannotApprovePRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400);
+      return apiError(interpolateUiString(UI_STRINGS.appApiPrIdApproveRoute.cannotApprovePRInStatusStatusExpectedPRPENDINGPROJECTAPPROVAL, { "status": pr.status }), 400, { route: '/api/pr/[id]/approve', method: 'POST' });
     }
 
     const approvedAt = new Date();

@@ -12,6 +12,14 @@ export type ApiContext = {
   vendorId?: string | null;
 };
 
+/** Optional log context for apiError: a stable event name, route details and the caught error. */
+export interface ApiErrorDetails {
+  event?: string;
+  route?: string;
+  method?: string;
+  error?: unknown;
+  [key: string]: unknown;
+}
 export type AuthenticatedSessionUser = {
   id: string;
   tenantId: string;

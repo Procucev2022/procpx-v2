@@ -13,12 +13,12 @@ export async function GET() {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/me', method: 'GET' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/me', method: 'GET' });
   }
 
   try {
@@ -30,13 +30,13 @@ export async function GET() {
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, 404);
+      return apiError(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, 404, { route: '/api/vendor-portal/me', method: 'GET' });
     }
 
     return apiSuccess({ vendor });
   } catch (error: any) {
     console.error('Error fetching vendor profile:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorProfile }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToFetchVendorProfile }), 500, { route: '/api/vendor-portal/me', method: 'GET', error: error });
   }
 }
 
@@ -45,12 +45,12 @@ export async function PATCH(req: NextRequest) {
   if (!isApiContext(ctx)) return ctx;
 
   if (ctx.role !== 'VENDOR' && !ctx.vendorId) {
-    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403);
+    return apiError(UI_STRINGS.common.forbiddenVendorPortalIsAccessibleOnlyToMappedVendorAccounts, 403, { route: '/api/vendor-portal/me', method: 'PATCH' });
   }
 
   const vendorId = ctx.vendorId;
   if (!vendorId) {
-    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404);
+    return apiError(UI_STRINGS.common.vendorRecordNotAssociatedWithThisUserAccount, 404, { route: '/api/vendor-portal/me', method: 'PATCH' });
   }
 
   try {
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
     });
 
     if (!existing) {
-      return apiError(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, 404);
+      return apiError(UI_STRINGS.appApiVendorPortalMeRoute.vendorProfileNotFound, 404, { route: '/api/vendor-portal/me', method: 'PATCH' });
     }
 
     // Permitted self-service updates only (no tampering with qualificationScore, qualificationDecision, status, etc.)
@@ -118,6 +118,6 @@ export async function PATCH(req: NextRequest) {
     return apiSuccess({ vendor: updated, message: UI_STRINGS.appApiVendorPortalMeRoute.companyProfileUpdatedSuccessfully });
   } catch (error: any) {
     console.error('Error updating vendor profile:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateCompanyProfile }), 500);
+    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToUpdateCompanyProfile }), 500, { route: '/api/vendor-portal/me', method: 'PATCH', error: error });
   }
 }

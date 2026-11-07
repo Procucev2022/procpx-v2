@@ -118,7 +118,7 @@ export async function GET(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionEventNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionEventNotFoundOrAccessDenied, 404, { route: '/api/procurement/auctions/[id]', method: 'GET' });
     }
 
     // Auto-update status if time has progressed
@@ -195,7 +195,7 @@ export async function GET(
       }
 
       if (!isInvitedVendor) {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, 403);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.youAreNotInvitedToParticipateInThisAuction, 403, { route: '/api/procurement/auctions/[id]', method: 'GET' });
       }
     }
 
@@ -383,12 +383,12 @@ export async function PUT(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.auctionNotFoundOrAccessDenied, 404, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
     }
 
     if (action === 'PAUSE') {
       if (auction.status !== 'LIVE' && auction.status !== 'EXTENDED') {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyLiveAuctionsCanBePaused, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyLiveAuctionsCanBePaused, 400, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
       }
       const changedAt = new Date();
       const changed = await writeAuctionChange({
@@ -405,7 +405,7 @@ export async function PUT(
 
     if (action === 'RESUME') {
       if (auction.status !== 'PAUSED') {
-        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyPausedAuctionsCanBeResumed, 400);
+        return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyPausedAuctionsCanBeResumed, 400, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
       }
       const changedAt = new Date();
       const changed = await writeAuctionChange({
@@ -494,7 +494,7 @@ export async function PUT(
     }
 
     if (auction.status !== 'DRAFT') {
-      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyDraftAuctionsCanBeReConfigured, 400);
+      return apiError(UI_STRINGS.appApiProcurementAuctionsIdRoute.onlyDraftAuctionsCanBeReConfigured, 400, { route: '/api/procurement/auctions/[id]', method: 'PUT' });
     }
 
     if ((updateFields.title !== undefined && typeof updateFields.title !== 'string')
@@ -566,7 +566,7 @@ export async function DELETE(
     });
 
     if (!auction) {
-      return apiError(UI_STRINGS.common.auctionNotFound, 404);
+      return apiError(UI_STRINGS.common.auctionNotFound, 404, { route: '/api/procurement/auctions/[id]', method: 'DELETE' });
     }
 
     if (auction.status !== 'DRAFT' || auction._count.bids > 0) {

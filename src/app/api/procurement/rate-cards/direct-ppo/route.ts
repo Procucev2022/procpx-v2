@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       include: { vendor: true, items: true },
     });
     if (!rateCard) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.vendorRateCardNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.vendorRateCardNotFoundOrAccessDenied, 404, { route: '/api/procurement/rate-cards/direct-ppo', method: 'POST' });
     }
     if (rateCard.status !== 'APPROVED') {
       return apiError(interpolateUiString(
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
     if (lines.length === 0) {
-      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.requirementHasNoLinesToSource, 400);
+      return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.requirementHasNoLinesToSource, 400, { route: '/api/procurement/rate-cards/direct-ppo', method: 'POST' });
     }
     if (lines.length > MAX_PPO_CREATE_LINES) {
       return apiError(UI_STRINGS.appApiProcurementPposRoute.ppoHasTooManyLineItemsToCreateAtomically, 400);

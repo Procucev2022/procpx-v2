@@ -17,6 +17,7 @@ import {
 import type { TopNavProps } from "@app-types/components/ui/TopNav.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { NOTIFICATION_POLL_INTERVAL_MS } from "./TopNav.constants";
 
 
 
@@ -31,8 +32,16 @@ export default function TopNav({ user }: TopNavProps) {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(interval);
+    // Hidden tabs skip polls and catch up as soon as they are shown again.
+    const poll = () => {
+      if (document.visibilityState !== 'hidden') fetchNotifications();
+    };
+    const interval = setInterval(poll, NOTIFICATION_POLL_INTERVAL_MS);
+    document.addEventListener('visibilitychange', poll);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', poll);
+    };
   }, []);
 
   const fetchNotifications = async () => {

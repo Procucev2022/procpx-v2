@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   });
 
-  if (!cc) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404);
+  if (!cc) return apiError(UI_STRINGS.appApiCostCentresIdRoute.costCentreNotFound, 404, { route: '/api/cost-centres/[id]', method: 'GET' });
 
   const totalBudget = cc.budgets.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
   const approvedBudget = cc.budgets.reduce((sum, b) => sum + (b.approvedAmount || 0), 0);

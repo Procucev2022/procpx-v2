@@ -28,7 +28,7 @@ export async function POST(
       : [];
 
     if (!vendorIds.length) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.atLeastOneVendorIDIsRequired, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     if (vendorIds.length > MAX_RFQ_VENDOR_INVITE_COUNT) {
@@ -40,7 +40,7 @@ export async function POST(
     });
 
     if (!rfq) {
-      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     // Verify vendors belong to this tenant and are not blacklisted
@@ -53,7 +53,7 @@ export async function POST(
     }));
 
     if (eligibleVendors.length === 0) {
-      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400);
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
     // Create RFQ vendor invitations

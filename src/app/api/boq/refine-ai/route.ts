@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     targetRevisionId = typeof boqRevisionId === 'string' ? boqRevisionId : null;
 
     if (!boqRevisionId) {
-      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.bOQRevisionIDIsRequired, 400);
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.bOQRevisionIDIsRequired, 400, { route: '/api/boq/refine-ai', method: 'POST' });
     }
     if (lineIds !== undefined && (!Array.isArray(lineIds) || lineIds.some((lineId: unknown) => typeof lineId !== 'string'))) {
       return apiError(UI_STRINGS.appApiBoqRefineAiRoute.lineIdsMustBeAListOfStrings, 400);
@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404);
+    if (!revision) return apiError(UI_STRINGS.common.bOQRevisionNotFound, 404, { route: '/api/boq/refine-ai', method: 'POST' });
     if (revision.status === 'APPROVED') {
-      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.approvedBOQRevisionsCannotBeRefinedBranchANewRevisionFirst, 403);
+      return apiError(UI_STRINGS.appApiBoqRefineAiRoute.approvedBOQRevisionsCannotBeRefinedBranchANewRevisionFirst, 403, { route: '/api/boq/refine-ai', method: 'POST' });
     }
     if (revision.lines.length > MAX_BOQ_BATCH_LINES) {
       return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);

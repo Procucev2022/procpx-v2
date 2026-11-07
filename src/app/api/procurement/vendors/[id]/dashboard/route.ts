@@ -40,11 +40,11 @@ export async function GET(
   // Authorization & strict cross-vendor isolation
   if (ctx.role === 'VENDOR') {
     if (!ctx.vendorId || ctx.vendorId !== vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementVendorsIdDashboardRoute.forbiddenYouCanOnlyAccessYourOwnVendorDashboard, 403);
+      return apiError(UI_STRINGS.appApiProcurementVendorsIdDashboardRoute.forbiddenYouCanOnlyAccessYourOwnVendorDashboard, 403, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET' });
     }
   } else {
     if (!hasPermission(ctx.role, 'VENDOR_VIEW')) {
-      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET' });
     }
   }
 
@@ -55,7 +55,7 @@ export async function GET(
     });
 
     if (!vendor) {
-      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404);
+      return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied, 404, { route: '/api/procurement/vendors/[id]/dashboard', method: 'GET' });
     }
 
     const rfqWhere = { tenantId: ctx.tenantId, invitedVendors: { some: { tenantId: ctx.tenantId, vendorId: vendor.id } } };

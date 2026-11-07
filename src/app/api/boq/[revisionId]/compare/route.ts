@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
   });
 
-  if (!currentRevision) return apiError(UI_STRINGS.appApiBoqRevisionIdCompareRoute.currentRevisionNotFound, 404);
+  if (!currentRevision) return apiError(UI_STRINGS.appApiBoqRevisionIdCompareRoute.currentRevisionNotFound, 404, { route: '/api/boq/[revisionId]/compare', method: 'GET' });
 
   // If no targetRevisionId specified, compare against immediate previous revision
   let compareTargetRevId = targetRevisionId;
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
   });
 
-  if (!compareRevision) return apiError(UI_STRINGS.appApiBoqRevisionIdCompareRoute.compareTargetRevisionNotFound, 404);
+  if (!compareRevision) return apiError(UI_STRINGS.appApiBoqRevisionIdCompareRoute.compareTargetRevisionNotFound, 404, { route: '/api/boq/[revisionId]/compare', method: 'GET' });
 
   const prevLinesByNum = new Map(compareRevision.lines.map(l => [l.lineNumber, l]));
   const currLinesByNum = new Map(currentRevision.lines.map(l => [l.lineNumber, l]));
