@@ -280,6 +280,7 @@ export const UI_STRINGS = {
     costCentreNotFound: "Cost centre not found.",
   },
   appApiCostCentresRoute: {
+    activeCostCentreLookupExceedsMaximumSize: "This project has more than {{maxItems}} cost centres. Select a cost centre explicitly before importing by code.",
     costCentreCodeCodeAlreadyExistsForThisProject: "Cost Centre Code {{code}} already exists for this project.",
     costCentreCreatedCodeNameValue3Sqft: "Cost Centre created: {{code}} - {{name}} ({{value3}} sqft)",
     projectIDCostCentreCodeAndNameAreMandatory: "Project ID, Cost Centre Code, and Name are mandatory.",

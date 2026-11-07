@@ -6,10 +6,10 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98392/99049) |
-| branches | 93.69% (22438/23947) |
+| statements | 99.33% (98427/99084) |
+| branches | 93.70% (22452/23960) |
 | functions | 98.60% (1904/1931) |
-| lines | 99.33% (98392/99049) |
+| lines | 99.33% (98427/99084) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -133,7 +133,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/app/api/boq/standard/upload-validate/route.ts` | 98.15% | 95.23% | 100.00% | 98.15% | PASS |
 | `src/app/api/boq/template/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/upload-template/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/upload-template/route.ts` | 95.40% | 90.65% | 100.00% | 95.40% | PASS |
+| `src/app/api/boq/upload-template/route.ts` | 95.76% | 91.55% | 100.00% | 95.76% | PASS |
 | `src/app/api/boq/upload/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/upload/route.ts` | 100.00% | 90.24% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -332,7 +332,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.71% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

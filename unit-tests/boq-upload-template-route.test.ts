@@ -7,6 +7,8 @@ import { createNextBoqRevision } from '../src/lib/boq-revision-utils';
 import { deleteUpload, saveUpload } from '../src/lib/storage';
 import { UI_STRINGS } from '../src/lib/ui-strings.constants';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
+import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { COST_CENTRE_LOOKUP_MAX_OPTIONS } from '../src/app/api/cost-centres/route.constants';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
@@ -29,6 +31,10 @@ jest.mock('../src/lib/api-utils', () => ({
 jest.mock('../src/lib/boq-revision-utils', () => ({ createNextBoqRevision: jest.fn() }));
 jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn(), deleteUpload: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({
+  logEvent: jest.fn(),
+  writeStructuredLog: jest.fn().mockResolvedValue(undefined),
+}));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -37,6 +43,7 @@ const createRevision = createNextBoqRevision as jest.Mock;
 const storeUpload = saveUpload as jest.Mock;
 const removeUpload = deleteUpload as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
+const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const project = { id: 'project-1', name: 'West Campus', projectCode: 'PROJ' };
 const costCentres = [{ id: 'cc-1', code: 'CC-1', name: 'Electrical' }, { id: 'cc-2', code: 'CC-2', name: 'Mechanical' }];
@@ -95,6 +102,7 @@ describe('fixed template BOQ upload API', () => {
       if (statement.sql.includes('DELETE FROM "boq_lines"')) return { meta: { changes: 0 } };
       return { meta: { changes: 1 } };
     }));
+    structuredLog.mockReset().mockResolvedValue(undefined);
     storeUpload.mockReset().mockImplementation((segments: string[], fileName: string) =>
       Promise.resolve(`uploads/${segments.join('/')}/${fileName}`));
     removeUpload.mockReset().mockResolvedValue(undefined);
@@ -231,6 +239,34 @@ describe('fixed template BOQ upload API', () => {
     expect(batch[3].values).toEqual(expect.arrayContaining(['1', 'Spare pump', null, null, null, 'NOS', 4]));
     expect(db.boq.create).not.toHaveBeenCalled();
     expect(db.boqLine.create).not.toHaveBeenCalled();
+  });
+
+  it('bounds project cost-centre lookups and logs when the code is outside the returned window', async () => {
+    db.costCentre.findMany.mockResolvedValueOnce(Array.from({ length: COST_CENTRE_LOOKUP_MAX_OPTIONS + 1 }, (_, index) => ({
+      id: `cc-${index}`, code: `CC-${String(index).padStart(3, '0')}`,
+    })));
+    const result = await POST(makeRequest([validRow({ 'Cost Centre Code *': 'OUTSIDE-WINDOW' })], { projectId: 'project-1' }));
+
+    expect(result).toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiCostCentresRoute.activeCostCentreLookupExceedsMaximumSize
+        .replace('{{maxItems}}', String(COST_CENTRE_LOOKUP_MAX_OPTIONS)),
+      status: 413,
+    });
+    expect(db.costCentre.findMany).toHaveBeenCalledWith({
+      where: { projectId: 'project-1', tenantId: 'tenant-1' },
+      select: { id: true, code: true },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+      take: COST_CENTRE_LOOKUP_MAX_OPTIONS + 1,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'boq.template_cost_centre_lookup_limited', expect.objectContaining({
+      operation: 'resolve_template_cost_centre', route: '/api/boq/upload-template',
+      tenantId: 'tenant-1', userId: 'user-1', projectId: 'project-1',
+      resultCountAtLeast: COST_CENTRE_LOOKUP_MAX_OPTIONS + 1,
+      maxItems: COST_CENTRE_LOOKUP_MAX_OPTIONS, status: 'truncated',
+    }));
+    expect(storeUpload).not.toHaveBeenCalled();
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('maps upload processing failures to a server error', async () => {
