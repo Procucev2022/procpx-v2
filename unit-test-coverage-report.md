@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **344**. Files meeting all four 90% thresholds: **344/344**.
+Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98083/98736) |
-| branches | 93.73% (22324/23816) |
-| functions | 98.59% (1896/1923) |
-| lines | 99.33% (98083/98736) |
+| statements | 99.33% (98172/98825) |
+| branches | 93.74% (22381/23875) |
+| functions | 98.59% (1900/1927) |
+| lines | 99.33% (98172/98825) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -93,7 +93,7 @@ Files included: **344**. Files meeting all four 90% thresholds: **344/344**.
 | `src/app/api/boq/[revisionId]/approve/route.ts` | 100.00% | 90.90% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/compare/route.ts` | 100.00% | 91.66% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/lines/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/[revisionId]/lines/route.ts` | 100.00% | 91.18% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/[revisionId]/lines/route.ts` | 100.00% | 91.61% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/new-revision/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/new-revision/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/reject/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -302,6 +302,7 @@ Files included: **344**. Files meeting all four 90% thresholds: **344/344**.
 | `src/lib/auth.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
 | `src/lib/boq-line-pagination.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/boq-line-pagination.ts` | 100.00% | 94.87% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-upload.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
