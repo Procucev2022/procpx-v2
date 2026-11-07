@@ -7,7 +7,7 @@ Files included: **343**. Files meeting all four 90% thresholds: **343/343**.
 | Overall | Coverage |
 | --- | ---: |
 | statements | 99.33% (98053/98706) |
-| branches | 93.73% (22307/23797) |
+| branches | 93.73% (22308/23798) |
 | functions | 98.59% (1896/1923) |
 | lines | 99.33% (98053/98706) |
 
@@ -307,7 +307,7 @@ Files included: **343**. Files meeting all four 90% thresholds: **343/343**.
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/d1-batch.ts` | 99.09% | 95.19% | 100.00% | 99.09% | PASS |
+| `src/lib/d1-batch.ts` | 99.09% | 95.23% | 100.00% | 99.09% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-query.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
