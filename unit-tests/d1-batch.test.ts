@@ -89,6 +89,10 @@ describe('native D1 batch writes', () => {
     const failed = createDatabase([{ success: false }]);
     await expect(runD1BatchAtomically(failed.database, [{ sql: 'UPDATE workflow SET state = ?', values: ['ACTIVE'] }]))
       .rejects.toThrow(D1_BATCH_STATEMENT_FAILED);
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'database.d1_batch_failed', expect.objectContaining({
+      operation: 'execute_d1_batch', statementCount: 1, bindingCount: 1,
+      failedStatementIndexes: [0], error: { name: 'Error', message: D1_BATCH_STATEMENT_FAILED },
+    }));
 
     await expect(runD1BatchAtomically(failed.database, Array.from({ length: MAX_D1_BATCH_STATEMENTS + 1 }, () => ({
       sql: 'UPDATE workflow SET state = ?', values: ['ACTIVE'],
@@ -128,6 +132,34 @@ describe('native D1 batch writes', () => {
     await expect(runD1BatchAtomically(database, [{ sql: 'INSERT INTO records VALUES (?)', values: ['x'.repeat(MAX_D1_BINDING_BYTES + 1)] }]))
       .rejects.toThrow(D1_BINDING_SIZE_LIMIT_EXCEEDED);
     expect(database.prepare).not.toHaveBeenCalled();
+  });
+
+  it('logs rejected D1 batches without SQL or values and preserves the original error', async () => {
+    const { database } = createDatabase();
+    const databaseError = new Error('database unavailable');
+    (database.batch as jest.Mock).mockRejectedValueOnce(databaseError);
+    const input = [{ sql: 'UPDATE private_records SET token = ?', values: ['sensitive-value'] }];
+
+    await expect(runD1BatchAtomically(database, input)).rejects.toBe(databaseError);
+
+    const [, , context] = (writeStructuredLog as jest.Mock).mock.calls[0];
+    expect(context).toMatchObject({
+      operation: 'execute_d1_batch', statementCount: 1, bindingCount: 1,
+      durationMs: expect.any(Number), error: { name: 'Error', message: 'database unavailable' },
+    });
+    expect(context).not.toHaveProperty('sql');
+    expect(context).not.toHaveProperty('values');
+    expect(JSON.stringify(context)).not.toContain('sensitive-value');
+  });
+
+  it('preserves a D1 failure when central logging also fails', async () => {
+    const { database } = createDatabase();
+    const databaseError = new Error('database unavailable');
+    (database.batch as jest.Mock).mockRejectedValueOnce(databaseError);
+    (writeStructuredLog as jest.Mock).mockRejectedValueOnce(new Error('log storage unavailable'));
+
+    await expect(runD1BatchAtomically(database, [{ sql: 'UPDATE workflow SET state = ?', values: ['ACTIVE'] }]))
+      .rejects.toBe(databaseError);
   });
 
   it('normalizes Date parameters to ISO strings for D1 binding', async () => {

@@ -6,10 +6,10 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.34% (97567/98214) |
-| branches | 93.71% (22172/23658) |
-| functions | 98.57% (1865/1892) |
-| lines | 99.34% (97567/98214) |
+| statements | 99.33% (97598/98247) |
+| branches | 93.71% (22183/23670) |
+| functions | 98.57% (1866/1893) |
+| lines | 99.33% (97598/98247) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -282,7 +282,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.78% | 92.85% | 99.06% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.80% | 92.85% | 99.06% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -292,7 +292,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/lib/auction-lifecycle.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/audited-update.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/audited-update.ts` | 97.84% | 97.36% | 100.00% | 97.84% | PASS |
 | `src/lib/auth.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -301,7 +301,7 @@ Files included: **331**. Files meeting all four 90% thresholds: **331/331**.
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/d1-batch.ts` | 100.00% | 97.14% | 100.00% | 100.00% | PASS |
+| `src/lib/d1-batch.ts` | 100.00% | 97.56% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-query.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

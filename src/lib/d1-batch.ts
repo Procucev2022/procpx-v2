@@ -57,6 +57,29 @@ async function logD1BatchLimitViolation(input: D1BatchInputStatement[], violatio
   });
 }
 
+async function logD1BatchFailure(
+  input: D1BatchInputStatement[],
+  startedAt: number,
+  error: unknown,
+  failedStatementIndexes?: number[],
+): Promise<void> {
+  const bindingCount = input.reduce((total, statement) => total + statement.values.length, 0);
+  try {
+    await writeStructuredLog('error', 'database.d1_batch_failed', {
+      operation: 'execute_d1_batch',
+      statementCount: input.length,
+      bindingCount,
+      durationMs: Date.now() - startedAt,
+      ...(failedStatementIndexes ? { failedStatementIndexes } : {}),
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 500) }
+        : { type: typeof error },
+    });
+  } catch {
+    // Preserve the database failure when optional log storage is unavailable.
+  }
+}
+
 export function getD1BatchDatabase(): D1BatchDatabase {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { getCloudflareContext } = require('@opennextjs/cloudflare') as typeof import('@opennextjs/cloudflare');
@@ -85,11 +108,21 @@ export async function runD1BatchAtomically(
     if (violation === 'binding_size') throw new Error(D1_BINDING_SIZE_LIMIT_EXCEEDED);
     throw new Error(D1_BATCH_BINDING_LIMIT_EXCEEDED);
   }
-  const results = await database.batch(input.map(({ sql, values }) => database.prepare(sql).bind(
-    ...values.map((value) => value instanceof Date ? value.toISOString() : value),
-  )));
-  if (results.some((result) => result.success === false)) {
-    throw new Error(D1_BATCH_STATEMENT_FAILED);
+  const startedAt = Date.now();
+  let results: D1BatchResult[];
+  try {
+    results = await database.batch(input.map(({ sql, values }) => database.prepare(sql).bind(
+      ...values.map((value) => value instanceof Date ? value.toISOString() : value),
+    )));
+  } catch (error) {
+    await logD1BatchFailure(input, startedAt, error);
+    throw error;
+  }
+  const failedStatementIndexes = results.flatMap((result, index) => result.success === false ? [index] : []);
+  if (failedStatementIndexes.length > 0) {
+    const error = new Error(D1_BATCH_STATEMENT_FAILED);
+    await logD1BatchFailure(input, startedAt, error, failedStatementIndexes);
+    throw error;
   }
   return results;
 }
