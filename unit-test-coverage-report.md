@@ -6,10 +6,10 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98172/98825) |
-| branches | 93.74% (22381/23875) |
-| functions | 98.59% (1900/1927) |
-| lines | 99.33% (98172/98825) |
+| statements | 99.33% (98210/98863) |
+| branches | 93.73% (22395/23891) |
+| functions | 98.60% (1902/1929) |
+| lines | 99.33% (98210/98863) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -295,7 +295,7 @@ Files included: **345**. Files meeting all four 90% thresholds: **345/345**.
 | `src/lib/auction-bids.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/audit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/audit.ts` | 100.00% | 91.30% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.ts` | 97.84% | 97.36% | 100.00% | 97.84% | PASS |
 | `src/lib/auth.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

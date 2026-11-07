@@ -676,6 +676,8 @@ export async function GET(
         entityId: rfq.id,
         action: 'QUOTE_COMPARED',
         description: comparisonDescription,
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        route: '/api/procurement/rfqs/[id]/compare',
       });
     }
 

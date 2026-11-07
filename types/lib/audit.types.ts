@@ -12,4 +12,7 @@ export interface AuditParams {
   newValue?: object;
   ipAddress?: string;
   userAgent?: string;
+  /** Request context used for operational logging only; never persisted to the audit row. */
+  requestId?: string;
+  route?: string;
 }
