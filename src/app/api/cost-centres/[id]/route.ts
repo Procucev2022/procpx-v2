@@ -1,12 +1,13 @@
 // src/app/api/cost-centres/[id]/route.ts - Cost Centre Details & Updates
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
+import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import {
+  COST_CENTRE_APPROVAL_PAGE_SIZE,
   COST_CENTRE_AUDIT_AFTER_UPDATE_SQL,
   COST_CENTRE_ALLOWED_STATUSES,
   COST_CENTRE_UPDATE_FAILED_EVENT,
@@ -20,6 +21,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
+  const searchParams = new URL(req.url).searchParams;
+  const { page, pageSize, skip } = getListPageWindow(searchParams);
+  const approvalPageWindow = getListPageWindow(new URLSearchParams({
+    page: searchParams.get('approvalPage') || '1',
+    pageSize: searchParams.get('approvalPageSize') || String(COST_CENTRE_APPROVAL_PAGE_SIZE),
+  }));
 
   const cc = await prisma.costCentre.findFirst({
     where: { id, tenantId: ctx.tenantId },
@@ -27,29 +34,51 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       project: true,
       budgets: true,
       budgetContributions: {
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: pageSize,
         include: {
-          boq: true,
-          boqRevision: true,
-          approvals: true,
+          boq: { select: { id: true, boqCode: true, title: true, status: true } },
+          boqRevision: { select: { id: true, revisionNumber: true, revisionCode: true, status: true } },
+          approvals: {
+            orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+            skip: approvalPageWindow.skip,
+            take: approvalPageWindow.pageSize,
+          },
+          _count: { select: { approvals: true } },
         },
       },
       budgetTransactions: {
-        orderBy: { budgetDate: 'desc' },
+        orderBy: [{ budgetDate: 'desc' }, { id: 'desc' }],
+        skip,
+        take: pageSize,
       },
       prs: {
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: pageSize,
         include: {
-          approvals: true,
-          _count: { select: { lines: true } },
+          approvals: {
+            orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+            skip: approvalPageWindow.skip,
+            take: approvalPageWindow.pageSize,
+          },
+          _count: { select: { lines: true, approvals: true } },
         },
       },
       boqs: {
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: pageSize,
         include: {
           revisions: {
-            orderBy: { revisionNumber: 'desc' },
+            orderBy: [{ revisionNumber: 'desc' }, { id: 'desc' }],
             take: 1,
           },
+          _count: { select: { revisions: true } },
         },
       },
+      _count: { select: { budgetContributions: true, budgetTransactions: true, prs: true, boqs: true } },
     },
   });
 
@@ -58,12 +87,55 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const totalBudget = cc.budgets.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
   const approvedBudget = cc.budgets.reduce((sum, b) => sum + (b.approvedAmount || 0), 0);
   const ratePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? approvedBudget / cc.areaSqFt : null;
+  const { _count, ...costCentre } = cc;
+  const counts = _count || {};
+  const pageMetadata = (total: number, pageNumber = page, currentPageSize = pageSize) => ({
+    page: pageNumber,
+    pageSize: currentPageSize,
+    total,
+    totalPages: Math.ceil(total / currentPageSize),
+    hasMore: pageNumber * currentPageSize < total,
+  });
+  const budgetContributions = cc.budgetContributions.map((contribution) => ({
+    ...contribution,
+    approvalPagination: pageMetadata(
+      contribution._count?.approvals ?? contribution.approvals.length,
+      approvalPageWindow.page,
+      approvalPageWindow.pageSize,
+    ),
+  }));
+  const prs = cc.prs.map((pr) => ({
+    ...pr,
+    approvalPagination: pageMetadata(
+      pr._count?.approvals ?? pr.approvals.length,
+      approvalPageWindow.page,
+      approvalPageWindow.pageSize,
+    ),
+  }));
 
   return apiSuccess({
-    ...cc,
+    ...costCentre,
+    budgetContributions,
+    prs,
     totalBudget,
     approvedBudget,
     ratePerSqFt: ratePerSqFt !== null ? Math.round(ratePerSqFt * 100) / 100 : null,
+    collectionPagination: {
+      page,
+      pageSize,
+      budgetContributions: {
+        ...pageMetadata(counts.budgetContributions ?? cc.budgetContributions.length),
+        approvalPage: approvalPageWindow.page,
+        approvalPageSize: approvalPageWindow.pageSize,
+      },
+      budgetTransactions: pageMetadata(counts.budgetTransactions ?? cc.budgetTransactions.length),
+      prs: {
+        ...pageMetadata(counts.prs ?? cc.prs.length),
+        approvalPage: approvalPageWindow.page,
+        approvalPageSize: approvalPageWindow.pageSize,
+      },
+      boqs: pageMetadata(counts.boqs ?? cc.boqs.length),
+    },
   });
 }
 

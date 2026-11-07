@@ -26,6 +26,11 @@ jest.mock('../src/lib/api-utils', () => ({
   isApiContext: jest.fn(),
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
+  getListPageWindow: jest.fn((params: URLSearchParams) => {
+    const page = Math.max(1, Number(params.get('page')) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(params.get('pageSize')) || 50));
+    return { page, pageSize, skip: (page - 1) * pageSize };
+  }),
 }));
 jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn(), writeRfqVendorInvitationsAtomically: jest.fn() }));
@@ -153,16 +158,73 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
 
     db.costCentre.findFirst.mockResolvedValueOnce({
       id: 'cc-1', areaSqFt: 30, budgets: [{ totalAmount: 1000, approvedAmount: 500 }, { totalAmount: null, approvedAmount: 250 }],
+      budgetContributions: [], budgetTransactions: [], prs: [], boqs: [],
     });
     await expect(getCostCentre(request(), idParams('cc-1'))).resolves.toMatchObject({
       ok: true, data: { totalBudget: 1000, approvedBudget: 750, ratePerSqFt: 25 },
     });
     expect(db.costCentre.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: 'cc-1', tenantId: 'tenant-1' } }));
 
-    db.costCentre.findFirst.mockResolvedValueOnce({ id: 'cc-2', areaSqFt: 0, budgets: [{ totalAmount: null, approvedAmount: null }] });
+    db.costCentre.findFirst.mockResolvedValueOnce({
+      id: 'cc-2', areaSqFt: 0, budgets: [{ totalAmount: null, approvedAmount: null }],
+      budgetContributions: [], budgetTransactions: [], prs: [], boqs: [],
+    });
     await expect(getCostCentre(request(), idParams('cc-2'))).resolves.toMatchObject({
       ok: true, data: { totalBudget: 0, approvedBudget: 0, ratePerSqFt: null },
     });
+  });
+
+  it('pages cost centre collections and returns exact totals with bounded approval and revision previews', async () => {
+    db.costCentre.findFirst.mockResolvedValueOnce({
+      id: 'cc-1', areaSqFt: 30, budgets: [], budgetTransactions: [], boqs: [],
+      budgetContributions: [{ id: 'contribution-1', approvals: [{ id: 'budget-approval-1' }], _count: { approvals: 33 } }],
+      prs: [{ id: 'pr-1', approvals: [{ id: 'pr-approval-1' }], _count: { approvals: 7, lines: 4 } }],
+      _count: { budgetContributions: 65, budgetTransactions: 101, prs: 12, boqs: 4 },
+    });
+
+    await expect(getCostCentre(new NextRequest('http://localhost/api/cost-centres/cc-1?page=2&pageSize=25&approvalPage=2&approvalPageSize=10'), idParams('cc-1')))
+      .resolves.toMatchObject({
+        ok: true,
+        data: {
+          budgetContributions: [{ approvalPagination: { page: 2, pageSize: 10, total: 33, totalPages: 4, hasMore: true } }],
+          prs: [{ _count: { approvals: 7, lines: 4 }, approvalPagination: { page: 2, pageSize: 10, total: 7, totalPages: 1, hasMore: false } }],
+          collectionPagination: {
+            page: 2,
+            pageSize: 25,
+            budgetContributions: { total: 65, totalPages: 3, hasMore: true, approvalPage: 2, approvalPageSize: 10 },
+            budgetTransactions: { total: 101, totalPages: 5, hasMore: true },
+            prs: { total: 12, totalPages: 1, hasMore: false, approvalPage: 2, approvalPageSize: 10 },
+            boqs: { total: 4, totalPages: 1, hasMore: false },
+          },
+        },
+      });
+
+    const query = db.costCentre.findFirst.mock.calls.at(-1)?.[0];
+    expect(query.include.budgetContributions).toEqual(expect.objectContaining({
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: 25, take: 25,
+      include: expect.objectContaining({
+        approvals: { orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], skip: 10, take: 10 },
+        _count: { select: { approvals: true } },
+      }),
+    }));
+    expect(query.include.budgetTransactions).toEqual({
+      orderBy: [{ budgetDate: 'desc' }, { id: 'desc' }], skip: 25, take: 25,
+    });
+    expect(query.include.prs).toEqual(expect.objectContaining({
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: 25, take: 25,
+      include: expect.objectContaining({
+        approvals: { orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], skip: 10, take: 10 },
+        _count: { select: { lines: true, approvals: true } },
+      }),
+    }));
+    expect(query.include.boqs).toEqual(expect.objectContaining({
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], skip: 25, take: 25,
+      include: expect.objectContaining({
+        revisions: { orderBy: [{ revisionNumber: 'desc' }, { id: 'desc' }], take: 1 },
+        _count: { select: { revisions: true } },
+      }),
+    }));
+    expect(query.include._count).toEqual({ select: { budgetContributions: true, budgetTransactions: true, prs: true, boqs: true } });
   });
 
   it('updates cost centre fields with one tenant-scoped compare-and-set D1 batch', async () => {
