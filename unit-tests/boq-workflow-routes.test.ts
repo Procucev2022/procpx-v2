@@ -210,7 +210,10 @@ describe('BOQ and PR workflow routes', () => {
     db.procurementRequest.findFirst.mockResolvedValueOnce({ id: 'pr-1', prNumber: 'PR-001', lines: [] });
     await expect(getPr(request(), { params: Promise.resolve({ id: 'pr-1' }) })).resolves.toEqual({
       ok: true,
-      data: { id: 'pr-1', prNumber: 'PR-001', lines: [], linePagination: { hasMore: false, nextCursor: null, pageSize: 25 } },
+      data: {
+        id: 'pr-1', prNumber: 'PR-001', lines: [], linePagination: { hasMore: false, nextCursor: null, pageSize: 25 },
+        rfqs: [], rfqCount: 0, rfqPreviewTruncated: false,
+      },
       status: 200,
     });
     expect(db.procurementRequest.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({

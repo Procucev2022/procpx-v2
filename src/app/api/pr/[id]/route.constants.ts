@@ -22,3 +22,5 @@ export const PR_DETAIL_LINE_SELECT = {
     },
   },
 } as const;
+
+export const PR_DETAIL_RFQ_PREVIEW_LIMIT = 25;
