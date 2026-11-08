@@ -8,6 +8,7 @@ import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_DETAIL_LATEST_REVISION_LIMIT } from './route.constants';
 import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
 import { encodeBoqLineCursor } from '@/lib/boq-line-pagination';
+import { getBoqLineSummary } from '@/lib/boq-line-summary';
 import { logEvent } from '@/lib/observability/server-logger';
 
 
@@ -101,11 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     : null;
   const [lineSummary, rawLines] = lineWhere
     ? await Promise.all([
-      prisma.boqLine.aggregate({
-        where: lineWhere,
-        _count: { _all: true },
-        _sum: { aiTotalCost: true },
-      }),
+      getBoqLineSummary((query) => prisma.$queryRaw(query), revision.id, ctx.tenantId),
       prisma.boqLine.findMany({
         where: lineWhere,
         orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
@@ -169,8 +166,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
       errorType: 'SyntaxError',
     });
   }
-  const totalLines = lineSummary?._count._all ?? 0;
-  const totalValue = Number(lineSummary?._sum.aiTotalCost ?? 0);
+  const totalLines = lineSummary?.totalLines ?? 0;
+  const totalValue = lineSummary?.totalAiEstimate ?? 0;
   const nextCursor = totalLines > lines.length && lines.length > 0
     ? encodeBoqLineCursor(lines[lines.length - 1])
     : null;
@@ -182,6 +179,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
     revision,
     lines,
+    summary: lineSummary,
     totalLines,
     linesTruncated: totalLines > lines.length,
     nextCursor,

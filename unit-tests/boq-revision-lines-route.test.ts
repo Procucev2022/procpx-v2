@@ -129,9 +129,12 @@ describe('BOQ revision lines API', () => {
     }));
     expect(db.boqLine.count).toHaveBeenCalledWith({ where: expect.objectContaining({
       boqRevisionId: 'revision-1', tenantId: context.tenantId, isDeleted: false, validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
-      OR: expect.arrayContaining([{ originalDescription: { contains: 'wire' } }]),
+      OR: expect.arrayContaining([
+        { originalDescription: { contains: 'wire' } },
+        { specification: { contains: 'wire' } },
+      ]),
     }) });
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 5, take: 5, orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }] }));
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 5, take: 6, orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }] }));
   });
 
   it('returns the default GET page and handles a missing aiReason cost', async () => {
@@ -144,7 +147,7 @@ describe('BOQ revision lines API', () => {
 
   it('bounds BOQ line page sizes and normalizes invalid page numbers', async () => {
     await GET(request('/api/boq/revision-1/lines?page=-2&pageSize=10000&search=%20wire%20'), params);
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 100 }));
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 91 }));
     expect(db.boqLine.count).toHaveBeenCalledWith({ where: expect.objectContaining({ OR: expect.arrayContaining([{ originalDescription: { contains: 'wire' } }]) }) });
   });
 
@@ -197,6 +200,20 @@ describe('BOQ revision lines API', () => {
       data: { data: Array<{ id: string }>; hasMore: boolean; nextCursor: string | null };
     };
     expect(result.data).toMatchObject({ data: [{ id: 'line-3' }], hasMore: false, nextCursor: null });
+  });
+
+  it('skips repeated total counts for cursor pages when requested', async () => {
+    const cursor = encodeBoqLineCursor({ id: 'line-1', lineNumber: '2' });
+    db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null }]);
+
+    const result = await GET(request(`/api/boq/revision-1/lines?cursor=${encodeURIComponent(cursor)}&pageSize=2&includeTotal=false`), params) as unknown as {
+      data: Record<string, unknown>;
+    };
+
+    expect(db.boqLine.count).not.toHaveBeenCalled();
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+    expect(result.data).not.toHaveProperty('total');
+    expect(result.data).not.toHaveProperty('totalPages');
   });
 
   it('blocks unauthorized, missing, and approved revision updates', async () => {

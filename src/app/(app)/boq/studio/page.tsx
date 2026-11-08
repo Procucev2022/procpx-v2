@@ -46,12 +46,12 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import PageHeader from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
-import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES } from "./page.constants";
-import { fetchBoqLineContinuationPages } from '@/lib/boq-line-pagination';
-import { BOQ_LINE_MAX_BATCH_EDITS } from '@/lib/boq-line-pagination.constants';
+import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES, BOQ_FINANCIAL_CATEGORY_KEYS } from "./page.constants";
+import { BOQ_LINE_DETAIL_PAGE_SIZE, BOQ_LINE_MAX_BATCH_EDITS } from '@/lib/boq-line-pagination.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLookupOption } from '@app-types/app/api/cost-centres.types';
+import type { BoqLineSummary } from '@app-types/lib/boq-line-summary.types';
 
 
 
@@ -100,6 +100,11 @@ export default function BoqStudioPage() {
   const [activeBoq, setActiveBoq] = useState<any | null>(null);
   const [activeRevision, setActiveRevision] = useState<any | null>(null);
   const [lines, setLines] = useState<any[]>([]);
+  const [lineSummary, setLineSummary] = useState<BoqLineSummary | null>(null);
+  const [lineTotal, setLineTotal] = useState(0);
+  const [lineNextCursor, setLineNextCursor] = useState<string | null>(null);
+  const [linePageCursors, setLinePageCursors] = useState<string[]>([]);
+  const [linePageIndex, setLinePageIndex] = useState(1);
   const [loadingLines, setLoadingLines] = useState(false);
 
   // BOQ Creation Context / Parameters (Top Setup Bar)
@@ -224,9 +229,13 @@ export default function BoqStudioPage() {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const costCentreRequestSequence = useRef(0);
   const boqDetailsRequestSequence = useRef(0);
+  const boqLinePageRequestSequence = useRef(0);
+  const linesSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
     boqDetailsRequestSequence.current += 1;
+    boqLinePageRequestSequence.current += 1;
+    if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
   }, []);
 
   // -------------------------------------------------------------
@@ -417,8 +426,64 @@ export default function BoqStudioPage() {
     }
   };
 
+  const loadBoqLinePage = async (
+    revisionId: string,
+    cursor: string | null,
+    search: string,
+    transition: 'reset' | 'next' | 'previous',
+  ) => {
+    const requestSequence = ++boqLinePageRequestSequence.current;
+    setLoadingLines(true);
+    try {
+      const query = new URLSearchParams({ pageSize: String(BOQ_LINE_DETAIL_PAGE_SIZE) });
+      if (cursor) query.set('cursor', cursor);
+      if (search.trim()) query.set('search', search.trim());
+      if (transition !== 'reset') query.set('includeTotal', 'false');
+      const response = await fetch(`/api/boq/${encodeURIComponent(revisionId)}/lines?${query.toString()}`);
+      if (!response.ok) throw new Error(UI_STRINGS.common.userMessages.failedToLoadLineItemDetails);
+      const responseBody = await response.json();
+      const payload = responseBody?.data && !Array.isArray(responseBody.data)
+        ? responseBody.data
+        : responseBody;
+      if (!Array.isArray(payload?.data)) throw new Error(UI_STRINGS.common.userMessages.failedToLoadLineItemDetails);
+      if (requestSequence !== boqLinePageRequestSequence.current) return;
+
+      const pageLines = payload.data;
+      const nextCursor = typeof payload.nextCursor === 'string' ? payload.nextCursor : null;
+      const responseTotal = Number(payload.total);
+      const hasResponseTotal = payload.total !== undefined
+        && Number.isSafeInteger(responseTotal)
+        && responseTotal >= 0;
+      setLines(pageLines);
+      setLineTotal((current) => hasResponseTotal
+        ? responseTotal
+        : transition === 'reset' ? pageLines.length : current);
+      setLineNextCursor(nextCursor);
+      if (transition === 'reset') {
+        setLinePageCursors([]);
+        setLinePageIndex(1);
+      } else if (transition === 'next' && cursor) {
+        setLinePageCursors((current) => [...current, cursor]);
+        setLinePageIndex((current) => current + 1);
+      } else if (transition === 'previous') {
+        setLinePageCursors((current) => current.slice(0, -1));
+        setLinePageIndex((current) => Math.max(1, current - 1));
+      }
+    } catch (error) {
+      if (requestSequence === boqLinePageRequestSequence.current) {
+        console.error('Error loading BOQ line page:', error);
+        setStatusType('error');
+        setStatusMessage(UI_STRINGS.common.userMessages.failedToLoadLineItemDetails);
+      }
+    } finally {
+      if (requestSequence === boqLinePageRequestSequence.current) setLoadingLines(false);
+    }
+  };
+
   const loadBoqDetails = async (boqId: string) => {
     const requestSequence = ++boqDetailsRequestSequence.current;
+    boqLinePageRequestSequence.current += 1;
+    if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
     setLoadingLines(true);
     try {
       const res = await fetch(`/api/boq/${boqId}`);
@@ -427,13 +492,9 @@ export default function BoqStudioPage() {
         if (requestSequence !== boqDetailsRequestSequence.current) return;
         const boqData = d.boq || d.data?.boq;
         const revData = d.revision || d.data?.revision;
-        let lineItems = d.lines || d.data?.lines || [];
+        const lineItems = d.lines || d.data?.lines || [];
         const totalLines = Number(d.totalLines ?? d.data?.totalLines ?? lineItems.length);
-        if (revData?.id && lineItems.length < totalLines) {
-          const nextCursor = d.nextCursor ?? d.data?.nextCursor ?? null;
-          lineItems = lineItems.concat(await fetchBoqLineContinuationPages(revData.id, nextCursor));
-          if (requestSequence !== boqDetailsRequestSequence.current) return;
-        }
+        const nextCursor = d.nextCursor ?? d.data?.nextCursor ?? null;
 
         if (boqData) {
           setActiveBoq(boqData);
@@ -459,6 +520,12 @@ export default function BoqStudioPage() {
         setIsEditingBoq(false);
         setEditableLines([]);
         setLines(lineItems);
+        setLineSummary(d.summary ?? d.data?.summary ?? null);
+        setLineTotal(Number.isSafeInteger(totalLines) && totalLines >= 0 ? totalLines : lineItems.length);
+        setLineNextCursor(typeof nextCursor === 'string' ? nextCursor : null);
+        setLinePageCursors([]);
+        setLinePageIndex(1);
+        setLinesSearch('');
 
         // Precompute category breakdown and totals
         computeCostSummary(lineItems, boqData);
@@ -472,6 +539,30 @@ export default function BoqStudioPage() {
         setLoadingLines(false);
       }
     }
+  };
+
+  const handleLinesSearchChange = (search: string) => {
+    setLinesSearch(search);
+    if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
+    if (!activeRevision?.id || isEditingBoq) return;
+    setLoadingLines(true);
+    linesSearchTimer.current = setTimeout(() => {
+      void loadBoqLinePage(activeRevision.id, null, search, 'reset');
+    }, 250);
+  };
+
+  const handleNextLinesPage = () => {
+    if (!activeRevision?.id || !lineNextCursor || loadingLines || isEditingBoq) return;
+    if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
+    void loadBoqLinePage(activeRevision.id, lineNextCursor, linesSearch, 'next');
+  };
+
+  const handlePreviousLinesPage = () => {
+    if (!activeRevision?.id || linePageIndex <= 1 || loadingLines || isEditingBoq) return;
+    if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
+    const cursor = linePageIndex > 2 ? linePageCursors[linePageCursors.length - 2] ?? null : null;
+    if (linePageIndex > 2 && !cursor) return;
+    void loadBoqLinePage(activeRevision.id, cursor, linesSearch, 'previous');
   };
 
   const handlePurposeChange = (newPurpose: 'BUDGET' | 'PR') => {
@@ -1476,21 +1567,32 @@ export default function BoqStudioPage() {
   const activeProjectObj = projects.find(p => p.id === (activeBoq?.projectId || setupProject || selectedProjectId));
   const activeCostCentreObj = costCentres.find(cc => cc.id === (activeBoq?.costCentreId || setupCostCentre || selectedCostCentreId));
 
-  const filteredLines = (isEditingBoq ? editableLines : lines).filter(l => {
-    if (!linesSearch) return true;
-    const q = linesSearch.toLowerCase();
-    return (
-      (l.lineNumber && String(l.lineNumber).toLowerCase().includes(q)) ||
-      (l.originalDescription && l.originalDescription.toLowerCase().includes(q)) ||
-      (l.standardDescription && l.standardDescription.toLowerCase().includes(q)) ||
-      (l.specification && l.specification.toLowerCase().includes(q))
-    );
-  });
+  const filteredLines = isEditingBoq ? editableLines : lines;
 
   // Section 3: Comprehensive integrated financial summary
   const financialSummary = useMemo(() => {
+    const rawArea = activeCostCentreObj?.areaSqFt || activeProjectObj?.areaSqFt || (setupArea ? parseFloat(setupArea.replace(/,/g, '')) : null);
+    const areaSqFt = rawArea && !isNaN(rawArea) && rawArea > 0 ? rawArea : null;
+    if (lineSummary) {
+      const totalAiEstimate = lineSummary.totalAiEstimate;
+      return {
+        totalLines: lineSummary.totalLines,
+        validQuantityLines: lineSummary.validQuantityLines,
+        missingQuantityLines: lineSummary.missingQuantityLines,
+        missingRateLines: lineSummary.missingRateLines,
+        validationErrorLines: lineSummary.validationErrorLines,
+        hasAiEstimates: lineSummary.estimatedLineCount > 0,
+        totalAiEstimate,
+        areaSqFt,
+        costPerSqFt: areaSqFt && totalAiEstimate > 0
+          ? Math.round((totalAiEstimate / areaSqFt) * 100) / 100
+          : null,
+        categoryTotals: lineSummary.categoryTotals,
+      };
+    }
+
     const currentLines = isEditingBoq ? editableLines : lines;
-    const totalLines = currentLines.length;
+    const totalLines = lineTotal;
 
     let validQuantityLines = 0;
     let missingQuantityLines = 0;
@@ -1547,8 +1649,6 @@ export default function BoqStudioPage() {
     }
 
     // Cost per SqFt
-    const rawArea = activeCostCentreObj?.areaSqFt || activeProjectObj?.areaSqFt || (setupArea ? parseFloat(setupArea.replace(/,/g, '')) : null);
-    const areaSqFt = rawArea && !isNaN(rawArea) && rawArea > 0 ? rawArea : null;
     const costPerSqFt = (areaSqFt && hasAiEstimates && totalAiEstimate > 0)
       ? Math.round((totalAiEstimate / areaSqFt) * 100) / 100
       : null;
@@ -1565,7 +1665,7 @@ export default function BoqStudioPage() {
       costPerSqFt,
       categoryTotals,
     };
-  }, [isEditingBoq, editableLines, lines, activeCostCentreObj, activeProjectObj, setupArea]);
+  }, [isEditingBoq, editableLines, lines, lineSummary, lineTotal, activeCostCentreObj, activeProjectObj, setupArea]);
 
   const pendingQuantityCount = financialSummary.missingQuantityLines;
   const validQuantityCount = financialSummary.validQuantityLines;
@@ -1601,6 +1701,12 @@ export default function BoqStudioPage() {
               setActiveBoq(null);
               setActiveRevision(null);
               setLines([]);
+              setLineSummary(null);
+              setLineTotal(0);
+              setLineNextCursor(null);
+              setLinePageCursors([]);
+              setLinePageIndex(1);
+              setLinesSearch('');
               setEditableLines([]);
               setImportResult(null);
               setCostSummary(null);
@@ -2558,7 +2664,7 @@ export default function BoqStudioPage() {
               {/* Collapsible Category Breakdown Strip */}
               {showCategoryBreakdown && (
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-                  {['Material', 'Electrical', 'Civil', 'Interior', 'Other'].map(cat => (
+                  {BOQ_FINANCIAL_CATEGORY_KEYS.map(cat => (
                     <div key={cat} style={{ background: '#ffffff', padding: '6px 10px', borderRadius: 4, border: '1px solid #e2e8f0', textAlign: 'center' }}>
                       <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{cat}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
@@ -2685,7 +2791,7 @@ export default function BoqStudioPage() {
             <div style={{ marginTop: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppBoqStudioPage.bOQLINEITEMS}{lines.length}{UI_STRINGS.common.copyc7zu6c}</h4>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppBoqStudioPage.bOQLINEITEMS}{lineTotal}{UI_STRINGS.common.copyc7zu6c}</h4>
                   {pendingQuantityCount > 0 && (
                     <span style={{ fontSize: 11, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>{interpolateUiString(UI_STRINGS.appAppBoqStudioPage.quantityWarningCountBadge, { count: pendingQuantityCount })}</span>
                   )}
@@ -2698,7 +2804,8 @@ export default function BoqStudioPage() {
                       type="text"
                       placeholder={UI_STRINGS.appAppBoqStudioPage.searchLineItems}
                       value={linesSearch}
-                      onChange={e => setLinesSearch(e.target.value)}
+                      onChange={e => handleLinesSearchChange(e.target.value)}
+                      disabled={isEditingBoq}
                       className="input-field"
                       style={{ height: 28, fontSize: 12, width: 200, paddingLeft: 26 }}
                     />
@@ -3128,6 +3235,34 @@ export default function BoqStudioPage() {
                   </tbody>
                 </table>
               </div>
+              {lineTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handlePreviousLinesPage}
+                    disabled={linePageIndex <= 1 || loadingLines || isEditingBoq}
+                    style={{ fontSize: 11, padding: '4px 9px' }}
+                  >
+                    {UI_STRINGS.common.previousPage}
+                  </button>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>
+                    {interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {
+                      value1: linePageIndex,
+                      value2: Math.max(1, Math.ceil(lineTotal / BOQ_LINE_DETAIL_PAGE_SIZE)),
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleNextLinesPage}
+                    disabled={!lineNextCursor || loadingLines || isEditingBoq}
+                    style={{ fontSize: 11, padding: '4px 9px' }}
+                  >
+                    {UI_STRINGS.common.nextPage}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

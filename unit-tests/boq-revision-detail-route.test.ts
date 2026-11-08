@@ -9,6 +9,7 @@ import { logEvent } from '../src/lib/observability/server-logger';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     boqRevision: { findFirst: jest.fn() },
     boq: { findFirst: jest.fn(), update: jest.fn() },
     boqLine: { aggregate: jest.fn(), findMany: jest.fn() },
@@ -27,6 +28,11 @@ const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const log = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
+const emptySummary = {
+  totalLines: 0, validQuantityLines: 0, missingQuantityLines: 0, missingRateLines: 0,
+  validationErrorLines: 0, estimatedLineCount: 0, totalAiEstimate: 0,
+  categoryTotals: { Material: 0, Electrical: 0, Civil: 0, Interior: 0, Other: 0 },
+};
 const params = (revisionId = 'revision-1') => ({ params: Promise.resolve({ revisionId }) });
 const getRequest = () => new NextRequest('http://localhost/api/boq/revision-1');
 const patchRequest = (body: unknown) => new NextRequest('http://localhost/api/boq/revision-1', {
@@ -38,6 +44,7 @@ describe('BOQ revision detail API', () => {
     jest.clearAllMocks();
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
+    db.$queryRaw.mockResolvedValue([emptySummary]);
   });
 
   it('authenticates GET and PATCH requests before accessing tenant data', async () => {
@@ -58,7 +65,9 @@ describe('BOQ revision detail API', () => {
       id: 'revision-1', qualityScore: 0,
       boq: { id: 'boq-1', boqCode: 'BOQ-1', project: { id: 'project-1' }, costCentre: { id: 'cc-1' } },
     });
-    db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 3 }, _sum: { aiTotalCost: 73 } });
+    db.$queryRaw.mockResolvedValueOnce([{
+      ...emptySummary, totalLines: 3, totalAiEstimate: 73,
+    }]);
     db.boqLine.findMany.mockResolvedValueOnce([
       { id: 'line-1', aiReason: JSON.stringify({ costBreakdown: { labor: 2 } }), aiUnitCost: null, aiTotalCost: 25 },
       { id: 'line-2', aiReason: '{bad json', aiUnitCost: 12, aiTotalCost: 48, quantity: 4, category: { name: 'Electrical' }, originalDescription: 'Cable' },
@@ -76,13 +85,9 @@ describe('BOQ revision detail API', () => {
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
       orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      take: 100,
+      take: 90,
     }));
-    expect(db.boqLine.aggregate).toHaveBeenCalledWith({
-      where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
-      _count: { _all: true },
-      _sum: { aiTotalCost: true },
-    });
+    expect(db.$queryRaw).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledWith('warn', 'boq.cost_breakdown_parse_failed', expect.objectContaining({
       operation: 'parse_saved_cost_breakdown', route: '/api/boq/[revisionId]',
       tenantId: 'tenant-1', revisionId: 'revision-1', durationMs: expect.any(Number), status: 'degraded', malformedLineCount: 1,
@@ -99,7 +104,7 @@ describe('BOQ revision detail API', () => {
         { id: 'revision-latest', qualityScore: null },
       ],
     });
-    db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 1 }, _sum: { aiTotalCost: 10 } });
+    db.$queryRaw.mockResolvedValueOnce([{ ...emptySummary, totalLines: 1, totalAiEstimate: 10 }]);
     db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-1', aiTotalCost: 10, aiUnitCost: null }]);
     await expect(GET(getRequest(), params('boq-2'))).resolves.toMatchObject({
       ok: true, data: { boq: { estimatedValue: 10 }, revision: { id: 'revision-latest' }, totalLines: 1, linesTruncated: false, qualityScore: 100 },
@@ -117,18 +122,18 @@ describe('BOQ revision detail API', () => {
 
   it('bounds the detail line preview while preserving exact totals for the studio continuation request', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', boq: { id: 'boq-1' } });
-    db.boqLine.aggregate.mockResolvedValueOnce({ _count: { _all: 101 }, _sum: { aiTotalCost: 9876 } });
-    db.boqLine.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+    db.$queryRaw.mockResolvedValueOnce([{ ...emptySummary, totalLines: 91, totalAiEstimate: 9876 }]);
+    db.boqLine.findMany.mockResolvedValueOnce(Array.from({ length: 90 }, (_, index) => ({
       id: `line-${index + 1}`, lineNumber: String(index + 1), aiTotalCost: 10, aiUnitCost: null,
     })));
 
     const result = await GET(getRequest(), params()) as unknown as { data: { nextCursor: string } };
     expect(result).toMatchObject({
       ok: true,
-      data: { boq: { estimatedValue: 9876 }, totalLines: 101, linesTruncated: true, lines: expect.any(Array) },
+      data: { boq: { estimatedValue: 9876 }, totalLines: 91, linesTruncated: true, lines: expect.any(Array) },
     });
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
-    expect(decodeBoqLineCursor(result.data.nextCursor)).toEqual({ id: 'line-100', lineNumber: '100' });
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 90 }));
+    expect(decodeBoqLineCursor(result.data.nextCursor)).toEqual({ id: 'line-90', lineNumber: '90' });
   });
 
   it('returns an empty BOQ payload when the BOQ has no revisions and a 404 when neither identifier exists', async () => {

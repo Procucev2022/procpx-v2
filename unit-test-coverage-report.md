@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
+Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98665/99322) |
-| branches | 93.70% (22537/24050) |
-| functions | 98.55% (1907/1935) |
-| lines | 99.33% (98665/99322) |
+| statements | 99.33% (98874/99532) |
+| branches | 93.70% (22598/24117) |
+| functions | 98.55% (1913/1941) |
+| lines | 99.33% (98874/99532) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -28,7 +28,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/app/(app)/boq/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/standard-library/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/studio/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/boq/studio/page.tsx` | 98.80% | 90.31% | 97.72% | 98.80% | PASS |
+| `src/app/(app)/boq/studio/page.tsx` | 98.82% | 90.26% | 97.79% | 98.82% | PASS |
 | `src/app/(app)/boq/upload/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/upload/page.tsx` | 100.00% | 94.80% | 90.90% | 100.00% | PASS |
 | `src/app/(app)/budget/cost-centres/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -98,7 +98,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/app/api/boq/[revisionId]/new-revision/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/reject/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/[revisionId]/route.ts` | 99.15% | 95.45% | 100.00% | 99.15% | PASS |
+| `src/app/api/boq/[revisionId]/route.ts` | 99.14% | 95.52% | 100.00% | 99.14% | PASS |
 | `src/app/api/boq/[revisionId]/standardise/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/standardise/route.ts` | 91.70% | 94.54% | 100.00% | 91.70% | PASS |
 | `src/app/api/boq/[revisionId]/submit/route.ts` | 100.00% | 92.30% | 100.00% | 100.00% | PASS |
@@ -303,6 +303,7 @@ Files included: **347**. Files meeting all four 90% thresholds: **347/347**.
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
 | `src/lib/boq-line-pagination.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-line-pagination.ts` | 100.00% | 94.87% | 100.00% | 100.00% | PASS |
+| `src/lib/boq-line-summary.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-reference-catalog.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-reference-catalog.ts` | 100.00% | 93.75% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

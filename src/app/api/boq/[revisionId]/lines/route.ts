@@ -74,6 +74,7 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
   const cursorParam = searchParams.get('cursor');
   const cursor = cursorParam === null ? null : decodeBoqLineCursor(cursorParam);
   if (cursorParam !== null && !cursor) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  const includeTotal = searchParams.get('includeTotal') !== 'false';
   const validationStatus = searchParams.get('validationStatus') || '';
   const search = (searchParams.get('search') || '').trim().slice(0, 120);
 
@@ -86,6 +87,7 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     where.OR = [
       { originalDescription: { contains: search } },
       { standardDescription: { contains: search } },
+      { specification: { contains: search } },
       { lineNumber: { contains: search } },
       { itemCode: { contains: search } },
     ];
@@ -105,12 +107,12 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     : where;
 
   const [total, lines] = await Promise.all([
-    prisma.boqLine.count({ where }),
+    includeTotal ? prisma.boqLine.count({ where }) : Promise.resolve(null),
     prisma.boqLine.findMany({
       where: pagedWhere,
       orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
       ...(!cursor ? { skip: (page - 1) * pageSize } : {}),
-      take: pageSize + (cursor ? 1 : 0),
+      take: pageSize + 1,
       include: {
         category: { select: { id: true, name: true } },
         subcategory: { select: { id: true, name: true } },
@@ -119,7 +121,7 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     }),
   ]);
 
-  const hasMore = cursor ? lines.length > pageSize : total > page * pageSize;
+  const hasMore = lines.length > pageSize;
   const pageLines = lines.slice(0, pageSize);
   const nextCursor = hasMore && pageLines.length > 0
     ? encodeBoqLineCursor(pageLines[pageLines.length - 1])
@@ -178,10 +180,9 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
 
   return apiSuccess({
     data: enrichedLines,
-    total,
+    ...(total === null ? {} : { total, totalPages: Math.ceil(total / pageSize) }),
     page,
     pageSize,
-    totalPages: Math.ceil(total / pageSize),
     hasMore,
     nextCursor,
     revision,

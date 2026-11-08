@@ -49,7 +49,7 @@ describe('BOQ line pagination', () => {
       { id: 'line-101' }, { id: 'line-201' },
     ]);
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(fetchPage.mock.calls[0][0]).toContain('pageSize=100');
+    expect(fetchPage.mock.calls[0][0]).toContain('pageSize=90');
     expect(fetchPage.mock.calls[1][0]).toContain('cursor=');
   });
 

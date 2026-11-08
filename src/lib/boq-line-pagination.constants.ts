@@ -1,3 +1,3 @@
-export const BOQ_LINE_DETAIL_PAGE_SIZE = 100;
+export const BOQ_LINE_DETAIL_PAGE_SIZE = 90;
 export const BOQ_LINE_MAX_BATCH_EDITS = 90;
 export const BOQ_LINE_CURSOR_MAX_LENGTH = 512;
