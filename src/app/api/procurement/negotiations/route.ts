@@ -130,10 +130,37 @@ export async function POST(req: NextRequest) {
         ? vendorIds
         : rfq.invitedVendors.map((iv) => iv.vendorId)
       : [vendorId];
-    const targetList = Array.from(new Set(requestedTargetList.filter(
+    const validTargetIds = requestedTargetList.filter(
       (targetVendorId): targetVendorId is string => typeof targetVendorId === 'string' && targetVendorId.trim().length > 0,
-    )));
+    );
+    const targetList = Array.from(new Set(validTargetIds));
+    const invalidTargetCount = requestedTargetList.length - validTargetIds.length;
+    const duplicateTargetCount = validTargetIds.length - targetList.length;
+    if (invalidTargetCount > 0 || duplicateTargetCount > 0) {
+      await writeStructuredLog('warn', 'procurement.negotiation_targets_normalized', {
+        operation: 'normalize_dispatch_targets',
+        route: '/api/procurement/negotiations',
+        requestId,
+        tenantId: ctx.tenantId,
+        rfqId,
+        requestedTargetCount: requestedTargetList.length,
+        targetCount: targetList.length,
+        invalidTargetCount,
+        duplicateTargetCount,
+      });
+    }
     if (targetList.length === 0) {
+      await writeStructuredLog('warn', 'procurement.negotiation_dispatch_rejected', {
+        operation: 'dispatch_negotiation_offers',
+        route: '/api/procurement/negotiations',
+        requestId,
+        tenantId: ctx.tenantId,
+        rfqId,
+        reason: 'no_valid_vendor_targets',
+        requestedTargetCount: requestedTargetList.length,
+        invalidTargetCount,
+        duplicateTargetCount,
+      });
       return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 

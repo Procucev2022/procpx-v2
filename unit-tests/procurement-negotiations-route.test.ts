@@ -211,6 +211,10 @@ describe('procurement negotiations API', () => {
       where: { tenantId: 'tenant-1', id: { in: ['v1'] } },
       select: { id: true, name: true },
     });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.negotiation_targets_normalized', expect.objectContaining({
+      operation: 'normalize_dispatch_targets', route: '/api/procurement/negotiations', tenantId: 'tenant-1', rfqId: 'rfq-1',
+      requestedTargetCount: 2, targetCount: 1, invalidTargetCount: 0, duplicateTargetCount: 1,
+    }));
     expect(writeBatch).toHaveBeenCalledTimes(1);
   });
 
@@ -244,6 +248,14 @@ describe('procurement negotiations API', () => {
     expect(db.negotiation.findFirst).not.toHaveBeenCalled();
     expect(db.$queryRaw).not.toHaveBeenCalled();
     expect(writeBatch).not.toHaveBeenCalled();
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.negotiation_targets_normalized', expect.objectContaining({
+      operation: 'normalize_dispatch_targets', tenantId: 'tenant-1', rfqId: 'rfq-1',
+      requestedTargetCount: 2, targetCount: 0, invalidTargetCount: 2, duplicateTargetCount: 0,
+    }));
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.negotiation_dispatch_rejected', expect.objectContaining({
+      operation: 'dispatch_negotiation_offers', reason: 'no_valid_vendor_targets', tenantId: 'tenant-1', rfqId: 'rfq-1',
+      requestedTargetCount: 2, invalidTargetCount: 2, duplicateTargetCount: 0,
+    }));
   });
 
   it('handles pending rounds, confirmation failures, recent duplicates, and capped vendors', async () => {
