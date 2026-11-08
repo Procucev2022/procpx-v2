@@ -6,6 +6,8 @@ import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { dispatchPreparedWorkflowNotification } from '../src/lib/notifications';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from '../src/lib/ui-strings.constants';
+import { VENDOR_RATE_CARD_LIST_PAGE_SIZE } from '../src/lib/vendor-rate-card-list.constants';
+import { MAX_RATE_CARD_ITEMS } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -119,14 +121,18 @@ describe('vendor portal rate cards API', () => {
         { buyerOffer1: 12, vendorQuote1: null, finalAgreedRate: 12, previousPpoRate: 9, referenceQty: 3, variance: 200 },
       ] },
     ] } });
-    expect(result).toMatchObject({ ok: true, data: { page: 1, pageSize: 50, hasMore: false } });
+    expect(result).toMatchObject({ ok: true, data: { page: 1, pageSize: VENDOR_RATE_CARD_LIST_PAGE_SIZE, hasMore: false } });
     expect(structuredLog).toHaveBeenCalledWith('warn', 'vendor_portal.rate_card_metadata_invalid', expect.objectContaining({
       tenantId: 'tenant-1', vendorId: 'vendor-1', invalidFieldCount: 2,
     }));
     expect(db.vendorRateCard.findMany).toHaveBeenCalledWith({
       where: { tenantId: 'tenant-1', vendorId: 'vendor-1' },
-      include: { items: { where: { isActive: true } } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], skip: 0, take: 50,
+      include: { items: {
+        where: { isActive: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: MAX_RATE_CARD_ITEMS + 1,
+      } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], skip: 0, take: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
     });
     expect(db.vendorRateCard.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', vendorId: 'vendor-1' } });
   });
@@ -146,8 +152,68 @@ describe('vendor portal rate cards API', () => {
         { category: { contains: 'x'.repeat(200) } },
         { scope: { contains: 'x'.repeat(200) } },
       ] },
-      skip: 0, take: 50,
+      skip: 0, take: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
     }));
+  });
+
+  it('caps nested-item list pages while preserving subsequent pages', async () => {
+    db.vendorRateCard.count.mockResolvedValueOnce(37);
+    const request = new NextRequest('http://localhost/api/vendor-portal/rate-cards?pageSize=100');
+
+    const result = await GET(request);
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        page: 1,
+        pageSize: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
+        hasMore: true,
+      },
+    });
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      skip: 0,
+      take: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
+    }));
+  });
+
+  it('bounds active item reads and fails closed when stored card data exceeds its limit', async () => {
+    db.vendorRateCard.count.mockResolvedValueOnce(1);
+    db.vendorRateCard.findMany.mockResolvedValueOnce([card({
+      items: Array.from({ length: MAX_RATE_CARD_ITEMS + 1 }, (_, index) => ({ id: 'item-' + String(index + 1) })),
+    })]);
+
+    await expect(GET(getRequest())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchRateCards, status: 500,
+    });
+    expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: { items: expect.objectContaining({
+        take: MAX_RATE_CARD_ITEMS + 1,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }) },
+    }));
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'vendor_portal.rate_card_items_limit_exceeded', expect.objectContaining({
+      operation: 'list_vendor_rate_cards', oversizedRateCardCount: 1, maxItems: MAX_RATE_CARD_ITEMS,
+    }));
+  });
+
+  it('bounds the vendor submission card read and fails closed on oversized stored item data', async () => {
+    db.vendorRateCard.findFirst.mockResolvedValueOnce(card({
+      items: Array.from({ length: MAX_RATE_CARD_ITEMS + 1 }, (_, index) => ({ id: 'item-' + String(index + 1) })),
+    }));
+
+    await expect(POST(postRequest({ rateCardId: 'rate-card-1', items: [] }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals, status: 500,
+    });
+    expect(db.vendorRateCard.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({ items: expect.objectContaining({
+        take: MAX_RATE_CARD_ITEMS + 1,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }) }),
+    }));
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'vendor_portal.rate_card_items_limit_exceeded', expect.objectContaining({
+      operation: 'submit_vendor_rate_card', rateCardId: 'rate-card-1', maxItems: MAX_RATE_CARD_ITEMS,
+    }));
+    expect(batch).not.toHaveBeenCalled();
   });
 
   it('returns GET provider errors with a safe fallback message', async () => {

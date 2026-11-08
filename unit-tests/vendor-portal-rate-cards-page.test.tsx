@@ -3,6 +3,7 @@
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
+import { VENDOR_RATE_CARD_LIST_PAGE_SIZE } from '../src/lib/vendor-rate-card-list.constants';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorRateCardsPage from '../src/app/(app)/vendor-portal/rate-cards/page';
@@ -77,6 +78,8 @@ describe('vendor portal rate cards page', () => {
     await flush();
     await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadingRateCards))).not.toBeInTheDocument());
 
+    expect(new URL(String(fetchMock.mock.calls[0][0]), 'http://localhost').searchParams.get('pageSize'))
+      .toBe(String(VENDOR_RATE_CARD_LIST_PAGE_SIZE));
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.loadingRateCards))).not.toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRateCardsPage.vendorRateCardsCommercialNegotiation))).toBeInTheDocument();
     expect(screen.queryByTestId('section-five')).not.toBeInTheDocument();

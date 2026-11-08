@@ -26,6 +26,7 @@ import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace'
 import StatusBadge from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { VENDOR_RATE_CARD_LIST_PAGE_SIZE } from '@/lib/vendor-rate-card-list.constants';
 import type { VendorRateCardListItem } from '@app-types/app/(app)/vendor-portal/rate-cards/page.types';
 
 
@@ -62,7 +63,7 @@ export default function VendorRateCardsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const query = new URLSearchParams({ page: String(page), pageSize: '50' });
+      const query = new URLSearchParams({ page: String(page), pageSize: String(VENDOR_RATE_CARD_LIST_PAGE_SIZE) });
       if (currentSearchTerm.current.trim()) query.set('search', currentSearchTerm.current.trim());
       if (typeof window !== 'undefined') {
         const rateCardId = new URLSearchParams(window.location.search).get('negotiate');

@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **351**. Files meeting all four 90% thresholds: **351/351**.
+Files included: **352**. Files meeting all four 90% thresholds: **352/352**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.32% (99376/100050) |
-| branches | 93.68% (22694/24223) |
+| statements | 99.32% (99406/100080) |
+| branches | 93.68% (22699/24228) |
 | functions | 98.56% (1926/1954) |
-| lines | 99.32% (99376/100050) |
+| lines | 99.32% (99406/100080) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -243,7 +243,7 @@ Files included: **351**. Files meeting all four 90% thresholds: **351/351**.
 | `src/app/api/vendor-portal/me/route.ts` | 100.00% | 97.14% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/ppos/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/ppos/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/vendor-portal/rate-cards/route.ts` | 98.72% | 91.46% | 100.00% | 98.72% | PASS |
+| `src/app/api/vendor-portal/rate-cards/route.ts` | 98.80% | 91.71% | 100.00% | 98.80% | PASS |
 | `src/app/api/vendor-portal/rfqs/[id]/route.ts` | 99.78% | 94.77% | 100.00% | 99.78% | PASS |
 | `src/app/api/vendor-portal/rfqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/rfqs/route.ts` | 100.00% | 98.31% | 100.00% | 100.00% | PASS |
@@ -364,3 +364,4 @@ Files included: **351**. Files meeting all four 90% thresholds: **351/351**.
 | `src/lib/vendor-ai-evaluator.ts` | 100.00% | 96.26% | 100.00% | 100.00% | PASS |
 | `src/lib/vendor-evaluation-persistence.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/vendor-evaluation-persistence.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/vendor-rate-card-list.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
