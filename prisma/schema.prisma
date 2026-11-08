@@ -1162,6 +1162,7 @@ model BudgetTransaction {
   @@index([projectId], map: "budget_transactions_projectId_idx")
   @@index([costCentreId], map: "budget_transactions_costCentreId_idx")
   @@index([contributionId], map: "budget_transactions_contributionId_idx")
+  @@index([tenantId, contributionId, category, id], map: "budget_transactions_contribution_category_cursor_idx")
   @@index([boqRevisionId], map: "budget_transactions_boqRevisionId_idx")
   @@unique([reversedTransactionId])
     @@index([tenantId, projectId, costCentreId, status, category])

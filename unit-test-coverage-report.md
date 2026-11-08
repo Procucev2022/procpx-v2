@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **349**. Files meeting all four 90% thresholds: **349/349**.
+Files included: **351**. Files meeting all four 90% thresholds: **351/351**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.34% (99044/99702) |
-| branches | 93.71% (22606/24123) |
-| functions | 98.55% (1915/1943) |
-| lines | 99.34% (99044/99702) |
+| statements | 99.32% (99376/100050) |
+| branches | 93.68% (22694/24223) |
+| functions | 98.56% (1926/1954) |
+| lines | 99.32% (99376/100050) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -17,7 +17,7 @@ Files included: **349**. Files meeting all four 90% thresholds: **349/349**.
 | `src/app/(app)/admin/users/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/admin/users/page.tsx` | 100.00% | 98.21% | 94.73% | 100.00% | PASS |
 | `src/app/(app)/approvals/boq-pr/page.tsx` | 99.86% | 91.77% | 96.66% | 99.86% | PASS |
-| `src/app/(app)/approvals/budget/page.tsx` | 99.13% | 93.79% | 95.65% | 99.13% | PASS |
+| `src/app/(app)/approvals/budget/page.tsx` | 98.01% | 90.27% | 96.15% | 98.01% | PASS |
 | `src/app/(app)/approvals/rate-cards/page.tsx` | 98.68% | 90.28% | 95.65% | 98.68% | PASS |
 | `src/app/(app)/approvals/vendor-ratings/page.tsx` | 100.00% | 98.29% | 95.00% | 100.00% | PASS |
 | `src/app/(app)/audit/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -40,7 +40,7 @@ Files included: **349**. Files meeting all four 90% thresholds: **349/349**.
 | `src/app/(app)/cost-centres/page.tsx` | 99.42% | 92.78% | 100.00% | 99.42% | PASS |
 | `src/app/(app)/dashboard/page.tsx` | 99.23% | 91.82% | 100.00% | 99.23% | PASS |
 | `src/app/(app)/error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/finance/budget-approvals/page.tsx` | 99.16% | 95.31% | 95.65% | 99.16% | PASS |
+| `src/app/(app)/finance/budget-approvals/page.tsx` | 98.07% | 91.60% | 96.15% | 98.07% | PASS |
 | `src/app/(app)/layout.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/categories/page.tsx` | 100.00% | 96.77% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/standard-boq/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -309,6 +309,8 @@ Files included: **349**. Files meeting all four 90% thresholds: **349/349**.
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-upload.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
+| `src/lib/budget-contribution-detail-pagination.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/budget-contribution-detail.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/budget-contribution-lines.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -334,7 +336,7 @@ Files included: **349**. Files meeting all four 90% thresholds: **349/349**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.79% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

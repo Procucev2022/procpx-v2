@@ -28,6 +28,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { fetchBudgetContributionDetailPage } from '@/lib/budget-contribution-detail-pagination';
+import type { BudgetContributionDetailSection } from '@app-types/lib/budget-contribution-detail.types';
 
 
 export default function FinanceBudgetApprovalsPage() {
@@ -43,6 +45,8 @@ export default function FinanceBudgetApprovalsPage() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [reviewPageLoading, setReviewPageLoading] = useState<BudgetContributionDetailSection | null>(null);
+  const [reviewPageError, setReviewPageError] = useState({ lines: '', transactions: '' });
   const reviewRequestSequence = useRef(0);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -87,6 +91,8 @@ export default function FinanceBudgetApprovalsPage() {
     setReviewModalOpen(true);
     setReviewLoading(true);
     setReviewError('');
+    setReviewPageLoading(null);
+    setReviewPageError({ lines: '', transactions: '' });
     try {
       const response = await fetch(`/api/budgets/${contribution.id}`);
       const body = await response.json();
@@ -104,10 +110,50 @@ export default function FinanceBudgetApprovalsPage() {
     }
   };
 
+  const loadMoreContributionDetail = async (section: BudgetContributionDetailSection) => {
+    if (!selectedContrib || reviewPageLoading) return;
+    const page = selectedContrib.detailPages?.[section];
+    if (typeof page?.nextCursor !== 'string') return;
+    const sequence = reviewRequestSequence.current;
+    const contributionId = selectedContrib.id;
+    setReviewPageLoading(section);
+    setReviewPageError((current) => ({ ...current, [section]: '' }));
+    try {
+      const nextPage = await fetchBudgetContributionDetailPage<unknown>(contributionId, section, page.nextCursor);
+      if (sequence !== reviewRequestSequence.current) return;
+      if (section === 'lines') {
+        setSelectedContrib({
+          ...selectedContrib,
+          boqRevision: {
+            ...selectedContrib.boqRevision,
+            lines: [...(selectedContrib.boqRevision?.lines || []), ...nextPage.data],
+          },
+          detailPages: { ...selectedContrib.detailPages, lines: { hasMore: nextPage.hasMore, nextCursor: nextPage.nextCursor } },
+        });
+      } else {
+        setSelectedContrib({
+          ...selectedContrib,
+          transactions: [...(selectedContrib.transactions || []), ...nextPage.data],
+          detailPages: { ...selectedContrib.detailPages, transactions: { hasMore: nextPage.hasMore, nextCursor: nextPage.nextCursor } },
+        });
+      }
+    } catch {
+      if (sequence === reviewRequestSequence.current) {
+        setReviewPageError((current) => ({
+          ...current,
+          [section]: UI_STRINGS.appAppBudgetPage.failedToLoadProjectBudgetData,
+        }));
+      }
+    } finally {
+      if (sequence === reviewRequestSequence.current) setReviewPageLoading(null);
+    }
+  };
+
   const closeReview = () => {
     reviewRequestSequence.current += 1;
     setReviewModalOpen(false);
     setReviewLoading(false);
+    setReviewPageLoading(null);
   };
 
   const handleApprove = async (contribId: string) => {
@@ -433,6 +479,17 @@ export default function FinanceBudgetApprovalsPage() {
                   </div>
                 ))}
               </div>
+              {selectedContrib.detailPages?.transactions?.hasMore && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={reviewPageLoading === 'transactions'}
+                  onClick={() => { void loadMoreContributionDetail('transactions'); }}
+                >
+                  {reviewPageLoading === 'transactions' ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
+              )}
+              {reviewPageError.transactions && <div role="alert">{reviewPageError.transactions}</div>}
             </div>
 
             {/* Line items detail table */}
@@ -454,20 +511,39 @@ export default function FinanceBudgetApprovalsPage() {
                     <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center' }}>{UI_STRINGS.common.loading}</td></tr>
                   ) : reviewError ? (
                     <tr><td colSpan={7} role="alert" style={{ padding: 20, textAlign: 'center' }}>{reviewError}</td></tr>
-                  ) : (selectedContrib.boqRevision?.lines || []).map((line: any, idx: number) => (
-                    <tr key={line.id || idx} style={{ borderBottom: '1px solid #f1f5f9', height: 38 }}>
-                      <td style={{ padding: '0 10px', color: '#64748b' }}>{line.lineNumber || idx + 1}</td>
-                      <td style={{ padding: '0 10px', fontWeight: 600, color: '#0f172a' }}>
-                        {line.standardDescription || line.originalDescription}
-                      </td>
-                      <td style={{ padding: '0 10px', color: '#475569' }}>{line.category?.name || UI_STRINGS.common.general}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 600 }}>{line.quantity}</td>
-                      <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uomRaw || UI_STRINGS.common.nOS}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.aiUnitCost || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</td>
-                      <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(line.aiTotalCost || (line.quantity * (line.aiUnitCost || 0))).toLocaleString(I18N_CONFIG.defaultLocale)}
-                      </td>
-                    </tr>
-                  ))}
+                  ) : (
+                    <>
+                      {(selectedContrib.boqRevision?.lines || []).map((line: any, idx: number) => (
+                        <tr key={line.id || idx} style={{ borderBottom: '1px solid #f1f5f9', height: 38 }}>
+                          <td style={{ padding: '0 10px', color: '#64748b' }}>{line.lineNumber || idx + 1}</td>
+                          <td style={{ padding: '0 10px', fontWeight: 600, color: '#0f172a' }}>
+                            {line.standardDescription || line.originalDescription}
+                          </td>
+                          <td style={{ padding: '0 10px', color: '#475569' }}>{line.category?.name || UI_STRINGS.common.general}</td>
+                          <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 600 }}>{line.quantity}</td>
+                          <td style={{ padding: '0 10px', color: '#64748b' }}>{line.uomRaw || UI_STRINGS.common.nOS}</td>
+                          <td style={{ padding: '0 10px', textAlign: 'right' }}>{(line.aiUnitCost || 0).toLocaleString(I18N_CONFIG.defaultLocale)}</td>
+                          <td style={{ padding: '0 10px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{UI_STRINGS.common.copy1g8b5tg}{(line.aiTotalCost || (line.quantity * (line.aiUnitCost || 0))).toLocaleString(I18N_CONFIG.defaultLocale)}
+                          </td>
+                        </tr>
+                      ))}
+                      {selectedContrib.detailPages?.lines?.hasMore && (
+                        <tr>
+                          <td colSpan={7} style={{ padding: 10, textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={reviewPageLoading === 'lines'}
+                              onClick={() => { void loadMoreContributionDetail('lines'); }}
+                            >
+                              {reviewPageLoading === 'lines' ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                            </button>
+                            {reviewPageError.lines && <div role="alert">{reviewPageError.lines}</div>}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
