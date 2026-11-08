@@ -30,6 +30,11 @@ const CHECKS = [
   ['More than one budget for a project cost centre', `SELECT tenantId, projectId, costCentreId, COUNT(*) AS budgets FROM budgets GROUP BY tenantId, projectId, costCentreId HAVING COUNT(*) > 1`],
   ['More than one active budget contribution for a BOQ revision', `SELECT boqRevisionId, COUNT(*) AS contributions FROM budget_contributions WHERE isSuperSeded = 0 AND status NOT IN ('REJECTED', 'REVERSED') GROUP BY boqRevisionId HAVING COUNT(*) > 1`],
   ['Child rows whose tenant differs from their parent', `SELECT 'boq_lines' AS tableName, COUNT(*) AS records FROM boq_lines l JOIN boq_revisions r ON r.id = l.boqRevisionId WHERE l.tenantId <> r.tenantId UNION ALL SELECT 'pr_lines', COUNT(*) FROM pr_lines l JOIN procurement_requests p ON p.id = l.prId WHERE l.tenantId <> p.tenantId`],
+  ['RFQs whose project, BOQ revision and source PR do not agree', `SELECT r.id AS rfqId, r.projectId, r.boqRevisionId, r.prId, boq.projectId AS boqProjectId, pr.projectId AS prProjectId, pr.boqRevisionId AS prBoqRevisionId FROM rfqs r LEFT JOIN boq_revisions rev ON rev.id = r.boqRevisionId LEFT JOIN boqs boq ON boq.id = rev.boqId LEFT JOIN procurement_requests pr ON pr.id = r.prId WHERE rev.id IS NULL OR boq.id IS NULL OR r.tenantId <> rev.tenantId OR r.tenantId <> boq.tenantId OR r.projectId <> boq.projectId OR (r.prId IS NOT NULL AND (pr.id IS NULL OR pr.tenantId <> r.tenantId OR pr.projectId <> r.projectId OR pr.boqId <> boq.id OR pr.boqRevisionId <> r.boqRevisionId))`],
+  ['Quote lines linked to a different RFQ or tenant', `SELECT ql.id AS quoteLineId, ql.quoteId, ql.rfqLineId, q.rfqId AS quoteRfqId, line.rfqId AS lineRfqId FROM quote_lines ql JOIN quotes q ON q.id = ql.quoteId JOIN rfq_lines line ON line.id = ql.rfqLineId WHERE ql.tenantId <> q.tenantId OR ql.tenantId <> line.tenantId OR q.rfqId <> line.rfqId`],
+  ['Negotiation rounds whose tenant differs from their negotiation or vendor', `SELECT round.id AS negotiationRoundId, round.negotiationId, round.vendorId FROM negotiation_rounds round JOIN negotiations n ON n.id = round.negotiationId JOIN vendors v ON v.id = round.vendorId WHERE round.tenantId <> n.tenantId OR round.tenantId <> v.tenantId`],
+  ['PPO lines whose project, vendor, RFQ or tenant differs from the PPO', `SELECT line.id AS ppoLineId, line.ppoId, line.rfqLineId, p.rfqId AS ppoRfqId, rfqLine.rfqId AS lineRfqId FROM ppo_lines line JOIN ppos p ON p.id = line.ppoId LEFT JOIN rfq_lines rfqLine ON rfqLine.id = line.rfqLineId WHERE line.tenantId <> p.tenantId OR line.projectId <> p.projectId OR line.vendorId <> p.vendorId OR (line.rfqLineId IS NOT NULL AND (rfqLine.id IS NULL OR rfqLine.tenantId <> line.tenantId OR (p.rfqId IS NOT NULL AND rfqLine.rfqId <> p.rfqId)))`],
+  ['Actual-cost PPO line references whose PPO does not match', `SELECT actual.id AS actualCostId, actual.ppoId, actual.ppoLineId, line.ppoId AS ppoLinePpoId FROM actual_cost_transactions actual LEFT JOIN ppo_lines line ON line.id = actual.ppoLineId LEFT JOIN ppos p ON p.id = actual.ppoId WHERE (actual.ppoLineId IS NOT NULL AND (line.id IS NULL OR line.tenantId <> actual.tenantId OR (actual.ppoId IS NOT NULL AND line.ppoId <> actual.ppoId))) OR (actual.ppoId IS NOT NULL AND (p.id IS NULL OR p.tenantId <> actual.tenantId))`],
 ];
 
 function fail(message) {
@@ -37,15 +42,17 @@ function fail(message) {
   process.exit(1);
 }
 
-function execute(sql) {
-  if (!/^\s*SELECT\b/i.test(sql)) fail('only SELECT statements are allowed in this report');
+function executeAll(statements) {
+  if (statements.some((sql) => !/^\s*SELECT\b/i.test(sql))) fail('only SELECT statements are allowed in this report');
   const result = spawnSync(process.execPath, [
-    wranglerCli, 'd1', 'execute', DATABASE_NAME, mode, '--json', '--command', sql, '--config', configPath,
+    wranglerCli, 'd1', 'execute', DATABASE_NAME, mode, '--json', '--command', statements.join(';'), '--config', configPath,
   ], { cwd: root, env: process.env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (result.error) fail(`Wrangler could not start: ${result.error.message}`);
   if (result.status !== 0) fail(`Wrangler exited with status ${result.status}: ${(result.stderr || result.stdout || '').trim()}`);
   const output = result.stdout || '[]';
-  return JSON.parse(output.slice(output.indexOf('['))).flatMap((entry) => entry.results || []);
+  const results = JSON.parse(output.slice(output.indexOf('[')));
+  if (results.length !== statements.length) fail(`Wrangler returned ${results.length} query results for ${statements.length} checks`);
+  return results.map((entry) => entry.results || []);
 }
 
 if (!fs.existsSync(wranglerCli)) fail('the local Wrangler CLI was not found; install dependencies first');
@@ -56,8 +63,9 @@ if (mode === '--remote' && !process.env.CLOUDFLARE_ACCOUNT_ID) {
 }
 
 let issues = 0;
-for (const [title, sql] of CHECKS) {
-  const rows = execute(sql).filter((row) => !('records' in row) || Number(row.records) > 0);
+const checkResults = executeAll(CHECKS.map(([, sql]) => sql));
+for (const [index, [title]] of CHECKS.entries()) {
+  const rows = checkResults[index].filter((row) => !('records' in row) || Number(row.records) > 0);
   process.stdout.write(`${rows.length === 0 ? 'OK  ' : 'FIX '} ${title}${rows.length ? ` (${rows.length})` : ''}\n`);
   if (rows.length) {
     issues += 1;
