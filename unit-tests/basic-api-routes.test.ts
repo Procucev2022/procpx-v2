@@ -9,6 +9,7 @@ import { GET as getMe } from '../src/app/api/auth/me/route';
 import { GET as getVendorPpos } from '../src/app/api/vendor-portal/ppos/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { MAX_PPO_CREATE_LINES } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -334,6 +335,10 @@ describe('basic API routes', () => {
       ] }, status: 200,
     });
     expect(prismaMock.ppo.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'ppo-1', tenantId: 'tenant-1', vendorId: 'vendor-1' } }));
+    expect(prismaMock.ppo.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 'ppo-1', tenantId: 'tenant-1', vendorId: 'vendor-1' },
+      include: { lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_PPO_CREATE_LINES + 1 } },
+    }));
 
     prismaMock.ppo.findFirst.mockRejectedValueOnce(new Error('detail unavailable'));
     await expect(getVendorPpos(request('/api/vendor-portal/ppos?ppoId=ppo-1'))).resolves.toEqual({
@@ -356,5 +361,26 @@ describe('basic API routes', () => {
     await expect(getVendorPpos(request('/api/vendor-portal/ppos'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders, status: 500,
     });
+  });
+
+  it('bounds vendor PPO detail line reads and logs persisted over-limit data', async () => {
+    requireAuthMock.mockResolvedValueOnce({ tenantId: 'tenant-1', userId: 'vendor-user-1', role: 'VENDOR', vendorId: 'vendor-1' });
+    prismaMock.ppo.findFirst.mockResolvedValueOnce({
+      id: 'ppo-over-limit',
+      lines: Array.from({ length: MAX_PPO_CREATE_LINES + 1 }, (_, index) => ({ id: `line-${index + 1}` })),
+    });
+
+    await expect(getVendorPpos(request('/api/vendor-portal/ppos?ppoId=ppo-over-limit'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders, status: 500,
+    });
+    expect(prismaMock.ppo.findFirst).toHaveBeenCalledWith({
+      where: { id: 'ppo-over-limit', tenantId: 'tenant-1', vendorId: 'vendor-1' },
+      include: { lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_PPO_CREATE_LINES + 1 } },
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'vendor_portal.ppo_line_limit_exceeded', expect.objectContaining({
+      operation: 'read_vendor_ppo_detail', tenantId: 'tenant-1', vendorId: 'vendor-1',
+      ppoId: 'ppo-over-limit', observedLineCountAtLeast: MAX_PPO_CREATE_LINES + 1,
+      maximumLines: MAX_PPO_CREATE_LINES,
+    }));
   });
 });
