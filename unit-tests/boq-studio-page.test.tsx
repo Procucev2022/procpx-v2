@@ -5,7 +5,7 @@ import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BoqStudioPage from '../src/app/(app)/boq/studio/page';
 
 const mockToast = { success: jest.fn(), error: jest.fn(), warning: jest.fn(), info: jest.fn() };
@@ -127,6 +127,73 @@ describe('BOQ studio page', () => {
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(continuationUrl));
     expect(await screen.findByText('Copper cable')).toBeInTheDocument();
+  });
+
+  it('ignores a BOQ response that arrives after a newer selection', async () => {
+    const secondBoq = { ...boq, id: 'boq-2', boqCode: 'BOQ-2', title: 'Second BOQ' };
+    const secondRevision = { ...revision, id: 'revision-2' };
+    const latestLine = { ...lines[1], id: 'latest-line', standardDescription: 'Latest selected BOQ line' };
+    const staleLine = { ...lines[0], id: 'stale-line', standardDescription: 'Stale first BOQ line' };
+    let releaseFirstBody!: (body: unknown) => void;
+    const firstBody = new Promise<unknown>((resolve) => { releaseFirstBody = resolve; });
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [boq, secondBoq] });
+      if (url === '/api/boq/boq-1') return { ok: true, json: () => firstBody };
+      if (url === '/api/boq/boq-2') return response({ boq: secondBoq, revision: secondRevision, lines: [latestLine] });
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    const firstRow = (await screen.findByText('BOQ-1')).closest('tr')!;
+    const secondRow = screen.getByText('BOQ-2').closest('tr')!;
+    fireEvent.click(within(firstRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/boq-1'));
+    fireEvent.click(within(secondRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+
+    expect(await screen.findByText('Latest selected BOQ line')).toBeInTheDocument();
+    await act(async () => {
+      releaseFirstBody({ boq, revision, lines: [staleLine] });
+      await firstBody;
+    });
+
+    expect(screen.getByText('Latest selected BOQ line')).toBeInTheDocument();
+    expect(screen.queryByText('Stale first BOQ line')).not.toBeInTheDocument();
+  });
+
+  it('ignores stale continuation pages after a newer BOQ selection', async () => {
+    const secondBoq = { ...boq, id: 'boq-2', boqCode: 'BOQ-2', title: 'Second BOQ' };
+    const secondRevision = { ...revision, id: 'revision-2' };
+    const latestLine = { ...lines[1], id: 'latest-line', standardDescription: 'Latest selected BOQ line' };
+    const previewLine = { ...lines[0], id: 'preview-line', lineNumber: '1' };
+    const previewCursor = encodeBoqLineCursor({ id: 'preview-line', lineNumber: '1' });
+    const continuationUrl = `/api/boq/revision-1/lines?${new URLSearchParams({ cursor: previewCursor, pageSize: '100' })}`;
+    let releaseContinuation!: (value: unknown) => void;
+    const continuation = new Promise<unknown>((resolve) => { releaseContinuation = resolve; });
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [boq, secondBoq] });
+      if (url === '/api/boq/boq-1') return response({ boq, revision, lines: [previewLine], totalLines: 2, nextCursor: previewCursor });
+      if (url === continuationUrl) return continuation;
+      if (url === '/api/boq/boq-2') return response({ boq: secondBoq, revision: secondRevision, lines: [latestLine] });
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    const firstRow = (await screen.findByText('BOQ-1')).closest('tr')!;
+    const secondRow = screen.getByText('BOQ-2').closest('tr')!;
+    fireEvent.click(within(firstRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(continuationUrl));
+    fireEvent.click(within(secondRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+    expect(await screen.findByText('Latest selected BOQ line')).toBeInTheDocument();
+
+    await act(async () => {
+      releaseContinuation(response({ data: [{ ...lines[0], id: 'stale-continuation-line', standardDescription: 'Stale continuation line' }], nextCursor: null, total: 2 }));
+      await continuation;
+    });
+
+    expect(screen.getByText('Latest selected BOQ line')).toBeInTheDocument();
+    expect(screen.queryByText('Stale continuation line')).not.toBeInTheDocument();
   });
 
   it('loads project cost centres in stable pages and supports a bounded search', async () => {

@@ -222,6 +222,11 @@ export default function BoqStudioPage() {
   // Workspace Ref for smooth auto-scroll
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const costCentreRequestSequence = useRef(0);
+  const boqDetailsRequestSequence = useRef(0);
+
+  useEffect(() => () => {
+    boqDetailsRequestSequence.current += 1;
+  }, []);
 
   // -------------------------------------------------------------
   // INITIAL DATA LOADING & URL REFRESH RESTORATION (Section 22)
@@ -412,11 +417,13 @@ export default function BoqStudioPage() {
   };
 
   const loadBoqDetails = async (boqId: string) => {
+    const requestSequence = ++boqDetailsRequestSequence.current;
     setLoadingLines(true);
     try {
       const res = await fetch(`/api/boq/${boqId}`);
       if (res.ok) {
         const d = await res.json();
+        if (requestSequence !== boqDetailsRequestSequence.current) return;
         const boqData = d.boq || d.data?.boq;
         const revData = d.revision || d.data?.revision;
         let lineItems = d.lines || d.data?.lines || [];
@@ -424,6 +431,7 @@ export default function BoqStudioPage() {
         if (revData?.id && lineItems.length < totalLines) {
           const nextCursor = d.nextCursor ?? d.data?.nextCursor ?? null;
           lineItems = lineItems.concat(await fetchBoqLineContinuationPages(revData.id, nextCursor));
+          if (requestSequence !== boqDetailsRequestSequence.current) return;
         }
 
         if (boqData) {
@@ -454,9 +462,13 @@ export default function BoqStudioPage() {
         computeCostSummary(lineItems, boqData);
       }
     } catch (e) {
-      console.error('Error loading BOQ details:', e);
+      if (requestSequence === boqDetailsRequestSequence.current) {
+        console.error('Error loading BOQ details:', e);
+      }
     } finally {
-      setLoadingLines(false);
+      if (requestSequence === boqDetailsRequestSequence.current) {
+        setLoadingLines(false);
+      }
     }
   };
 
