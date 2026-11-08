@@ -11,7 +11,9 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import {
   RFQ_COMPARE_LINE_PAGE_SIZE,
   RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE,
+  RFQ_COMPARE_FALLBACK_DESCRIPTION_CHUNK_SIZE,
   RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+  RFQ_COMPARE_FALLBACK_BOQ_LINE_SELECT,
   RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE,
   RFQ_COMPARE_STATUS_UPDATE_SQL,
 } from './route.constants';
@@ -132,7 +134,7 @@ export async function GET(
     const fallbackSourceLines = rfq.boqRevision?.id && needsRevisionBoqFallback
       ? comparisonSourceLines.filter((line) => !line.boqLine && !line.prLine?.boqLine)
       : [];
-    const fallbackBoqLineById = new Map<string, RfqCompareFallbackBoqLine>();
+    const fallbackBoqLineBySourceId = new Map<string, RfqCompareFallbackBoqLine>();
     for (let offset = 0; offset < fallbackSourceLines.length; offset += RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE) {
       const fallbackChunk = fallbackSourceLines.slice(offset, offset + RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE);
       const ids = [...new Set(fallbackChunk.map((line) => line.boqLineId).filter((value): value is string => Boolean(value)))];
@@ -140,56 +142,76 @@ export async function GET(
         line.lineNumber,
         String(line.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, ''),
       ]))];
-      const descriptions = [...new Set(fallbackChunk.map((line) => line.description.trim()).filter(Boolean))];
-      const candidateFilters: Prisma.BoqLineWhereInput[] = [];
-      if (ids.length > 0) candidateFilters.push({ id: { in: ids } });
-      if (lineNumbers.length > 0) candidateFilters.push({ lineNumber: { in: lineNumbers } });
-      for (const description of descriptions) {
-        candidateFilters.push({ standardDescription: { contains: description } });
-        candidateFilters.push({ originalDescription: { contains: description } });
-      }
-      const fallbackCandidates = await prisma.boqLine.findMany({
+      const exactCandidateFilters: Prisma.BoqLineWhereInput[] = [];
+      if (ids.length > 0) exactCandidateFilters.push({ id: { in: ids } });
+      if (lineNumbers.length > 0) exactCandidateFilters.push({ lineNumber: { in: lineNumbers } });
+      const exactFallbackCandidates = await prisma.boqLine.findMany({
         where: {
           tenantId: ctx.tenantId,
           boqRevisionId: rfq.boqRevision?.id,
-          OR: candidateFilters,
+          OR: exactCandidateFilters,
         },
-        select: {
-          id: true,
-          lineNumber: true,
-          itemCode: true,
-          standardDescription: true,
-          originalDescription: true,
-          specification: true,
-          category: { select: { name: true } },
-          subcategory: { select: { name: true } },
-          uom: { select: { code: true } },
-          costSource: true,
-          costDate: true,
-          aiUnitCost: true,
-          location: true,
-          drawingReference: true,
-          brand: true,
-          model: true,
-          material: true,
-          grade: true,
-          remarks: true,
-        },
+        select: RFQ_COMPARE_FALLBACK_BOQ_LINE_SELECT,
         orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
         take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
       });
-      if (fallbackCandidates.length > RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT) {
+      if (exactFallbackCandidates.length > RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT) {
         await writeStructuredLog('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', {
           operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
           requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
           rfqId: rfq.id, revisionId: rfq.boqRevision?.id, linePage,
-          candidateCountAtLeast: fallbackCandidates.length, maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+          candidateCountAtLeast: exactFallbackCandidates.length, maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
         });
         return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
       }
-      for (const fallbackCandidate of fallbackCandidates) fallbackBoqLineById.set(fallbackCandidate.id, fallbackCandidate);
+      for (const line of fallbackChunk) {
+        const exactCandidate = exactFallbackCandidates.find((candidate) =>
+          candidate.id === line.boqLineId || candidate.lineNumber === line.lineNumber ||
+          candidate.lineNumber === String(line.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, '')
+        );
+        if (exactCandidate) fallbackBoqLineBySourceId.set(line.id, exactCandidate);
+      }
+      const descriptionFallbackLines = fallbackChunk.filter((line) => !fallbackBoqLineBySourceId.has(line.id));
+      for (let descriptionOffset = 0; descriptionOffset < descriptionFallbackLines.length;
+        descriptionOffset += RFQ_COMPARE_FALLBACK_DESCRIPTION_CHUNK_SIZE) {
+        const descriptionChunk = descriptionFallbackLines.slice(
+          descriptionOffset, descriptionOffset + RFQ_COMPARE_FALLBACK_DESCRIPTION_CHUNK_SIZE,
+        );
+        const descriptions = [...new Set(descriptionChunk.map((line) => line.description.trim()).filter(Boolean))];
+        if (descriptions.length === 0) continue;
+        const descriptionFilters: Prisma.BoqLineWhereInput[] = descriptions.flatMap((description) => [
+          { standardDescription: { contains: description } },
+          { originalDescription: { contains: description } },
+        ]);
+        const descriptionCandidates = await prisma.boqLine.findMany({
+          where: {
+            tenantId: ctx.tenantId,
+            boqRevisionId: rfq.boqRevision?.id,
+            OR: descriptionFilters,
+          },
+          select: RFQ_COMPARE_FALLBACK_BOQ_LINE_SELECT,
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+        });
+        if (descriptionCandidates.length > RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT) {
+          await writeStructuredLog('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', {
+            operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
+            requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+            rfqId: rfq.id, revisionId: rfq.boqRevision?.id, linePage,
+            candidateCountAtLeast: descriptionCandidates.length, maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+          });
+          return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
+        }
+        for (const line of descriptionChunk) {
+          const normalizedDescription = line.description.toLowerCase();
+          const match = descriptionCandidates.find((candidate) =>
+            candidate.standardDescription?.toLowerCase() === normalizedDescription ||
+            candidate.originalDescription.toLowerCase() === normalizedDescription
+          );
+          if (match) fallbackBoqLineBySourceId.set(line.id, match);
+        }
+      }
     }
-    const fallbackBoqLines = [...fallbackBoqLineById.values()];
 
     // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.
     const latestQuoteRows = await prisma.$queryRaw<RfqLatestCompareQuoteRow[]>(Prisma.sql`
@@ -635,13 +657,7 @@ export async function GET(
       const sourceBoq =
         rfqLine.boqLine ||
         rfqLine.prLine?.boqLine ||
-        fallbackBoqLines.find((b) =>
-          b.id === rfqLine.boqLineId ||
-          b.lineNumber === rfqLine.lineNumber ||
-          b.lineNumber === String(rfqLine.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, '') ||
-          (b.standardDescription && b.standardDescription.toLowerCase() === (rfqLine.description || '').toLowerCase()) ||
-          (b.originalDescription && b.originalDescription.toLowerCase() === (rfqLine.description || '').toLowerCase())
-        );
+        fallbackBoqLineBySourceId.get(rfqLine.id) || null;
 
       const itemCode = sourceBoq?.itemCode || null;
       const itemDescription = rfqLine.description || sourceBoq?.standardDescription || sourceBoq?.originalDescription || 'Line item';
