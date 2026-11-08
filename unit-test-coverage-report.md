@@ -6,10 +6,10 @@ Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98874/99532) |
-| branches | 93.70% (22598/24117) |
+| statements | 99.33% (98896/99554) |
+| branches | 93.70% (22596/24115) |
 | functions | 98.55% (1913/1941) |
-| lines | 99.33% (98874/99532) |
+| lines | 99.33% (98896/99554) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -287,7 +287,7 @@ Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.80% | 92.85% | 99.06% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.78% | 92.85% | 99.06% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -312,7 +312,7 @@ Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/d1-batch.ts` | 99.09% | 95.23% | 100.00% | 99.09% | PASS |
+| `src/lib/d1-batch.ts` | 99.13% | 95.32% | 100.00% | 99.13% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-compat.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-query.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -333,7 +333,7 @@ Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.79% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

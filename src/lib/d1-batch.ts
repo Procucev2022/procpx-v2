@@ -19,6 +19,7 @@ import {
   RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
   RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,
   RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
+  RATE_CARD_TRANSITION_ASSERT_SQL,
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
 } from './d1-batch.constants';
 import { UI_STRINGS } from './ui-strings.constants';
@@ -217,6 +218,14 @@ export async function writeRateCardTransitionAtomically(input: {
     { sql: input.updateSql, values: input.updateValues },
     { sql: RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL, values: input.approvalValues },
     { sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: input.auditValues },
+    {
+      sql: RATE_CARD_TRANSITION_ASSERT_SQL,
+      values: [
+        input.approvalValues[0], input.approvalValues[1], input.approvalValues[2],
+        input.auditValues[0], input.auditValues[1], input.auditValues[4], input.auditValues[5],
+      ],
+    },
   ]);
-  return results.every((result) => Number(result.meta?.changes || 0) === 1);
+  return results.slice(0, 3).every((result) => Number(result.meta?.changes || 0) === 1)
+    && results[3]?.results?.[0]?.transition === '{}';
 }

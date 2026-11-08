@@ -366,6 +366,19 @@ export const RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL = `
   WHERE changes() = 1
 `;
 
+export const RATE_CARD_TRANSITION_ASSERT_SQL = `
+  SELECT json_extract(CASE WHEN
+    EXISTS (
+      SELECT 1 FROM "rate_card_approvals"
+      WHERE "id" = ? AND "tenantId" = ? AND "rateCardId" = ?
+    )
+    AND EXISTS (
+      SELECT 1 FROM "audit_logs"
+      WHERE "id" = ? AND "tenantId" = ? AND "entityType" = ? AND "entityId" = ?
+    )
+    THEN '{}' ELSE 'invalid' END, '$') AS "transition"
+`;
+
 export const RATE_CARD_INSERT_IF_VENDOR_VALID_SQL = `
   INSERT INTO "vendor_rate_cards" (
     "id", "tenantId", "vendorId", "rateCardNumber", "version", "title", "category", "subcategory",
