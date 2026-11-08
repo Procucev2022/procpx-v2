@@ -14,6 +14,7 @@ jest.mock('../src/lib/prisma', () => ({
     budgetContribution: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     budgetTransaction: { findFirst: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
     budget: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
+    $queryRaw: jest.fn(),
     auditLog: { create: jest.fn() },
   },
 }));
@@ -36,13 +37,13 @@ const request = (body: unknown) => new NextRequest('http://localhost/api/boq/add
 const revision = (overrides: Record<string, any> = {}) => ({
   id: 'revision-1', boqId: 'boq-1', revisionCode: 'BOQ-001-R1', costCentreId: 'cc-revision',
   boq: { id: 'boq-1', boqCode: 'BOQ-001', projectId: 'project-1', costCentreId: 'cc-boq' },
-  lines: [
-    { id: 'line-1', quantity: 2, aiUnitCost: 10, aiTotalCost: 0, benchmarkRate: 20, category: { name: 'Electrical' } },
-    { id: 'line-2', quantity: 4, aiUnitCost: 0, aiTotalCost: 80, benchmarkRate: 25, category: null },
-  ],
   ...overrides,
 });
 const costCentre = { id: 'cc-target', code: 'CC-T', name: 'Target Centre' };
+const defaultLineAggregate = [
+  { categoryName: 'Electrical', categoryAmount: 20, categoryQuantity: 2, firstLineId: 'line-1', totalLines: 2, missingQuantityLines: 0, invalidCostLines: 0, totalEstimated: 100 },
+  { categoryName: 'General', categoryAmount: 80, categoryQuantity: 4, firstLineId: 'line-2', totalLines: 2, missingQuantityLines: 0, invalidCostLines: 0, totalEstimated: 100 },
+];
 
 describe('BOQ add-to-budget API', () => {
   let consoleError: jest.SpyInstance;
@@ -56,6 +57,7 @@ describe('BOQ add-to-budget API', () => {
     db.boq.findFirst.mockReset().mockResolvedValue(null);
     db.boq.update.mockReset().mockResolvedValue({});
     db.costCentre.findFirst.mockReset().mockResolvedValue(costCentre);
+    db.$queryRaw.mockReset().mockResolvedValue(defaultLineAggregate);
     db.budgetContribution.findFirst.mockReset().mockResolvedValue(null);
     db.budgetContribution.create.mockReset().mockResolvedValue({ id: 'contribution-new' });
     db.budgetContribution.update.mockReset().mockResolvedValue({ id: 'contribution-existing' });
@@ -113,12 +115,12 @@ describe('BOQ add-to-budget API', () => {
       ok: false, error: UI_STRINGS.common.costCentreNotFoundForThisProject, status: 404,
     });
 
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [{ id: 'line-null', quantity: null }, { id: 'line-zero', quantity: 0 }, { id: 'line-undefined' }] }));
+    db.$queryRaw.mockResolvedValueOnce([{ missingQuantityLines: 3, totalLines: 3, invalidCostLines: 0, totalEstimated: 0 }]);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({
       ok: false, error: expect.stringContaining('3'), status: 400,
     });
 
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [{ id: 'line-negative', quantity: -1 }] }));
+    db.$queryRaw.mockResolvedValueOnce([{ missingQuantityLines: 1, totalLines: 1, invalidCostLines: 0, totalEstimated: 0 }]);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({
       ok: false, error: expect.stringContaining('1'), status: 400,
     });
@@ -166,6 +168,10 @@ describe('BOQ add-to-budget API', () => {
     expect(batch[6].sql).toContain('ON CONFLICT');
     expect(db.budgetContribution.create).not.toHaveBeenCalled();
     expect(db.budgetTransaction.create).not.toHaveBeenCalled();
+    expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(db.boqRevision.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      select: expect.not.objectContaining({ lines: expect.anything() }),
+    }));
   });
 
   it('resubmits rejected contributions, replaces their transactions, and adds to an existing budget', async () => {
@@ -197,14 +203,12 @@ describe('BOQ add-to-budget API', () => {
   });
 
   it('rejects empty or invalid allocations, stale contributions, and failed D1 compare-and-set writes', async () => {
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision({ lines: [] }));
+    db.$queryRaw.mockResolvedValueOnce([]);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.budgetNeedsAtLeastOneLine, status: 400,
     });
 
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision({
-      lines: [{ id: 'bad-cost', quantity: 1, aiUnitCost: 10, aiTotalCost: -1, category: null }],
-    }));
+    db.$queryRaw.mockResolvedValueOnce([{ missingQuantityLines: 0, totalLines: 1, invalidCostLines: 1, totalEstimated: -1 }]);
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToAddBoqToBudget, status: 400,
     });

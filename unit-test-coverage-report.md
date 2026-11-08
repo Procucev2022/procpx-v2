@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
+Files included: **349**. Files meeting all four 90% thresholds: **349/349**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.33% (98901/99559) |
-| branches | 93.70% (22600/24119) |
-| functions | 98.55% (1913/1941) |
-| lines | 99.33% (98901/99559) |
+| statements | 99.33% (98994/99652) |
+| branches | 93.71% (22606/24123) |
+| functions | 98.55% (1915/1943) |
+| lines | 99.33% (98994/99652) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -104,7 +104,7 @@ Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 | `src/app/api/boq/[revisionId]/submit/route.ts` | 100.00% | 92.30% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/validate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/[revisionId]/validate/route.ts` | 99.00% | 96.36% | 100.00% | 99.00% | PASS |
-| `src/app/api/boq/add-to-budget/route.ts` | 98.25% | 94.84% | 100.00% | 98.25% | PASS |
+| `src/app/api/boq/add-to-budget/route.ts` | 98.26% | 96.51% | 100.00% | 98.26% | PASS |
 | `src/app/api/boq/create-pr/route.ts` | 95.80% | 94.49% | 100.00% | 95.80% | PASS |
 | `src/app/api/boq/drawing-extract/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/drawing-extract/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
@@ -309,6 +309,7 @@ Files included: **348**. Files meeting all four 90% thresholds: **348/348**.
 | `src/lib/boq-revision-utils.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-upload.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-validate.ts` | 100.00% | 98.18% | 100.00% | 100.00% | PASS |
+| `src/lib/budget-contribution-lines.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
