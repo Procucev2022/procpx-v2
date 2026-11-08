@@ -455,8 +455,9 @@ export default function BoqStudioPage() {
           setActiveRevision(revData);
         }
 
+        setIsEditingBoq(false);
+        setEditableLines([]);
         setLines(lineItems);
-        setEditableLines(lineItems.map((l: any) => ({ ...l })));
 
         // Precompute category breakdown and totals
         computeCostSummary(lineItems, boqData);
@@ -1026,6 +1027,7 @@ export default function BoqStudioPage() {
       setIsEditingBoq(true);
     } else {
       setIsEditingBoq(false);
+      setEditableLines([]);
     }
   };
 
@@ -2662,7 +2664,7 @@ export default function BoqStudioPage() {
                     type="button"
                     className="btn btn-outline"
                     onClick={() => {
-                      setEditableLines(lines.map(l => ({ ...l })));
+                      setEditableLines([]);
                       setIsEditingBoq(false);
                     }}
                     style={{ background: '#ffffff', fontSize: 11, padding: '4px 8px' }}

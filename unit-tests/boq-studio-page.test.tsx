@@ -196,6 +196,32 @@ describe('BOQ studio page', () => {
     expect(screen.queryByText('Stale continuation line')).not.toBeInTheDocument();
   });
 
+  it('releases the inline edit copy when switching BOQs', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const secondBoq = { ...boq, id: 'boq-2', boqCode: 'BOQ-2', title: 'Second BOQ' };
+    const secondRevision = { ...revision, id: 'revision-2' };
+    const latestLine = { ...lines[1], id: 'latest-line', standardDescription: 'Latest selected BOQ line' };
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [boq, secondBoq] });
+      if (url === '/api/boq/boq-2') return response({ boq: secondBoq, revision: secondRevision, lines: [latestLine] });
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    expect(await screen.findByText('Vitrified tiles')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
+    fireEvent.change(screen.getByDisplayValue('Vitrified tiles'), { target: { value: 'Unsaved line edit' } });
+
+    const secondRow = screen.getByText('BOQ-2').closest('tr')!;
+    fireEvent.click(within(secondRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+
+    expect(await screen.findByText('Latest selected BOQ line')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges, '', false) })).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Unsaved line edit')).not.toBeInTheDocument();
+  });
+
   it('loads project cost centres in stable pages and supports a bounded search', async () => {
     const laterCentre = { ...costCentre, id: 'cc-2', code: 'CC-2', name: 'Operations' };
     const searchedCentre = { ...costCentre, id: 'cc-3', code: 'CC-3', name: 'Warehouse' };
