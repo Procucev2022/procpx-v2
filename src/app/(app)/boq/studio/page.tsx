@@ -48,6 +48,7 @@ import { useToast } from '@/components/ui/Toast';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES } from "./page.constants";
 import { fetchBoqLineContinuationPages } from '@/lib/boq-line-pagination';
+import { BOQ_LINE_MAX_BATCH_EDITS } from '@/lib/boq-line-pagination.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLookupOption } from '@app-types/app/api/cost-centres.types';
@@ -1021,6 +1022,13 @@ export default function BoqStudioPage() {
       if (activeBoq?.status === 'APPROVED') {
         setStatusType('error');
         setStatusMessage(UI_STRINGS.appAppBoqStudioPage.approvedBOQRevisionsAreLockedAndCannotBeEditedPleaseCreateANewRevision);
+        return;
+      }
+      if (lines.length > BOQ_LINE_MAX_BATCH_EDITS) {
+        setStatusType('error');
+        setStatusMessage(interpolateUiString(UI_STRINGS.appApiBoqRevisionIdLinesRoute.batchLineUpdateLimitExceeded, {
+          limit: BOQ_LINE_MAX_BATCH_EDITS,
+        }));
         return;
       }
       setEditableLines(lines.map((l: any) => ({ ...l })));

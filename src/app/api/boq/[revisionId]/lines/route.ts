@@ -7,6 +7,7 @@ import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_LINE_DEFAULT_PAGE_SIZE, BOQ_LINE_MAX_PAGE_NUMBER, BOQ_LINE_MAX_PAGE_SIZE } from './route.constants';
+import { BOQ_LINE_MAX_BATCH_EDITS } from '@/lib/boq-line-pagination.constants';
 import { decodeBoqLineCursor, encodeBoqLineCursor } from '@/lib/boq-line-pagination';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
@@ -18,7 +19,6 @@ import {
   BOQ_LINE_ASSERT_UPDATED_SQL,
   BOQ_LINE_EDITABLE_TEXT_FIELDS,
   BOQ_LINE_INSERT_NEXT_NUMBER_SQL,
-  BOQ_LINE_MAX_BATCH_EDITS,
   BOQ_LINE_SOFT_DELETE_IF_CURRENT_SQL,
   BOQ_LINE_UPDATE_EDIT_SQL,
   BOQ_REVISION_RECALCULATE_LINE_COUNTS_AFTER_AUDIT_SQL,

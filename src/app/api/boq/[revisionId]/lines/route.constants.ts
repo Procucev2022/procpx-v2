@@ -3,7 +3,6 @@ import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
 export const BOQ_LINE_DEFAULT_PAGE_SIZE = 50;
 export const BOQ_LINE_MAX_PAGE_SIZE = BOQ_LINE_DETAIL_PAGE_SIZE;
 export const BOQ_LINE_MAX_PAGE_NUMBER = 1_000;
-export const BOQ_LINE_MAX_BATCH_EDITS = 90;
 export const BOQ_LINE_EDITABLE_TEXT_FIELDS = [
   'standardDescription', 'originalDescription', 'specification', 'categoryId', 'subcategoryId', 'uomId', 'uomRaw',
   'location', 'drawingReference', 'brand', 'model', 'material', 'grade', 'remarks',

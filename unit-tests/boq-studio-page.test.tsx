@@ -4,6 +4,7 @@ import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
+import { BOQ_LINE_MAX_BATCH_EDITS } from '../src/lib/boq-line-pagination.constants';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BoqStudioPage from '../src/app/(app)/boq/studio/page';
@@ -127,6 +128,34 @@ describe('BOQ studio page', () => {
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(continuationUrl));
     expect(await screen.findByText('Copper cable')).toBeInTheDocument();
+  });
+
+  it('blocks bulk edit above the D1 batch limit and keeps row-level edits available', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const overLimitLines = Array.from({ length: BOQ_LINE_MAX_BATCH_EDITS + 1 }, (_, index) => ({
+      ...lines[0],
+      id: `line-${index + 1}`,
+      lineNumber: String(index + 1),
+      originalDescription: `Tile work ${index + 1}`,
+    }));
+    const defaultFetch = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq/boq-1') {
+        return response({ boq, revision, lines: overLimitLines, totalLines: overLimitLines.length });
+      }
+      return defaultFetch!(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    expect(await screen.findByText('Tile work 91')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
+
+    expect(screen.getByText(uiStringPattern(interpolateUiString(
+      UI_STRINGS.appApiBoqRevisionIdLinesRoute.batchLineUpdateLimitExceeded,
+      { limit: BOQ_LINE_MAX_BATCH_EDITS },
+    )))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.exitEditMode) })).not.toBeInTheDocument();
+    expect(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))).toHaveLength(BOQ_LINE_MAX_BATCH_EDITS + 1);
   });
 
   it('ignores a BOQ response that arrives after a newer selection', async () => {
