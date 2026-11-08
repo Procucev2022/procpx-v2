@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const requestedRateCardId = (req.nextUrl.searchParams.get('rateCardId') || '').trim().slice(0, 128);
     const page = requestedRateCardId ? 1 : window.page;
     const pageSize = requestedRateCardId ? 1 : Math.min(window.pageSize, VENDOR_RATE_CARD_LIST_PAGE_SIZE);
-    const skip = requestedRateCardId ? 0 : window.skip;
+    const skip = requestedRateCardId ? 0 : (page - 1) * pageSize;
     const where = {
       tenantId: ctx.tenantId,
       vendorId,

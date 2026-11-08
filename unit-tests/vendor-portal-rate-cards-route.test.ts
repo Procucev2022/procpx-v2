@@ -158,20 +158,20 @@ describe('vendor portal rate cards API', () => {
 
   it('caps nested-item list pages while preserving subsequent pages', async () => {
     db.vendorRateCard.count.mockResolvedValueOnce(37);
-    const request = new NextRequest('http://localhost/api/vendor-portal/rate-cards?pageSize=100');
+    const request = new NextRequest('http://localhost/api/vendor-portal/rate-cards?page=2&pageSize=100');
 
     const result = await GET(request);
 
     expect(result).toMatchObject({
       ok: true,
       data: {
-        page: 1,
+        page: 2,
         pageSize: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
         hasMore: true,
       },
     });
     expect(db.vendorRateCard.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      skip: 0,
+      skip: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
       take: VENDOR_RATE_CARD_LIST_PAGE_SIZE,
     }));
   });
