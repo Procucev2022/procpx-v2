@@ -1,6 +1,6 @@
 # proCPX Architecture Audit
 
-Audit date: 2026-11-07
+Audit date: 2026-11-08
 
 ## Scope and evidence
 
@@ -21,11 +21,17 @@ The current local database is a Wrangler D1 SQLite state. The Prisma SQLite prov
 - Outbox delivery now reconciles ambiguous D1 responses. If the delivery batch committed but its acknowledgement was lost, the dispatcher reads the row state, counts the notification as delivered, and emits `notification.outbox_delivery_acknowledgement_lost`; a lost lease is recorded separately as a warning. The isolated SQLite integration test executes the real outbox SQL, commits the notification, then simulates a lost response; it confirms one notification, a delivered outbox row, no false retry, and no second delivery. The full workspace gate passed with 343/343 coverage files meeting all four 90% thresholds (99.33% statements/lines, 93.73% branches, 98.59% functions), performance, i18n, typecheck, lint no-regression, mutation guard, safe migration, and D1 integrity. Shared local D1 remains at 44 tables/493 records and 139/139 indexes. No schema migration or shared D1 data change was made for this fix.
 - BOQ revision standardisation now reads at most the configured 1,000 active categories and 500 active UOMs, returning a structured warning and a localized 413 response when either bound is exceeded. Categories are selected as a flat `(id, name, parentId)` list and indexed in memory once, avoiding a nested child expansion under every category. The existing case-insensitive category/subcategory matching remains unchanged. Focused tests cover the flattened relationship and both overflow paths; no migration or D1 row change was made.
 
+## Continuation on 2026-11-08
+
+- RFQ comparison now returns at most 50 vendor-by-line rows per request, filters detailed quote rows to that page, and keeps full-RFQ quote completeness and package totals. The buyer UI exposes previous/next page controls and discards stale comparison responses. All 347 coverage files pass the per-file 90% statements, branches, functions, and lines gate; the full workspace quality gate also passed performance budgets, i18n, typecheck, lint no-regression, D1 mutation boundaries, safe migrations, and integrity.
+- The read-only D1 quality report initially found seven procurement status differences. Six are valid: the approval route releases the PR while retaining `PR_APPROVED` on its BOQ revision. The remaining mismatch was the controlled `fx-pr-approved` fixture, whose PR was approved while the revision was still `PR_CREATED`. The baseline SQL now uses `PR_APPROVED`, the quality query accepts the documented release transition, and that one local fixture field was corrected. Its PR/revision IDs, relationship, line rows, and audit history were preserved. The report now passes 15/15 checks; the local database remains at 44 tables and 493 records. No migration ran and no remote D1 data was read or changed.
+- `npm run db:seed:test` passed against the ignored `.wrangler/e2e-d1` database, confirming the isolated 2-tenant, 14-persona procurement fixture set. The shared local D1 was not reseeded. The `dev` Cloudflare account/token permission issue remains an external blocker for remote integrity and production usage evidence.
+
 ## Findings resolved in this work
 
 ### D1 data and schema integrity
 
-- The latest local integrity gate reports 44 application tables and 493 records, with 25 logical duplicate checks passing, no foreign-key violations, and no cross-tenant references. The shared local D1 record set remained unchanged during the latest code and integrity checks.
+- The latest local integrity gate reports 44 application tables and 493 records, with 25 logical duplicate checks passing, no foreign-key violations, and no cross-tenant references. The record count is unchanged; one identified mock fixture's procurement stage was corrected without changing IDs or relationships.
 - The full local end-to-end workflow checked that earlier record counts never decreased and that vendor, quotation, negotiation, award, and PPO references remained intact.
 - Ordered Wrangler migrations now run through 0032. Migrations 0002–0017 add logical uniqueness guards and lookup indexes; 0018 adds the notification outbox; 0019–0022 add rate-card, auction-history, and vendor-scoped notification lookup support; 0023 adds a covering PPO lookup index for budget-versus-actual aggregation; 0024 indexes active project assignments by user; 0025 indexes tenant audit timeline ordering; 0026 indexes rate-card items by tenant/card; 0027 indexes RFQ vendor preview ordering; 0028 indexes tenant quote-ledger ordering; 0029 indexes cursor-ordered negotiation history; 0030 indexes rate-card approval history; 0031 adds broad lookup indexes; and 0032 indexes active vendor-user fallback matching. These reviewed migrations were applied locally through `npm run db:migrate:safe`; no remote migration was run.
 - The fixture script `scripts/seed-d1-test-fixtures.cjs` now runs migrations and idempotent fixtures only in the ignored `.wrangler/e2e-d1` database. It was run twice successfully; the shared local D1 was unchanged. The isolated dataset contains two tenants, two categories, two projects, two cost centres, a multi-line BOQ, an approved PR, three vendors and quotes, negotiation history, an award, and a PPO.
