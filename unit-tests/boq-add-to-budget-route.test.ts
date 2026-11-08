@@ -157,7 +157,7 @@ describe('BOQ add-to-budget API', () => {
       status: 'UNDER_APPROVAL', transactionsCount: 2,
     }) });
     const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
-    expect(batch).toHaveLength(7);
+    expect(batch).toHaveLength(8);
     expect(batch[0].sql).toContain('NOT EXISTS');
     expect(batch[1].sql).toContain('WHERE changes() = 1');
     expect(batch[2].sql).toContain('MAX(CASE WHEN "transactionCode" GLOB');
@@ -166,6 +166,15 @@ describe('BOQ add-to-budget API', () => {
     expect(batch[4].sql).toContain('boq_revisions');
     expect(batch[5].sql).toContain("CASE WHEN \"purpose\" IN ('PR', 'BOTH') THEN 'BOTH'");
     expect(batch[6].sql).toContain('ON CONFLICT');
+    expect(batch[7].sql).toContain('changes() = 1');
+    expect(batch[7].values).toEqual([
+      expect.any(String), 'tenant-1', 'revision-1', 'project-target', 'cc-target',
+      expect.any(String), 'tenant-1', expect.any(String),
+      'tenant-1', expect.any(String), 'project-target', 'cc-target', 'boq-1', 'revision-1', 2,
+      'revision-1', 'tenant-1', 'boq-1', 'cc-target',
+      'boq-1', 'tenant-1', 'cc-target',
+      'tenant-1', 'cc-target', 'project-target', 100,
+    ]);
     expect(db.budgetContribution.create).not.toHaveBeenCalled();
     expect(db.budgetTransaction.create).not.toHaveBeenCalled();
     expect(db.$queryRaw).toHaveBeenCalledTimes(1);
@@ -178,12 +187,13 @@ describe('BOQ add-to-budget API', () => {
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-rejected', status: 'REJECTED' });
     await POST(request({ revisionId: 'revision-1', costCentreId: 'cc-target' }));
     const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
-    expect(batch).toHaveLength(8);
+    expect(batch).toHaveLength(9);
     expect(batch[0].sql).toContain("'DRAFT', 'REJECTED'");
     expect(batch[1].sql).toContain('WHERE changes() = 1');
     expect(batch[2].sql).toContain('DELETE FROM "budget_transactions"');
     expect(batch[3].sql).toContain('INSERT INTO "budget_transactions"');
     expect(batch[7].sql).toContain('"pendingAmount" = "budgets"."pendingAmount" + excluded."pendingAmount"');
+    expect(batch[8].sql).toContain('changes() = 1');
     expect(db.budgetContribution.update).not.toHaveBeenCalled();
     expect(db.budgetTransaction.deleteMany).not.toHaveBeenCalled();
   });

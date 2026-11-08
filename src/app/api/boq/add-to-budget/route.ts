@@ -7,6 +7,7 @@ import { interpolateUiString } from '@/lib/i18n';
 import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   BUDGET_AGGREGATE_PENDING_UPSERT_SQL,
+  BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL,
   BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL,
   BUDGET_CONTRIBUTION_BOQ_UPDATE_AFTER_AUDIT_SQL,
   BUDGET_CONTRIBUTION_CREATE_UNDER_APPROVAL_SQL,
@@ -195,6 +196,18 @@ export async function POST(req: NextRequest) {
       sql: BUDGET_AGGREGATE_PENDING_UPSERT_SQL,
       values: [crypto.randomUUID(), ctx.tenantId, targetProjectId, targetCostCentreId, totalEstimated, totalEstimated,
         now, now, ctx.userId, auditId, ctx.tenantId],
+    });
+    batch.push({
+      sql: BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL,
+      values: [
+        contributionId, ctx.tenantId, revision.id, targetProjectId, targetCostCentreId,
+        auditId, ctx.tenantId, contributionId,
+        ctx.tenantId, contributionId, targetProjectId, targetCostCentreId, revision.boqId, revision.id,
+        categoryTotals.size,
+        revision.id, ctx.tenantId, revision.boqId, targetCostCentreId,
+        revision.boqId, ctx.tenantId, targetCostCentreId,
+        ctx.tenantId, targetCostCentreId, targetProjectId, totalEstimated,
+      ],
     });
 
     if (!isD1BatchWithinLimits(batch)) {

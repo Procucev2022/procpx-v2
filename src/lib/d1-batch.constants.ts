@@ -1081,6 +1081,43 @@ export const BUDGET_AGGREGATE_PENDING_UPSERT_SQL = `
   WHERE "budgets"."projectId" = excluded."projectId"
 `;
 
+export const BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL = `
+  SELECT json_extract(CASE WHEN
+    changes() = 1
+    AND EXISTS (
+      SELECT 1 FROM "budget_contributions"
+      WHERE "id" = ? AND "tenantId" = ? AND "boqRevisionId" = ?
+        AND "projectId" = ? AND "costCentreId" = ? AND "status" = 'UNDER_APPROVAL'
+    )
+    AND EXISTS (
+      SELECT 1 FROM "audit_logs"
+      WHERE "id" = ? AND "tenantId" = ?
+        AND "entityType" = 'BUDGET_CONTRIBUTION' AND "entityId" = ?
+    )
+    AND (
+      SELECT COUNT(*) FROM "budget_transactions"
+      WHERE "tenantId" = ? AND "contributionId" = ? AND "projectId" = ?
+        AND "costCentreId" = ? AND "boqId" = ? AND "boqRevisionId" = ?
+        AND "status" = 'UNDER_APPROVAL'
+    ) = ?
+    AND EXISTS (
+      SELECT 1 FROM "boq_revisions"
+      WHERE "id" = ? AND "tenantId" = ? AND "boqId" = ?
+        AND "costCentreId" = ? AND "budgetStatus" = 'BUDGET_UNDER_APPROVAL'
+    )
+    AND EXISTS (
+      SELECT 1 FROM "boqs"
+      WHERE "id" = ? AND "tenantId" = ? AND "costCentreId" = ?
+        AND "purpose" IN ('BUDGET', 'BOTH')
+    )
+    AND EXISTS (
+      SELECT 1 FROM "budgets"
+      WHERE "tenantId" = ? AND "costCentreId" = ? AND "projectId" = ?
+        AND "status" = 'UNDER_APPROVAL' AND "pendingAmount" >= ?
+    )
+    THEN '{}' ELSE 'invalid' END, '$') AS "allocation"
+`;
+
 export const BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL = `
   DELETE FROM "budget_transactions"
   WHERE "tenantId" = ? AND "contributionId" = ? AND EXISTS (
