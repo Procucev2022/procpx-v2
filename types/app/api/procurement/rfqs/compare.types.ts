@@ -10,6 +10,28 @@ export type RfqCompareRateCardRow = {
   vendorName: string;
 };
 
+export type RfqCompareFallbackBoqLine = {
+  id: string;
+  lineNumber: string;
+  itemCode: string | null;
+  standardDescription: string | null;
+  originalDescription: string;
+  specification: string | null;
+  category: { name: string } | null;
+  subcategory: { name: string } | null;
+  uom: { code: string } | null;
+  costSource: string | null;
+  costDate: Date | null;
+  aiUnitCost: number | null;
+  location: string | null;
+  drawingReference: string | null;
+  brand: string | null;
+  model: string | null;
+  material: string | null;
+  grade: string | null;
+  remarks: string | null;
+};
+
 export type RfqLatestCompareQuoteRow = {
   quoteId: string;
   vendorId: string;

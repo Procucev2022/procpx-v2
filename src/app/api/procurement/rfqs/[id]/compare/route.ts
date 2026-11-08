@@ -10,10 +10,13 @@ import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import {
   RFQ_COMPARE_LINE_PAGE_SIZE,
+  RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE,
+  RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
   RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE,
   RFQ_COMPARE_STATUS_UPDATE_SQL,
 } from './route.constants';
 import type {
+  RfqCompareFallbackBoqLine,
   RfqCompareRateCardRow,
   RfqLatestCompareNegotiationRoundRow,
   RfqLatestCompareQuoteRow,
@@ -52,42 +55,6 @@ export async function GET(
             costCentre: { select: { id: true, code: true, name: true } },
           },
         },
-        lines: {
-          select: {
-            id: true,
-            lineNumber: true,
-            description: true,
-            specification: true,
-            category: true,
-            subcategory: true,
-            uom: true,
-            quantity: true,
-            benchmarkRate: true,
-            boqLineId: true,
-            boqLine: {
-              select: {
-                id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
-                category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
-                costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
-                brand: true, model: true, material: true, grade: true, remarks: true,
-              },
-            },
-            prLine: {
-              select: {
-                estimatedRate: true,
-                boqLine: {
-                  select: {
-                    id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
-                    category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
-                    costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
-                    brand: true, model: true, material: true, grade: true, remarks: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-        },
         negotiations: {
           select: {
             id: true,
@@ -110,22 +77,83 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET' });
     }
 
-    const totalLineCount = rfq.lines.length;
+    const lineWhere = { tenantId: ctx.tenantId, rfqId: id };
+    const totalLineCount = await prisma.rfqLine.count({ where: lineWhere });
     const totalLinePages = Math.max(1, Math.ceil(totalLineCount / RFQ_COMPARE_LINE_PAGE_SIZE));
     const requestedLinePage = Number(req.nextUrl.searchParams.get('page'));
     const linePage = Number.isSafeInteger(requestedLinePage) && requestedLinePage > 0
       ? Math.min(requestedLinePage, totalLinePages)
       : 1;
     const linePageOffset = (linePage - 1) * RFQ_COMPARE_LINE_PAGE_SIZE;
-    const comparisonSourceLines = rfq.lines.slice(linePageOffset, linePageOffset + RFQ_COMPARE_LINE_PAGE_SIZE);
+    const comparisonSourceLines = await prisma.rfqLine.findMany({
+      where: lineWhere,
+      skip: linePageOffset,
+      take: RFQ_COMPARE_LINE_PAGE_SIZE,
+      select: {
+        id: true,
+        lineNumber: true,
+        description: true,
+        specification: true,
+        category: true,
+        subcategory: true,
+        uom: true,
+        quantity: true,
+        benchmarkRate: true,
+        boqLineId: true,
+        boqLine: {
+          select: {
+            id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+            category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+            costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+            brand: true, model: true, material: true, grade: true, remarks: true,
+          },
+        },
+        prLine: {
+          select: {
+            estimatedRate: true,
+            boqLine: {
+              select: {
+                id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+                category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+                costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+                brand: true, model: true, material: true, grade: true, remarks: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    });
     const comparisonLineIds = comparisonSourceLines.length > 0
       ? comparisonSourceLines.map((line) => line.id)
       : ['__empty_rfq_comparison_page__'];
 
     const needsRevisionBoqFallback = comparisonSourceLines.some((line) => !line.boqLine && !line.prLine?.boqLine);
-    const fallbackBoqLines = rfq.boqRevision?.id && needsRevisionBoqFallback
-      ? await prisma.boqLine.findMany({
-        where: { tenantId: ctx.tenantId, boqRevisionId: rfq.boqRevision.id },
+    const fallbackSourceLines = rfq.boqRevision?.id && needsRevisionBoqFallback
+      ? comparisonSourceLines.filter((line) => !line.boqLine && !line.prLine?.boqLine)
+      : [];
+    const fallbackBoqLineById = new Map<string, RfqCompareFallbackBoqLine>();
+    for (let offset = 0; offset < fallbackSourceLines.length; offset += RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE) {
+      const fallbackChunk = fallbackSourceLines.slice(offset, offset + RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE);
+      const ids = [...new Set(fallbackChunk.map((line) => line.boqLineId).filter((value): value is string => Boolean(value)))];
+      const lineNumbers = [...new Set(fallbackChunk.flatMap((line) => [
+        line.lineNumber,
+        String(line.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, ''),
+      ]))];
+      const descriptions = [...new Set(fallbackChunk.map((line) => line.description.trim()).filter(Boolean))];
+      const candidateFilters: Prisma.BoqLineWhereInput[] = [];
+      if (ids.length > 0) candidateFilters.push({ id: { in: ids } });
+      if (lineNumbers.length > 0) candidateFilters.push({ lineNumber: { in: lineNumbers } });
+      for (const description of descriptions) {
+        candidateFilters.push({ standardDescription: { contains: description } });
+        candidateFilters.push({ originalDescription: { contains: description } });
+      }
+      const fallbackCandidates = await prisma.boqLine.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          boqRevisionId: rfq.boqRevision?.id,
+          OR: candidateFilters,
+        },
         select: {
           id: true,
           lineNumber: true,
@@ -148,8 +176,20 @@ export async function GET(
           remarks: true,
         },
         orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      })
-      : [];
+        take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+      });
+      if (fallbackCandidates.length > RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT) {
+        await writeStructuredLog('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', {
+          operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
+          requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+          rfqId: rfq.id, revisionId: rfq.boqRevision?.id, linePage,
+          candidateCountAtLeast: fallbackCandidates.length, maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+        });
+        return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
+      }
+      for (const fallbackCandidate of fallbackCandidates) fallbackBoqLineById.set(fallbackCandidate.id, fallbackCandidate);
+    }
+    const fallbackBoqLines = [...fallbackBoqLineById.values()];
 
     // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.
     const latestQuoteRows = await prisma.$queryRaw<RfqLatestCompareQuoteRow[]>(Prisma.sql`
@@ -463,10 +503,19 @@ export async function GET(
     });
 
     // 5. Line-level comparison matrix
-    const totalAiBenchmark = rfq.lines.reduce((total, line) => {
-      const aiCost = line.boqLine?.aiUnitCost || line.benchmarkRate || line.prLine?.estimatedRate || null;
-      return total + (aiCost !== null ? aiCost * line.quantity : 0);
-    }, 0);
+    const benchmarkTotals = await prisma.$queryRaw<Array<{ totalAiBenchmark: number | string }>>(Prisma.sql`
+      SELECT COALESCE(SUM(
+        COALESCE(NULLIF(boqLine."aiUnitCost", 0), NULLIF(rfqLine."benchmarkRate", 0), NULLIF(prLine."estimatedRate", 0))
+        * rfqLine."quantity"
+      ), 0) AS "totalAiBenchmark"
+      FROM "rfq_lines" AS rfqLine
+      LEFT JOIN "boq_lines" AS boqLine
+        ON boqLine."id" = rfqLine."boqLineId" AND boqLine."tenantId" = rfqLine."tenantId"
+      LEFT JOIN "pr_lines" AS prLine
+        ON prLine."id" = rfqLine."prLineId" AND prLine."tenantId" = rfqLine."tenantId"
+      WHERE rfqLine."tenantId" = ${ctx.tenantId} AND rfqLine."rfqId" = ${id}
+    `);
+    const totalAiBenchmark = Number(benchmarkTotals[0]?.totalAiBenchmark || 0);
     const invalidNegotiationRounds = new Set<string>();
 
     const lineComparison = comparisonSourceLines.map((rfqLine) => {
@@ -588,14 +637,13 @@ export async function GET(
         rfqLine.prLine?.boqLine ||
         fallbackBoqLines.find((b) =>
           b.id === rfqLine.boqLineId ||
-          (b.itemCode && b.itemCode === (rfqLine as any).itemCode) ||
           b.lineNumber === rfqLine.lineNumber ||
           b.lineNumber === String(rfqLine.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, '') ||
           (b.standardDescription && b.standardDescription.toLowerCase() === (rfqLine.description || '').toLowerCase()) ||
           (b.originalDescription && b.originalDescription.toLowerCase() === (rfqLine.description || '').toLowerCase())
         );
 
-      const itemCode = sourceBoq?.itemCode || (rfqLine as any).itemCode || null;
+      const itemCode = sourceBoq?.itemCode || null;
       const itemDescription = rfqLine.description || sourceBoq?.standardDescription || sourceBoq?.originalDescription || 'Line item';
       
       // BOQ Description: The source BOQ-specific description.

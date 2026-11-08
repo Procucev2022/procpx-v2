@@ -6,10 +6,10 @@ Files included: **352**. Files meeting all four 90% thresholds: **352/352**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.32% (99406/100080) |
-| branches | 93.68% (22701/24230) |
+| statements | 99.32% (99456/100130) |
+| branches | 93.68% (22704/24235) |
 | functions | 98.56% (1926/1954) |
-| lines | 99.32% (99406/100080) |
+| lines | 99.32% (99456/100130) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -207,7 +207,7 @@ Files included: **352**. Files meeting all four 90% thresholds: **352/352**.
 | `src/app/api/procurement/rate-cards/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rate-cards/route.ts` | 100.00% | 95.86% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/compare/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.48% | 93.63% | 100.00% | 99.48% | PASS |
+| `src/app/api/procurement/rfqs/[id]/compare/route.ts` | 99.51% | 92.98% | 100.00% | 99.51% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/lock-rates/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/messages/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -287,7 +287,7 @@ Files included: **352**. Files meeting all four 90% thresholds: **352/352**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.78% | 92.85% | 99.06% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 99.06% | 93.80% | 92.85% | 99.06% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
