@@ -268,6 +268,10 @@ describe('auction detail and control API', () => {
         scheduledEndTime: expect.any(String), rfq: { projectName: undefined, prNumber: undefined, costCentre: undefined },
         vendors: [], items: [], bids: [] },
     } });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'auction.documents_invalid', expect.objectContaining({
+      operation: 'parse_stored_auction_documents', tenantId: 'tenant-1', userId: 'user-1',
+      auctionId: 'auction-1', field: 'documents', fallback: 'empty_array',
+    }), 'application');
     db.auction.findFirst.mockResolvedValueOnce(auction({ documents: null }));
     await expect(GET(getRequest(), params())).resolves.toMatchObject({ ok: true, data: { auction: { documents: [] } } });
 
@@ -275,7 +279,7 @@ describe('auction detail and control API', () => {
     await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAuctionDetails, status: 500 });
     db.auction.findFirst.mockRejectedValueOnce({});
     await expect(GET(getRequest(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchAuctionDetails, status: 500 });
-    expect(structuredLog).toHaveBeenCalledTimes(2);
+    expect(structuredLog).toHaveBeenCalledTimes(3);
   });
 
   it('pauses, resumes, extends, concludes, and cancels auctions with audit records', async () => {
