@@ -46,6 +46,8 @@ import { useToast } from '@/components/ui/Toast';
 import { STEP_THEMES } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { reportClientEvent, reportHandledClientFailure } from '@/lib/observability/client-reporter';
+import { CLIENT_VENDOR_CATEGORIES_SHAPE_INVALID_EVENT } from '@/lib/observability/client-reporter.constants';
 
 
 
@@ -564,10 +566,26 @@ export default function NewRfqPage() {
   const getVendorCategories = (categories: any): string[] => {
     if (Array.isArray(categories)) return categories;
     if (typeof categories === 'string' && categories.trim()) {
-      try {
-        const parsed = JSON.parse(categories);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {}
+      const trimmedCategories = categories.trim();
+      if (/^[\[{\"]/.test(trimmedCategories)) {
+        try {
+          const parsed = JSON.parse(trimmedCategories);
+          if (Array.isArray(parsed)) return parsed;
+          reportClientEvent('warn', CLIENT_VENDOR_CATEGORIES_SHAPE_INVALID_EVENT, {
+            operation: 'parse_vendor_categories',
+            route: '/procurement/rfqs/new',
+            field: 'categories',
+            fallback: 'comma_delimited_categories',
+          });
+        } catch (error: unknown) {
+          reportHandledClientFailure(error, {
+            operation: 'parse_vendor_categories',
+            route: '/procurement/rfqs/new',
+            field: 'categories',
+            fallback: 'comma_delimited_categories',
+          });
+        }
+      }
       return categories.split(',').map((s: string) => s.trim()).filter(Boolean);
     }
     return [];

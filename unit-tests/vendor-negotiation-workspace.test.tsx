@@ -4,8 +4,12 @@ import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import VendorNegotiationWorkspace from '../src/components/VendorNegotiationWorkspace';
+import { reportHandledClientFailure } from '../src/lib/observability/client-reporter';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
+jest.mock('../src/lib/observability/client-reporter', () => ({
+  reportHandledClientFailure: jest.fn(),
+}));
 
 jest.mock('../src/components/ui/Toast', () => ({
   useToast: () => ({ success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() }),
@@ -100,8 +104,18 @@ describe('vendor commercial negotiation workspace', () => {
     fireEvent.change(updatedInputs[0], { target: { value: '450' } });
     fireEvent.change(updatedInputs[1], { target: { value: '500' } });
     fireEvent.change(screen.getByPlaceholderText(/State any payment milestone assumptions/), { target: { value: 'Final commercial offer' } });
+    const removeSubmittedDraft = jest.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => { throw new Error('storage denied'); });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitBindingFinalOffer) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/negotiations/submit-offer', expect.objectContaining({ method: 'POST' })));
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'clear_submitted_negotiation_draft',
+        recordId: 'rfq-1',
+        fallback: 'submission_succeeded_but_local_draft_remains',
+      }),
+    );
+    removeSubmittedDraft.mockRestore();
     const post = mockFetch.mock.calls.find(([url]) => url === '/api/procurement/negotiations/submit-offer')?.[1];
     expect(JSON.parse(post.body)).toEqual(expect.objectContaining({
       rfqId: 'rfq-1', vendorId: 'vendor-1', revisedQuoteAmount: 1400, isFinalOffer: true,
@@ -134,6 +148,14 @@ describe('vendor commercial negotiation workspace', () => {
     };
     configureFetch({ rfq: dataWithCounter });
     render(<VendorNegotiationWorkspace mode="RFQ" data={dataWithCounter} vendorName="Vendor One" isBuyer={false} onBack={jest.fn()} />);
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({
+        operation: 'parse_negotiation_round_line_items',
+        roundId: 'bad',
+        field: 'lineItemsJson',
+      }),
+    );
     expect(await screen.findByText(/Buyer Counteroffer Received/)).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.actionRequiredSubmitRevisedOffer))).toBeInTheDocument();
     expect(screen.getByText(/Latest round context/)).toBeInTheDocument();
@@ -209,20 +231,50 @@ describe('vendor commercial negotiation workspace', () => {
     });
     global.fetch = mockFetch as typeof fetch;
     render(<VendorNegotiationWorkspace mode="RFQ" data={rfq} vendorId="vendor-1" isBuyer={false} onBack={jest.fn()} />);
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({
+        operation: 'restore_negotiation_draft',
+        fallback: 'use_initial_rate_and_note_values',
+      }),
+    );
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.commercialNegotiationWorkspace))).toBeInTheDocument();
     fireEvent.click(screen.getByTitle(/Refresh latest negotiation rounds/));
     await waitFor(() => expect(detailCalls).toBe(2));
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'refresh_negotiation_rfq',
+        route: '/api/vendor-portal/rfqs/:id',
+        recordId: 'rfq-1',
+        fallback: 'continue_with_initial_rfq_data',
+      }),
+    );
     const inputs = document.querySelectorAll('input[type="number"]');
     fireEvent.change(inputs[0], { target: { value: '10' } });
     fireEvent.change(inputs[1], { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsVendorNegotiationWorkspace.submitRevisedNegotiationOffer) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/negotiations/submit-offer', expect.anything()));
     expect(await screen.findByText('connection lost')).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'submit_negotiation_offer',
+        fallback: 'show_submission_error',
+      }),
+    );
 
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = jest.fn(() => { throw new Error('blocked'); });
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveDraft) })[0]);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.failedToSaveDraftLocallyInBrowserStorage))).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'persist_negotiation_draft',
+        fallback: 'show_draft_save_error',
+      }),
+    );
     Storage.prototype.setItem = originalSetItem;
   });
 
@@ -298,6 +350,13 @@ describe('vendor commercial negotiation workspace', () => {
     const removeItem = jest.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => { throw new Error('storage blocked'); });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.reset) }));
     expect(removeItem).toHaveBeenCalledWith('procpx_neg_draft_rfq_rfq-1');
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'reset_negotiation_draft',
+        fallback: 'preserve_current_rates_and_notes',
+      }),
+    );
     removeItem.mockRestore();
   });
 

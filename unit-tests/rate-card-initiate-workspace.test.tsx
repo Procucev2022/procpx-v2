@@ -7,6 +7,11 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as XLSX from 'xlsx';
 import InitiateRateCardWorkspace from '../src/components/rate-cards/InitiateRateCardWorkspace';
+import { reportHandledClientFailure } from '../src/lib/observability/client-reporter';
+
+jest.mock('../src/lib/observability/client-reporter', () => ({
+  reportHandledClientFailure: jest.fn(),
+}));
 
 jest.mock('xlsx', () => ({
   utils: {
@@ -109,6 +114,13 @@ describe('rate card initiation workspace', () => {
     (XLSX.writeFile as jest.Mock).mockImplementationOnce(() => { throw new Error('disk unavailable'); });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.downloadExcelTemplate) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToGenerateExcelDownload))).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'export_rate_card_template',
+        fallback: 'show_template_download_error',
+      }),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step3ReviewInitiate))).toBeInTheDocument();
@@ -284,6 +296,20 @@ describe('rate card initiation workspace', () => {
     expect(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.retailStoreInteriorWorksFY202627))).toBeInTheDocument();
     await openRateLines();
     expect(screen.getByText('5 items')).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({
+        operation: 'restore_rate_card_initiation_draft',
+        fallback: 'use_initial_form_and_rate_lines',
+      }),
+    );
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'persist_rate_card_initiation_draft',
+        fallback: 'keep_current_form_in_memory',
+      }),
+    );
     setItem.mockRestore();
   });
 

@@ -28,6 +28,7 @@ import type { FinalisedRateItem, Section7Props } from "@app-types/components/rat
 export type { FinalisedRateItem };
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 
 
 
@@ -58,7 +59,14 @@ export default function Section7FinalisedDetails({
     if (!rateCard?.notes) return null;
     try {
       return JSON.parse(rateCard.notes);
-    } catch {
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'parse_finalised_rate_card_notes',
+        route: '/procurement/rate-cards/:id',
+        recordId: rateCard?.id,
+        field: 'notes',
+        fallback: 'omit_optional_note_metadata',
+      });
       return null;
     }
   }, [rateCard]);
@@ -96,7 +104,16 @@ export default function Section7FinalisedDetails({
         if (it.comparisonRef) {
           try {
             meta = JSON.parse(it.comparisonRef);
-          } catch {}
+          } catch (error: unknown) {
+            reportHandledClientFailure(error, {
+              operation: 'parse_finalised_rate_card_comparison_metadata',
+              route: '/procurement/rate-cards/:id',
+              recordId: rateCard?.id,
+              itemId: it.id,
+              field: 'comparisonRef',
+              fallback: 'use_persisted_rate_item_values',
+            });
+          }
         }
         return {
           id: it.id,
@@ -232,7 +249,13 @@ export default function Section7FinalisedDetails({
 
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 4000);
-    } catch {
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'export_finalised_rate_card_workbook',
+        route: '/procurement/rate-cards/:id',
+        recordId: rateCard?.id,
+        fallback: 'open_print_view',
+      });
       window.print();
     }
   };

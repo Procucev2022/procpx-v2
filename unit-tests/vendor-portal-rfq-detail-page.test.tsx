@@ -6,7 +6,11 @@ import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VendorRfqWorkspacePage from '../src/app/(app)/vendor-portal/rfqs/[id]/page';
+import { reportHandledClientFailure } from '../src/lib/observability/client-reporter';
 
+jest.mock('../src/lib/observability/client-reporter', () => ({
+  reportHandledClientFailure: jest.fn(),
+}));
 const mockToastSuccess = jest.fn();
 const mockRouterPush = jest.fn();
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, ...props }: any) => <a {...props}>{children}</a> }));
@@ -146,6 +150,13 @@ describe('vendor portal RFQ detail workspace', () => {
     expect(await screen.findByText(/Project: Enterprise Project/)).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.common.open))).toBeInTheDocument();
     expect(screen.getByText('0 Items')).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'restore_vendor_quote_draft',
+        fallback: 'use_quote_values_from_rfq',
+      }),
+    );
     view.unmount();
   });
 
@@ -191,6 +202,14 @@ describe('vendor portal RFQ detail workspace', () => {
     };
     const view = render(<VendorRfqWorkspacePage />);
     expect(await screen.findByRole('heading', { level: 2, name: uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.submittedQuotationSummary, "", false) })).toHaveTextContent('Q-SPARSE');
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({
+        operation: 'parse_vendor_buyer_counter_offer_lines',
+        field: 'lineItemsJson',
+        recordId: 'rfq-vendor-1',
+      }),
+    );
     expect(screen.getByText('Fallback cable')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.max5QuoteVersionsReached))).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppVendorPortalRfqsIdPage.addressed))).toBeInTheDocument();
@@ -253,6 +272,14 @@ describe('vendor portal RFQ detail workspace', () => {
     jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('storage denied'); });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsIdPage.submitQuoteVersionValue1, {"value1":"5"})) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/vendor-portal/rfqs/rfq-vendor-1', expect.objectContaining({ method: 'POST' })));
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'clear_submitted_quote_draft',
+        recordId: 'rfq-vendor-1',
+        fallback: 'quotation_succeeded_but_local_draft_remains',
+      }),
+    );
     const payload = JSON.parse(mockFetch.mock.calls.find(([, init]) => init?.method === 'POST')?.[1].body as string);
     expect(payload.validUntil).toBeNull();
     expect(payload.commercialNotes).toBeNull();

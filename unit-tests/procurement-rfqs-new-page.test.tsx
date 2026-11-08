@@ -6,6 +6,7 @@ import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import NewRfqPage from '../src/app/(app)/procurement/rfqs/new/page';
+import { reportClientEvent, reportHandledClientFailure } from '../src/lib/observability/client-reporter';
 
 const mockSearchParams = jest.fn();
 const mockPush = jest.fn();
@@ -29,6 +30,10 @@ jest.mock('next/link', () => ({
 }));
 jest.mock('../src/components/ui/Toast', () => ({
   useToast: () => ({ success: mockToastSuccess, error: mockToastError }),
+}));
+jest.mock('../src/lib/observability/client-reporter', () => ({
+  reportClientEvent: jest.fn(),
+  reportHandledClientFailure: jest.fn(),
 }));
 
 const boq = (id: string, projectName: string, category = 'Electrical') => ({
@@ -253,6 +258,48 @@ describe('new procurement RFQ workflow', () => {
       projectId: 'project-rev-2', boqRevisionId: 'rev-2', packageType: 'SELECTED_LINES', selectedLineIds: expect.any(Array),
       vendorIds: ['v-2'], action: 'RELEASE_RFQ', technicalRequirements: 'IS certified only', priceBasis: 'Variable with Material Index escalation',
     }));
+  });
+
+  it('reports malformed vendor category JSON while keeping CSV category fallback quiet', async () => {
+    configureFetch({
+      vendors: {
+        vendors: [
+          ...vendors,
+          { ...vendors[2], id: 'v-malformed-json', categories: '[\"Electrical\"' },
+          { ...vendors[2], id: 'v-wrong-shape', categories: '{\"category\":\"Electrical\"}' },
+        ],
+      },
+    });
+    renderPage();
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary))).toBeInTheDocument();
+    continueTo(2);
+    continueTo(3);
+    continueTo(4);
+    expect(await screen.findByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.searchNameCodeContact))).toBeInTheDocument();
+    fireEvent.change(
+      screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.searchNameCodeContact)),
+      { target: { value: 'no-match' } },
+    );
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({
+        operation: 'parse_vendor_categories',
+        field: 'categories',
+        fallback: 'comma_delimited_categories',
+      }),
+    );
+    expect(reportClientEvent).toHaveBeenCalledWith(
+      'warn',
+      'browser.vendor_categories_shape_invalid',
+      expect.objectContaining({
+        operation: 'parse_vendor_categories',
+        field: 'categories',
+        fallback: 'comma_delimited_categories',
+      }),
+    );
+    expect(jest.mocked(reportClientEvent).mock.calls.every(([level, event]) =>
+      level === 'warn' && event === 'browser.vendor_categories_shape_invalid',
+    )).toBe(true);
   });
 
   it('reports missing baselines, empty scope, invalid timeline, empty vendor selection, and save failures', async () => {
