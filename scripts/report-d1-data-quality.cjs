@@ -29,6 +29,9 @@ const CHECKS = [
   ['Quotes without lines', `SELECT id, quoteNumber, status FROM quotes q WHERE NOT EXISTS (SELECT 1 FROM quote_lines l WHERE l.quoteId = q.id)`],
   ['More than one budget for a project cost centre', `SELECT tenantId, projectId, costCentreId, COUNT(*) AS budgets FROM budgets GROUP BY tenantId, projectId, costCentreId HAVING COUNT(*) > 1`],
   ['More than one active budget contribution for a BOQ revision', `SELECT boqRevisionId, COUNT(*) AS contributions FROM budget_contributions WHERE isSuperSeded = 0 AND status NOT IN ('REJECTED', 'REVERSED') GROUP BY boqRevisionId HAVING COUNT(*) > 1`],
+  ['BOQs whose project or cost centre does not match the tenant and project', `SELECT b.id AS boqId, b.projectId, b.costCentreId FROM boqs b LEFT JOIN projects p ON p.id = b.projectId LEFT JOIN cost_centres cc ON cc.id = b.costCentreId WHERE p.id IS NULL OR b.tenantId <> p.tenantId OR (b.costCentreId IS NOT NULL AND (cc.id IS NULL OR b.tenantId <> cc.tenantId OR b.projectId <> cc.projectId))`],
+  ['BOQ revisions whose tenant or cost centre does not match the parent BOQ project', `SELECT r.id AS revisionId, r.boqId, r.costCentreId FROM boq_revisions r LEFT JOIN boqs b ON b.id = r.boqId LEFT JOIN cost_centres cc ON cc.id = r.costCentreId WHERE b.id IS NULL OR r.tenantId <> b.tenantId OR (r.costCentreId IS NOT NULL AND (cc.id IS NULL OR r.tenantId <> cc.tenantId OR b.projectId <> cc.projectId))`],
+  ['PRs whose project, cost centre, BOQ and revision references do not align', `SELECT pr.id AS prId, pr.projectId, pr.costCentreId, pr.boqId, pr.boqRevisionId FROM procurement_requests pr LEFT JOIN projects project ON project.id = pr.projectId LEFT JOIN cost_centres centre ON centre.id = pr.costCentreId LEFT JOIN boqs boq ON boq.id = pr.boqId LEFT JOIN boq_revisions revision ON revision.id = pr.boqRevisionId WHERE project.id IS NULL OR centre.id IS NULL OR boq.id IS NULL OR revision.id IS NULL OR pr.tenantId <> project.tenantId OR pr.tenantId <> centre.tenantId OR pr.tenantId <> boq.tenantId OR pr.tenantId <> revision.tenantId OR centre.projectId <> pr.projectId OR boq.projectId <> pr.projectId OR revision.boqId <> boq.id`],
   ['Child rows whose tenant differs from their parent', `SELECT 'boq_lines' AS tableName, COUNT(*) AS records FROM boq_lines l JOIN boq_revisions r ON r.id = l.boqRevisionId WHERE l.tenantId <> r.tenantId UNION ALL SELECT 'pr_lines', COUNT(*) FROM pr_lines l JOIN procurement_requests p ON p.id = l.prId WHERE l.tenantId <> p.tenantId`],
   ['RFQs whose project, BOQ revision and source PR do not agree', `SELECT r.id AS rfqId, r.projectId, r.boqRevisionId, r.prId, boq.projectId AS boqProjectId, pr.projectId AS prProjectId, pr.boqRevisionId AS prBoqRevisionId FROM rfqs r LEFT JOIN boq_revisions rev ON rev.id = r.boqRevisionId LEFT JOIN boqs boq ON boq.id = rev.boqId LEFT JOIN procurement_requests pr ON pr.id = r.prId WHERE rev.id IS NULL OR boq.id IS NULL OR r.tenantId <> rev.tenantId OR r.tenantId <> boq.tenantId OR r.projectId <> boq.projectId OR (r.prId IS NOT NULL AND (pr.id IS NULL OR pr.tenantId <> r.tenantId OR pr.projectId <> r.projectId OR pr.boqId <> boq.id OR pr.boqRevisionId <> r.boqRevisionId))`],
   ['Quote lines linked to a different RFQ or tenant', `SELECT ql.id AS quoteLineId, ql.quoteId, ql.rfqLineId, q.rfqId AS quoteRfqId, line.rfqId AS lineRfqId FROM quote_lines ql JOIN quotes q ON q.id = ql.quoteId JOIN rfq_lines line ON line.id = ql.rfqLineId WHERE ql.tenantId <> q.tenantId OR ql.tenantId <> line.tenantId OR q.rfqId <> line.rfqId`],
@@ -55,21 +58,27 @@ function executeAll(statements) {
   return results.map((entry) => entry.results || []);
 }
 
-if (!fs.existsSync(wranglerCli)) fail('the local Wrangler CLI was not found; install dependencies first');
-if (mode === '--remote' && !process.env.CLOUDFLARE_ACCOUNT_ID) {
-  // A login with access to several accounts needs an explicit account in non-interactive runs.
-  const accountId = fs.readFileSync(configPath, 'utf8').match(/"account_id"\s*:\s*["']([^"']+)["']/)?.[1];
-  if (accountId) process.env.CLOUDFLARE_ACCOUNT_ID = accountId;
+function runReport() {
+  if (!fs.existsSync(wranglerCli)) fail('the local Wrangler CLI was not found; install dependencies first');
+  if (mode === '--remote' && !process.env.CLOUDFLARE_ACCOUNT_ID) {
+    // A login with access to several accounts needs an explicit account in non-interactive runs.
+    const accountId = fs.readFileSync(configPath, 'utf8').match(/"account_id"\s*:\s*["']([^"']+)["']/)?.[1];
+    if (accountId) process.env.CLOUDFLARE_ACCOUNT_ID = accountId;
+  }
+
+  let issues = 0;
+  const checkResults = executeAll(CHECKS.map(([, sql]) => sql));
+  for (const [index, [title]] of CHECKS.entries()) {
+    const rows = checkResults[index].filter((row) => !('records' in row) || Number(row.records) > 0);
+    process.stdout.write(`${rows.length === 0 ? 'OK  ' : 'FIX '} ${title}${rows.length ? ` (${rows.length})` : ''}\n`);
+    if (rows.length) {
+      issues += 1;
+      console.table(rows.slice(0, 20));
+    }
+  }
+  process.stdout.write(`\nD1 ${mode === '--local' ? 'local' : 'remote'} data-quality report: ${issues} of ${CHECKS.length} checks need attention. No data was changed.\n`);
 }
 
-let issues = 0;
-const checkResults = executeAll(CHECKS.map(([, sql]) => sql));
-for (const [index, [title]] of CHECKS.entries()) {
-  const rows = checkResults[index].filter((row) => !('records' in row) || Number(row.records) > 0);
-  process.stdout.write(`${rows.length === 0 ? 'OK  ' : 'FIX '} ${title}${rows.length ? ` (${rows.length})` : ''}\n`);
-  if (rows.length) {
-    issues += 1;
-    console.table(rows.slice(0, 20));
-  }
-}
-process.stdout.write(`\nD1 ${mode === '--local' ? 'local' : 'remote'} data-quality report: ${issues} of ${CHECKS.length} checks need attention. No data was changed.\n`);
+if (require.main === module) runReport();
+
+module.exports = { CHECKS };
