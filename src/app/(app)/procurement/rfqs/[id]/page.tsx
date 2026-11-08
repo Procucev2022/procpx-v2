@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo, use, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Card from '@/components/ui/Card';
@@ -75,7 +76,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           }
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_rfq_detail_role', route: '/api/auth/session',
+      }));
   }, [id, router]);
 
   const isDemoMode = id === 'RFQ-DEMO-001' || id === 'demo' || searchParams.get('demo') === 'true';

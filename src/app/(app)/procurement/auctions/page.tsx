@@ -2,6 +2,7 @@
 // app/(app)/procurement/auctions/page.tsx
 // Complete Enterprise Auction Workspace: Dashboard, KPIs, Register, and Step-Based Guided Creation
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -72,7 +73,9 @@ function AuctionsContent() {
       .then((data) => {
         if (data?.user?.role) setUserRole(data.user.role);
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_auction_user_role', route: '/api/auth/session',
+      }));
   }, []);
 
   const canManage =

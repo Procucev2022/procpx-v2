@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/projects/page.tsx - Standardised Enterprise Projects Register
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Folder, Plus } from 'lucide-react';
@@ -31,7 +32,9 @@ export default function ProjectsPage() {
         const role = d.data?.user?.role || d.user?.role || '';
         setCanCreate(['SUPER_ADMIN', 'CLIENT_ADMIN', 'PROJECT_USER'].includes(role));
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_project_creation_permission', route: '/api/auth/me',
+      }));
   }, []);
 
   const load = useCallback(() => {

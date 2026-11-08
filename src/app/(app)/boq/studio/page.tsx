@@ -1,6 +1,7 @@
 'use client';
 // src/app/(app)/boq/studio/page.tsx - Consolidated BOQ Creation, Generation, Edit, AI Cost & Review Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useState, useEffect, useRef, useTransition, useMemo, Fragment } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -93,7 +94,9 @@ export default function BoqStudioPage() {
           setMasterCategories(merged);
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_boq_studio_categories', route: '/api/masters/categories',
+      }));
   }, []);
 
   // Active BOQ & Revision in Workspace

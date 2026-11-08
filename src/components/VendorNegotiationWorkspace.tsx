@@ -2,6 +2,7 @@
 // src/components/VendorNegotiationWorkspace.tsx
 // proCPX — Dedicated Full-Window Commercial Negotiation Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
@@ -53,7 +54,9 @@ export default function VendorNegotiationWorkspace({
           setCurrentUserRole(session.user.role);
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_negotiation_user_role', route: '/api/auth/session',
+      }));
   }, []);
 
   const isBuyerRole = isBuyer !== undefined ? isBuyer : (currentUserRole !== '' && currentUserRole !== 'VENDOR');

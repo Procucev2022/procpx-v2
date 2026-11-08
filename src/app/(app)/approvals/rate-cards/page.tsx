@@ -2,6 +2,7 @@
 // src/app/(app)/approvals/rate-cards/page.tsx
 // Two-Level Rate Card Approval Queue (Level 1: Project Approver -> Level 2: Finance Approver)
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import Link from 'next/link';
 import {
   Tag,
@@ -80,7 +81,9 @@ export default function RateCardApprovalsPage() {
           setUserRole('FINANCE_APPROVER');
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_rate_card_approval_role', route: '/api/auth/session',
+      }));
   }, []);
 
   const fetchRateCards = useCallback(async (append = false) => {

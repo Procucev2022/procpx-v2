@@ -3,6 +3,7 @@ import {
   describeError,
   flushClientEvents,
   installClientErrorReporting,
+  reportHandledClientFailure,
   reportClientEvent,
   resetClientReporter,
 } from '../src/lib/observability/client-reporter';
@@ -91,6 +92,31 @@ describe('client error reporter', () => {
     expect(events[1].context).toEqual(expect.objectContaining({ url: '/api/boq', status: 503 }));
     expect(events[2].context).toEqual(expect.objectContaining({ url: '/api/budgets', method: 'GET' }));
     expect(events[3].context).toEqual(expect.objectContaining({ url: 'http://[bad' }));
+  });
+
+  it('reports handled parse failures but avoids duplicating network and abort events', async () => {
+    reportHandledClientFailure(new SyntaxError('Unexpected token'), {
+      operation: 'parse_auth_session', route: '/api/auth/session',
+    });
+    const networkError = new TypeError('Failed to fetch');
+    uninstall = installClientErrorReporting();
+    fetchMock.mockRejectedValueOnce(networkError);
+    await expect(window.fetch('/api/auth/me')).rejects.toThrow('Failed to fetch');
+    reportHandledClientFailure(networkError, { operation: 'load_auth_role', route: '/api/auth/me' });
+    reportHandledClientFailure(Object.assign(new Error('cancelled'), { name: 'AbortError' }), {
+      operation: 'load_auth_role', route: '/api/auth/me',
+    });
+
+    flushClientEvents();
+    const events = sentBatches(fetchMock).flat();
+    expect(events.map((event) => event.message)).toEqual([
+      'browser.handled_client_operation_failed', 'browser.api_network_error',
+    ]);
+    expect(events[0].context).toEqual(expect.objectContaining({
+      operation: 'parse_auth_session', route: '/api/auth/session',
+      error: expect.objectContaining({ name: 'SyntaxError' }),
+    }));
+    expect(events[1].context).toEqual(expect.objectContaining({ url: '/api/auth/me' }));
   });
 
   it('passes log posts through without reporting them', async () => {

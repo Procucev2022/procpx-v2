@@ -2,6 +2,7 @@
 // src/app/(app)/vendor-portal/rfqs/page.tsx
 // proCPX — Vendor Portal: My RFQs & Bids Register with Dedicated Negotiation Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useCallback, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -106,7 +107,9 @@ export default function VendorRfqsPage() {
       .then((data) => {
         if (data?.user) setSessionUser(data.user);
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_vendor_rfq_session', route: '/api/auth/session',
+      }));
     void loadRfqs();
   }, [loadRfqs]);
 
