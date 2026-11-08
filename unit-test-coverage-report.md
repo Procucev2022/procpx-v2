@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **352**. Files meeting all four 90% thresholds: **352/352**.
+Files included: **353**. Files meeting all four 90% thresholds: **353/353**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.32% (99496/100170) |
-| branches | 93.68% (22713/24244) |
+| statements | 99.32% (99521/100195) |
+| branches | 93.68% (22713/24245) |
 | functions | 98.56% (1926/1954) |
-| lines | 99.32% (99496/100170) |
+| lines | 99.32% (99521/100195) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -130,7 +130,8 @@ Files included: **352**. Files meeting all four 90% thresholds: **352/352**.
 | `src/app/api/boq/standard/error-report/route.ts` | 100.00% | 94.44% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/generate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/generate/route.ts` | 100.00% | 95.60% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/standard/upload-validate/route.ts` | 98.15% | 95.23% | 100.00% | 98.15% | PASS |
+| `src/app/api/boq/standard/upload-validate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/standard/upload-validate/route.ts` | 98.28% | 94.48% | 100.00% | 98.28% | PASS |
 | `src/app/api/boq/template/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/upload-template/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/upload-template/route.ts` | 95.76% | 91.55% | 100.00% | 95.76% | PASS |

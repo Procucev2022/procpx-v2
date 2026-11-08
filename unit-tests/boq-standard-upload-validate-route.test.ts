@@ -5,9 +5,12 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { MAX_ACTIVE_BOQ_UOM_REFERENCES } from '../src/lib/boq-reference-catalog.constants';
+import { logEvent } from '../src/lib/observability/server-logger';
+import { BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_EVENT } from '../src/app/api/boq/standard/upload-validate/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { uomMaster: { findMany: jest.fn() } } }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -52,11 +55,11 @@ describe('standard BOQ upload validation API', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     findUoms.mockResolvedValue([
-      { code: 'NOS', aliases: 'invalid json' },
-      { code: 'KG', aliases: '["kilo"]' },
-      { code: 'BAG', aliases: '["bag"]' },
-      { code: 'EA', aliases: '["each"]' },
-      { code: 'M', aliases: null },
+      { id: 'uom-nos', code: 'NOS', aliases: 'invalid json' },
+      { id: 'uom-kg', code: 'KG', aliases: '["kilo"]' },
+      { id: 'uom-bag', code: 'BAG', aliases: '["bag"]' },
+      { id: 'uom-ea', code: 'EA', aliases: '["each"]' },
+      { id: 'uom-m', code: 'M', aliases: null },
     ]);
   });
 
@@ -94,6 +97,24 @@ describe('standard BOQ upload validation API', () => {
   it('accepts a plain Item header as the description', async () => {
     const result = await POST(sheetRequest('BOQ', [['Item', 'Quantity'], ['Manual task', 1]])) as any;
     expect(result.data.validLines[0]).toMatchObject({ description: 'Manual task', itemCode: 'STD-L1' });
+  });
+
+  it('logs malformed stored UOM aliases while continuing to accept the canonical UOM code', async () => {
+    const result = await POST(sheetRequest()) as unknown as {
+      ok: boolean;
+      status: number;
+      data: { validLines: Array<{ uom: string }> };
+    };
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    expect(result.data.validLines[0].uom).toBe('NOS');
+    expect(logEvent).toHaveBeenCalledWith('warn', BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_EVENT, expect.objectContaining({
+      operation: 'parse_uom_aliases', route: '/api/boq/standard/upload-validate',
+      tenantId: context.tenantId, userId: context.userId,
+      invalidReferenceCount: 1, uomIds: ['uom-nos'], uomIdsTruncated: false,
+      status: 'continued_without_invalid_aliases',
+    }));
+    expect(JSON.stringify(jest.mocked(logEvent).mock.calls)).not.toContain('invalid json');
   });
 
   it('rejects workbooks with no selected sheet, empty matrices, or only headers', async () => {

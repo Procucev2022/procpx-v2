@@ -8,6 +8,11 @@ import { interpolateUiString } from "@/lib/i18n";
 import { MAX_BOQ_IMPORT_COLUMNS, MAX_BOQ_IMPORT_SHEET_ROWS, MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
 import { MAX_BOQ_BATCH_LINES } from '@/lib/d1-batch.constants';
 import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
+import { logEvent } from '@/lib/observability/server-logger';
+import {
+  BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_EVENT,
+  BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_ID_LIMIT,
+} from './route.constants';
 
 export type { ValidationIssue };
 
@@ -102,12 +107,30 @@ export async function POST(req: NextRequest) {
     if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
     const uoms = referenceCatalog.uoms;
     const validUomSet = new Set(uoms.map(u => u.code.toUpperCase()));
+    const invalidUomAliasIds: string[] = [];
+    let invalidUomAliasCount = 0;
+    const aliasParseStartedAt = Date.now();
     uoms.forEach(u => {
       try {
         const aliases: string[] = JSON.parse(u.aliases || '[]');
         aliases.forEach(a => validUomSet.add(a.toUpperCase()));
-      } catch (_) {}
+      } catch {
+        invalidUomAliasCount += 1;
+        if (invalidUomAliasIds.length < BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_ID_LIMIT) {
+          invalidUomAliasIds.push(u.id);
+        }
+      }
     });
+    if (invalidUomAliasCount > 0) {
+      const requestId = (req.headers.get('x-request-id') || req.headers.get('cf-ray') || '').trim().slice(0, 128);
+      logEvent('warn', BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_EVENT, {
+        operation: 'parse_uom_aliases', route: '/api/boq/standard/upload-validate',
+        ...(requestId ? { requestId } : {}), tenantId: ctx.tenantId, userId: ctx.userId,
+        invalidReferenceCount: invalidUomAliasCount, uomIds: invalidUomAliasIds,
+        uomIdsTruncated: invalidUomAliasCount > invalidUomAliasIds.length,
+        durationMs: Date.now() - aliasParseStartedAt, status: 'continued_without_invalid_aliases',
+      });
+    }
 
     const issues: ValidationIssue[] = [];
     const parsedValidLines: any[] = [];
