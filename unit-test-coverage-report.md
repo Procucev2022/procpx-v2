@@ -6,10 +6,10 @@ Files included: **353**. Files meeting all four 90% thresholds: **353/353**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.31% (99552/100234) |
-| branches | 93.68% (22723/24255) |
-| functions | 98.56% (1927/1955) |
-| lines | 99.31% (99552/100234) |
+| statements | 99.31% (99542/100224) |
+| branches | 93.68% (22717/24249) |
+| functions | 98.56% (1926/1954) |
+| lines | 99.31% (99542/100224) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -255,7 +255,6 @@ Files included: **353**. Files meeting all four 90% thresholds: **353/353**.
 | `src/app/login/page.tsx` | 100.00% | 98.24% | 97.36% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ApprovalChatDrawer.tsx` | 100.00% | 98.98% | 100.00% | 100.00% | PASS |
-| `src/components/observability/ClientObservability.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/observability/ErrorFallback.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/PrDetailModal.tsx` | 99.77% | 94.90% | 100.00% | 99.77% | PASS |
 | `src/components/ProcurementCommercialWorkspace.tsx` | 98.81% | 90.35% | 97.56% | 98.81% | PASS |
@@ -290,6 +289,7 @@ Files included: **353**. Files meeting all four 90% thresholds: **353/353**.
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/VendorNegotiationWorkspace.tsx` | 98.93% | 93.80% | 92.85% | 98.93% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
+| `src/instrumentation-client.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.ts` | 100.00% | 98.88% | 100.00% | 100.00% | PASS |
@@ -337,7 +337,7 @@ Files included: **353**. Files meeting all four 90% thresholds: **353/353**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.80% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

@@ -5,7 +5,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { auth } from '../src/lib/auth';
 import { redirect, useRouter, useSearchParams } from 'next/navigation';
 import RootLayout, { metadata } from '../src/app/layout';
-import ClientObservability from '../src/components/observability/ClientObservability';
 import RootPage from '../src/app/page';
 import ProcurementPage from '../src/app/(app)/procurement/page';
 import VendorPortalIndexPage from '../src/app/(app)/vendor-portal/page';
@@ -62,9 +61,9 @@ describe('simple app and redirect pages', () => {
     expect(layout.type).toBe('html');
     expect(layout.props.lang).toBe(I18N_CONFIG.defaultLocale);
     expect(layout.props.children.type).toBe('body');
-    const [observability, content] = layout.props.children.props.children;
-    expect(observability.type).toBe(ClientObservability);
-    expect(content.props.children).toBe('App content');
+    expect(layout.props.children.props.children).toMatchObject({
+      type: 'span', props: { children: 'App content' },
+    });
   });
 
   it('redirects the standard BOQ library to its canonical route', async () => {
