@@ -8,6 +8,7 @@ import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, AUDIT_LOG_INSERT_SQL, NEGOTIATION_IN
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { NOTIFICATION_OUTBOX_INSERT_AFTER_AUDIT_SQL } from '../src/lib/notification-outbox.constants';
+import { MAX_D1_QUERY_FILTER_VALUES } from '../src/lib/d1-query.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -15,7 +16,7 @@ jest.mock('../src/lib/prisma', () => ({
     negotiation: { findMany: jest.fn(), count: jest.fn(), groupBy: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     negotiationRound: { create: jest.fn(), update: jest.fn() },
     rfq: { findFirst: jest.fn(), update: jest.fn() },
-    vendor: { findFirst: jest.fn() },
+    vendor: { findMany: jest.fn() },
     rfqMessage: { create: jest.fn() },
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
@@ -83,7 +84,9 @@ describe('procurement negotiations API', () => {
     db.negotiation.findFirst.mockReset().mockResolvedValue(negotiation());
     db.negotiation.create.mockReset().mockResolvedValue(negotiation());
     db.rfq.findFirst.mockReset().mockResolvedValue(rfq());
-    db.vendor.findFirst.mockReset().mockImplementation(async ({ where }: any) => where.id === 'missing' ? null : ({ id: where.id, name: `Vendor ${where.id}` }));
+    db.vendor.findMany.mockReset().mockImplementation(async ({ where }: any) => where.id.in
+      .filter((id: string) => id !== 'missing')
+      .map((id: string) => ({ id, name: `Vendor ${id}` })));
     db.rfqMessage.create.mockReset().mockResolvedValue({ id: 'message-1' });
     latestQuoteRows = [{ vendorId: 'v1', quoteVersion: 1, totalQuoteAmount: 1000 }];
     roundSummaryRows = [];
@@ -130,11 +133,11 @@ describe('procurement negotiations API', () => {
     await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, status: 400 });
 
     db.rfq.findFirst.mockResolvedValueOnce(null);
-    await expect(POST(postRequest({ rfqId: 'missing' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
+    await expect(POST(postRequest({ rfqId: 'missing', vendorId: 'v1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'DRAFT' }));
-    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toMatchObject({ ok: false, error: expect.stringContaining('does not permit'), status: 400 });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1' }))).resolves.toMatchObject({ ok: false, error: expect.stringContaining('does not permit'), status: 400 });
     for (const invalid of [0, -1, 'abc']) {
-      await expect(POST(postRequest({ rfqId: 'rfq-1', counterOfferAmount: invalid }))).resolves.toEqual({
+      await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1', counterOfferAmount: invalid }))).resolves.toEqual({
         ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.counterofferAmountMustBeAPositiveNumber, status: 400,
       });
     }
@@ -191,6 +194,36 @@ describe('procurement negotiations API', () => {
     expect(db.$transaction).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'COUNTER_OFFER_SENT', details: { vendorName: 'Vendor v1', amount: 800, roundNumber: 1 } }), { prepareOnly: true });
     expect(dispatchPrepared).toHaveBeenCalledWith(expect.any(String), expect.any(Date), expect.objectContaining({ entityId: expect.any(String) }));
+  });
+
+  it('deduplicates vendor targets and resolves the vendor once before dispatch', async () => {
+    const result = await POST(postRequest({ rfqId: 'rfq-1', vendorIds: ['v1', 'v1'], counterOfferAmount: 800 }));
+
+    expect(result).toMatchObject({ ok: true, status: 201, data: {
+      summary: { totalSelected: 1, dispatchedCount: 1, failedCount: 0 },
+      dispatched: [{ vendorId: 'v1', status: 'DISPATCHED', roundNumber: 1 }],
+    } });
+    expect(db.vendor.findMany).toHaveBeenCalledTimes(1);
+    expect(db.vendor.findMany).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1', id: { in: ['v1'] } },
+      select: { id: true, name: true },
+    });
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('chunks bulk vendor reads below the D1 binding limit', async () => {
+    const vendorIds = Array.from({ length: MAX_D1_QUERY_FILTER_VALUES + 1 }, (_, index) => `uninvited-${index}`);
+    latestQuoteRows = [];
+
+    const result = await POST(postRequest({ rfqId: 'rfq-1', vendorIds, counterOfferAmount: 800 }));
+
+    expect(result).toMatchObject({ ok: true, status: 400, data: {
+      summary: { totalSelected: MAX_D1_QUERY_FILTER_VALUES + 1, dispatchedCount: 0, failedCount: MAX_D1_QUERY_FILTER_VALUES + 1 },
+    } });
+    expect(db.vendor.findMany.mock.calls.map(([query]: [{ where: { id: { in: string[] } } }]) => query.where.id.in.length))
+      .toEqual([MAX_D1_QUERY_FILTER_VALUES, 1]);
+    expect(db.vendor.findMany.mock.calls.every(([query]: [{ where: { tenantId: string } }]) => query.where.tenantId === 'tenant-1')).toBe(true);
+    expect(writeBatch).not.toHaveBeenCalled();
   });
 
   it('handles pending rounds, confirmation failures, recent duplicates, and capped vendors', async () => {
@@ -252,11 +285,12 @@ describe('procurement negotiations API', () => {
 
   it('returns single-vendor failures and maps provider or request errors', async () => {
     await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, status: 400 });
-    db.vendor.findFirst.mockResolvedValueOnce(null);
+    expect(db.rfq.findFirst).not.toHaveBeenCalled();
+    expect(db.$queryRaw).not.toHaveBeenCalled();
+    expect(writeBatch).not.toHaveBeenCalled();
     const missing = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'missing' }));
     expect(missing.status).toBe(400);
     await expect(missing.json()).resolves.toMatchObject({ error: 'Vendor not found' });
-    db.vendor.findFirst.mockResolvedValueOnce({ id: 'v3', name: 'Vendor v3' });
     const uninvited = await POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v3' }));
     expect(uninvited.status).toBe(400);
     await expect(uninvited.json()).resolves.toMatchObject({ error: expect.stringContaining('is not invited') });
@@ -271,7 +305,7 @@ describe('procurement negotiations API', () => {
     db.rfq.findFirst.mockRejectedValueOnce(new Error('negotiation write failed'));
     await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
     db.rfq.findFirst.mockRejectedValueOnce({});
-    await expect(POST(postRequest({ rfqId: 'rfq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
+    await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'v1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
     const badJson = { json: jest.fn().mockRejectedValue(new Error('invalid negotiation payload')) } as unknown as NextRequest;
     await expect(POST(badJson)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCreateNegotiationRound, status: 500 });
     expect(structuredLog).toHaveBeenCalledTimes(4);

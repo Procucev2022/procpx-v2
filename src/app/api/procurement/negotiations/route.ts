@@ -20,6 +20,7 @@ import {
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { getListPageWindow } from '@/lib/api-utils';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import type {
@@ -101,8 +102,15 @@ export async function POST(req: NextRequest) {
       allowSupersede = false,
     } = body;
 
+    const isBulkRequest = Boolean(
+      (Array.isArray(vendorIds) && vendorIds.length > 0) || bulkAllEligible,
+    );
+
     if (!rfqId) {
       return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, 400, { route: '/api/procurement/negotiations', method: 'POST' });
+    }
+    if (!isBulkRequest && (typeof vendorId !== 'string' || vendorId.trim().length === 0)) {
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
     failedRfqId = rfqId;
 
@@ -241,12 +249,19 @@ export async function POST(req: NextRequest) {
     ]);
     const latestQuoteByVendor = new Map(latestQuoteRows.map((quote) => [quote.vendorId, quote]));
     const roundSummaryByVendor = new Map(roundSummaryRows.map((summary) => [summary.vendorId, summary]));
+    const vendorById = new Map<string, { id: string; name: string }>();
+
+    async function loadDispatchVendors(vendorIdsToLoad: string[]) {
+      const vendors = await readByD1FilterChunks(vendorIdsToLoad, (vendorIdChunk) => prisma.vendor.findMany({
+        where: { tenantId: currentTenantId, id: { in: vendorIdChunk } },
+        select: { id: true, name: true },
+      }));
+      for (const vendor of vendors) vendorById.set(vendor.id, vendor);
+    }
 
     // Internal helper to dispatch an offer to a single vendor
     async function dispatchToVendor(targetVendorId: string) {
-      const vendor = await prisma.vendor.findFirst({
-        where: { id: targetVendorId, tenantId: currentTenantId },
-      });
+      const vendor = vendorById.get(targetVendorId);
       if (!vendor) {
         return { success: false, vendorId: targetVendorId, vendorName: 'Unknown', reason: 'Vendor not found' };
       }
@@ -496,17 +511,17 @@ export async function POST(req: NextRequest) {
     }
 
     // CHECK IF BULK DISPATCH REQUESTED
-    const isBulkRequest = Boolean(
-      (Array.isArray(vendorIds) && vendorIds.length > 0) || bulkAllEligible
-    );
-
     if (isBulkRequest) {
-      let targetList: string[] = [];
+      let requestedTargetList: unknown[] = [];
       if (Array.isArray(vendorIds) && vendorIds.length > 0) {
-        targetList = vendorIds;
+        requestedTargetList = vendorIds;
       } else {
-        targetList = rfq.invitedVendors.map((iv) => iv.vendorId);
+        requestedTargetList = rfq.invitedVendors.map((iv) => iv.vendorId);
       }
+      const targetList = Array.from(new Set(requestedTargetList.filter(
+        (targetVendorId): targetVendorId is string => typeof targetVendorId === 'string' && targetVendorId.trim().length > 0,
+      )));
+      await loadDispatchVendors(targetList);
 
       const dispatched: any[] = [];
       const failed: any[] = [];
@@ -551,10 +566,7 @@ export async function POST(req: NextRequest) {
     }
 
     // SINGLE VENDOR DISPATCH
-    if (!vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
-    }
-
+    await loadDispatchVendors([vendorId]);
     const singleResult = await dispatchToVendor(vendorId);
     if (!singleResult.success) {
       const { NextResponse } = await import('next/server');
