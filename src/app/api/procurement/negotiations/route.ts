@@ -125,6 +125,18 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
+    const requestedTargetList: unknown[] = isBulkRequest
+      ? Array.isArray(vendorIds) && vendorIds.length > 0
+        ? vendorIds
+        : rfq.invitedVendors.map((iv) => iv.vendorId)
+      : [vendorId];
+    const targetList = Array.from(new Set(requestedTargetList.filter(
+      (targetVendorId): targetVendorId is string => typeof targetVendorId === 'string' && targetVendorId.trim().length > 0,
+    )));
+    if (targetList.length === 0) {
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
+    }
+
     const permittedStatuses = ['RELEASED', 'VENDOR_RESPONSE_OPEN', 'RESPONSE_CLOSED', 'COMPARISON', 'NEGOTIATION'];
     if (!permittedStatuses.includes(rfq.status)) {
       return apiError(interpolateUiString(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIsInStatusStatusAndDoesNotPermitCommercialNegotiationOffers, { "status": rfq.status }), 400, { route: '/api/procurement/negotiations', method: 'POST' });
@@ -183,11 +195,12 @@ export async function POST(req: NextRequest) {
     const requestedRevisedQuoteAmount = revisedQuoteAmount ? Number(revisedQuoteAmount) : null;
     const duplicateWindowStart = new Date(Date.now() - 4_000);
     const [latestQuoteRows, roundSummaryRows] = await Promise.all([
-      prisma.$queryRaw<NegotiationDispatchLatestQuoteRow[]>(Prisma.sql`
+      readByD1FilterChunks(targetList, (vendorIdChunk) => prisma.$queryRaw<NegotiationDispatchLatestQuoteRow[]>(Prisma.sql`
         WITH latest_vendor_quotes AS (
           SELECT quote."tenantId", quote."rfqId", quote."vendorId", MAX(quote."quoteVersion") AS "latestVersion"
           FROM "quotes" AS quote
           WHERE quote."tenantId" = ${currentTenantId} AND quote."rfqId" = ${rfqId}
+            AND quote."vendorId" IN (${Prisma.join(vendorIdChunk)})
           GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
         )
         SELECT quote."vendorId", quote."quoteVersion", quote."totalQuoteAmount"
@@ -196,7 +209,8 @@ export async function POST(req: NextRequest) {
           ON quote."tenantId" = latest."tenantId" AND quote."rfqId" = latest."rfqId"
             AND quote."vendorId" = latest."vendorId" AND quote."quoteVersion" = latest."latestVersion"
       `),
-      prisma.$queryRaw<NegotiationDispatchRoundSummaryRow[]>(Prisma.sql`
+      ),
+      readByD1FilterChunks(targetList, (vendorIdChunk) => prisma.$queryRaw<NegotiationDispatchRoundSummaryRow[]>(Prisma.sql`
         WITH vendor_round_stats AS (
           SELECT rounds."tenantId", rounds."negotiationId", rounds."vendorId",
             MAX(rounds."roundNumber") AS "latestRoundNumber",
@@ -217,6 +231,7 @@ export async function POST(req: NextRequest) {
               THEN rounds."roundNumber" END) AS "duplicateRoundNumber"
           FROM "negotiation_rounds" AS rounds
           WHERE rounds."tenantId" = ${currentTenantId} AND rounds."negotiationId" = ${currentNegotiation.id}
+            AND rounds."vendorId" IN (${Prisma.join(vendorIdChunk)})
           GROUP BY rounds."tenantId", rounds."negotiationId", rounds."vendorId"
         )
         SELECT stats."vendorId", stats."latestRoundNumber", stats."activeBuyerOfferCount",
@@ -246,6 +261,7 @@ export async function POST(req: NextRequest) {
             AND duplicate."vendorId" = stats."vendorId" AND duplicate."roundNumber" = stats."duplicateRoundNumber"
             AND duplicate."status" <> 'SUPERSEDED'
       `),
+      ),
     ]);
     const latestQuoteByVendor = new Map(latestQuoteRows.map((quote) => [quote.vendorId, quote]));
     const roundSummaryByVendor = new Map(roundSummaryRows.map((summary) => [summary.vendorId, summary]));
@@ -512,15 +528,6 @@ export async function POST(req: NextRequest) {
 
     // CHECK IF BULK DISPATCH REQUESTED
     if (isBulkRequest) {
-      let requestedTargetList: unknown[] = [];
-      if (Array.isArray(vendorIds) && vendorIds.length > 0) {
-        requestedTargetList = vendorIds;
-      } else {
-        requestedTargetList = rfq.invitedVendors.map((iv) => iv.vendorId);
-      }
-      const targetList = Array.from(new Set(requestedTargetList.filter(
-        (targetVendorId): targetVendorId is string => typeof targetVendorId === 'string' && targetVendorId.trim().length > 0,
-      )));
       await loadDispatchVendors(targetList);
 
       const dispatched: any[] = [];

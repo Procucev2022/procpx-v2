@@ -172,12 +172,15 @@ describe('procurement negotiations API', () => {
     expect(rfqRead.include.invitedVendors.select).toEqual({ vendorId: true });
     const latestQuotesQuery = db.$queryRaw.mock.calls.find(([query]: [{ sql: string }]) => query.sql.includes('latest_vendor_quotes'))?.[0];
     expect(latestQuotesQuery.sql).toContain('MAX(quote."quoteVersion") AS "latestVersion"');
+    expect(latestQuotesQuery.sql).toContain('quote."vendorId" IN');
     expect(latestQuotesQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
     const roundSummaryQuery = db.$queryRaw.mock.calls.find(([query]: [{ sql: string }]) => query.sql.includes('vendor_round_stats'))?.[0];
     expect(roundSummaryQuery.sql).toContain('SUM(CASE WHEN rounds."status" <>');
     expect(roundSummaryQuery.sql).toContain('MAX(CASE WHEN rounds."status" <>');
+    expect(roundSummaryQuery.sql).toContain('rounds."vendorId" IN');
     expect(roundSummaryQuery.sql).toContain('"duplicateRoundNumber"');
     expect(roundSummaryQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'neg-new']));
+    expect(roundSummaryQuery.values).toEqual(expect.arrayContaining(['v1', 'v2']));
     expect(db.negotiation.findFirst.mock.calls.every(([query]: [{ select: Record<string, unknown> }]) => !('rounds' in query.select))).toBe(true);
     const createStatements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
     expect(createStatements.map(({ sql }) => sql)).toEqual([NEGOTIATION_INSERT_IF_ABSENT_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL]);
@@ -223,6 +226,23 @@ describe('procurement negotiations API', () => {
     expect(db.vendor.findMany.mock.calls.map(([query]: [{ where: { id: { in: string[] } } }]) => query.where.id.in.length))
       .toEqual([MAX_D1_QUERY_FILTER_VALUES, 1]);
     expect(db.vendor.findMany.mock.calls.every(([query]: [{ where: { tenantId: string } }]) => query.where.tenantId === 'tenant-1')).toBe(true);
+    const latestQuoteQueries = db.$queryRaw.mock.calls.filter(([query]: [{ sql: string }]) => query.sql.includes('latest_vendor_quotes'));
+    const roundSummaryQueries = db.$queryRaw.mock.calls.filter(([query]: [{ sql: string }]) => query.sql.includes('vendor_round_stats'));
+    expect(latestQuoteQueries).toHaveLength(2);
+    expect(roundSummaryQueries).toHaveLength(2);
+    expect(latestQuoteQueries[0][0].values).toEqual(expect.arrayContaining(vendorIds.slice(0, MAX_D1_QUERY_FILTER_VALUES)));
+    expect(latestQuoteQueries[1][0].values).toEqual(expect.arrayContaining([vendorIds[MAX_D1_QUERY_FILTER_VALUES]]));
+    expect(roundSummaryQueries[0][0].values).toEqual(expect.arrayContaining(vendorIds.slice(0, MAX_D1_QUERY_FILTER_VALUES)));
+    expect(roundSummaryQueries[1][0].values).toEqual(expect.arrayContaining([vendorIds[MAX_D1_QUERY_FILTER_VALUES]]));
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('does not create a negotiation when all bulk target IDs are invalid', async () => {
+    const result = await POST(postRequest({ rfqId: 'rfq-1', vendorIds: [null, ''], counterOfferAmount: 800 }));
+
+    expect(result).toEqual({ ok: false, error: UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, status: 400 });
+    expect(db.negotiation.findFirst).not.toHaveBeenCalled();
+    expect(db.$queryRaw).not.toHaveBeenCalled();
     expect(writeBatch).not.toHaveBeenCalled();
   });
 
