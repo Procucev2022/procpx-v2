@@ -20,7 +20,10 @@ import {
   DASHBOARD_UOM_PREVIEW_LIMIT,
   DASHBOARD_VIEWER_PROJECT_PREVIEW_LIMIT,
 } from './route.constants';
-import type { DashboardRecentBoqLineValueAggregate } from '@app-types/app/api/dashboard/route.types';
+import type {
+  DashboardApprovedBoqLineAggregate,
+  DashboardRecentBoqLineValueAggregate,
+} from '@app-types/app/api/dashboard/route.types';
 
 
 export async function GET(request?: Request) {
@@ -417,23 +420,23 @@ export async function GET(request?: Request) {
     ]);
 
     const lineGroups = approvedRevisions.length > 0
-      ? await prisma.boqLine.groupBy({
-        by: ['boqRevisionId', 'aiUnitCost'],
-        where: {
-          tenantId,
-          boqRevisionId: { in: approvedRevisions.map((revision) => revision.id) },
-          isDeleted: false,
-        },
-        _count: { _all: true },
-        _sum: { quantity: true },
-      })
+      ? await prisma.$queryRaw<DashboardApprovedBoqLineAggregate[]>(Prisma.sql`
+        SELECT "boqRevisionId", COUNT(*) AS "lineCount",
+          COALESCE(SUM(COALESCE("quantity", 0) * CASE WHEN "aiUnitCost" > 0 THEN "aiUnitCost" ELSE 100 END), 0) AS "amount"
+        FROM "boq_lines"
+        WHERE "tenantId" = ${tenantId}
+          AND "boqRevisionId" IN (${Prisma.join(approvedRevisions.map((revision) => revision.id))})
+          AND "isDeleted" = false
+        GROUP BY "boqRevisionId"
+        ORDER BY "boqRevisionId" ASC
+      `)
       : [];
     const lineSummaryByRevision = new Map<string, { count: number; amount: number }>();
     for (const group of lineGroups) {
-      const current = lineSummaryByRevision.get(group.boqRevisionId) || { count: 0, amount: 0 };
-      current.count += Number(group._count._all || 0);
-      current.amount += Number(group._sum.quantity || 0) * (Number(group.aiUnitCost) > 0 ? Number(group.aiUnitCost) : 100);
-      lineSummaryByRevision.set(group.boqRevisionId, current);
+      lineSummaryByRevision.set(group.boqRevisionId, {
+        count: Number(group.lineCount || 0),
+        amount: Number(group.amount || 0),
+      });
     }
 
     const revisionLineCount = (revisionId: string, fallbackCount = 0) => lineSummaryByRevision.get(revisionId)?.count ?? fallbackCount;

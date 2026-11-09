@@ -305,10 +305,11 @@ describe('dashboard API role responses', () => {
         prs: expect.objectContaining({ take: 1 }),
       }),
     }));
-    expect(db.boqLine.groupBy).toHaveBeenCalledWith(expect.objectContaining({
-      by: ['boqRevisionId', 'aiUnitCost'],
-      where: expect.objectContaining({ tenantId: 'tenant-1', isDeleted: false }),
-    }));
+    const groupedLineQuery = db.$queryRaw.mock.calls.at(-1)[0] as { sql: string; values: unknown[] };
+    expect(groupedLineQuery.sql).toContain('COUNT(*) AS "lineCount"');
+    expect(groupedLineQuery.sql).toContain('GROUP BY "boqRevisionId"');
+    expect(groupedLineQuery.sql).not.toContain('GROUP BY "boqRevisionId", "aiUnitCost"');
+    expect(groupedLineQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rev-1']));
   });
 
   it('uses grouped BOQ costs and exact RFQ relation counts for procurement previews', async () => {
@@ -325,8 +326,8 @@ describe('dashboard API role responses', () => {
       prs: [],
     })]);
     db.boq.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
-    db.boqLine.groupBy.mockResolvedValueOnce([{
-      boqRevisionId: 'rev-summary', aiUnitCost: 25, _sum: { quantity: 8 }, _count: { _all: 2 },
+    db.$queryRaw.mockResolvedValueOnce([{
+      boqRevisionId: 'rev-summary', lineCount: 2, amount: 200,
     }]);
 
     await GET();
@@ -336,6 +337,9 @@ describe('dashboard API role responses', () => {
     expect(payload.boqRegister[0].rfqs[0]).toEqual(expect.objectContaining({
       quotesCount: 3, invitedCount: 4, negotiationStage: 'Round 7 (ROUND ACTIVE)',
     }));
+    const groupedLineQuery = db.$queryRaw.mock.calls.at(-1)[0] as { sql: string; values: unknown[] };
+    expect(groupedLineQuery.sql).toContain('GROUP BY "boqRevisionId"');
+    expect(groupedLineQuery.values).toEqual(['tenant-1', 'rev-summary']);
   });
 
   it('returns an empty procurement preview without issuing line aggregates', async () => {
@@ -345,7 +349,7 @@ describe('dashboard API role responses', () => {
       role: 'PROCUREMENT_USER', boqRegister: [], registerHasMore: false,
       summaryCards: expect.objectContaining({ approvedBoqs: 0, boqsReceived: 0 }),
     }));
-    expect(db.boqLine.groupBy).not.toHaveBeenCalled();
+    expect(db.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('serves finance summaries and safely sums missing project budgets as zero', async () => {
