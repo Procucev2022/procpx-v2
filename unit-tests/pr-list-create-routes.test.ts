@@ -5,6 +5,7 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '../src/lib/project-auth';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { MAX_PR_BATCH_LINES } from '../src/lib/d1-batch.constants';
 
 
@@ -24,6 +25,7 @@ jest.mock('../src/lib/project-auth', () => ({
   getUserProjectAccessFilter: jest.fn(),
   isUserAuthorizedForProject: jest.fn(),
 }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -43,6 +45,7 @@ const isContext = isApiContext as unknown as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
 const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
+const backgroundLog = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const getRequest = (query = '') => new NextRequest(`http://localhost/api/pr${query}`);
 const postRequest = (body: unknown) => new NextRequest('http://localhost/api/pr', {
@@ -290,5 +293,8 @@ describe('PR list and create API', () => {
     await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProcurementRequest, status: 500,
     });
+    expect(backgroundLog).toHaveBeenCalledWith('error', 'purchase_request.creation_failed', expect.objectContaining({
+      operation: 'create', route: '/api/pr', tenantId: 'tenant-1',
+    }), 'next');
   });
 });

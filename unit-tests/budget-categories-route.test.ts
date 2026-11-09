@@ -3,7 +3,7 @@ import { GET } from '../src/app/api/budgets/categories/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { getUserProjectAccessFilter } from '../src/lib/project-auth';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 jest.mock('../src/lib/prisma', () => ({
@@ -24,7 +24,7 @@ jest.mock('../src/lib/api-utils', () => ({
   }),
 }));
 jest.mock('../src/lib/project-auth', () => ({ getUserProjectAccessFilter: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const db = prisma as unknown as Record<string, jest.Mock | Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -159,7 +159,7 @@ describe('budget categories API', () => {
   it('logs failed aggregate reads and returns a safe error', async () => {
     queryRaw.mockRejectedValueOnce(new Error('private category aggregate detail'));
     await expect(GET(request('?projectId=project-1&costCentreId=cc-1'))).resolves.toMatchObject({ ok: false, status: 500 });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'budget.categories_read_failed', expect.objectContaining({
+    expect(logEvent).toHaveBeenCalledWith('error', 'budget.categories_read_failed', expect.objectContaining({
       operation: 'read_budget_categories', route: '/api/budgets/categories', tenantId: 'tenant-1',
       projectId: 'project-1', costCentreId: 'cc-1', page: 1, pageSize: 50,
     }), 'next');

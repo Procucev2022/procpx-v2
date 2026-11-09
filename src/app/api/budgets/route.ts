@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent } from '@/lib/observability/server-logger';
 import { getUserProjectAccessFilter } from '@/lib/project-auth';
 import {
   ACTUAL_COST_SUMMARY_STATUSES,
@@ -312,7 +312,7 @@ export async function GET(req: NextRequest) {
     transactionLedgerUrl: '/api/budgets/transactions',
   });
   } catch (error) {
-    void writeStructuredLog('error', 'budget.summary_read_failed', {
+    logEvent('error', 'budget.summary_read_failed', {
       operation: 'read_budget_summary', route: '/api/budgets', requestId: req.headers.get('x-request-id'),
       tenantId: ctx.tenantId, projectId: new URL(req.url).searchParams.get('projectId'),
       costCentreId: new URL(req.url).searchParams.get('costCentreId'), durationMs: Date.now() - startedAt, error,

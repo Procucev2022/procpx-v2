@@ -6,7 +6,7 @@ import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { ACTUAL_COST_INSERT_IF_VALID_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent } from '@/lib/observability/server-logger';
 import { ACTUAL_COST_SOURCES, ACTUAL_COST_STATUSES } from './route.constants';
 
 const MAX_CODE_RETRIES = 3;
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
     ]);
     return apiSuccess({ data: transactions, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
   } catch (error) {
-    void writeStructuredLog('error', 'actual_cost.list_failed', {
+    logEvent('error', 'actual_cost.list_failed', {
       operation: 'list',
       route: '/api/actual-costs',
       requestId: requestId(req),
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
     try {
       rawBody = await req.json();
     } catch (error) {
-      void writeStructuredLog('warn', 'actual_cost.invalid_request_body', {
+      logEvent('warn', 'actual_cost.invalid_request_body', {
         operation: 'create',
         route: '/api/actual-costs',
         requestId: requestId(req),
@@ -307,7 +307,7 @@ export async function POST(req: NextRequest) {
       });
       if (codeCollision) continue;
 
-      void writeStructuredLog('warn', 'actual_cost.reference_validation_failed', {
+      logEvent('warn', 'actual_cost.reference_validation_failed', {
         operation: 'create',
         route: '/api/actual-costs',
         requestId: requestId(req),
@@ -321,7 +321,7 @@ export async function POST(req: NextRequest) {
 
     return apiError(UI_STRINGS.appApiActualCostsRoute.actualCostCodeConflictRetryTheRequest, 409);
   } catch (error) {
-    void writeStructuredLog('error', 'actual_cost.create_failed', {
+    logEvent('error', 'actual_cost.create_failed', {
       operation: 'create',
       route: '/api/actual-costs',
       requestId: requestId(req),

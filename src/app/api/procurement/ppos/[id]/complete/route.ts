@@ -12,7 +12,7 @@ import {
   PPO_LINE_COMPLETION_UPDATE_SQL,
   PPO_STATUS_UPDATE_AFTER_COMPLETION_SQL,
 } from '@/lib/d1-batch.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import type { PreparedPpoLineCompletion } from '@app-types/app/api/procurement/ppos/complete.types';
 
 function canonicalize(value: unknown): unknown {
@@ -39,7 +39,7 @@ async function getReplayResponse(tenantId: string, ppoId: string, requestId: str
     take: MAX_PPO_COMPLETION_LINES + 1,
   });
   if (actualTransactions.length > MAX_PPO_COMPLETION_LINES) {
-    void writeStructuredLog('error', 'procurement.ppo_completion_replay_limit_exceeded', {
+    logEvent('error', 'procurement.ppo_completion_replay_limit_exceeded', {
       operation: 'replay_completion',
       route: '/api/procurement/ppos/[id]/complete',
       tenantId,

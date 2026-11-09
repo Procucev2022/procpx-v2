@@ -13,7 +13,7 @@ import {
 } from '@/lib/d1-batch.constants';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent } from '@/lib/observability/server-logger';
 import { getCategoryPreviews } from '@/lib/category-preview';
 
 function requestId(req: NextRequest): string | undefined {
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
       statusCounts,
     });
   } catch (error) {
-    void writeStructuredLog('error', 'purchase_request.list_failed', {
+    logEvent('error', 'purchase_request.list_failed', {
       operation: 'list', route: '/api/pr', requestId: requestId(req), tenantId: ctx.tenantId,
       projectId: projectId || undefined, durationMs: Date.now() - startedAt, error,
     }, 'next');
@@ -301,7 +301,7 @@ export async function POST(req: NextRequest) {
       throw error;
     }
   } catch (error) {
-    void writeStructuredLog('error', 'purchase_request.creation_failed', {
+    logEvent('error', 'purchase_request.creation_failed', {
       operation: 'create', route: '/api/pr', requestId: requestId(req), tenantId: ctx.tenantId,
       userId: ctx.userId, boqRevisionId: requestedRevisionId, projectId: requestedProjectId,
       durationMs: Date.now() - startedAt, error,

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { GET } from '../src/app/api/budgets/transactions/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess } from '../src/lib/api-utils';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from '../src/lib/ui-strings.constants';
 
 jest.mock('../src/lib/prisma', () => ({
@@ -23,7 +23,7 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
 }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -169,7 +169,7 @@ describe('budget transaction ledger API', () => {
     await expect(GET(request('?projectId=project-1'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToFetchBudgetTransactions, status: 500,
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'budget.transaction_ledger_failed', expect.objectContaining({
+    expect(logEvent).toHaveBeenCalledWith('error', 'budget.transaction_ledger_failed', expect.objectContaining({
       operation: 'list', route: '/api/budgets/transactions', tenantId: 'tenant-1', projectId: 'project-1',
     }), 'next');
   });
@@ -180,7 +180,7 @@ describe('budget transaction ledger API', () => {
     await expect(GET(request('?onlyCostCentres=true&projectId=project-1'))).resolves.toMatchObject({
       ok: false, error: UI_STRINGS.common.userMessages.failedToFetchBudgetTransactions, status: 500,
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'budget.cost_centre_filter_options_failed', expect.objectContaining({
+    expect(logEvent).toHaveBeenCalledWith('error', 'budget.cost_centre_filter_options_failed', expect.objectContaining({
       operation: 'list_cost_centre_options', route: '/api/budgets/transactions', tenantId: 'tenant-1', projectId: 'project-1',
     }), 'next');
   });

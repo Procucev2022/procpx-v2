@@ -7,7 +7,7 @@ import { GET as getAuctionRfqOptions } from '../src/app/api/procurement/auctions
 import { POST as completePpo } from '../src/app/api/procurement/ppos/[id]/complete/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { MAX_PPO_COMPLETION_LINES, MAX_PPO_CREATE_LINES } from '../src/lib/d1-batch.constants';
 
 
@@ -37,7 +37,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -405,7 +405,7 @@ describe('PPO completion and actual-cost lineage', () => {
       where: { tenantId: 'tenant-1', ppoId: 'ppo-replay-overflow', completionRequestId: 'completion-request-1' },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: MAX_PPO_COMPLETION_LINES + 1,
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'procurement.ppo_completion_replay_limit_exceeded', expect.objectContaining({
+    expect(logEvent).toHaveBeenCalledWith('error', 'procurement.ppo_completion_replay_limit_exceeded', expect.objectContaining({
       operation: 'replay_completion', tenantId: 'tenant-1', ppoId: 'ppo-replay-overflow',
       transactionCount: MAX_PPO_COMPLETION_LINES + 1, maximumTransactions: MAX_PPO_COMPLETION_LINES,
     }), 'next');

@@ -14,7 +14,7 @@ import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from
 import { prepareRfqNotificationOutbox } from '@/lib/notification-outbox';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import { readByD1FilterChunks } from '@/lib/d1-query';
 import type { RfqLineWrite } from '@app-types/app/api/procurement/rfqs.types';
 import {
@@ -533,7 +533,7 @@ export async function createRfq(req: NextRequest) {
         { rfqNumber: competingRfq.rfqNumber },
       ), 409);
     }
-    void writeStructuredLog('error', 'rfq.create_failed', {
+    logEvent('error', 'rfq.create_failed', {
       operation: 'create', route: '/api/procurement/rfqs', requestId: requestId(req),
       tenantId: ctx.tenantId, projectId, boqRevisionId, recordId: rfqId, prId,
       durationMs: Date.now() - startedAt, error,

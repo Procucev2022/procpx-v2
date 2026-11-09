@@ -166,10 +166,18 @@ export async function writeStructuredLog(
  * or slow down because of logging. Errors inside the logger are swallowed here
  * after being reported on stderr.
  */
-export function logEvent(level: LogLevel, message: string, context: Record<string, unknown> = {}): void {
-  trackPendingLogWrite(writeStructuredLog(level, message, context).catch((error: unknown) => {
-    process.stderr.write(`observability.log_failed ${String(error)}
-`);
+export function logEvent(
+  level: LogLevel,
+  message: string,
+  context: Record<string, unknown> = {},
+  source: LogSource = 'application',
+): void {
+  trackPendingLogWrite(writeStructuredLog(level, message, context, source).catch((error: unknown) => {
+    try {
+      process.stderr.write(`observability.log_failed ${String(error)}\n`);
+    } catch {
+      // Logging failures must never become unhandled request failures.
+    }
   }));
 }
 

@@ -8,7 +8,7 @@ import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { isD1BatchWithinLimits } from '../src/lib/d1-batch';
 import { MAX_PPO_CREATE_LINES } from '../src/lib/d1-batch.constants';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { DIRECT_RATE_CARD_PPO_CODE_RETRIES } from '../src/app/api/procurement/rate-cards/direct-ppo/route.constants';
 
@@ -31,7 +31,7 @@ jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn(), dispatchPreparedWorkflowNotification: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: jest.fn((input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100)), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -43,7 +43,7 @@ const notify = notifyNextResponsibleParty as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
 const withinBatchLimits = isD1BatchWithinLimits as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
-const structuredLog = writeStructuredLog as jest.Mock;
+const structuredLog = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1', userName: 'Buyer One' };
 const rateCard = {
   id: 'rate-card-1', rateCardNumber: 'VRC-2026-000001', status: 'APPROVED',

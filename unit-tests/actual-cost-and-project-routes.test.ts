@@ -7,7 +7,7 @@ import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { GET as listActualCosts, POST as createActualCost } from '../src/app/api/actual-costs/route';
 import { GET as listProjects, POST as createProject } from '../src/app/api/projects/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { PROJECT_INSERT_IF_CODE_AVAILABLE_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '../src/lib/d1-batch.constants';
 
 
@@ -35,7 +35,10 @@ jest.mock('../src/lib/api-utils', () => ({
   }),
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../src/lib/observability/server-logger', () => ({
+  logEvent: jest.fn(),
+  writeStructuredLog: jest.fn().mockResolvedValue(undefined),
+}));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -44,6 +47,7 @@ const audit = createAuditLog as jest.Mock;
 const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
+const backgroundLog = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', userName: 'Test User', role: 'CLIENT_ADMIN' };
 const request = (url: string, body?: unknown) => new NextRequest(url, {
   method: body === undefined ? 'GET' : 'POST',
@@ -102,6 +106,9 @@ describe('actual cost API', () => {
     await expect(listActualCosts(request('http://localhost/api/actual-costs?projectId=p1'))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToFetchActualCostTransactions, status: 500,
     });
+    expect(backgroundLog).toHaveBeenCalledWith('error', 'actual_cost.list_failed', expect.objectContaining({
+      operation: 'list', route: '/api/actual-costs', tenantId: 'tenant-1', projectId: 'p1',
+    }), 'next');
   });
 
   it('validates actual cost creation and computes amount plus tax from quantity and rate', async () => {
@@ -158,6 +165,9 @@ describe('actual cost API', () => {
     await expect(createActualCost(request('http://localhost/api/actual-costs', { projectId: 'p1', category: 'Civil', actualQuantity: 1, actualUnitRate: 2 }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCreateActualCostTransaction, status: 500,
     });
+    expect(backgroundLog).toHaveBeenCalledWith('error', 'actual_cost.create_failed', expect.objectContaining({
+      operation: 'create', route: '/api/actual-costs', tenantId: 'tenant-1', projectId: 'p1',
+    }), 'next');
   });
 
   it('validates amounts, dates, completion source and project authorization before writing', async () => {

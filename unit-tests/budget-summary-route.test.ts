@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { GET } from '../src/app/api/budgets/route';
 import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { getUserProjectAccessFilter } from '../src/lib/project-auth';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
@@ -27,7 +27,7 @@ jest.mock('../src/lib/api-utils', () => ({
     return { page, pageSize, skip: (page - 1) * pageSize };
   }),
 }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({ getUserProjectAccessFilter: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
@@ -367,7 +367,7 @@ describe('budget summary API', () => {
     await expect(GET(request('?projectId=project-1&costCentreId=cc-1'))).resolves.toMatchObject({
       ok: false, status: 500,
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'budget.summary_read_failed', expect.objectContaining({
+    expect(logEvent).toHaveBeenCalledWith('error', 'budget.summary_read_failed', expect.objectContaining({
       operation: 'read_budget_summary', route: '/api/budgets', tenantId: 'tenant-1',
     }), 'next');
   });

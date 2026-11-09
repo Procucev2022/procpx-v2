@@ -7,7 +7,7 @@ import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { MAX_D1_BATCH_STATEMENTS } from '../src/lib/d1-batch.constants';
 
 
@@ -36,7 +36,10 @@ jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/notifications', () => ({ notifyNextResponsibleParty: jest.fn(), dispatchPreparedWorkflowNotification: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../src/lib/observability/server-logger', () => ({
+  logEvent: jest.fn(),
+  writeStructuredLog: jest.fn().mockResolvedValue(undefined),
+}));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -47,6 +50,7 @@ const dispatchPrepared = dispatchPreparedWorkflowNotification as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
+const backgroundLog = logEvent as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1', userName: 'Buyer' };
 const getRequest = (query = '') => new NextRequest(`http://localhost/api/procurement/rfqs${query}`);
 const postRequest = (body: unknown) => new NextRequest('http://localhost/api/procurement/rfqs', {
@@ -343,7 +347,7 @@ describe('RFQ collection API', () => {
     await expect(POST(oversizedRequestId)).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCreateRfq, status: 500,
     });
-    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rfq.create_failed', expect.objectContaining({ requestId: undefined }), 'next');
+    expect(backgroundLog).toHaveBeenLastCalledWith('error', 'rfq.create_failed', expect.objectContaining({ requestId: undefined }), 'next');
   });
 
   it('enforces project and vendor tenant scope and keeps a committed RFQ when outbox dispatch fails', async () => {
