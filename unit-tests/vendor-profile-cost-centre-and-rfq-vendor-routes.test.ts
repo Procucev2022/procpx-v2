@@ -301,7 +301,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     expect(writeLog).toHaveBeenCalledWith('error', 'cost_centre.update_failed', expect.objectContaining({ costCentreId: 'cc-1' }));
   });
 
-  it('validates RFQ vendor invitations and upserts eligible vendors using RFQ status', async () => {
+  it('validates RFQ vendor invitations and delegates persisted status to the D1 batch', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
@@ -325,7 +325,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
       where: { id: { in: ['vendor-1', 'vendor-2'] }, tenantId: 'tenant-1', isBlacklisted: false },
     });
     expect(writeInvitations).toHaveBeenLastCalledWith({
-      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1', 'vendor-2'], invitationStatus: UI_STRINGS.common.pENDING,
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1', 'vendor-2'],
       audit: {
         userId: 'user-1', projectId: 'project-1',
         description: 'Invited 2 vendors to RFQ RFQ-001: Acme, BuildCo',
@@ -337,7 +337,7 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     writeInvitations.mockResolvedValueOnce(1);
     await inviteRfqVendors(request({ vendorIds: ['vendor-3'] }), idParams('rfq-1'));
     expect(writeInvitations).toHaveBeenLastCalledWith({
-      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-3'], invitationStatus: UI_STRINGS.appAppProcurementRfqsNewPage.iNVITED,
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-3'],
       audit: {
         userId: 'user-1', projectId: 'project-1',
         description: 'Invited 1 vendors to RFQ RFQ-001: OtherCo',

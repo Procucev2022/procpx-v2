@@ -139,14 +139,14 @@ describe('native D1 batch writes', () => {
     getContextMock.mockReturnValueOnce({ env: { DB: database } });
     await expect(writeRfqVendorInvitationsAtomically({
       tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1', 'vendor-2', 'vendor-3'],
-      invitationStatus: 'INVITED', audit: { userId: 'user-1', projectId: 'project-1', description: 'Invited three vendors' }, createdAt,
+      audit: { userId: 'user-1', projectId: 'project-1', description: 'Invited three vendors' }, createdAt,
     })).resolves.toBe(3);
 
     expect(database.batch).toHaveBeenCalledTimes(1);
     expect(bound).toEqual([
       {
         sql: RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
-        values: [expect.any(String), 'tenant-1', 'tenant-1', 'rfq-1', 'INVITED', 'rfq-1', 'tenant-1'],
+        values: [expect.any(String), 'tenant-1', 'rfq-1', 'tenant-1'],
       },
       {
         sql: RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,
@@ -278,7 +278,7 @@ describe('native D1 batch writes', () => {
   it('returns without opening D1 for an empty list and rejects more than the supported vendor count', async () => {
     const { database } = createDatabase();
     await expect(writeRfqVendorInvitationsAtomically({
-      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: [], invitationStatus: 'PENDING',
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: [],
       audit: { description: 'No vendors selected' },
     })).resolves.toBe(0);
     expect(database.prepare).not.toHaveBeenCalled();
@@ -286,7 +286,7 @@ describe('native D1 batch writes', () => {
     await expect(writeRfqVendorInvitationsAtomically({
       tenantId: 'tenant-1', rfqId: 'rfq-1',
       vendorIds: Array.from({ length: MAX_RFQ_VENDOR_INVITE_COUNT + 1 }, (_, index) => `vendor-${index}`),
-      invitationStatus: 'PENDING', audit: { description: 'Invited vendors' },
+      audit: { description: 'Invited vendors' },
     })).rejects.toThrow(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.maximumVendorInviteBatchLimit);
     expect(database.batch).not.toHaveBeenCalled();
   });
@@ -295,7 +295,7 @@ describe('native D1 batch writes', () => {
     const failed = createDatabase([{ success: false }]);
     getContextMock.mockReturnValueOnce({ env: { DB: failed.database } });
     await expect(writeRfqVendorInvitationsAtomically({
-      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1'], invitationStatus: 'PENDING',
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1'],
       audit: { description: 'Invite one vendor' },
     })).rejects.toThrow(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors);
 
@@ -303,7 +303,7 @@ describe('native D1 batch writes', () => {
     (offline.database.batch as jest.Mock).mockRejectedValueOnce(new Error('database unavailable'));
     getContextMock.mockReturnValueOnce({ env: { DB: offline.database } });
     await expect(writeRfqVendorInvitationsAtomically({
-      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1'], invitationStatus: 'PENDING',
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1'],
       audit: { description: 'Invite one vendor' },
     })).rejects.toThrow('database unavailable');
 
@@ -315,7 +315,7 @@ describe('native D1 batch writes', () => {
     const { database } = createDatabase([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     getContextMock.mockReturnValueOnce({ env: { DB: database } });
     await expect(writeRfqVendorInvitationsAtomically({
-      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1'], invitationStatus: 'PENDING',
+      tenantId: 'tenant-1', rfqId: 'rfq-1', vendorIds: ['vendor-1'],
       audit: { description: 'Invite one vendor' },
     })).resolves.toBe(1);
   });

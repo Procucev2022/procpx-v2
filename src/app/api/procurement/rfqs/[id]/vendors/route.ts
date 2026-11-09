@@ -56,14 +56,12 @@ export async function POST(
       return apiError(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.noneOfTheSelectedVendorsAreEligibleOrActive, 400, { route: '/api/procurement/rfqs/[id]/vendors', method: 'POST' });
     }
 
-    // Create RFQ vendor invitations
-    const invitationStatus = rfq.status === 'DRAFT' ? 'PENDING' : 'INVITED';
+    // The D1 batch derives invitation status from the RFQ's current persisted state.
     const description = interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.invitedLengthVendorsToRFQRfqNumberJoin, { "length": eligibleVendors.length, "rfqNumber": rfq.rfqNumber, "join": eligibleVendors.map((v) => v.name).join(', ') });
     const invitedCount = await writeRfqVendorInvitationsAtomically({
       tenantId: ctx.tenantId,
       rfqId: id,
       vendorIds: eligibleVendors.map((vendor) => vendor.id),
-      invitationStatus,
       audit: {
         userId: ctx.userId,
         projectId: rfq.projectId,

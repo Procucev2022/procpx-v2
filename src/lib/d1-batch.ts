@@ -187,8 +187,7 @@ export async function writeRfqVendorInvitationsAtomically(input: RfqVendorInvita
     results = await runD1BatchAtomically(getD1BatchDatabase(), [
       {
         sql: RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
-        values: [JSON.stringify(invitationRows), input.tenantId, input.tenantId, input.rfqId,
-          input.invitationStatus, input.rfqId, input.tenantId],
+        values: [JSON.stringify(invitationRows), input.tenantId, input.rfqId, input.tenantId],
       },
       {
         sql: RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,

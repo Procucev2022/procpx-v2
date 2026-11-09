@@ -33,7 +33,6 @@ export interface RfqVendorInvitationWriteInput {
   tenantId: string;
   rfqId: string;
   vendorIds: string[];
-  invitationStatus: string;
   audit: RfqVendorInvitationAuditContext;
   createdAt?: Date;
 }

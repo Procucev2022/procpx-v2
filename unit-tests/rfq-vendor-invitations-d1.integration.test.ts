@@ -8,9 +8,9 @@ jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog:
 
 type BoundStatement = D1BatchStatement & { sql: string; values: unknown[] };
 interface LocalSQLiteStatement {
-  all(...values: never[]): unknown[];
-  get(...values: never[]): unknown;
-  run(...values: never[]): { changes: number | bigint };
+  all(...values: unknown[]): unknown[];
+  get(...values: unknown[]): unknown;
+  run(...values: unknown[]): { changes: number | bigint };
 }
 interface LocalSQLiteDatabase {
   exec(sql: string): void;
@@ -26,7 +26,7 @@ const getContextMock = getCloudflareContext as jest.Mock;
 function createDatabase(): { database: D1BatchDatabase; sqlite: LocalSQLiteDatabase } {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(`
-    CREATE TABLE rfqs (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL);
+    CREATE TABLE rfqs (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, status TEXT NOT NULL);
     CREATE TABLE vendors (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, isBlacklisted INTEGER NOT NULL);
     CREATE TABLE rfq_vendors (
       id TEXT NOT NULL PRIMARY KEY, tenantId TEXT NOT NULL, rfqId TEXT NOT NULL, vendorId TEXT NOT NULL,
@@ -37,7 +37,7 @@ function createDatabase(): { database: D1BatchDatabase; sqlite: LocalSQLiteDatab
       entityId TEXT NOT NULL, action TEXT NOT NULL, description TEXT NOT NULL, oldValue TEXT, newValue TEXT,
       ipAddress TEXT, userAgent TEXT, createdAt TEXT NOT NULL
     );
-    INSERT INTO rfqs (id, tenantId) VALUES ('rfq-1', 'tenant-1');
+    INSERT INTO rfqs (id, tenantId, status) VALUES ('rfq-1', 'tenant-1', 'DRAFT');
     INSERT INTO vendors (id, tenantId, isBlacklisted) VALUES
       ('vendor-1', 'tenant-1', 0), ('vendor-2', 'tenant-1', 0), ('blocked', 'tenant-1', 1), ('other-tenant', 'tenant-2', 0);
   `);
@@ -75,7 +75,6 @@ function invitationInput(vendorIds: string[]) {
     tenantId: 'tenant-1',
     rfqId: 'rfq-1',
     vendorIds,
-    invitationStatus: 'INVITED',
     audit: { userId: 'user-1', projectId: 'project-1', description: 'Invited vendors' },
     createdAt: new Date('2026-11-07T10:00:00.000Z'),
   };
@@ -105,6 +104,9 @@ describe('RFQ vendor invitation D1 consistency', () => {
       .resolves.toBe(2);
 
     expect(count(sqlite, 'rfq_vendors')).toBe(2);
+    expect(sqlite.prepare('SELECT invitationStatus FROM rfq_vendors ORDER BY vendorId').all()).toEqual([
+      { invitationStatus: 'PENDING' }, { invitationStatus: 'PENDING' },
+    ]);
     expect(count(sqlite, 'audit_logs')).toBe(1);
     const audit = sqlite.prepare('SELECT * FROM audit_logs').get() as Record<string, unknown>;
     expect(audit).toMatchObject({
@@ -113,6 +115,17 @@ describe('RFQ vendor invitation D1 consistency', () => {
       newValue: JSON.stringify({ vendorIds: ['vendor-1', 'vendor-2'] }),
       createdAt: '2026-11-07T10:00:00.000Z',
     });
+  });
+
+  it('derives the invitation status from the persisted RFQ state at batch time', async () => {
+    const testDatabase = createDatabase();
+    sqlite = testDatabase.sqlite;
+    sqlite.prepare('UPDATE rfqs SET status = ? WHERE id = ?').run('RELEASED', 'rfq-1');
+    getContextMock.mockReturnValue({ env: { DB: testDatabase.database } });
+
+    await expect(writeRfqVendorInvitationsAtomically(invitationInput(['vendor-1']))).resolves.toBe(1);
+    expect(sqlite.prepare('SELECT invitationStatus FROM rfq_vendors WHERE vendorId = ?').get('vendor-1'))
+      .toEqual({ invitationStatus: 'INVITED' });
   });
 
   it('rolls back every invitation if audit persistence fails', async () => {

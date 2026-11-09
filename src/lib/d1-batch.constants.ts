@@ -249,15 +249,16 @@ export const RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL = `
     SELECT input."id", input."vendorId"
     FROM input
     JOIN "vendors" v ON v."id" = input."vendorId" AND v."tenantId" = ? AND v."isBlacklisted" = 0
+  ), current_rfq AS (
+    SELECT r."id", r."tenantId", r."status"
+    FROM "rfqs" r WHERE r."id" = ? AND r."tenantId" = ?
   )
   INSERT INTO "rfq_vendors"
     ("id", "tenantId", "rfqId", "vendorId", "invitationStatus", "submissionStatus")
-  SELECT eligible."id", ?, ?, eligible."vendorId", ?, 'PENDING'
-  FROM eligible
-  WHERE EXISTS (
-    SELECT 1 FROM "rfqs" r WHERE r."id" = ? AND r."tenantId" = ?
-  )
-    AND (SELECT COUNT(*) FROM input) = (SELECT COUNT(*) FROM eligible)
+  SELECT eligible."id", current_rfq."tenantId", current_rfq."id", eligible."vendorId",
+    CASE WHEN current_rfq."status" = 'DRAFT' THEN 'PENDING' ELSE 'INVITED' END, 'PENDING'
+  FROM eligible CROSS JOIN current_rfq
+  WHERE (SELECT COUNT(*) FROM input) = (SELECT COUNT(*) FROM eligible)
   ON CONFLICT ("rfqId", "vendorId") DO UPDATE SET
     "invitationStatus" = excluded."invitationStatus"
   WHERE "rfq_vendors"."tenantId" = excluded."tenantId"
