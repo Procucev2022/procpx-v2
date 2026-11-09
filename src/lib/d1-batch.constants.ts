@@ -1829,6 +1829,9 @@ export const QUOTE_INSERT_WITH_NEXT_VERSION_SQL = `
       WHERE "tenantId" = ? AND "rfqId" = ? AND "vendorId" = ?), 0) > 0
       THEN 'REVISED' ELSE 'SUBMITTED' END,
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  FROM "rfqs" eligibleRfq
+  WHERE eligibleRfq."id" = ? AND eligibleRfq."tenantId" = ?
+    AND eligibleRfq."status" IN (?, ?, ?, ?)
   RETURNING "id", "tenantId", "rfqId", "vendorId", "quoteNumber", "quoteVersion", "status",
     "totalBaseAmount", "taxAmount", "discountAmount", "totalQuoteAmount", "commercialTerms",
     "paymentTermsOffered", "deliveryLeadTimeDays", "validUntil", "submittedAt", "submittedBy",

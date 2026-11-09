@@ -13,6 +13,7 @@ import { getListPageWindow } from '@/lib/api-utils';
 import { prepareQuoteNotificationOutbox } from '@/lib/notification-outbox';
 import type { Prisma } from '@prisma/client';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
+import { QUOTE_SUBMISSION_ALLOWED_RFQ_STATUSES } from './route.constants';
 
 
 export async function GET(req: NextRequest) {
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
   const startedAt = Date.now();
   let rfqId: string | undefined;
   let vendorId: string | undefined;
+  let batchWriteStarted = false;
   try {
     const body = await req.json();
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -132,7 +134,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!['RELEASED', 'VENDOR_RESPONSE_OPEN', 'COMPARISON', 'NEGOTIATION'].includes(rfq.status)) {
+    if (!(QUOTE_SUBMISSION_ALLOWED_RFQ_STATUSES as readonly string[]).includes(rfq.status)) {
       return apiError(interpolateUiString(UI_STRINGS.common.rFQStatusStatusDoesNotPermitVendorQuotationSubmissions, { "status": rfq.status }), 400, { route: '/api/procurement/quotes', method: 'POST' });
     }
 
@@ -265,7 +267,7 @@ export async function POST(req: NextRequest) {
           typeof commercialTerms === 'string' ? commercialTerms : null,
           typeof paymentTermsOffered === 'string' ? paymentTermsOffered : null,
           leadTime, validUntilDate?.toISOString() || null, now.toISOString(), ctx.userId,
-          now.toISOString(), now.toISOString(),
+          now.toISOString(), now.toISOString(), rfqId, ctx.tenantId, ...QUOTE_SUBMISSION_ALLOWED_RFQ_STATUSES,
         ],
       },
       ...quoteLinesData.map((line) => ({
@@ -296,7 +298,9 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.appApiVendorPortalRfqsIdRoute.quotationHasTooManyLineItemsToSubmitAtomically, 400);
     }
 
+    batchWriteStarted = true;
     const results = await writeD1BatchAtomically(batchStatements);
+    batchWriteStarted = false;
     const quoteRow = results[0]?.results?.[0];
     if (!quoteRow || typeof quoteRow.id !== 'string' || typeof quoteRow.quoteNumber !== 'string'
       || !Number.isFinite(Number(quoteRow.quoteVersion))) {
@@ -331,6 +335,37 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess({ quote, message: interpolateUiString(UI_STRINGS.appApiProcurementQuotesRoute.quoteVNextVersionSubmittedSuccessfully, { "nextVersion": nextVersion }) }, 201);
   } catch (error: unknown) {
+    let rfqStatusRecheckError: { name: string; message: string } | { type: string } | undefined;
+    if (batchWriteStarted && rfqId) {
+      try {
+        const currentRfq = await prisma.rfq.findFirst({
+          where: { id: rfqId, tenantId: ctx.tenantId },
+          select: { status: true },
+        });
+        if (!currentRfq || !(QUOTE_SUBMISSION_ALLOWED_RFQ_STATUSES as readonly string[]).includes(currentRfq.status)) {
+          try {
+            await writeStructuredLog('warn', 'procurement.quote_submission_conflicted', {
+              operation: 'submit_quote',
+              route: '/api/procurement/quotes',
+              requestId: req.headers.get('x-request-id') || undefined,
+              tenantId: ctx.tenantId,
+              rfqId,
+              vendorId,
+              reason: 'rfq_status_changed_during_write',
+              rfqStatus: currentRfq?.status || 'missing',
+              durationMs: Date.now() - startedAt,
+            });
+          } catch {
+            // A logging failure must not replace the conflict response.
+          }
+          return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
+        }
+      } catch (recheckError) {
+        rfqStatusRecheckError = recheckError instanceof Error
+          ? { name: recheckError.name, message: recheckError.message.slice(0, 500) }
+          : { type: typeof recheckError };
+      }
+    }
     await writeStructuredLog('error', 'procurement.quote_submission_failed', {
       operation: 'submit_quote',
       route: '/api/procurement/quotes',
@@ -339,6 +374,7 @@ export async function POST(req: NextRequest) {
       vendorId,
       requestId: req.headers.get('x-request-id') || undefined,
       durationMs: Date.now() - startedAt,
+      ...(rfqStatusRecheckError ? { rfqStatusRecheckError } : {}),
       error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
     });
     return apiError(UI_STRINGS.common.userMessages.failedToSubmitQuote, 500);
