@@ -175,6 +175,37 @@ describe('role-aware dashboard', () => {
     expect(screen.queryByText('Approval blocked')).not.toBeInTheDocument();
   });
 
+  it('loads additional approver review lines through the tenant-scoped cursor endpoint', async () => {
+    const pr = {
+      ...pendingPr(),
+      lineCount: 26,
+      linePagination: { hasMore: true, nextCursor: 'cursor/next', pageSize: 25 },
+    };
+    dashboardData = { role: 'PROJECT_APPROVER', pendingPrs: [pr], recentlyApprovedList: [], recentlyRejectedList: [] };
+    configureFetch();
+    mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve(reply({}));
+      if (url === '/api/pr/pr-1/lines?cursor=cursor%2Fnext') {
+        return Promise.resolve(reply({
+          lines: [{ id: 'line-26', lineNumber: '26', itemDescription: 'Final valve', category: 'Pipes', quantity: 1, uom: 'EA' }],
+          linePagination: { hasMore: false, nextCursor: null, pageSize: 25 },
+        }));
+      }
+      return Promise.resolve(reply(dashboardData));
+    });
+
+    render(<DashboardPage />);
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.approvalDashboard));
+    fireEvent.click(screen.getByRole('button', {
+      name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { currency: 'Review', toLocaleString: 'BOQ' })),
+    }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+
+    expect(await screen.findByText('Final valve')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-1/lines?cursor=cursor%2Fnext');
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
+  });
+
   it('requires a reason for return and rejection and submits both review actions', async () => {
     dashboardData = { role: 'PROJECT_APPROVER', pendingPrs: [pendingPr()], recentlyApprovedList: [], recentlyRejectedList: [] };
     renderForData();

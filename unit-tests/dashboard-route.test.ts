@@ -169,28 +169,53 @@ describe('dashboard API role responses', () => {
     auth.mockResolvedValue({ ...baseContext, role: 'PROJECT_APPROVER' });
     db.user.findMany.mockResolvedValue([{ id: 'user-2', email: 'known@test', name: 'Known', role: 'PROJECT_USER' }]);
     db.procurementRequest.count.mockResolvedValueOnce(2).mockResolvedValueOnce(4).mockResolvedValueOnce(1);
+    const pendingLines = Array.from({ length: 26 }, (_, index) => ({
+      id: `line-${index + 1}`, lineNumber: String(index + 1), category: 'Civil',
+    }));
     db.procurementRequest.findMany
       .mockResolvedValueOnce([{
-        id: 'pr-1', requestedBy: 'known@test', lines: [{ category: 'Civil' }, { category: 'Civil' }, { category: null }],
+        id: 'pr-1', requestedBy: 'known@test', lines: pendingLines, _count: { lines: 31 },
         boq: { category: 'Fallback' }, approvals: [{ status: 'ENQUIRY', note: 'Clarify' }],
       }, {
-        id: 'pr-2', requestedBy: 'unknown', lines: [], boq: { category: null }, approvals: [],
+        id: 'pr-2', requestedBy: 'unknown', lines: [], _count: { lines: 0 }, boq: { category: null }, approvals: [],
       }])
       .mockResolvedValueOnce([{ id: 'approved-1' }])
       .mockResolvedValueOnce([{ id: 'rejected-1' }]);
+    db.pRLine.groupBy.mockResolvedValue([
+      { prId: 'pr-1', category: 'Civil' },
+      { prId: 'pr-1', category: 'Electrical' },
+    ]);
 
     await GET();
 
     expect(db.procurementRequest.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
       take: 5,
       orderBy: [{ requestedDate: 'desc' }, { id: 'desc' }],
+      include: expect.objectContaining({
+        lines: expect.objectContaining({
+          where: { tenantId: 'tenant-1' },
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: 26,
+        }),
+        _count: { select: { lines: true } },
+      }),
+    }));
+    expect(db.pRLine.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      by: ['prId', 'category'],
+      where: { tenantId: 'tenant-1', prId: { in: ['pr-1', 'pr-2'] } },
+      take: 100,
     }));
 
     expect(success).toHaveBeenCalledWith(expect.objectContaining({
       pending: 2, recentApproved: 4, recentRejected: 1,
       pendingPrs: [
-        expect.objectContaining({ requesterName: 'Known', requesterEmail: 'known@test', categories: ['Civil'], hasEnquiry: true, latestMessage: { status: 'ENQUIRY', note: 'Clarify' } }),
-        expect.objectContaining({ requesterName: 'unknown', requesterEmail: '', categories: [UI_STRINGS.common.standard], hasEnquiry: false, latestMessage: null }),
+        expect.objectContaining({
+          requesterName: 'Known', requesterEmail: 'known@test', categories: ['Civil', 'Electrical'],
+          lineCount: 31, lines: pendingLines.slice(0, 25),
+          linePagination: { hasMore: true, nextCursor: expect.any(String), pageSize: 25 },
+          hasEnquiry: true, latestMessage: { status: 'ENQUIRY', note: 'Clarify' },
+        }),
+        expect.objectContaining({ requesterName: 'unknown', requesterEmail: '', categories: [UI_STRINGS.common.standard], lineCount: 0, hasEnquiry: false, latestMessage: null }),
       ],
     }));
   });
@@ -198,7 +223,7 @@ describe('dashboard API role responses', () => {
   it('skips requester lookups when pending requests have no requester IDs', async () => {
     auth.mockResolvedValue({ ...baseContext, role: 'PROJECT_APPROVER' });
     db.procurementRequest.findMany
-      .mockResolvedValueOnce([{ id: 'pr-no-requester', requestedBy: null, lines: [], boq: null, approvals: [] }])
+      .mockResolvedValueOnce([{ id: 'pr-no-requester', requestedBy: null, lines: [], _count: { lines: 0 }, boq: null, approvals: [] }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 

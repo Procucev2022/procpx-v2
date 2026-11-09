@@ -6,10 +6,10 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.30% (100206/100908) |
-| branches | 93.69% (22923/24466) |
-| functions | 98.57% (1934/1962) |
-| lines | 99.30% (100206/100908) |
+| statements | 99.29% (100271/100983) |
+| branches | 93.66% (22931/24483) |
+| functions | 98.57% (1935/1963) |
+| lines | 99.29% (100271/100983) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -38,7 +38,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/(app)/budget/transactions/page.tsx` | 100.00% | 92.30% | 95.00% | 100.00% | PASS |
 | `src/app/(app)/budget/vs-actual/page.tsx` | 100.00% | 90.40% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/cost-centres/page.tsx` | 99.42% | 92.78% | 100.00% | 99.42% | PASS |
-| `src/app/(app)/dashboard/page.tsx` | 99.23% | 91.82% | 100.00% | 99.23% | PASS |
+| `src/app/(app)/dashboard/page.tsx` | 98.90% | 90.60% | 100.00% | 98.90% | PASS |
 | `src/app/(app)/error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/finance/budget-approvals/page.tsx` | 98.07% | 91.60% | 96.15% | 98.07% | PASS |
 | `src/app/(app)/layout.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -155,7 +155,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/cost-centres/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/cost-centres/route.ts` | 100.00% | 95.65% | 100.00% | 100.00% | PASS |
 | `src/app/api/dashboard/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/dashboard/route.ts` | 99.84% | 90.21% | 100.00% | 99.84% | PASS |
+| `src/app/api/dashboard/route.ts` | 99.85% | 90.11% | 100.00% | 99.85% | PASS |
 | `src/app/api/financial/budget-vs-actual/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/masters/categories/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/masters/categories/route.ts` | 95.07% | 90.67% | 100.00% | 95.07% | PASS |

@@ -7,7 +7,11 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { readByD1FilterChunks } from '@/lib/d1-query';
+import { getPrLinePaginationMetadata, paginatePrLineRecords } from '@/lib/pr-line-pagination';
+import { PR_DETAIL_LINE_PAGE_SIZE } from '@/lib/pr-line-pagination.constants';
+import { PR_DETAIL_LINE_SELECT } from '@/app/api/pr/[id]/route.constants';
 import {
+  DASHBOARD_APPROVER_CATEGORY_PREVIEW_LIMIT,
   DASHBOARD_EXCEPTION_PREVIEW_LIMIT,
   DASHBOARD_REGISTER_PREVIEW_LIMIT,
   DASHBOARD_RFQ_PREVIEW_LIMIT,
@@ -112,31 +116,53 @@ export async function GET(request?: Request) {
           boq: { select: { id: true, boqCode: true, title: true, description: true, category: true } },
           boqRevision: { select: { id: true, revisionNumber: true, revisionCode: true } },
           lines: {
-            include: {
-              boqLine: true,
-            },
+            where: { tenantId },
+            select: PR_DETAIL_LINE_SELECT,
+            orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+            take: PR_DETAIL_LINE_PAGE_SIZE + 1,
           },
+          _count: { select: { lines: true } },
           approvals: { orderBy: { timestamp: 'desc' }, take: 1 },
         },
       }),
     ]);
 
+    const pendingPrIds = rawPendingPrs.map((pr) => pr.id);
     const requesterIds = Array.from(new Set(rawPendingPrs.map((pr) => pr.requestedBy).filter(Boolean)));
-    const users = requesterIds.length > 0 ? await prisma.user.findMany({
-      where: { tenantId, id: { in: requesterIds } },
-      select: { id: true, name: true, email: true },
-    }) : [];
+    const [users, categoryGroups] = await Promise.all([
+      requesterIds.length > 0 ? prisma.user.findMany({
+        where: { tenantId, id: { in: requesterIds } },
+        select: { id: true, name: true, email: true },
+      }) : Promise.resolve([]),
+      pendingPrIds.length > 0 ? prisma.pRLine.groupBy({
+        by: ['prId', 'category'],
+        where: { tenantId, prId: { in: pendingPrIds } },
+        orderBy: [{ prId: 'asc' }, { category: 'asc' }],
+        take: DASHBOARD_APPROVER_CATEGORY_PREVIEW_LIMIT,
+      }) : Promise.resolve([]),
+    ]);
     const userMap = new Map<string, { name: string; email: string }>();
     users.forEach((user) => {
       userMap.set(user.id, { name: user.name, email: user.email });
       userMap.set(user.email, { name: user.name, email: user.email });
     });
 
+    const categoriesByPr = new Map<string, string[]>();
+    categoryGroups.forEach((group) => {
+      const categories = categoriesByPr.get(group.prId) || [];
+      categories.push(group.category);
+      categoriesByPr.set(group.prId, categories);
+    });
+
     const pendingPrs = rawPendingPrs.map(pr => {
       const requester = userMap.get(pr.requestedBy);
-      const categories = Array.from(new Set(pr.lines.map(l => l.category).filter(Boolean)));
+      const categories = categoriesByPr.get(pr.id) || [];
+      const linePage = paginatePrLineRecords(pr.lines);
       return {
         ...pr,
+        lines: linePage.lines,
+        linePagination: getPrLinePaginationMetadata(linePage),
+        lineCount: pr._count.lines,
         requesterName: requester?.name || pr.requestedBy,
         requesterEmail: requester?.email || '',
         categories: categories.length > 0 ? categories : (pr.boq?.category ? [pr.boq.category] : ['Standard']),

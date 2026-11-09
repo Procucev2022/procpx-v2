@@ -86,11 +86,49 @@ export default function DashboardPage() {
   const [approverRejectModalOpen, setApproverRejectModalOpen] = useState(false);
   const [approverRejectReason, setApproverRejectReason] = useState('');
   const [approverProcessing, setApproverProcessing] = useState(false);
+  const [approverLinesLoading, setApproverLinesLoading] = useState(false);
   const [approverStatusMessage, setApproverStatusMessage] = useState('');
   const [approverActionError, setApproverActionError] = useState('');
   const [approverChatDrawerOpen, setApproverChatDrawerOpen] = useState(false);
   const [approverChatPr, setApproverChatPr] = useState<any | null>(null);
   const [approverIsEnquiryMode, setApproverIsEnquiryMode] = useState(false);
+
+  const loadMoreApproverLines = async () => {
+    const pr = approverSelectedPr;
+    const cursor = pr?.linePagination?.nextCursor;
+    if (!pr?.id || !cursor || approverLinesLoading) return;
+
+    setApproverLinesLoading(true);
+    try {
+      const response = await fetch(`/api/pr/${encodeURIComponent(pr.id)}/lines?cursor=${encodeURIComponent(cursor)}`);
+      const result = await response.json();
+      if (!response.ok) {
+        toast.error({
+          title: UI_STRINGS.common.error,
+          message: result.error || UI_STRINGS.common.userMessages.failedToFetchProcurementRequests,
+        });
+        return;
+      }
+
+      setApproverSelectedPr((current: unknown) => {
+        if (!current || typeof current !== 'object' || !('id' in current)) return current;
+        const selected = current as { id?: unknown; lines?: unknown[]; [key: string]: unknown };
+        if (selected.id !== pr.id) return current;
+        return {
+          ...selected,
+          lines: [...(selected.lines || []), ...(Array.isArray(result.lines) ? result.lines : [])],
+          linePagination: result.linePagination,
+        };
+      });
+    } catch {
+      toast.error({
+        title: UI_STRINGS.common.error,
+        message: UI_STRINGS.common.userMessages.failedToFetchProcurementRequests,
+      });
+    } finally {
+      setApproverLinesLoading(false);
+    }
+  };
 
   // Standardised PR Details Modal state
   const [selectedPrForDetails, setSelectedPrForDetails] = useState<any | null>(null);
@@ -455,7 +493,7 @@ export default function DashboardPage() {
                       </td>
                       <td style={{ fontWeight: 600, color: '#0f172a' }}>
                         <div>{pr.title}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{pr.lines?.length || pr.totalLines || 0}{UI_STRINGS.common.lineItems}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>{pr.lineCount ?? pr.totalLines ?? pr.lines?.length ?? 0}{UI_STRINGS.common.lineItems}</div>
                       </td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{pr.project?.name || UI_STRINGS.common.copy4s9bsz}</div>
@@ -619,7 +657,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.totalLineItems}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.lines?.length || 0}{UI_STRINGS.common.lines}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{approverSelectedPr.lineCount ?? approverSelectedPr.totalLines ?? approverSelectedPr.lines?.length ?? 0}{UI_STRINGS.common.lines}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.common.requestedValue}</div>
@@ -667,6 +705,16 @@ export default function DashboardPage() {
                   </tbody>
                 </table>
               </div>
+              {approverSelectedPr.linePagination?.hasMore && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={loadMoreApproverLines}
+                    disabled={approverLinesLoading}
+                  >{UI_STRINGS.common.loadMore}</button>
+                </div>
+              )}
 
               {/* Modal actions */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
