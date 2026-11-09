@@ -17,7 +17,7 @@ import {
   PPO_LINE_INSERT_SQL,
   RFQ_MARK_AWARDED_AFTER_PPO_INSERT_SQL,
 } from '@/lib/d1-batch.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import type { LatestPpoQuoteSummary } from '@app-types/app/api/procurement/ppos.types';
@@ -121,13 +121,19 @@ export async function GET(req: NextRequest) {
     const pposWithParsedRatings = ppos.map((ppo) => {
       let rating = ppo.vendorRating;
       if (rating && isProcurementUser && rating.status !== 'APPROVED') rating = null;
-      let parsedCriteria: Record<string, any> = {};
-      if (rating?.criteriaDetails) {
+      let parsedCriteria: Record<string, unknown> = {};
+      if (rating?.criteriaDetails !== null && rating?.criteriaDetails !== undefined) {
+        let malformed = false;
         try {
-          parsedCriteria = typeof rating.criteriaDetails === 'string'
+          const parsed: unknown = typeof rating.criteriaDetails === 'string'
             ? JSON.parse(rating.criteriaDetails)
             : rating.criteriaDetails;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) parsedCriteria = parsed as Record<string, unknown>;
+          else malformed = true;
         } catch {
+          malformed = true;
+        }
+        if (malformed) {
           ratingParseFailures.push(ppo.id);
         }
       }
@@ -154,12 +160,17 @@ export async function GET(req: NextRequest) {
       };
     });
     if (ratingParseFailures.length > 0) {
-      await writeStructuredLog('warn', 'procurement.ppo_rating_details_parse_failed', {
+      logEvent('warn', 'procurement.ppo_rating_details_parse_failed', {
         operation: 'parse_vendor_rating_details',
         route: '/api/procurement/ppos',
-        requestId: req.headers.get('x-request-id'),
+        requestId: req.headers.get('x-request-id') || null,
         tenantId: ctx.tenantId,
-        ppoIds: ratingParseFailures,
+        userId: ctx.userId,
+        invalidCount: ratingParseFailures.length,
+        samplePpoId: ratingParseFailures[0],
+        ppoIds: ratingParseFailures.slice(0, 25),
+        truncated: ratingParseFailures.length > 25,
+        fallback: 'empty_object',
       });
     }
 

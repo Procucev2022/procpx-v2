@@ -9,7 +9,7 @@ import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '../src/l
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, MAX_PPO_CREATE_LINES, PPO_INSERT_IF_VALID_SQL, PPO_LINE_INSERT_SQL, RFQ_MARK_AWARDED_AFTER_PPO_INSERT_SQL } from '../src/lib/d1-batch.constants';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -47,7 +47,7 @@ jest.mock('../src/lib/project-auth', () => ({
   isUserAuthorizedForProject: jest.fn(),
 }));
 jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, any>;
 const auth = requireAuth as jest.Mock;
@@ -59,6 +59,7 @@ const permission = hasPermission as jest.Mock;
 const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
+const logHandled = logEvent as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', userName: 'Buyer', role: 'PROCUREMENT_USER' };
 const getRequest = (query = '') => new NextRequest(`http://localhost/api/procurement/ppos${query}`);
@@ -130,6 +131,7 @@ describe('procurement PPO collection API', () => {
     db.vendor.findFirst.mockImplementation(({ where }: { where: { id: string } }) => Promise.resolve({ id: where.id, name: where.id === 'vendor-2' ? 'Beta' : 'Acme' }));
     db.rfqVendor.findFirst.mockResolvedValue({ id: 'invited-1' });
     writeBatch.mockReset().mockResolvedValue(Array.from({ length: 8 }, () => ({ meta: { changes: 1 } })));
+    logHandled.mockReset();
     structuredLog.mockReset().mockResolvedValue({});
     audit.mockResolvedValue(undefined);
     notify.mockImplementation((input: Record<string, unknown>, options?: { prepareOnly?: boolean }) => options?.prepareOnly ? ({
@@ -183,6 +185,7 @@ describe('procurement PPO collection API', () => {
       take: 2,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     }));
+    expect(logHandled).not.toHaveBeenCalled();
     const ppoListRelations = (prisma.ppo.findMany as jest.Mock).mock.calls[0][0].include;
     expect(ppoListRelations.rfq.select).not.toHaveProperty('lines');
     expect(ppoListRelations).not.toHaveProperty('costCentre');
@@ -202,7 +205,9 @@ describe('procurement PPO collection API', () => {
         status: 'DRAFT', criteriaDetails: { qualityComments: 'Inspect', approvedBy: 'user-2', returnReason: 'Recheck' },
       } },
       { id: 'malformed-rating', vendorRating: { status: 'DRAFT', criteriaDetails: '{broken' } },
+      { id: 'array-rating', vendorRating: { status: 'DRAFT', criteriaDetails: '[]' } },
       { id: 'empty-rating', vendorRating: { status: 'DRAFT', criteriaDetails: {} } },
+      { id: 'null-rating', vendorRating: { status: 'DRAFT', criteriaDetails: null } },
     ]);
     await expect(GET(getRequest('?projectId=project-query'))).resolves.toMatchObject({ ok: true, data: {
       isProcurementUser: false,
@@ -210,8 +215,16 @@ describe('procurement PPO collection API', () => {
         { vendorRating: { qualityComments: 'Inspect', approvedBy: 'user-2', returnReason: 'Recheck', decisionHistory: [] } },
         { vendorRating: { criteriaDetailsParsed: {}, qualityComments: '', approvedBy: null, returnReason: null } },
         { vendorRating: { criteriaDetailsParsed: {}, qualityComments: '', approvedBy: null, returnReason: null } },
+        { vendorRating: { criteriaDetailsParsed: {}, qualityComments: '', approvedBy: null, returnReason: null } },
+        { vendorRating: { criteriaDetailsParsed: {}, qualityComments: '', approvedBy: null, returnReason: null } },
       ],
     } });
+    expect(logHandled).toHaveBeenCalledWith('warn', 'procurement.ppo_rating_details_parse_failed', expect.objectContaining({
+      operation: 'parse_vendor_rating_details', route: '/api/procurement/ppos',
+      tenantId: 'tenant-1', userId: 'user-1', invalidCount: 2,
+      samplePpoId: 'malformed-rating', ppoIds: ['malformed-rating', 'array-rating'],
+      truncated: false, fallback: 'empty_object',
+    }));
     expect(db.ppo.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', projectId: 'project-query' },
     }));
