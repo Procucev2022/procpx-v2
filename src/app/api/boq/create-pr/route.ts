@@ -14,6 +14,7 @@ import {
 } from '@/lib/d1-batch.constants';
 import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { isUserAuthorizedForProject } from '@/lib/project-auth';
 
 
 export async function POST(req: NextRequest) {
@@ -61,6 +62,22 @@ export async function POST(req: NextRequest) {
     if (selectedLineIds !== undefined && (!Array.isArray(selectedLineIds) || selectedLineIds.some((id) => typeof id !== 'string'))) {
       return apiError(UI_STRINGS.common.invalidRequestBody, 400);
     }
+    const selectedIds = Array.isArray(selectedLineIds) ? Array.from(new Set(selectedLineIds as string[])) : undefined;
+    if (selectedIds && selectedIds.length > MAX_PR_BATCH_LINES) {
+      return apiError(interpolateUiString(UI_STRINGS.common.prExceedsAtomicWriteLimitMaxLines, {
+        maxLines: MAX_PR_BATCH_LINES,
+      }), 400);
+    }
+
+    const activeLineSelection = {
+      where: {
+        isDeleted: false,
+        ...(selectedIds && selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
+      },
+      orderBy: [{ lineNumber: 'asc' as const }, { id: 'asc' as const }],
+      take: MAX_PR_BATCH_LINES + 1,
+      include: { category: true, subcategory: true, uom: true },
+    };
 
     // Resolve revision
     let revision = null;
@@ -68,10 +85,7 @@ export async function POST(req: NextRequest) {
       revision = await prisma.boqRevision.findFirst({
         where: { id: boqRevisionId, tenantId: ctx.tenantId },
         include: {
-          lines: {
-            where: { isDeleted: false },
-            include: { category: true, subcategory: true, uom: true },
-          },
+          lines: activeLineSelection,
           boq: {
             include: { project: true, costCentre: true },
           },
@@ -89,10 +103,7 @@ export async function POST(req: NextRequest) {
             orderBy: { revisionNumber: 'desc' },
             take: 1,
             include: {
-              lines: {
-                where: { isDeleted: false },
-                include: { category: true, subcategory: true, uom: true },
-              },
+              lines: activeLineSelection,
             },
           },
         },
@@ -126,10 +137,13 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404, { route: '/api/boq/create-pr', method: 'POST' });
     }
 
-    // Filter lines if specific line selection was provided
-    const targetLines = selectedLineIds && selectedLineIds.length > 0
-      ? revision.lines.filter((l: any) => selectedLineIds.includes(l.id))
-      : revision.lines;
+    const authorized = await isUserAuthorizedForProject(ctx.userId, ctx.role, targetProjectId, ctx.tenantId);
+    if (!authorized) {
+      return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
+    }
+
+    // The revision query applies selection filters and an overflow sentinel before returning these lines.
+    const targetLines = revision.lines;
 
     if (targetLines.length === 0) {
       return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/boq/create-pr', method: 'POST' });
