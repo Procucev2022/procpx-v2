@@ -444,6 +444,12 @@ BOQ-to-budget allocation also ends with an in-batch invariant assertion. It veri
 - The full `npm run check:quality` gate passed: all 355 source files meet the four 90% thresholds (99.30% statements/lines, 93.68% branches, 98.57% functions); build, performance, i18n, typecheck, lint no-regression (1,239 existing errors and 441 warnings across 766 files), 156 mutation-boundary checks, safe migrations, and final integrity passed. The PPO route has 91.84% branch coverage.
 - Pre- and post-change local integrity remains 44 tables/493 records, 140/140 indexes, 25 duplicate checks, zero foreign-key violations, and zero cross-tenant references. No migration ran and no records were added, modified, or deleted.
 
+## Continuation on 2026-11-09: type financial budget-versus-actual filters
+
+- The finance report route used `any` for four Prisma filters, two response aggregation maps, and its error boundary. The filters now use generated Prisma where-input types, the cost-centre/category summaries have dedicated types, and the catch boundary is `unknown`. The SQL, grouped reads, page bounds, fallback rules, and response fields remain the same.
+- The existing finance route suite passed 8/8; `npm run check:changed` passed lint no-regression, typecheck, i18n, all 156 D1 mutation-boundary checks, and related tests. The full workspace gate passed with all 355 source files at or above the four 90% thresholds (99.30% statements/lines, 93.69% branches, 98.57% functions), plus build, performance, i18n, typecheck, lint no-regression (1,214 existing errors and 439 warnings across 766 files), mutation boundaries, safe migration, and final integrity.
+- Local D1 remains at 44 tables/493 records, 140/140 indexes, 25 duplicate checks, zero foreign-key violations, and zero cross-tenant references. No records were added, changed, or deleted; no local migration was pending or applied, and no remote D1 operation was made. Cloudflare `dev` permissions remain an external blocker per user instruction.
+
 ## Continuation on 2026-11-09: type the budget summary aggregation
 
 - The budget summary route used `any` for its single project, grouped contribution/transaction rows, and response summaries. It now uses dedicated route types for normalized aggregate rows and relies on the selected Prisma result type for cost-centre details. The same project totals, pagination, fallback calculations, and JSON response shape are preserved; nullable contribution collections continue to fall back to an empty list.
