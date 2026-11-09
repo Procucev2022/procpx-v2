@@ -16,10 +16,15 @@ import {
   BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL,
 } from '@/lib/d1-batch.constants';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import { MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
 import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 import { DRAWING_BOQ_AUDIT_ACTION, DRAWING_BOQ_SOURCE_TYPE, MAX_DRAWING_BOQ_LINES, SUPPORTED_DRAWING_EXTENSIONS } from './route.constants';
+import {
+  PROJECT_DOCUMENT_AUDIT_DELETE_IF_PRESENT_SQL,
+  PROJECT_DOCUMENT_DELETE_IF_PRESENT_SQL,
+  PROJECT_DOCUMENT_INSERT_SQL,
+} from '../../projects/[id]/documents/route.constants';
 
 class InvalidDrawingRequestError extends Error {}
 
@@ -128,6 +133,10 @@ export async function POST(req: NextRequest) {
   let savedFilePath: string | undefined;
   let documentPersisted = false;
   let uploadCreatedInRequest = false;
+  let documentPersistenceUncertain = false;
+  let uploadedDocumentId: string | undefined;
+  let uploadedAuditId: string | undefined;
+  let uploadedDrawingResponse: unknown;
 
   try {
     const contentType = req.headers.get('content-type') || '';
@@ -260,26 +269,115 @@ export async function POST(req: NextRequest) {
     if (!safeOriginalName || safeOriginalName.length > 200) return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingFileAndProjectIDAreRequired, 400);
     const fileBuffer = Buffer.from(await fileValue.arrayBuffer());
     const parseResult = await processDrawingFile(fileBuffer, safeOriginalName, drawingNumber);
-    savedFilePath = await saveUpload([ctx.tenantId, projectId, 'drawings'], `${crypto.randomUUID()}.${extension}`, fileBuffer);
+    const documentId = crypto.randomUUID();
+    const auditId = crypto.randomUUID();
+    uploadedDocumentId = documentId;
+    uploadedAuditId = auditId;
+    const uploadedAt = new Date();
+    savedFilePath = await saveUpload([ctx.tenantId, projectId, 'drawings'], `${documentId}.${extension}`, fileBuffer);
     uploadCreatedInRequest = true;
-    const document = await prisma.projectDocument.create({
-      data: {
-        tenantId: ctx.tenantId, projectId, name: safeOriginalName,
-        fileType: extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : 'image/jpeg',
-        fileSize: fileValue.size, filePath: savedFilePath, uploadedBy: ctx.userId, category: 'DRAWING',
-      },
+    const fileType = extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : 'image/jpeg';
+    const auditDescription = interpolateUiString(UI_STRINGS.appApiProjectsIdDocumentsRoute.projectDocumentAddedNameCategory, {
+      name: safeOriginalName,
+      category: 'DRAWING',
     });
-    documentPersisted = true;
-
-    return apiSuccess({
-      success: true, fileName: safeOriginalName, fileSize: fileValue.size, documentId: document.id,
+    uploadedDrawingResponse = {
+      success: true, fileName: safeOriginalName, fileSize: fileValue.size, documentId,
       drawingNumber: parseResult.drawingReference || drawingNumber, parserUsed: parseResult.parserUsed,
       providerMessage: parseResult.providerMessage, totalDetected: parseResult.totalDetected,
       explicitCount: parseResult.explicitCount, uncertainCount: parseResult.uncertainCount,
       items: parseResult.items, warnings: parseResult.warnings,
-    }, 200);
+    };
+    const documentResults = await writeD1BatchAtomically([
+      {
+        sql: PROJECT_DOCUMENT_INSERT_SQL,
+        values: [documentId, projectId, ctx.tenantId, safeOriginalName, fileType, fileValue.size,
+          savedFilePath, ctx.userId, uploadedAt, 'DRAWING'],
+      },
+      {
+        sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+        values: [auditId, ctx.tenantId, ctx.userId, projectId, 'PROJECT', projectId, 'CREATE', auditDescription,
+          null, JSON.stringify({ documentId, name: safeOriginalName, category: 'DRAWING', fileSize: fileValue.size }),
+          null, req.headers.get('user-agent'), uploadedAt],
+      },
+    ]);
+    const documentInserted = Number(documentResults[0]?.meta?.changes || 0) === 1;
+    const auditInserted = Number(documentResults[1]?.meta?.changes || 0) === 1;
+    documentPersisted = documentInserted;
+    if (!documentInserted || !auditInserted) {
+      try {
+        await writeD1BatchAtomically([
+          { sql: PROJECT_DOCUMENT_AUDIT_DELETE_IF_PRESENT_SQL, values: [auditId, ctx.tenantId, projectId] },
+          { sql: PROJECT_DOCUMENT_DELETE_IF_PRESENT_SQL, values: [documentId, projectId, ctx.tenantId] },
+        ]);
+      } catch (compensationError) {
+        // Keep the drawing blob available if the document row may still reference it.
+        savedFilePath = undefined;
+        logEvent('error', 'boq.drawing_upload_compensation_failed', {
+          operation: 'compensate_drawing_document_upload', route: '/api/boq/drawing-extract',
+          requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+          projectId, documentId, auditId, fileSize: fileValue.size, durationMs: Date.now() - startedAt,
+          documentPersisted, storagePreserved: true,
+          error: compensationError instanceof Error ? { name: compensationError.name } : { type: typeof compensationError },
+        });
+        return apiError(UI_STRINGS.appApiProjectsIdDocumentsRoute.documentUploadFailed, 500);
+      }
+      await deleteUpload(savedFilePath, [ctx.tenantId, projectId, 'drawings']);
+      savedFilePath = undefined;
+      documentPersisted = false;
+      return apiError(UI_STRINGS.appApiProjectsIdDocumentsRoute.projectDocumentChangedPleaseRetry, 409);
+    }
+    documentPersisted = true;
+
+    return apiSuccess(uploadedDrawingResponse, 200);
   } catch (error) {
     if (error instanceof InvalidDrawingRequestError) return apiError(UI_STRINGS.common.descriptionIsRequired, 400);
+    if (savedFilePath && uploadCreatedInRequest && !documentPersisted && projectIdForLog && uploadedDocumentId && uploadedAuditId) {
+      try {
+        const [persistedDocument, persistedAudit] = await Promise.all([
+          prisma.projectDocument.findFirst({
+            where: { id: uploadedDocumentId, projectId: projectIdForLog, tenantId: ctx.tenantId },
+            select: { id: true },
+          }),
+          prisma.auditLog.findFirst({
+            where: { id: uploadedAuditId, tenantId: ctx.tenantId, entityType: 'PROJECT', entityId: projectIdForLog },
+            select: { id: true },
+          }),
+        ]);
+        if (persistedDocument && persistedAudit) {
+          documentPersisted = true;
+          logEvent('warn', 'boq.drawing_upload_acknowledgement_lost', {
+            operation: 'reconcile_drawing_document_upload', route: '/api/boq/drawing-extract',
+            requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+            projectId: projectIdForLog, documentId: uploadedDocumentId, auditId: uploadedAuditId,
+            durationMs: Date.now() - startedAt,
+          });
+          return apiSuccess(uploadedDrawingResponse, 200);
+        }
+        if (persistedDocument || persistedAudit) {
+          documentPersisted = Boolean(persistedDocument);
+          documentPersistenceUncertain = true;
+          savedFilePath = undefined;
+          logEvent('error', 'boq.drawing_upload_persistence_incomplete', {
+            operation: 'reconcile_drawing_document_upload', route: '/api/boq/drawing-extract',
+            requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+            projectId: projectIdForLog, documentId: uploadedDocumentId, auditId: uploadedAuditId,
+            documentRowPresent: Boolean(persistedDocument), auditRowPresent: Boolean(persistedAudit),
+            durationMs: Date.now() - startedAt,
+          });
+        }
+      } catch (reconciliationError) {
+        documentPersistenceUncertain = true;
+        savedFilePath = undefined;
+        logEvent('warn', 'boq.drawing_upload_reconciliation_failed', {
+          operation: 'reconcile_drawing_document_upload', route: '/api/boq/drawing-extract',
+          requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+          projectId: projectIdForLog, documentId: uploadedDocumentId, auditId: uploadedAuditId,
+          durationMs: Date.now() - startedAt,
+          error: reconciliationError instanceof Error ? { name: reconciliationError.name } : { type: typeof reconciliationError },
+        });
+      }
+    }
     if (savedFilePath && uploadCreatedInRequest && !documentPersisted && projectIdForLog) {
       try {
         await deleteUpload(savedFilePath, [ctx.tenantId, projectIdForLog, 'drawings']);
@@ -295,8 +393,8 @@ export async function POST(req: NextRequest) {
     await writeStructuredLog('error', 'boq.drawing_processing_failed', {
       operation: 'process_drawing_or_create_draft', route: '/api/boq/drawing-extract',
       requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
-      projectId: projectIdForLog, boqId: boqIdForLog, revisionId: revisionIdForLog,
-      lineCount, durationMs: Date.now() - startedAt, documentPersisted,
+      projectId: projectIdForLog, boqId: boqIdForLog, revisionId: revisionIdForLog, documentId: uploadedDocumentId,
+      lineCount, durationMs: Date.now() - startedAt, documentPersisted, documentPersistenceUncertain,
       error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 500) } : { type: typeof error },
     });
     return apiError(UI_STRINGS.appApiBoqDrawingExtractRoute.drawingProcessingFailed, 500);

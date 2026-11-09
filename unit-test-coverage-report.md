@@ -6,10 +6,10 @@ Files included: **354**. Files meeting all four 90% thresholds: **354/354**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.31% (99873/100562) |
-| branches | 93.65% (22770/24312) |
+| statements | 99.30% (99960/100660) |
+| branches | 93.64% (22787/24333) |
 | functions | 98.56% (1927/1955) |
-| lines | 99.31% (99873/100562) |
+| lines | 99.30% (99960/100660) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -107,7 +107,7 @@ Files included: **354**. Files meeting all four 90% thresholds: **354/354**.
 | `src/app/api/boq/add-to-budget/route.ts` | 98.36% | 96.51% | 100.00% | 98.36% | PASS |
 | `src/app/api/boq/create-pr/route.ts` | 95.80% | 94.49% | 100.00% | 95.80% | PASS |
 | `src/app/api/boq/drawing-extract/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/drawing-extract/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/drawing-extract/route.ts` | 97.26% | 93.45% | 100.00% | 97.26% | PASS |
 | `src/app/api/boq/duplicate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/duplicate/route.ts` | 100.00% | 98.21% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/estimate-cost/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
