@@ -6,10 +6,10 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.30% (100057/100755) |
-| branches | 93.67% (22858/24401) |
+| statements | 99.30% (100112/100812) |
+| branches | 93.68% (22886/24429) |
 | functions | 98.57% (1932/1960) |
-| lines | 99.30% (100057/100755) |
+| lines | 99.30% (100112/100812) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -85,7 +85,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/approvals/messages/route.ts` | 97.40% | 92.75% | 100.00% | 97.40% | PASS |
 | `src/app/api/approvals/route.ts` | 100.00% | 92.38% | 100.00% | 100.00% | PASS |
 | `src/app/api/approvals/vendor-ratings/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/approvals/vendor-ratings/route.ts` | 100.00% | 95.28% | 100.00% | 100.00% | PASS |
+| `src/app/api/approvals/vendor-ratings/route.ts` | 99.45% | 94.01% | 100.00% | 99.45% | PASS |
 | `src/app/api/audit/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/audit/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/auth/[...nextauth]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -231,7 +231,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/procurement/vendors/[id]/evaluation/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/[id]/evaluation/route.ts` | 96.78% | 95.65% | 100.00% | 96.78% | PASS |
 | `src/app/api/procurement/vendors/[id]/ppo-ratings/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/vendors/[id]/ppo-ratings/route.ts` | 99.77% | 90.55% | 100.00% | 99.77% | PASS |
+| `src/app/api/procurement/vendors/[id]/ppo-ratings/route.ts` | 99.78% | 92.38% | 100.00% | 99.78% | PASS |
 | `src/app/api/procurement/vendors/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/[id]/route.ts` | 100.00% | 98.82% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

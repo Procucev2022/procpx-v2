@@ -7,7 +7,7 @@ import { isUserAuthorizedForProject } from '@/lib/project-auth';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { readByD1FilterChunks } from '@/lib/d1-query';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, PPO_MARK_COMPLETED_AFTER_AUDIT_SQL, PPO_VENDOR_RATING_UPSERT_IF_ELIGIBLE_SQL } from '@/lib/d1-batch.constants';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
@@ -109,13 +109,22 @@ export async function GET(
       : [];
     const userMap = new Map(users.map((u) => [u.id, u.name]));
 
+    let malformedCriteriaCount = 0;
+    let sampleMalformedRatingId: string | null = null;
     const ratings = rawRatings.map((r) => {
-      let parsedCriteria: any = {};
-      if (r.criteriaDetails) {
+      let parsedCriteria: Record<string, unknown> = {};
+      if (r.criteriaDetails !== null && r.criteriaDetails !== undefined) {
+        let malformed = false;
         try {
-          parsedCriteria = typeof r.criteriaDetails === 'string' ? JSON.parse(r.criteriaDetails) : r.criteriaDetails;
+          const parsed: unknown = typeof r.criteriaDetails === 'string' ? JSON.parse(r.criteriaDetails) : r.criteriaDetails;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) parsedCriteria = parsed as Record<string, unknown>;
+          else malformed = true;
         } catch {
-          parsedCriteria = {};
+          malformed = true;
+        }
+        if (malformed) {
+          malformedCriteriaCount += 1;
+          sampleMalformedRatingId ??= r.id;
         }
       }
 
@@ -137,6 +146,14 @@ export async function GET(
         decisionHistory: parsedCriteria.history || [],
       };
     });
+    if (malformedCriteriaCount > 0) {
+      logEvent('warn', 'vendor_rating.criteria_details_invalid', {
+        operation: 'list_vendor_ratings', route: '/api/procurement/vendors/[id]/ppo-ratings',
+        requestId: req.headers.get('x-request-id') || null, tenantId: ctx.tenantId, userId: ctx.userId,
+        vendorId: id, fieldName: 'criteriaDetails', invalidCount: malformedCriteriaCount,
+        sampleRatingId: sampleMalformedRatingId, fallback: 'empty_object',
+      });
+    }
 
     const approvedAggregate = statusGroups.find((group) => group.status === 'APPROVED');
     const average = (value: number | null | undefined) => value == null ? null : Math.round(value * 10) / 10;
@@ -326,12 +343,25 @@ export async function POST(
 
     // Build criteria details JSON
     let existingCriteria: any = {};
-    if (existingRating?.criteriaDetails) {
+    let malformedExistingCriteria = false;
+    if (existingRating?.criteriaDetails !== null && existingRating?.criteriaDetails !== undefined) {
       try {
-        existingCriteria = typeof existingRating.criteriaDetails === 'string' ? JSON.parse(existingRating.criteriaDetails) : existingRating.criteriaDetails;
+        const parsed: unknown = typeof existingRating.criteriaDetails === 'string'
+          ? JSON.parse(existingRating.criteriaDetails)
+          : existingRating.criteriaDetails;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existingCriteria = parsed;
+        else malformedExistingCriteria = true;
       } catch {
-        existingCriteria = {};
+        malformedExistingCriteria = true;
       }
+    }
+    if (malformedExistingCriteria) {
+      logEvent('warn', 'vendor_rating.criteria_details_invalid', {
+        operation: 'submit_vendor_rating', route: '/api/procurement/vendors/[id]/ppo-ratings',
+        requestId: req.headers.get('x-request-id') || null, tenantId: ctx.tenantId, userId: ctx.userId,
+        vendorId: vendor.id, ppoId: ppo.id, ratingId: existingRating?.id,
+        fieldName: 'criteriaDetails', fallback: 'empty_object',
+      });
     }
 
     const history = Array.isArray(existingCriteria.history) ? existingCriteria.history : [];
