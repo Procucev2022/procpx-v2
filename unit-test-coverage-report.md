@@ -6,10 +6,10 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.30% (100195/100897) |
-| branches | 93.67% (22914/24460) |
+| statements | 99.30% (100187/100889) |
+| branches | 93.69% (22912/24455) |
 | functions | 98.57% (1934/1962) |
-| lines | 99.30% (100195/100897) |
+| lines | 99.30% (100187/100889) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -146,7 +146,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/budgets/reject/route.ts` | 100.00% | 95.65% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/reverse/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/budgets/route.ts` | 98.80% | 93.95% | 100.00% | 98.80% | PASS |
+| `src/app/api/budgets/route.ts` | 98.78% | 95.83% | 100.00% | 98.78% | PASS |
 | `src/app/api/budgets/submit/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/transactions/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/transactions/route.ts` | 100.00% | 98.95% | 100.00% | 100.00% | PASS |

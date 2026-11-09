@@ -11,7 +11,11 @@ import {
   BUDGET_APPROVED_STATUS,
   BUDGET_PENDING_STATUSES,
 } from './route.constants';
-import type { BudgetProjectAggregate } from '@app-types/app/api/budgets/route.types';
+import type {
+  BudgetContributionSummaryRow,
+  BudgetProjectAggregate,
+  BudgetTransactionSummaryRow,
+} from '@app-types/app/api/budgets/route.types';
 import { readByD1FilterChunks } from '@/lib/d1-query';
 import { MAX_D1_QUERY_DUPLICATED_FILTER_VALUES } from '@/lib/d1-query.constants';
 
@@ -160,7 +164,6 @@ export async function GET(req: NextRequest) {
   if (!projectData) return apiError(UI_STRINGS.appApiBoqRoute.projectNotFoundOrAccessible, 404);
 
   const costCentreTotal = await prisma.costCentre.count({ where: costCentreWhere });
-  const projects: any[] = [projectData];
   const costCentreIds = projectData.costCentres.map((costCentre) => costCentre.id);
   const aggregateWhere: Record<string, unknown> = { tenantId: ctx.tenantId };
   if (projectId) aggregateWhere.projectId = projectId;
@@ -178,7 +181,7 @@ export async function GET(req: NextRequest) {
     })) : Promise.resolve([]),
   ]);
 
-  const contributionsByCostCentre = new Map<string, any[]>();
+  const contributionsByCostCentre = new Map<string, BudgetContributionSummaryRow[]>();
   for (const group of contributionGroups) {
     if (!group.costCentreId) continue;
     const rows = contributionsByCostCentre.get(group.costCentreId) || [];
@@ -189,7 +192,7 @@ export async function GET(req: NextRequest) {
     });
     contributionsByCostCentre.set(group.costCentreId, rows);
   }
-  const transactionsByCostCentre = new Map<string, any[]>();
+  const transactionsByCostCentre = new Map<string, BudgetTransactionSummaryRow[]>();
   for (const group of transactionGroups) {
     if (!group.costCentreId) continue;
     const rows = transactionsByCostCentre.get(group.costCentreId) || [];
@@ -203,9 +206,7 @@ export async function GET(req: NextRequest) {
   let approvedProjectBudget = 0;
   let pendingProjectBudget = 0;
   let totalProjectActual = 0;
-  let totalProjectArea = 0;
-
-  for (const proj of projects) totalProjectArea += proj.areaSqFt || 0;
+  const totalProjectArea = projectData.areaSqFt || 0;
 
   // Compute project KPIs from all compact aggregate groups, independently of
   // the cost-centre detail page currently returned to the client.
@@ -214,90 +215,81 @@ export async function GET(req: NextRequest) {
   totalProjectBudget = approvedProjectBudget + pendingProjectBudget;
   totalProjectActual = Number(projectAggregate.actualAmount || 0);
 
-  const costCentreSummaries: any[] = [];
-  for (const proj of projects) {
-    for (const cc of (proj.costCentres || [])) {
-      const ccContributions = contributionsByCostCentre.get(cc.id) || [];
-      const ccTransactions = transactionsByCostCentre.get(cc.id) || [];
-      // 1. Contributions totals
-      const ccApprovedContrib = ccContributions
-        .filter((c: any) => c.status === 'APPROVED')
-        .reduce((sum: number, c: any) => sum + (c.acceptedEstimatedValue || 0), 0);
-      const ccPendingContrib = ccContributions
-        .filter((c: any) => c.status === 'UNDER_APPROVAL' || c.status === 'PENDING_PROJECT_APPROVAL' || c.status === 'PENDING_FINANCE_APPROVAL')
-        .reduce((sum: number, c: any) => sum + (c.totalEstimatedValue || 0), 0);
+  const costCentreSummaries = projectData.costCentres.map((cc) => {
+    const ccContributions = contributionsByCostCentre.get(cc.id) || [];
+    const ccTransactions = transactionsByCostCentre.get(cc.id) || [];
+    const ccApprovedContrib = ccContributions
+      .filter((contribution) => contribution.status === 'APPROVED')
+      .reduce((sum, contribution) => sum + contribution.acceptedEstimatedValue, 0);
+    const ccPendingContrib = ccContributions
+      .filter((contribution) => contribution.status === 'UNDER_APPROVAL' || contribution.status === 'PENDING_PROJECT_APPROVAL' || contribution.status === 'PENDING_FINANCE_APPROVAL')
+      .reduce((sum, contribution) => sum + contribution.totalEstimatedValue, 0);
 
-      // If transactions exist without contributions, fallback to transactions
-      const txApproved = ccTransactions.filter((t: any) => t.status === 'APPROVED').reduce((sum: number, t: any) => sum + t.amount, 0);
-      const txPending = ccTransactions
-        .filter((t: any) => t.status === 'UNDER_APPROVAL' || t.status === 'PENDING_PROJECT_APPROVAL' || t.status === 'PENDING_FINANCE_APPROVAL')
-        .reduce((sum: number, t: any) => sum + t.amount, 0);
+    const txApproved = ccTransactions.filter((transaction) => transaction.status === 'APPROVED')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const txPending = ccTransactions
+      .filter((transaction) => transaction.status === 'UNDER_APPROVAL' || transaction.status === 'PENDING_PROJECT_APPROVAL' || transaction.status === 'PENDING_FINANCE_APPROVAL')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
 
-      const ccApproved = ccApprovedContrib > 0 ? ccApprovedContrib : txApproved;
-      const ccPending = ccPendingContrib > 0 ? ccPendingContrib : txPending;
-      const ccTotal = ccApproved + ccPending;
+    const ccApproved = ccApprovedContrib > 0 ? ccApprovedContrib : txApproved;
+    const ccPending = ccPendingContrib > 0 ? ccPendingContrib : txPending;
+    const ccTotal = ccApproved + ccPending;
+    const ccActual = actualsByCostCentre.get(cc.id) || 0;
+    const ccBalance = Math.max(0, ccApproved - ccActual);
 
-      // Actual costs for this cost centre
-      const ccActual = actualsByCostCentre.get(cc.id) || 0;
-      // Available Balance must be against approved budget, NEVER unapproved pending!
-      const ccBalance = Math.max(0, ccApproved - ccActual);
+    const ratePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccApproved / cc.areaSqFt) * 100) / 100 : null;
+    const totalRatePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccTotal / cc.areaSqFt) * 100) / 100 : null;
+    const actualRatePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccActual / cc.areaSqFt) * 100) / 100 : null;
+    const balanceRatePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccBalance / cc.areaSqFt) * 100) / 100 : null;
 
-      const ratePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccApproved / cc.areaSqFt) * 100) / 100 : null;
-      const totalRatePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccTotal / cc.areaSqFt) * 100) / 100 : null;
-      const actualRatePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccActual / cc.areaSqFt) * 100) / 100 : null;
-      const balanceRatePerSqFt = cc.areaSqFt && cc.areaSqFt > 0 ? Math.round((ccBalance / cc.areaSqFt) * 100) / 100 : null;
-
-      // Cost Centre Budget Status
-      let budgetStatus = 'DRAFT';
-      if (ccContributions.length > 0) {
-        const statuses = ccContributions.map((c: any) => c.status);
-        if (statuses.every((s: string) => s === 'APPROVED')) {
-          budgetStatus = 'APPROVED';
-        } else if (statuses.some((s: string) => s === 'UNDER_APPROVAL' || s === 'PENDING_PROJECT_APPROVAL')) {
-          budgetStatus = 'UNDER_APPROVAL';
-        } else if (statuses.some((s: string) => s === 'PENDING_FINANCE_APPROVAL')) {
-          budgetStatus = 'PENDING FINANCE APPROVAL';
-        } else if (statuses.every((s: string) => s === 'REJECTED')) {
-          budgetStatus = 'REJECTED';
-        } else if (statuses.some((s: string) => s === 'APPROVED')) {
-          budgetStatus = 'PARTIALLY APPROVED';
-        } else {
-          budgetStatus = 'DRAFT';
-        }
-      } else if (ccTransactions.length > 0) {
-        const txStatuses = ccTransactions.map((t: any) => t.status);
-        if (txStatuses.every((s: string) => s === 'APPROVED')) budgetStatus = 'APPROVED';
-        else if (txStatuses.some((s: string) => s === 'UNDER_APPROVAL' || s === 'PENDING_PROJECT_APPROVAL')) budgetStatus = 'UNDER_APPROVAL';
-        else if (txStatuses.every((s: string) => s === 'REJECTED')) budgetStatus = 'REJECTED';
-        else if (txStatuses.some((s: string) => s === 'APPROVED')) budgetStatus = 'PARTIALLY APPROVED';
+    let budgetStatus = 'DRAFT';
+    if (ccContributions.length > 0) {
+      const statuses = ccContributions.map((contribution) => contribution.status);
+      if (statuses.every((status) => status === 'APPROVED')) {
+        budgetStatus = 'APPROVED';
+      } else if (statuses.some((status) => status === 'UNDER_APPROVAL' || status === 'PENDING_PROJECT_APPROVAL')) {
+        budgetStatus = 'UNDER_APPROVAL';
+      } else if (statuses.some((status) => status === 'PENDING_FINANCE_APPROVAL')) {
+        budgetStatus = 'PENDING FINANCE APPROVAL';
+      } else if (statuses.every((status) => status === 'REJECTED')) {
+        budgetStatus = 'REJECTED';
+      } else if (statuses.some((status) => status === 'APPROVED')) {
+        budgetStatus = 'PARTIALLY APPROVED';
       }
-
-      costCentreSummaries.push({
-        id: cc.id,
-        projectId: proj.id,
-        projectCode: proj.projectCode,
-        projectName: proj.name,
-        code: cc.code,
-        name: cc.name,
-        areaSqFt: cc.areaSqFt,
-        location: cc.location,
-        floorZone: cc.floorZone,
-        totalBudget: ccTotal,
-        approvedBudget: ccApproved,
-        pendingBudget: ccPending,
-        actual: ccActual,
-        balance: ccBalance,
-        budgetStatus,
-        ratePerSqFt,
-        totalRatePerSqFt,
-        actualRatePerSqFt,
-        balanceRatePerSqFt,
-        categories: [],
-        contributions: (cc.budgetContributions || []).filter((c: any) => c.status === 'UNDER_APPROVAL' || c.status === 'PENDING_PROJECT_APPROVAL' || c.status === 'PENDING_FINANCE_APPROVAL'),
-        transactionsCount: ccTransactions.reduce((count: number, tx: any) => count + tx.count, 0),
-      });
+    } else if (ccTransactions.length > 0) {
+      const statuses = ccTransactions.map((transaction) => transaction.status);
+      if (statuses.every((status) => status === 'APPROVED')) budgetStatus = 'APPROVED';
+      else if (statuses.some((status) => status === 'UNDER_APPROVAL' || status === 'PENDING_PROJECT_APPROVAL')) budgetStatus = 'UNDER_APPROVAL';
+      else if (statuses.every((status) => status === 'REJECTED')) budgetStatus = 'REJECTED';
+      else if (statuses.some((status) => status === 'APPROVED')) budgetStatus = 'PARTIALLY APPROVED';
     }
-  }
+
+    return {
+      id: cc.id,
+      projectId: projectData.id,
+      projectCode: projectData.projectCode,
+      projectName: projectData.name,
+      code: cc.code,
+      name: cc.name,
+      areaSqFt: cc.areaSqFt,
+      location: cc.location,
+      floorZone: cc.floorZone,
+      totalBudget: ccTotal,
+      approvedBudget: ccApproved,
+      pendingBudget: ccPending,
+      actual: ccActual,
+      balance: ccBalance,
+      budgetStatus,
+      ratePerSqFt,
+      totalRatePerSqFt,
+      actualRatePerSqFt,
+      balanceRatePerSqFt,
+      categories: [],
+      contributions: (cc.budgetContributions || []).filter((contribution) => contribution.status === 'UNDER_APPROVAL'
+        || contribution.status === 'PENDING_PROJECT_APPROVAL' || contribution.status === 'PENDING_FINANCE_APPROVAL'),
+      transactionsCount: ccTransactions.reduce((count, transaction) => count + transaction.count, 0),
+    };
+  });
 
   const overallBalance = Math.max(0, approvedProjectBudget - totalProjectActual);
   const overallRatePerSqFt = totalProjectArea > 0 ? Math.round((approvedProjectBudget / totalProjectArea) * 100) / 100 : null;
