@@ -573,7 +573,9 @@ describe('dashboard API role responses', () => {
   it('computes project user budget fallbacks, recent BOQs, and rejected versus draft actions', async () => {
     db.boq.count.mockResolvedValueOnce(5).mockResolvedValueOnce(2).mockResolvedValueOnce(1).mockResolvedValueOnce(2);
     db.budgetContribution.aggregate.mockResolvedValueOnce({ _sum: { totalEstimatedValue: 0 } }).mockResolvedValueOnce({ _sum: { acceptedEstimatedValue: 0 } });
-    db.$queryRaw.mockResolvedValueOnce([{ total: 50 }]);
+    db.$queryRaw
+      .mockResolvedValueOnce([{ total: 50 }])
+      .mockResolvedValueOnce([{ boqRevisionId: 'r1', estimatedValue: 30 }]);
     db.boq.findMany
       .mockResolvedValueOnce([{
         id: 'b1', boqCode: 'B-1', description: '', status: 'REJECTED', updatedAt: new Date(),
@@ -607,6 +609,11 @@ describe('dashboard API role responses', () => {
     const [sqlTemplate, tenantId] = db.$queryRaw.mock.calls[0];
     expect(sqlTemplate.join(' ')).toContain('MAX(latest.revisionNumber)');
     expect(tenantId).toBe('tenant-1');
+    const recentLineAggregate = db.$queryRaw.mock.calls[1][0] as { sql: string; values: unknown[] };
+    expect(recentLineAggregate.sql).toContain('SUM(CASE');
+    expect(recentLineAggregate.sql).toContain('GROUP BY "boqRevisionId"');
+    expect(recentLineAggregate.values).toEqual(['tenant-1', 'r1']);
+    expect(db.boq.findMany.mock.calls[0][0].include.revisions).toEqual(expect.objectContaining({ select: { id: true } }));
   });
 
   it('uses approved contribution totals and returns no pending actions for an unhandled role', async () => {

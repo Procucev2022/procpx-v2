@@ -1,5 +1,6 @@
 // app/api/dashboard/route.ts - Role-aware dashboard stats
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { Prisma } from '@prisma/client';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { prisma } from '@/lib/prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -15,6 +16,7 @@ import {
   DASHBOARD_UOM_PREVIEW_LIMIT,
   DASHBOARD_VIEWER_PROJECT_PREVIEW_LIMIT,
 } from './route.constants';
+import type { DashboardRecentBoqLineValueAggregate } from '@app-types/app/api/dashboard/route.types';
 
 
 export async function GET(request?: Request) {
@@ -1215,19 +1217,36 @@ export async function GET(request?: Request) {
       revisions: {
         orderBy: { revisionNumber: 'desc' },
         take: 1,
-        include: {
-          lines: {
-            where: { isDeleted: false },
-            select: { aiTotalCost: true, quantity: true, aiUnitCost: true },
-          },
-        },
+        select: { id: true },
       },
     },
   });
 
+  const latestRevisionIds = Array.from(new Set(recentBoqsData.flatMap((boq) => {
+    const revisionId = boq.revisions[0]?.id;
+    return revisionId ? [revisionId] : [];
+  })));
+  const recentBoqLineValues = latestRevisionIds.length > 0
+    ? await prisma.$queryRaw<DashboardRecentBoqLineValueAggregate[]>(Prisma.sql`
+      SELECT "boqRevisionId",
+        COALESCE(SUM(CASE
+          WHEN "aiTotalCost" IS NOT NULL AND "aiTotalCost" != 0 THEN "aiTotalCost"
+          WHEN "quantity" IS NOT NULL AND "quantity" != 0
+            AND "aiUnitCost" IS NOT NULL AND "aiUnitCost" != 0 THEN "quantity" * "aiUnitCost"
+          ELSE 0
+        END), 0) AS "estimatedValue"
+      FROM "boq_lines"
+      WHERE "tenantId" = ${tenantId}
+        AND "isDeleted" = 0
+        AND "boqRevisionId" IN (${Prisma.join(latestRevisionIds)})
+      GROUP BY "boqRevisionId"
+    `)
+    : [];
+  const estimatedValueByRevision = new Map(recentBoqLineValues.map((row) => [row.boqRevisionId, Number(row.estimatedValue || 0)]));
+
   const recentBoqs = recentBoqsData.map((b) => {
     const latestRev = b.revisions[0];
-    let estimatedValue = latestRev?.lines?.reduce((sum, l) => sum + (l.aiTotalCost || (l.quantity && l.aiUnitCost ? l.quantity * l.aiUnitCost : 0) || 0), 0) || 0;
+    let estimatedValue = latestRev ? estimatedValueByRevision.get(latestRev.id) || 0 : 0;
     if (estimatedValue === 0 && b.budgetContributions?.[0]) {
       estimatedValue = b.budgetContributions[0].totalEstimatedValue || 0;
     }
