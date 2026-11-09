@@ -188,6 +188,18 @@ describe('procurement vendor directory API', () => {
     expect(structuredLog).not.toHaveBeenCalled();
   });
 
+  it('chunks approved rating aggregates for a full 100-vendor directory page', async () => {
+    db.vendor.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `vendor-${index + 1}`, categories: 'Electrical',
+    })));
+    db.vendor.count.mockResolvedValueOnce(100);
+
+    await GET(getRequest('?pageSize=100'));
+
+    expect(db.ppoVendorRating.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.ppoVendorRating.groupBy.mock.calls.map(([query]) => query.where.vendorId.in.length)).toEqual([90, 10]);
+  });
+
   it('requires valid onboarding identity and contact fields', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);

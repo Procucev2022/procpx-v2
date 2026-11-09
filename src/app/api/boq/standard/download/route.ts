@@ -12,6 +12,7 @@ import {
   MAX_STANDARD_BOQ_EXPORT_ITEMS,
   MAX_STANDARD_BOQ_EXPORT_UOMS,
 } from './route.constants';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function GET(req: NextRequest) {
@@ -29,6 +30,9 @@ export async function GET(req: NextRequest) {
     costCentreId = searchParams.get('costCentreId') || '';
     const categoriesParam = searchParams.get('categories') || '';
     const selectedCategories = categoriesParam ? categoriesParam.split(',').map(c => c.trim()).filter(Boolean) : [];
+    if (selectedCategories.length > MAX_STANDARD_BOQ_EXPORT_CATEGORIES) {
+      return apiError(UI_STRINGS.appApiBoqStandardDownloadRoute.standardBoqExportExceedsSafeSizeSelectFewerCategories, 413);
+    }
 
     // Fetch Project and Cost Centre details for metadata
     let project = null;
@@ -54,29 +58,26 @@ export async function GET(req: NextRequest) {
       whereClause.sector = sector;
     }
 
-    if (selectedCategories.length > 0) {
-      whereClause.category = { in: selectedCategories };
-    }
+    const readStandardItems = (baseWhere: Prisma.StandardBoqItemWhereInput) => selectedCategories.length > 0
+      ? readByD1FilterChunks(selectedCategories, (chunk) => prisma.standardBoqItem.findMany({
+        where: { ...baseWhere, category: { in: chunk } },
+        select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
+        orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
+        take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1,
+      }))
+      : prisma.standardBoqItem.findMany({
+        where: baseWhere,
+        select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
+        orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
+        take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1,
+      });
 
-    let standardItems = await prisma.standardBoqItem.findMany({
-      where: whereClause,
-      select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
-      orderBy: [{ category: 'asc' }, { subcategory: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
-      take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1,
-    });
+    const standardItemsBaseWhere = { ...whereClause };
+    let standardItems = await readStandardItems(standardItemsBaseWhere);
 
     // Fallback: If sector specific query yields few items, pull items matching the categories across tenant
     if (standardItems.length === 0 && selectedCategories.length > 0) {
-      standardItems = await prisma.standardBoqItem.findMany({
-        where: {
-          tenantId: ctx.tenantId,
-          isActive: true,
-          category: { in: selectedCategories },
-        },
-        select: { itemCode: true, standardDescription: true, detailedSpecification: true, uom: true, category: true, subcategory: true, brandMake: true, benchmarkRate: true },
-        orderBy: [{ category: 'asc' }, { itemCode: 'asc' }, { id: 'asc' }],
-        take: MAX_STANDARD_BOQ_EXPORT_ITEMS + 1,
-      });
+      standardItems = await readStandardItems({ tenantId: ctx.tenantId, isActive: true });
     }
 
     // If still empty, pull general standard items

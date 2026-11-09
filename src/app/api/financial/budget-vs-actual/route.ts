@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import type { BudgetVsActualLineSource, BudgetVsActualSummaryGroup } from '@app-types/app/api/financial/budget-vs-actual/route.types';
 
 function loadBudgetVsActualSummaryGroups(input: {
@@ -204,24 +205,24 @@ export async function GET(req: NextRequest) {
       ? await Promise.all([
         lineCountPromise,
         summaryRowsPromise,
-        prisma.budgetTransaction.groupBy({
+        readByD1FilterChunks(pageLineIds, (chunk) => prisma.budgetTransaction.groupBy({
           by: ['boqLineId'],
-          where: { ...budgetTxWhere, boqLineId: { in: pageLineIds } },
+          where: { ...budgetTxWhere, boqLineId: { in: chunk } },
           _sum: { amount: true, quantity: true },
           _count: { _all: true },
-        }),
-        prisma.ppoLine.groupBy({
+        })),
+        readByD1FilterChunks(pageLineIds, (chunk) => prisma.ppoLine.groupBy({
           by: ['boqLineId'],
-          where: { ...ppoLineWhere, boqLineId: { in: pageLineIds } },
+          where: { ...ppoLineWhere, boqLineId: { in: chunk } },
           _sum: { orderedQuantity: true, orderedAmount: true },
           _count: { _all: true },
-        }),
-        prisma.actualCostTransaction.groupBy({
+        })),
+        readByD1FilterChunks(pageLineIds, (chunk) => prisma.actualCostTransaction.groupBy({
           by: ['boqLineId'],
-          where: { ...actualTxWhere, boqLineId: { in: pageLineIds } },
+          where: { ...actualTxWhere, boqLineId: { in: chunk } },
           _sum: { actualQuantity: true, actualAmount: true },
           _count: { _all: true },
-        }),
+        })),
       ])
       : [await lineCountPromise, await summaryRowsPromise, [], [], []];
 

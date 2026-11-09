@@ -6,10 +6,10 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.30% (100053/100751) |
-| branches | 93.66% (22846/24391) |
-| functions | 98.57% (1931/1959) |
-| lines | 99.30% (100053/100751) |
+| statements | 99.30% (100056/100754) |
+| branches | 93.67% (22855/24398) |
+| functions | 98.57% (1932/1960) |
+| lines | 99.30% (100056/100754) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -126,7 +126,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/boq/standard-library/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard-library/route.ts` | 100.00% | 93.47% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/download/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/boq/standard/download/route.ts` | 100.00% | 94.52% | 100.00% | 100.00% | PASS |
+| `src/app/api/boq/standard/download/route.ts` | 100.00% | 97.43% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/error-report/route.ts` | 100.00% | 94.44% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/generate/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/boq/standard/generate/route.ts` | 100.00% | 95.60% | 100.00% | 100.00% | PASS |
@@ -235,7 +235,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/procurement/vendors/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/[id]/route.ts` | 100.00% | 98.82% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/vendors/route.ts` | 99.77% | 92.85% | 100.00% | 99.77% | PASS |
+| `src/app/api/procurement/vendors/route.ts` | 99.77% | 92.89% | 100.00% | 99.77% | PASS |
 | `src/app/api/projects/[id]/documents/[documentId]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/projects/[id]/documents/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/projects/[id]/documents/route.ts` | 100.00% | 96.36% | 100.00% | 100.00% | PASS |
@@ -338,7 +338,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.53% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

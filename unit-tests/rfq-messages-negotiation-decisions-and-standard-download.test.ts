@@ -411,4 +411,32 @@ describe('standard BOQ download', () => {
     db.category.findMany.mockResolvedValueOnce([{ children: Array.from({ length: MAX_STANDARD_BOQ_EXPORT_CATEGORY_CHILDREN + 1 }, () => ({})) }]);
     await expect(downloadStandardBoq(request('http://localhost/api/boq/standard/download'))).resolves.toMatchObject({ status: 413 });
   });
+
+  it('chunks standard BOQ category filters and rejects requests beyond the export category bound', async () => {
+    db.standardBoqItem.findMany.mockReset();
+    db.uomMaster.findMany.mockReset();
+    db.category.findMany.mockReset();
+    const selectedCategories = Array.from({ length: 91 }, (_, index) => `Category-${index + 1}`);
+    db.standardBoqItem.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{
+      itemCode: 'CAT-91', standardDescription: 'Bounded category result', detailedSpecification: '',
+      uom: 'EA', category: selectedCategories[90], subcategory: null, brandMake: null, benchmarkRate: null,
+    }]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce([]);
+
+    const response = await downloadStandardBoq(request(
+      `http://localhost/api/boq/standard/download?categories=${encodeURIComponent(selectedCategories.join(','))}`,
+    ));
+
+    expect(response.status).toBe(200);
+    expect(db.standardBoqItem.findMany).toHaveBeenCalledTimes(2);
+    expect(db.standardBoqItem.findMany.mock.calls.map(([query]) => query.where.category.in.length)).toEqual([90, 1]);
+    expect(db.standardBoqItem.findMany.mock.calls[1][0].where.category.in).toEqual(['Category-91']);
+
+    const tooManyCategories = Array.from({ length: MAX_STANDARD_BOQ_EXPORT_CATEGORIES + 1 }, (_, index) => `Category-${index + 1}`);
+    await expect(downloadStandardBoq(request(
+      `http://localhost/api/boq/standard/download?categories=${encodeURIComponent(tooManyCategories.join(','))}`,
+    ))).resolves.toMatchObject({ status: 413 });
+    expect(db.standardBoqItem.findMany).toHaveBeenCalledTimes(2);
+  });
 });

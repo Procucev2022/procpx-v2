@@ -240,6 +240,20 @@ describe('budget versus actual report route', () => {
     expect(db.actualCostTransaction.findMany).not.toHaveBeenCalled();
   });
 
+  it('chunks the three line-detail aggregates when a report page contains 100 lines', async () => {
+    db.boqLine.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `line-${index + 1}`, lineNumber: String(index + 1), quantity: 1, aiUnitCost: 1, aiTotalCost: 1,
+      category: null, revision: null,
+    })));
+
+    await GET(request('?projectId=project-1&pageSize=100'));
+
+    for (const model of [db.budgetTransaction, db.ppoLine, db.actualCostTransaction]) {
+      expect(model.groupBy).toHaveBeenCalledTimes(2);
+      expect(model.groupBy.mock.calls.map(([query]) => query.where.boqLineId.in.length)).toEqual([90, 10]);
+    }
+  });
+
   it('handles empty datasets and unfiltered project queries', async () => {
     db.budgetTransaction.findMany.mockResolvedValue([]);
     db.ppoLine.findMany.mockResolvedValue([]);
