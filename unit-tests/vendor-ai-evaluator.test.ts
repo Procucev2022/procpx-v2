@@ -1,4 +1,8 @@
-import { evaluateVendorProfile, type VendorEvaluationInput } from '../src/lib/vendor-ai-evaluator';
+import {
+  evaluateVendorProfile,
+  type VendorEvaluationInput,
+  type VendorEvaluationInputDataIssue,
+} from '../src/lib/vendor-ai-evaluator';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
@@ -125,6 +129,49 @@ describe('evaluateVendorProfile', () => {
       .criteria.financialStrength.verificationGaps.length).toBeGreaterThan(0);
     expect(evaluateVendorProfile({ ...strongVendor, documents: '[{}]' })
       .criteria.financialStrength.verificationGaps.length).toBeGreaterThan(0);
+  });
+
+  it('reports malformed JSON and wrong persisted shapes while using safe array fallbacks', () => {
+    const issues: VendorEvaluationInputDataIssue[] = [];
+    const report = evaluateVendorProfile({
+      ...strongVendor, documents: '{bad json', clientReferences: '{bad json',
+    }, { onInputDataIssue: (issue) => issues.push(issue) });
+
+    expect(issues).toEqual([
+      { fieldName: 'documents', reason: 'invalid_json', fallback: 'empty_array' },
+      { fieldName: 'clientReferences', reason: 'invalid_json', fallback: 'legacy_text' },
+    ]);
+    expect(report.criteria.references.suggestedScore).toBe(60);
+
+    issues.length = 0;
+    const wrongShape = evaluateVendorProfile({
+      ...strongVendor, documents: '{}', clientReferences: '{"client":"Legacy client"}',
+    }, { onInputDataIssue: (issue) => issues.push(issue) });
+    expect(issues).toEqual([
+      { fieldName: 'documents', reason: 'invalid_shape', fallback: 'empty_array' },
+      { fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'empty_array' },
+    ]);
+    expect(wrongShape.criteria.references.suggestedScore).toBe(30);
+    expect(wrongShape.criteria.financialStrength.verificationGaps.length).toBeGreaterThan(0);
+
+    issues.length = 0;
+    const filteredEntries = evaluateVendorProfile({
+      ...strongVendor,
+      documents: '[null,{"name":"Balance statement"},5]',
+      clientReferences: '[null,{"client":"Client One"},""]',
+    }, { onInputDataIssue: (issue) => issues.push(issue) });
+    expect(issues).toEqual([
+      { fieldName: 'documents', reason: 'invalid_shape', fallback: 'filtered_invalid_entries', invalidEntryCount: 2 },
+      { fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'filtered_invalid_entries', invalidEntryCount: 2 },
+    ]);
+    expect(filteredEntries.criteria.financialStrength.evidenceFound.join(' ')).toContain('financial supporting document');
+    expect(filteredEntries.criteria.references.suggestedScore).toBe(60);
+
+    issues.length = 0;
+    evaluateVendorProfile({ ...strongVendor, clientReferences: 'Legacy client name' }, {
+      onInputDataIssue: (issue) => issues.push(issue),
+    });
+    expect(issues).toEqual([]);
   });
 
   it('flags a blacklisted high-scoring vendor as conditional', () => {
