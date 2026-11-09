@@ -12,6 +12,8 @@ import {
   BUDGET_PENDING_STATUSES,
 } from './route.constants';
 import type { BudgetProjectAggregate } from '@app-types/app/api/budgets/route.types';
+import { readByD1FilterChunks } from '@/lib/d1-query';
+import { MAX_D1_QUERY_DUPLICATED_FILTER_VALUES } from '@/lib/d1-query.constants';
 
 async function loadProjectBudgetAggregate(input: {
   tenantId: string;
@@ -21,13 +23,14 @@ async function loadProjectBudgetAggregate(input: {
 }): Promise<BudgetProjectAggregate> {
   const pendingStatuses = Prisma.join(BUDGET_PENDING_STATUSES);
   const actualStatuses = Prisma.join(ACTUAL_COST_SUMMARY_STATUSES);
-  const pageCostCentreFilter = input.costCentreIds.length > 0
-    ? Prisma.sql`AND "costCentreId" IN (${Prisma.join(input.costCentreIds)})`
-    : Prisma.sql`AND 1 = 0`;
   const costCentreFilter = input.costCentreId
     ? Prisma.sql`AND cc."id" = ${input.costCentreId}`
     : Prisma.empty;
-  const rows = await prisma.$queryRaw<BudgetProjectAggregate[]>(Prisma.sql`
+  const readAggregate = (pageCostCentreIds: string[]) => {
+    const pageCostCentreFilter = pageCostCentreIds.length > 0
+      ? Prisma.sql`AND "costCentreId" IN (${Prisma.join(pageCostCentreIds)})`
+      : Prisma.sql`AND 1 = 0`;
+    return prisma.$queryRaw<BudgetProjectAggregate[]>(Prisma.sql`
     WITH contribution_totals AS (
       SELECT "costCentreId",
         SUM(CASE WHEN "status" = ${BUDGET_APPROVED_STATUS} THEN COALESCE("acceptedEstimatedValue", 0) ELSE 0 END) AS "approvedContribution",
@@ -73,7 +76,18 @@ async function loadProjectBudgetAggregate(input: {
     WHERE cc."tenantId" = ${input.tenantId} AND cc."projectId" = ${input.projectId}
       ${costCentreFilter}
   `);
-  return rows[0] || { approvedBudget: 0, pendingBudget: 0, actualAmount: 0 };
+  };
+  const rows = input.costCentreIds.length > 0
+    ? await readByD1FilterChunks(input.costCentreIds, readAggregate, MAX_D1_QUERY_DUPLICATED_FILTER_VALUES)
+    : await readAggregate([]);
+  const aggregate = rows[0] || { approvedBudget: 0, pendingBudget: 0, actualAmount: 0 };
+  const actuals = new Map<string, number>();
+  for (const row of rows) {
+    for (const [costCentreId, amount] of parseCostCentreActuals(row.costCentreActualsJson ?? '{}')) {
+      actuals.set(costCentreId, amount);
+    }
+  }
+  return { ...aggregate, costCentreActualsJson: JSON.stringify(Object.fromEntries(actuals)) };
 }
 
 function parseCostCentreActuals(value: unknown): Map<string, number> {
@@ -151,17 +165,17 @@ export async function GET(req: NextRequest) {
   const aggregateWhere: Record<string, unknown> = { tenantId: ctx.tenantId };
   if (projectId) aggregateWhere.projectId = projectId;
   if (costCentreId) aggregateWhere.costCentreId = costCentreId;
-  const pageAggregateWhere = { ...aggregateWhere, costCentreId: { in: costCentreIds } };
+  const pageAggregateWhere = { ...aggregateWhere };
   const [projectAggregate, contributionGroups, transactionGroups] = await Promise.all([
     loadProjectBudgetAggregate({ tenantId: ctx.tenantId, projectId, costCentreId: costCentreId || null, costCentreIds }),
-    costCentreIds.length > 0 ? prisma.budgetContribution.groupBy({
-      by: ['costCentreId', 'status'], where: { ...pageAggregateWhere, isSuperSeded: false },
+    costCentreIds.length > 0 ? readByD1FilterChunks(costCentreIds, (chunk) => prisma.budgetContribution.groupBy({
+      by: ['costCentreId', 'status'], where: { ...pageAggregateWhere, costCentreId: { in: chunk }, isSuperSeded: false },
       _sum: { acceptedEstimatedValue: true, totalEstimatedValue: true }, _count: { _all: true },
-    }) : Promise.resolve([]),
-    costCentreIds.length > 0 ? prisma.budgetTransaction.groupBy({
-      by: ['costCentreId', 'status'], where: pageAggregateWhere,
+    })) : Promise.resolve([]),
+    costCentreIds.length > 0 ? readByD1FilterChunks(costCentreIds, (chunk) => prisma.budgetTransaction.groupBy({
+      by: ['costCentreId', 'status'], where: { ...pageAggregateWhere, costCentreId: { in: chunk } },
       _sum: { amount: true }, _count: { _all: true },
-    }) : Promise.resolve([]),
+    })) : Promise.resolve([]),
   ]);
 
   const contributionsByCostCentre = new Map<string, any[]>();

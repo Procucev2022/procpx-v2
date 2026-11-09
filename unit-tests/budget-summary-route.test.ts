@@ -31,6 +31,7 @@ jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn()
 jest.mock('../src/lib/project-auth', () => ({ getUserProjectAccessFilter: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
+const rawQuery = (prisma as unknown as { $queryRaw: jest.Mock }).$queryRaw;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
@@ -301,6 +302,47 @@ describe('budget summary API', () => {
         costCentres: expect.objectContaining({ skip: 25, take: 25, orderBy: [{ code: 'asc' }, { id: 'asc' }] }),
       }),
     }));
+  });
+
+  it('chunks 100-row page aggregates while merging actuals and preserving project-wide totals once', async () => {
+    const costCentres = Array.from({ length: 100 }, (_, index) => costCentre({ id: `cc-${index + 1}` }));
+    db.project.findFirst.mockResolvedValueOnce({
+      id: 'project-1', projectCode: 'P-001', name: 'North Plant', areaSqFt: 1000, costCentres,
+    });
+    db.costCentre.count.mockResolvedValueOnce(100);
+    db.$queryRaw
+      .mockResolvedValueOnce([{
+        approvedBudget: 100, pendingBudget: 50, actualAmount: 6,
+        costCentreActualsJson: JSON.stringify({ 'cc-1': 1 }),
+      }])
+      .mockResolvedValueOnce([{
+        approvedBudget: 100, pendingBudget: 50, actualAmount: 6,
+        costCentreActualsJson: JSON.stringify({ 'cc-46': 2 }),
+      }])
+      .mockResolvedValueOnce([{
+        approvedBudget: 100, pendingBudget: 50, actualAmount: 6,
+        costCentreActualsJson: JSON.stringify({ 'cc-91': 3 }),
+      }]);
+
+    const result = await GET(request('?projectId=project-1&pageSize=100'));
+
+    expect(result).toMatchObject({ ok: true, data: {
+      kpis: { totalBudget: 150, approvedBudget: 100, pendingApproval: 50, actual: 6 },
+    } });
+    const returnedCostCentres = (result as unknown as { data: { costCentres: Array<Record<string, unknown>> } }).data.costCentres;
+    expect(returnedCostCentres).toHaveLength(100);
+    expect(returnedCostCentres).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'cc-1', actual: 1 }),
+      expect.objectContaining({ id: 'cc-46', actual: 2 }),
+      expect.objectContaining({ id: 'cc-91', actual: 3 }),
+    ]));
+    expect(db.budgetContribution.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.budgetTransaction.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.budgetContribution.groupBy.mock.calls.map(([query]) => query.where.costCentreId.in.length)).toEqual([90, 10]);
+    expect(db.budgetTransaction.groupBy.mock.calls.map(([query]) => query.where.costCentreId.in.length)).toEqual([90, 10]);
+    expect(db.$queryRaw).toHaveBeenCalledTimes(3);
+    const rawQueries = rawQuery.mock.calls.map((call: unknown[]) => call[0] as { values: unknown[] });
+    expect(rawQueries.every((query) => query.values.length <= 100)).toBe(true);
   });
 
   it('handles draft and rejected ledger states and nullable relation collections', async () => {

@@ -9,6 +9,7 @@ import { COST_CENTRE_INSERT_IF_PROJECT_EXISTS_SQL, COST_CENTRE_LOOKUP_MAX_OPTION
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import type { Prisma } from '@prisma/client';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function GET(req: NextRequest) {
@@ -72,11 +73,11 @@ export async function GET(req: NextRequest) {
       const hasMore = rows.length > pageWindow.pageSize;
       const costCentres = hasMore ? rows.slice(0, pageWindow.pageSize) : rows;
       const budgetGroups = costCentres.length > 0
-        ? await prisma.budget.groupBy({
-            by: ['costCentreId'],
-            where: { tenantId: ctx.tenantId, costCentreId: { in: costCentres.map(({ id }) => id) } },
-            _sum: { totalAmount: true, approvedAmount: true, pendingAmount: true },
-          })
+        ? await readByD1FilterChunks(costCentres.map(({ id }) => id), (chunk) => prisma.budget.groupBy({
+          by: ['costCentreId'],
+          where: { tenantId: ctx.tenantId, costCentreId: { in: chunk } },
+          _sum: { totalAmount: true, approvedAmount: true, pendingAmount: true },
+        }))
         : [];
       const budgetByCostCentre = new Map(budgetGroups.map((group) => [group.costCentreId, group._sum]));
 
@@ -120,11 +121,11 @@ export async function GET(req: NextRequest) {
     const hasMore = lookupRows.length > COST_CENTRE_LOOKUP_MAX_OPTIONS;
     const costCentres = hasMore ? lookupRows.slice(0, COST_CENTRE_LOOKUP_MAX_OPTIONS) : lookupRows;
     const budgetGroups = costCentres.length > 0
-      ? await prisma.budget.groupBy({
-          by: ['costCentreId'],
-          where: { tenantId: ctx.tenantId, costCentreId: { in: costCentres.map(({ id }) => id) } },
-          _sum: { totalAmount: true, approvedAmount: true, pendingAmount: true },
-        })
+      ? await readByD1FilterChunks(costCentres.map(({ id }) => id), (chunk) => prisma.budget.groupBy({
+        by: ['costCentreId'],
+        where: { tenantId: ctx.tenantId, costCentreId: { in: chunk } },
+        _sum: { totalAmount: true, approvedAmount: true, pendingAmount: true },
+      }))
       : [];
 
     if (hasMore) {

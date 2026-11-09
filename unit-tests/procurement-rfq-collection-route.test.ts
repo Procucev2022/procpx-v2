@@ -201,6 +201,19 @@ describe('RFQ collection API', () => {
     }), 'application');
   });
 
+  it('chunks quote aggregation when the RFQ register page reaches 100 rows', async () => {
+    db.rfq.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `rfq-${index + 1}`, rfqNumber: `RFQ-${index + 1}`, status: 'DRAFT',
+      project: null, boqRevision: null, pr: null, invitedVendors: [], quotes: [],
+      negotiations: [], auctions: [], awards: [], ppos: [],
+    })));
+
+    await GET(getRequest('?pageSize=100'));
+
+    expect(db.quote.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.quote.groupBy.mock.calls.map(([query]) => query.where.rfqId.in.length)).toEqual([90, 10]);
+  });
+
   it('validates RFQ creation access, approved PR state, duplicate sourcing, and PR line scope', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);

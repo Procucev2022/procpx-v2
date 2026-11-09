@@ -108,9 +108,12 @@ describe('cost centre and approved BOQ APIs', () => {
     expect((response as unknown as { data: unknown[] }).data).toHaveLength(100);
     expect((response as unknown as { headers: Headers }).headers.get('x-cost-centre-has-more')).toBe('true');
     expect(db.costCentre.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take: 101 }));
-    expect(db.budget.groupBy).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', costCentreId: { in: Array.from({ length: 100 }, (_, index) => `cc-${index + 1}`) } },
-    }));
+    expect(db.budget.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.budget.groupBy.mock.calls.map(([query]) => query.where.costCentreId.in.length)).toEqual([90, 10]);
+    expect(db.budget.groupBy.mock.calls[0][0].where.costCentreId.in).toEqual(
+      Array.from({ length: 90 }, (_, index) => `cc-${index + 1}`),
+    );
+    expect(db.budget.groupBy.mock.calls[1][0].where.costCentreId.in).toEqual(['cc-91', 'cc-92', 'cc-93', 'cc-94', 'cc-95', 'cc-96', 'cc-97', 'cc-98', 'cc-99', 'cc-100']);
     expect(structuredLog).toHaveBeenCalledWith('warn', 'cost_centre.lookup_truncated', expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-1', limit: 100,
     }));
@@ -154,6 +157,20 @@ describe('cost centre and approved BOQ APIs', () => {
       by: ['costCentreId'],
       where: { tenantId: 'tenant-1', costCentreId: { in: ['cc-1', 'cc-2'] } },
     }));
+  });
+
+  it('chunks paged cost-centre budget aggregation at the safe D1 filter size', async () => {
+    db.costCentre.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `page-cc-${index + 1}`, areaSqFt: 10, projectId: 'project-1',
+    })));
+    db.costCentre.count.mockResolvedValueOnce(100);
+    db.costCentre.aggregate.mockResolvedValueOnce({ _sum: { areaSqFt: 1000 } });
+    db.budget.aggregate.mockResolvedValueOnce({ _sum: { totalAmount: 0, approvedAmount: 0, pendingAmount: 0 } });
+
+    await listCostCentres(request('http://localhost/api/cost-centres?page=1&pageSize=100'));
+
+    expect(db.budget.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.budget.groupBy.mock.calls.map(([query]) => query.where.costCentreId.in.length)).toEqual([90, 10]);
   });
 
   it('handles empty paged summaries, non-Error reads, and atomic creation conflicts', async () => {
