@@ -6,10 +6,10 @@ Files included: **354**. Files meeting all four 90% thresholds: **354/354**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.31% (99843/100529) |
-| branches | 93.66% (22760/24299) |
+| statements | 99.31% (99869/100554) |
+| branches | 93.66% (22774/24315) |
 | functions | 98.56% (1927/1955) |
-| lines | 99.31% (99843/100529) |
+| lines | 99.31% (99869/100554) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -218,7 +218,7 @@ Files included: **354**. Files meeting all four 90% thresholds: **354/354**.
 | `src/app/api/procurement/rfqs/[id]/re-rfq/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/[id]/re-rfq/route.ts` | 94.67% | 93.02% | 100.00% | 94.67% | PASS |
 | `src/app/api/procurement/rfqs/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/rfqs/[id]/route.ts` | 97.66% | 90.55% | 100.00% | 97.66% | PASS |
+| `src/app/api/procurement/rfqs/[id]/route.ts` | 97.77% | 90.34% | 100.00% | 97.77% | PASS |
 | `src/app/api/procurement/rfqs/[id]/vendors/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/rfqs/post.ts` | 95.39% | 91.10% | 100.00% | 95.39% | PASS |
 | `src/app/api/procurement/rfqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -289,7 +289,7 @@ Files included: **354**. Files meeting all four 90% thresholds: **354/354**.
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 92.87% | 92.85% | 98.96% | PASS |
-| `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.90% | 96.77% | 99.91% | PASS |
+| `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation-client.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -338,7 +338,7 @@ Files included: **354**. Files meeting all four 90% thresholds: **354/354**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 99.05% | 98.79% | 100.00% | 99.05% | PASS |
+| `src/lib/observability/server-logger.ts` | 99.05% | 98.75% | 100.00% | 99.05% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

@@ -632,6 +632,7 @@ export const UI_STRINGS = {
     cancellationReasonIsRequired: "Cancellation reason is required",
     cannotReleaseRFQInStatusStatus: "Cannot release RFQ in status {{status}}",
     forbiddenYouAreNotInvitedToThisRFQ: "Forbidden: you are not invited to this RFQ",
+    rfqStatusChangeRequiresWorkflowAction: "RFQ status changes must use the matching workflow action.",
   },
   appApiProcurementRfqsIdVendorsRoute: {
     atLeastOneVendorIDIsRequired: "At least one vendor ID is required",

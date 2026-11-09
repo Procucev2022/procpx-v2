@@ -276,6 +276,38 @@ describe('RFQ status and edit transitions', () => {
     await expect(updateRfq(putRequest({ status: 'UNDER_REVIEW' }), params)).resolves.toEqual({ ok: false, error: UI_STRINGS.common.rFQNotFoundOrAccessDenied, status: 404 });
   });
 
+  it('requires workflow permissions when release or cancellation is requested through status', async () => {
+    const denied = { status: 403 };
+    auth.mockResolvedValueOnce(denied);
+    isContext.mockReturnValueOnce(false);
+    await expect(updateRfq(putRequest({ status: 'RELEASED' }), params)).resolves.toBe(denied);
+    expect(auth).toHaveBeenLastCalledWith('RFQ_RELEASE');
+
+    auth.mockResolvedValueOnce(denied);
+    isContext.mockReturnValueOnce(false);
+    await expect(updateRfq(putRequest({ status: 'CANCELLED', reason: 'Paused' }), params)).resolves.toBe(denied);
+    expect(auth).toHaveBeenLastCalledWith('RFQ_CANCEL');
+  });
+
+  it('rejects unknown actions, mismatched action targets, and unguarded workflow status changes', async () => {
+    await expect(updateRfq(putRequest({ action: 'APPROVE' }), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    expect(auth).not.toHaveBeenCalled();
+
+    await expect(updateRfq(putRequest({ action: 'RELEASE', status: 'CANCELLED' }), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsIdRoute.rfqStatusChangeRequiresWorkflowAction, status: 400,
+    });
+    expect(auth).not.toHaveBeenCalled();
+
+    db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', tenantId: 'tenant-1', status: 'DRAFT', _count: { invitedVendors: 0 } });
+    await expect(updateRfq(putRequest({ status: 'AWARDED' }), params)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementRfqsIdRoute.rfqStatusChangeRequiresWorkflowAction, status: 400,
+    });
+    expect(auth).toHaveBeenCalledWith('RFQ_EDIT');
+    expect(writeBatch).not.toHaveBeenCalled();
+  });
+
   it('releases drafts, updates invitations, and applies draft fields with audit history', async () => {
     db.rfq.findFirst.mockResolvedValueOnce({ id: 'rfq-1', tenantId: 'tenant-1', rfqNumber: 'RFQ-1', projectId: 'project-1', status: 'DRAFT', _count: { invitedVendors: 2 } });
     const updated = { id: 'rfq-1', status: 'RELEASED' };
