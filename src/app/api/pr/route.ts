@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '@/lib/project-auth';
+import { MAX_D1_QUERY_FILTER_VALUES } from '@/lib/d1-query.constants';
+import { readSelectedPrBoqLines } from '@/lib/pr-line-selection';
+import type { SelectedPrBoqLine } from '@app-types/lib/pr-line-selection.types';
 import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   MAX_PR_BATCH_LINES,
@@ -139,19 +142,24 @@ export async function POST(req: NextRequest) {
     if (selectedIds && selectedIds.length > MAX_PR_BATCH_LINES) {
       return apiError(interpolateUiString(UI_STRINGS.common.prExceedsAtomicWriteLimitMaxLines, { maxLines: MAX_PR_BATCH_LINES }), 400);
     }
+    const chunkedSelectionIds = selectedIds && selectedIds.length > MAX_D1_QUERY_FILTER_VALUES
+      ? selectedIds
+      : undefined;
 
     const revision = await prisma.boqRevision.findFirst({
       where: { id: boqRevisionId, tenantId: ctx.tenantId },
       include: {
-        lines: {
-          where: {
-            isDeleted: false,
-            ...(selectedIds && selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
+        ...(chunkedSelectionIds ? {} : {
+          lines: {
+            where: {
+              isDeleted: false,
+              ...(selectedIds && selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
+            },
+            orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+            take: MAX_PR_BATCH_LINES + 1,
+            include: { category: true, subcategory: true, uom: true },
           },
-          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-          take: MAX_PR_BATCH_LINES + 1,
-          include: { category: true, subcategory: true, uom: true },
-        },
+        }),
         boq: true,
       },
     });
@@ -172,7 +180,9 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
 
-    const targetLines = revision.lines;
+    const targetLines: SelectedPrBoqLine[] = chunkedSelectionIds
+      ? await readSelectedPrBoqLines(ctx.tenantId, revision.id, chunkedSelectionIds)
+      : revision.lines as SelectedPrBoqLine[];
     if (targetLines.length === 0) {
       return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/pr', method: 'POST' });
     }

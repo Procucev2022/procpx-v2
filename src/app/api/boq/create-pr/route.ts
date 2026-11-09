@@ -15,6 +15,9 @@ import {
 import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { isUserAuthorizedForProject } from '@/lib/project-auth';
+import { MAX_D1_QUERY_FILTER_VALUES } from '@/lib/d1-query.constants';
+import { readSelectedPrBoqLines } from '@/lib/pr-line-selection';
+import type { SelectedPrBoqLine } from '@app-types/lib/pr-line-selection.types';
 
 
 export async function POST(req: NextRequest) {
@@ -68,6 +71,9 @@ export async function POST(req: NextRequest) {
         maxLines: MAX_PR_BATCH_LINES,
       }), 400);
     }
+    const chunkedSelectionIds = selectedIds && selectedIds.length > MAX_D1_QUERY_FILTER_VALUES
+      ? selectedIds
+      : undefined;
 
     const activeLineSelection = {
       where: {
@@ -85,7 +91,7 @@ export async function POST(req: NextRequest) {
       revision = await prisma.boqRevision.findFirst({
         where: { id: boqRevisionId, tenantId: ctx.tenantId },
         include: {
-          lines: activeLineSelection,
+          ...(chunkedSelectionIds ? {} : { lines: activeLineSelection }),
           boq: {
             include: { project: true, costCentre: true },
           },
@@ -103,7 +109,7 @@ export async function POST(req: NextRequest) {
             orderBy: { revisionNumber: 'desc' },
             take: 1,
             include: {
-              lines: activeLineSelection,
+              ...(chunkedSelectionIds ? {} : { lines: activeLineSelection }),
             },
           },
         },
@@ -142,8 +148,10 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403);
     }
 
-    // The revision query applies selection filters and an overflow sentinel before returning these lines.
-    const targetLines = revision.lines;
+    // Large selections are read in D1-safe chunks; other paths use the bounded revision relation.
+    const targetLines: SelectedPrBoqLine[] = chunkedSelectionIds
+      ? await readSelectedPrBoqLines(ctx.tenantId, revision.id, chunkedSelectionIds)
+      : revision.lines as SelectedPrBoqLine[];
 
     if (targetLines.length === 0) {
       return apiError(UI_STRINGS.common.noValidBOQLinesAvailableToGeneratePR, 400, { route: '/api/boq/create-pr', method: 'POST' });

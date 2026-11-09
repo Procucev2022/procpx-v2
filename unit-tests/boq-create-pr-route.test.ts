@@ -5,6 +5,7 @@ import { requireAuth, isApiContext, apiError, apiSuccess } from '../src/lib/api-
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
+import { readSelectedPrBoqLines } from '../src/lib/pr-line-selection';
 import { interpolateUiString } from '../src/lib/i18n';
 import {
   PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
@@ -15,6 +16,7 @@ import {
   MAX_PR_BATCH_LINES,
 } from '../src/lib/d1-batch.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { MAX_D1_QUERY_FILTER_VALUES } from '../src/lib/d1-query.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -26,6 +28,7 @@ jest.mock('../src/lib/prisma', () => ({
   },
 }));
 jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn() }));
+jest.mock('../src/lib/pr-line-selection', () => ({ readSelectedPrBoqLines: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -43,6 +46,7 @@ const successResponse = apiSuccess as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
+const readSelectedLines = readSelectedPrBoqLines as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1', role: 'BUYER' };
 const request = (body: unknown) => new NextRequest('http://localhost/api/boq/create-pr', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -72,6 +76,7 @@ describe('create PR from BOQ route', () => {
     db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1', code: 'CC01', name: 'North Wing' });
     db.procurementRequest.findFirst.mockResolvedValue(null);
     projectAuthorized.mockResolvedValue(true);
+    readSelectedLines.mockResolvedValue([]);
     writeBatch.mockResolvedValue([
       { results: [{ id: 'pr-1', prNumber: 'PR-2026-000009' }] },
       ...Array.from({ length: 6 }, () => ({ meta: { changes: 1 } })),
@@ -261,6 +266,21 @@ describe('create PR from BOQ route', () => {
 
     expect(db.boqRevision.findFirst).not.toHaveBeenCalled();
     expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('uses D1-safe line reads when the selected IDs exceed the per-query filter ceiling', async () => {
+    const selectedLineIds = Array.from({ length: MAX_D1_QUERY_FILTER_VALUES + 1 }, (_, index) => `line-${index}`);
+    const selectedLines = selectedLineIds.map((id, index) => ({
+      id, lineNumber: String(index + 1).padStart(3, '0'), quantity: 1,
+      aiUnitCost: 1, aiTotalCost: 1, originalDescription: 'Selected line',
+    }));
+    readSelectedLines.mockResolvedValueOnce(selectedLines);
+
+    await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1', selectedLineIds })))
+      .resolves.toMatchObject({ ok: true, status: 201, data: { totalLines: selectedLineIds.length } });
+
+    expect(readSelectedLines).toHaveBeenCalledWith('tenant-1', 'revision-1', selectedLineIds);
+    expect(db.boqRevision.findFirst.mock.calls[0][0].include.lines).toBeUndefined();
   });
 
   it('returns conflict when a concurrent PR creation wins the active revision guard', async () => {
