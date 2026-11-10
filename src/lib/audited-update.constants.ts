@@ -27,6 +27,7 @@ export const AUDITED_UPDATE_TABLES = {
     columns: ['termsAccepted', 'termsAcceptedAt'],
     booleanColumns: ['termsAccepted'],
     returning: '"id", "termsAccepted", "termsAcceptedAt"',
+    updatedAtColumn: null,
   },
 } as const;
 

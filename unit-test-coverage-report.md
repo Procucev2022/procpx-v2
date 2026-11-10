@@ -6,10 +6,10 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100087/100805) |
-| branches | 93.66% (22973/24526) |
+| statements | 99.28% (100089/100807) |
+| branches | 93.67% (22982/24535) |
 | functions | 98.57% (1939/1967) |
-| lines | 99.28% (100087/100805) |
+| lines | 99.28% (100089/100807) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -301,7 +301,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/lib/auction-lifecycle.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 91.30% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/audited-update.ts` | 97.84% | 97.36% | 100.00% | 97.84% | PASS |
+| `src/lib/audited-update.ts` | 97.87% | 97.72% | 100.00% | 97.87% | PASS |
 | `src/lib/auth.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auth.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
@@ -340,7 +340,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

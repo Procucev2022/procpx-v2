@@ -314,6 +314,50 @@ async function workflow(s: Record<string, Session>) {
     && !Object.hasOwn(listedAuction ?? {}, 'vendors')
     && !Object.hasOwn(listedAuction ?? {}, 'items'), `HTTP ${auctionListResponse.status}; total=${auctionList.total ?? 0}`);
 
+  const liveAuctionStart = new Date(Date.now() - 60 * 1000);
+  const liveAuctionEnd = new Date(Date.now() + 60 * 60 * 1000);
+  r = await proc.post('/api/procurement/auctions', {
+    rfqId: rfq.id,
+    title: `${RUN} Live Auction`,
+    startTime: liveAuctionStart.toISOString(),
+    endTime: liveAuctionEnd.toISOString(),
+    invitedVendorIds: vendorIds.map((vendor) => vendor.vendorId),
+    items: rfqLines.map((line, index) => ({ rfqLineId: line.id, itemCode: `E2E-LIVE-${index + 1}`, quantity: 1 })),
+  });
+  step('create live auction for vendor bidding', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const liveAuctionRow = d1<{ id: string; status: string }>(
+    `SELECT id, status FROM auctions WHERE rfqId=${q(rfq.id)} AND title=${q(`${RUN} Live Auction`)} LIMIT 1`,
+  )[0];
+  const liveAuctionId = liveAuctionRow?.id ?? '';
+  step('live auction and participants persisted in D1', liveAuctionRow?.status === 'LIVE'
+    && d1(`SELECT id FROM auction_vendors WHERE auctionId=${q(liveAuctionId)}`).length === vendorIds.length);
+  const bidder = vendorIds[0];
+  const bidderSession = await login(bidder.email);
+  r = await bidderSession.post(`/api/procurement/auctions/${liveAuctionId}/terms-accept`, {});
+  step('invited vendor accepts live auction terms', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const termsAcceptedAt = d1<{ termsAcceptedAt: string | null }>(
+    `SELECT termsAcceptedAt FROM auction_vendors WHERE auctionId=${q(liveAuctionId)} AND vendorId=${q(bidder.vendorId)}`,
+  )[0]?.termsAcceptedAt;
+  step('vendor terms acceptance persisted in D1', Boolean(termsAcceptedAt));
+  r = await bidderSession.post(`/api/procurement/auctions/${liveAuctionId}/bid`, { bidAmount: 1000 });
+  step('invited vendor submits live auction bid', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const liveBidState = d1<{ status: string; currentLowestBid: number | null; bidCount: number; vendorBidCount: number }>(
+    `SELECT a.status, a.currentLowestBid,
+      (SELECT count(*) FROM auction_bids b WHERE b.auctionId=a.id AND b.vendorId=${q(bidder.vendorId)}) bidCount,
+      (SELECT bidsCount FROM auction_vendors av WHERE av.auctionId=a.id AND av.vendorId=${q(bidder.vendorId)}) vendorBidCount
+      FROM auctions a WHERE a.id=${q(liveAuctionId)}`,
+  )[0];
+  step('bid, auction leader and participant counter persist atomically', liveBidState?.status === 'LIVE'
+    && Number(liveBidState.currentLowestBid) === 1000
+    && liveBidState.bidCount === 1
+    && liveBidState.vendorBidCount === 1);
+  const liveAuctionListResponse = await proc.get(`/api/procurement/auctions?tab=LIVE&search=${encodeURIComponent(RUN)}`);
+  const liveAuctionList = data(liveAuctionListResponse);
+  const listedLiveAuction = liveAuctionList?.auctions?.find((item: ApiJson) => item.id === liveAuctionId);
+  step('auction register reports the submitted bid count', liveAuctionListResponse.status === 200
+    && liveAuctionList.total === 1
+    && listedLiveAuction?.totalBids === 1, `HTTP ${liveAuctionListResponse.status}; total=${liveAuctionList.total ?? 0}`);
+
   r = await proc.get(`/api/procurement/rfqs/${rfq.id}/compare`);
   step('quote comparison loads', r.status === 200, `HTTP ${r.status}`);
 
@@ -419,7 +463,7 @@ async function workflow(s: Record<string, Session>) {
     && actualCostPage?.total === ppoLines && actualCostPage?.data?.length === ppoLines,
   `HTTP ${actualCostRead.status}; ${actualCostPage?.total ?? 0} row(s)`);
 
-  const audits = d1<{ c: number }>(`SELECT count(*) c FROM audit_logs WHERE entityId IN (${[projectId, boqRow.boqId, boqRow.revisionId, pr.id, rfq.id, auctionId, ppo.id].map(q).join(',')})`)[0]?.c;
+  const audits = d1<{ c: number }>(`SELECT count(*) c FROM audit_logs WHERE entityId IN (${[projectId, boqRow.boqId, boqRow.revisionId, pr.id, rfq.id, auctionId, liveAuctionId, ppo.id].map(q).join(',')})`)[0]?.c;
   record('workflow', 'audit trail written in D1', audits > 0, `${audits} audit entries for the new records`);
 
   return { projectId, prNumber: pr.prNumber, rfqNumber: rfq.rfqNumber, ppoNumber: ppo.ppoNumber };

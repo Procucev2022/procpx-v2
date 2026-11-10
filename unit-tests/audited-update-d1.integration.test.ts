@@ -41,7 +41,7 @@ function createDatabase(): { database: D1BatchDatabase; sqlite: LocalSQLiteDatab
       turnoverCrores REAL, capabilities TEXT, serviceCoverage TEXT, clientReferences TEXT, certifications TEXT,
       onboardingStatus TEXT, documents TEXT, updatedAt TEXT NOT NULL);
     CREATE TABLE auction_vendors (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, auctionId TEXT NOT NULL, vendorId TEXT NOT NULL,
-      termsAccepted INTEGER NOT NULL DEFAULT 0, termsAcceptedAt TEXT, updatedAt TEXT NOT NULL);
+      termsAccepted INTEGER NOT NULL DEFAULT 0, termsAcceptedAt TEXT);
     CREATE TABLE audit_logs (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, userId TEXT, projectId TEXT,
       entityType TEXT NOT NULL, entityId TEXT NOT NULL, action TEXT NOT NULL, description TEXT NOT NULL,
       oldValue TEXT, newValue TEXT, ipAddress TEXT, userAgent TEXT, createdAt TEXT NOT NULL);
@@ -88,8 +88,8 @@ function createDatabase(): { database: D1BatchDatabase; sqlite: LocalSQLiteDatab
   sqlite.prepare('INSERT INTO vendors (id, tenantId, name, phone, updatedAt) VALUES (?, ?, ?, ?, ?)').run(
     'vendor-1', 'tenant-1', 'Old Vendor', '111', '2026-01-01T00:00:00.000Z',
   );
-  sqlite.prepare('INSERT INTO auction_vendors (id, tenantId, auctionId, vendorId, updatedAt) VALUES (?, ?, ?, ?, ?)').run(
-    'auction-vendor-1', 'tenant-1', 'auction-1', 'vendor-1', '2026-01-01T00:00:00.000Z',
+  sqlite.prepare('INSERT INTO auction_vendors (id, tenantId, auctionId, vendorId) VALUES (?, ?, ?, ?)').run(
+    'auction-vendor-1', 'tenant-1', 'auction-1', 'vendor-1',
   );
   return { database, sqlite };
 }
@@ -143,7 +143,9 @@ describe('audited D1 updates', () => {
     expect(sqlite.prepare('SELECT capabilities, documents FROM vendors WHERE id = ?').get('vendor-1')).toEqual({
       capabilities: '["Electrical"]', documents: '[{"filename":"certificate.pdf"}]',
     });
-    expect(sqlite.prepare('SELECT termsAccepted FROM auction_vendors WHERE id = ?').get('auction-vendor-1')).toEqual({ termsAccepted: 1 });
+    expect(sqlite.prepare('SELECT termsAccepted, termsAcceptedAt FROM auction_vendors WHERE id = ?').get('auction-vendor-1')).toEqual({
+      termsAccepted: 1, termsAcceptedAt: updatedAt.toISOString(),
+    });
   });
 
   it('uses the configured D1 binding and persists optional audit context when no database is injected', async () => {
