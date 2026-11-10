@@ -2,22 +2,15 @@
 // src/components/PrDetailModal.tsx
 // Standardised, reusable PR Detail Modal for Dashboard, Approved PRs, and PR Register
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import StatusBadge from '@/components/ui/StatusBadge';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import {
-  Building2,
-  Layers,
   FileSpreadsheet,
-  IndianRupee,
   Calendar,
-  CheckCircle2,
-  Clock,
   ArrowRight,
-  ExternalLink,
-  Tag,
   ListChecks,
   User,
   ShieldCheck,
@@ -36,8 +29,6 @@ export default function PrDetailModal({
   isOpen,
   onClose,
   pr,
-  userRole = 'PROCUREMENT_USER',
-  onCreateRfq,
 }: PrDetailModalProps) {
   const [detailedPr, setDetailedPr] = useState<any | null>(null);
   const [loadingLines, setLoadingLines] = useState(false);

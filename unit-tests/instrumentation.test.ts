@@ -48,13 +48,14 @@ describe('Next.js logging instrumentation', () => {
   it('records request errors with sanitized path and route context in Edge and Node runtimes', async () => {
     process.env.NEXT_RUNTIME = 'edge';
     await onRequestError(new Error('edge failure'), {
-      path: '/api/items', method: 'GET', headers: {},
+      path: '/api/items', method: 'GET', headers: { 'x-request-id': 'edge-request-123' },
     }, {
       routePath: '/api/items', routeType: 'route', routerKind: 'App Router',
       renderSource: 'server-rendering', revalidateReason: undefined,
     });
     expect(writeEdgeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.common.error2, 'http.request_failed', expect.objectContaining({
       method: 'GET',
+      requestId: 'edge-request-123',
       path: '/api/items',
       route: '/api/items',
       runtime: 'edge',
@@ -63,13 +64,14 @@ describe('Next.js logging instrumentation', () => {
 
     process.env.NEXT_RUNTIME = 'nodejs';
     await onRequestError(new Error('request failed'), {
-      path: '/api/pr?id=private', method: 'POST', headers: {},
+      path: '/api/pr?id=private', method: 'POST', headers: { 'cf-ray': 'cloudflare-ray-456' },
     }, {
       routePath: '/api/pr/[id]', routeType: 'route', routerKind: 'App Router',
       renderSource: 'server-rendering', revalidateReason: 'stale',
     });
     expect(writeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.common.error2, 'http.request_failed', expect.objectContaining({
       method: 'POST',
+      requestId: 'cloudflare-ray-456',
       path: '/api/pr?id=%5BREDACTED%5D',
       route: '/api/pr/[id]',
       routeType: 'route',
@@ -88,6 +90,9 @@ describe('Next.js logging instrumentation', () => {
       routePath: '/api/health', routeType: 'route', routerKind: 'App Router',
       renderSource: 'server-rendering', revalidateReason: undefined,
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.common.error2, 'http.request_failed', expect.objectContaining({ runtime: 'unknown' }), 'next');
+    expect(writeStructuredLog).toHaveBeenCalledWith(UI_STRINGS.common.error2, 'http.request_failed', expect.objectContaining({
+      runtime: 'unknown',
+      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    }), 'next');
   });
 });

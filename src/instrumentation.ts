@@ -1,5 +1,5 @@
 import type { Instrumentation } from 'next';
-import { safeRequestPath, sanitizeLogValue } from './lib/observability/shared';
+import { getRequestCorrelationId, safeRequestPath, sanitizeLogValue } from './lib/observability/shared';
 
 type RuntimeLogger = typeof import('./lib/observability/server-logger');
 
@@ -27,7 +27,7 @@ export const onRequestError: Instrumentation.onRequestError = async (error, requ
   const { writeStructuredLog } = getRuntimeLogger();
   const errorValue = sanitizeLogValue(error);
   await writeStructuredLog('error', 'http.request_failed', {
-    requestId: crypto.randomUUID(),
+    requestId: getRequestCorrelationId(request.headers) || crypto.randomUUID(),
     method: request.method,
     path: safeRequestPath(request.path),
     route: context.routePath,

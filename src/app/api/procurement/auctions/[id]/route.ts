@@ -260,6 +260,11 @@ export async function GET(
       parsedDocs = auction.documents ? JSON.parse(auction.documents) : [];
     } catch {
       parsedDocs = [];
+      await writeStructuredLog('warn', 'auction.documents_invalid', {
+        operation: 'parse_stored_auction_documents', route: '/api/procurement/auctions/[id]',
+        requestId, tenantId: ctx.tenantId, userId: ctx.userId, auctionId: auction.id,
+        field: 'documents', fallback: 'empty_array', durationMs: Date.now() - startedAt,
+      }, 'application');
     }
 
     return apiSuccess({

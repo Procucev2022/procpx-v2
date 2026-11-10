@@ -1,7 +1,7 @@
 'use client';
 // src/components/rate-cards/HomeWorkspace.tsx
 // Home Workspace: Master Rate Cards Register with Standardized Enterprise Hierarchy, Tabs, and Table
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Plus, Eye, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import LongTextCell from '@/components/ui/LongTextCell';
@@ -27,7 +27,6 @@ export default function HomeWorkspace({
   onClearFilters,
   onInitiateClick,
   onNegotiateClick,
-  onBuyerAcceptClick,
   onDetailsClick,
   hasMoreData = false,
   loadingMoreData = false,

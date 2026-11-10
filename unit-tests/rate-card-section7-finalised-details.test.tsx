@@ -4,8 +4,12 @@ import { uiStringPattern } from '@/lib/i18n';
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Section7FinalisedDetails from '../src/components/rate-cards/Section7FinalisedDetails';
+import { reportHandledClientFailure } from '../src/lib/observability/client-reporter';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
+jest.mock('../src/lib/observability/client-reporter', () => ({
+  reportHandledClientFailure: jest.fn(),
+}));
 
 jest.mock('xlsx', () => ({
   __esModule: true,
@@ -146,10 +150,29 @@ describe('rate card Section 7 finalised details', () => {
         id: 'bad-meta', itemCode: 'BAD-1', description: 'Fallback description', rate: 25, minQuantity: 0, comparisonRef: '{bad json',
       }],
     }} agreement={null} />);
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({ operation: 'parse_finalised_rate_card_notes', field: 'notes' }),
+    );
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(SyntaxError),
+      expect.objectContaining({
+        operation: 'parse_finalised_rate_card_comparison_metadata',
+        field: 'comparisonRef',
+        itemId: 'bad-meta',
+      }),
+    );
     expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.viewExecutedAgreement) })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.downloadRateCard) }));
     expect(print).toHaveBeenCalledTimes(1);
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        operation: 'export_finalised_rate_card_workbook',
+        fallback: 'open_print_view',
+      }),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsSection7FinalisedDetails.agreedRates, '', false) }));
     expect(screen.getAllByText('Fallback description')).toHaveLength(2);

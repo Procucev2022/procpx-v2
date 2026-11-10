@@ -1,3 +1,7 @@
+export const RFQ_TRANSITION_ACTIONS = Object.freeze(['RELEASE', 'CANCEL'] as const);
+export const RFQ_RELEASED_STATUS = 'RELEASED';
+export const RFQ_CANCELLED_STATUS = 'CANCELLED';
+
 export const RFQ_TRANSITION_ALLOWED_FIELDS = [
   'status', 'releasedAt', 'title', 'scopeOfWork', 'submissionDeadline',
   'clarificationDeadline', 'deliveryRequirement', 'paymentTerms', 'taxTerms',

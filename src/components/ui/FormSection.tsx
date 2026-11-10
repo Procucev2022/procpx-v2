@@ -1,7 +1,6 @@
 'use client';
 // src/components/ui/FormSection.tsx
 // Standardized Enterprise Reusable Form Section Container (1px neutral border, 16-20px padding, subtle header)
-import React from 'react';
 import type { FormSectionProps } from "@app-types/components/ui/FormSection.types";
 export type { FormSectionProps };
 

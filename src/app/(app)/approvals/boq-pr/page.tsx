@@ -4,20 +4,15 @@ import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
-  FileText,
   CheckCircle2,
   XCircle,
   Clock,
-  Layers,
   FileSpreadsheet,
   AlertTriangle,
   X,
   Eye,
   MessageSquare,
   HelpCircle,
-  Send,
-  Loader2,
-  CheckSquare,
   RotateCcw,
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
@@ -25,7 +20,6 @@ import { useToast } from '@/components/ui/Toast';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { PrLinePaginationMetadata } from '@app-types/lib/pr-line-pagination.types';

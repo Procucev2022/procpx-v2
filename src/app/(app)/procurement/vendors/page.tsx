@@ -17,33 +17,19 @@ import {
   FileText,
   ShieldCheck,
   Star,
-  ExternalLink,
   Users,
   Globe,
   Sparkles,
   ArrowRight,
   ArrowLeft,
   Info,
-  TrendingUp,
-  Award,
-  RefreshCw,
-  HelpCircle,
   Check,
   RotateCcw,
   X,
-  ChevronRight,
   ChevronDown,
   Loader2,
-  MapPin,
-  Briefcase,
-  Layers,
-  FileCheck2,
-  CheckSquare,
-  Square,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import Card from '@/components/ui/Card';
-import StatusBadge from '@/components/ui/StatusBadge';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { useToast } from '@/components/ui/Toast';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";

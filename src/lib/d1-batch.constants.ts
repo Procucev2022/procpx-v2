@@ -2,6 +2,9 @@ export const MAX_D1_BATCH_STATEMENTS = 500;
 export const MAX_D1_STATEMENT_BINDINGS = 100;
 export const MAX_D1_BATCH_BINDINGS = 4_500;
 export const MAX_D1_BINDING_BYTES = 1_800_000;
+export const D1_BATCH_SLOW_LOG_THRESHOLD_MS = 1_000;
+export const MAX_RFQ_VENDOR_INVITE_COUNT = 500;
+export const MAX_RFQ_WORKFLOW_LINES = 500;
 export const MAX_RATE_CARD_ITEMS = 200;
 export const MAX_PPO_COMPLETION_LINES = 90;
 export const MAX_PPO_CREATE_LINES = 140;
@@ -239,12 +242,27 @@ export const BOQ_DUPLICATE_AUDIT_INSERT_AFTER_CHANGE_SQL = `
   WHERE duplicate."id" = ? AND duplicate."tenantId" = ? AND changes() = 1
 `;
 
-export const RFQ_VENDOR_INVITATION_UPSERT_SQL = `
+export const RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL = `
+  WITH input AS (
+    SELECT json_extract(value, '$.id') AS "id", json_extract(value, '$.vendorId') AS "vendorId"
+    FROM json_each(?)
+  ), eligible AS (
+    SELECT input."id", input."vendorId"
+    FROM input
+    JOIN "vendors" v ON v."id" = input."vendorId" AND v."tenantId" = ? AND v."isBlacklisted" = 0
+  ), current_rfq AS (
+    SELECT r."id", r."tenantId", r."status"
+    FROM "rfqs" r WHERE r."id" = ? AND r."tenantId" = ?
+  )
   INSERT INTO "rfq_vendors"
     ("id", "tenantId", "rfqId", "vendorId", "invitationStatus", "submissionStatus")
-  VALUES (?, ?, ?, ?, ?, 'PENDING')
+  SELECT eligible."id", current_rfq."tenantId", current_rfq."id", eligible."vendorId",
+    CASE WHEN current_rfq."status" = 'DRAFT' THEN 'PENDING' ELSE 'INVITED' END, 'PENDING'
+  FROM eligible CROSS JOIN current_rfq
+  WHERE (SELECT COUNT(*) FROM input) = (SELECT COUNT(*) FROM eligible)
   ON CONFLICT ("rfqId", "vendorId") DO UPDATE SET
     "invitationStatus" = excluded."invitationStatus"
+  WHERE "rfq_vendors"."tenantId" = excluded."tenantId"
 `;
 
 export const RFQ_INSERT_IF_VALID_SQL = `
@@ -330,6 +348,14 @@ export const AUDIT_LOG_INSERT_FAIL_CLOSED_SQL = `
   SELECT CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 `;
 
+export const RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL = `
+  INSERT INTO "audit_logs" (
+    "id", "tenantId", "userId", "projectId", "entityType", "entityId", "action",
+    "description", "oldValue", "newValue", "ipAddress", "userAgent", "createdAt"
+  )
+  SELECT CASE WHEN changes() > 0 THEN ? ELSE NULL END, ?, ?, ?, 'RFQ', ?, 'VENDOR_INVITED', ?, NULL, ?, NULL, NULL, ?
+`;
+
 export const D1_BATCH_STATEMENT_FAILED = 'D1 batch statement failed';
 export const D1_BATCH_STATEMENT_LIMIT_EXCEEDED = 'D1 batch statement limit exceeded';
 export const D1_QUOTE_INSERT_RESULT_MISSING = 'D1 quote insert did not return the created quote';
@@ -340,6 +366,19 @@ export const RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL = `
   )
   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
   WHERE changes() = 1
+`;
+
+export const RATE_CARD_TRANSITION_ASSERT_SQL = `
+  SELECT json_extract(CASE WHEN
+    EXISTS (
+      SELECT 1 FROM "rate_card_approvals"
+      WHERE "id" = ? AND "tenantId" = ? AND "rateCardId" = ?
+    )
+    AND EXISTS (
+      SELECT 1 FROM "audit_logs"
+      WHERE "id" = ? AND "tenantId" = ? AND "entityType" = ? AND "entityId" = ?
+    )
+    THEN '{}' ELSE 'invalid' END, '$') AS "transition"
 `;
 
 export const RATE_CARD_INSERT_IF_VENDOR_VALID_SQL = `
@@ -1044,6 +1083,43 @@ export const BUDGET_AGGREGATE_PENDING_UPSERT_SQL = `
   WHERE "budgets"."projectId" = excluded."projectId"
 `;
 
+export const BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL = `
+  SELECT json_extract(CASE WHEN
+    changes() = 1
+    AND EXISTS (
+      SELECT 1 FROM "budget_contributions"
+      WHERE "id" = ? AND "tenantId" = ? AND "boqRevisionId" = ?
+        AND "projectId" = ? AND "costCentreId" = ? AND "status" = 'UNDER_APPROVAL'
+    )
+    AND EXISTS (
+      SELECT 1 FROM "audit_logs"
+      WHERE "id" = ? AND "tenantId" = ?
+        AND "entityType" = 'BUDGET_CONTRIBUTION' AND "entityId" = ?
+    )
+    AND (
+      SELECT COUNT(*) FROM "budget_transactions"
+      WHERE "tenantId" = ? AND "contributionId" = ? AND "projectId" = ?
+        AND "costCentreId" = ? AND "boqId" = ? AND "boqRevisionId" = ?
+        AND "status" = 'UNDER_APPROVAL'
+    ) = ?
+    AND EXISTS (
+      SELECT 1 FROM "boq_revisions"
+      WHERE "id" = ? AND "tenantId" = ? AND "boqId" = ?
+        AND "costCentreId" = ? AND "budgetStatus" = 'BUDGET_UNDER_APPROVAL'
+    )
+    AND EXISTS (
+      SELECT 1 FROM "boqs"
+      WHERE "id" = ? AND "tenantId" = ? AND "costCentreId" = ?
+        AND "purpose" IN ('BUDGET', 'BOTH')
+    )
+    AND EXISTS (
+      SELECT 1 FROM "budgets"
+      WHERE "tenantId" = ? AND "costCentreId" = ? AND "projectId" = ?
+        AND "status" = 'UNDER_APPROVAL' AND "pendingAmount" >= ?
+    )
+    THEN '{}' ELSE 'invalid' END, '$') AS "allocation"
+`;
+
 export const BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL = `
   DELETE FROM "budget_transactions"
   WHERE "tenantId" = ? AND "contributionId" = ? AND EXISTS (
@@ -1444,6 +1520,7 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
       JOIN "boqs" b ON b."id" = r."boqId"
       WHERE l."id" = i."boqLineId" AND l."tenantId" = i."tenantId" AND b."projectId" = i."projectId"
         AND (i."boqRevisionId" IS NULL OR l."boqRevisionId" = i."boqRevisionId")
+        AND (i."boqId" IS NULL OR r."boqId" = i."boqId")
     ))
     AND (i."prId" IS NULL OR EXISTS (
       SELECT 1 FROM "procurement_requests" pr
@@ -1464,11 +1541,20 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
     ))
     AND (i."ppoId" IS NULL OR EXISTS (
       SELECT 1 FROM "ppos" p WHERE p."id" = i."ppoId" AND p."tenantId" = i."tenantId" AND p."projectId" = i."projectId"
+        AND (i."vendorId" IS NULL OR p."vendorId" = i."vendorId")
     ))
     AND (i."ppoLineId" IS NULL OR EXISTS (
       SELECT 1 FROM "ppo_lines" l JOIN "ppos" p ON p."id" = l."ppoId"
       WHERE l."id" = i."ppoLineId" AND l."tenantId" = i."tenantId" AND p."projectId" = i."projectId"
         AND (i."ppoId" IS NULL OR l."ppoId" = i."ppoId")
+        AND l."projectId" = p."projectId"
+        AND (i."boqId" IS NULL OR l."boqId" = i."boqId")
+        AND (i."boqRevisionId" IS NULL OR l."boqRevisionId" = i."boqRevisionId")
+        AND (i."boqLineId" IS NULL OR l."boqLineId" = i."boqLineId")
+        AND (i."prLineId" IS NULL OR l."prLineId" = i."prLineId")
+        AND (i."rfqLineId" IS NULL OR l."rfqLineId" = i."rfqLineId")
+        AND l."vendorId" = p."vendorId"
+        AND (i."vendorId" IS NULL OR l."vendorId" = i."vendorId")
     ))
     AND (i."vendorId" IS NULL OR EXISTS (
       SELECT 1 FROM "vendors" v WHERE v."id" = i."vendorId" AND v."tenantId" = i."tenantId"
@@ -1755,6 +1841,9 @@ export const QUOTE_INSERT_WITH_NEXT_VERSION_SQL = `
       WHERE "tenantId" = ? AND "rfqId" = ? AND "vendorId" = ?), 0) > 0
       THEN 'REVISED' ELSE 'SUBMITTED' END,
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  FROM "rfqs" eligibleRfq
+  WHERE eligibleRfq."id" = ? AND eligibleRfq."tenantId" = ?
+    AND eligibleRfq."status" IN (?, ?, ?, ?)
   RETURNING "id", "tenantId", "rfqId", "vendorId", "quoteNumber", "quoteVersion", "status",
     "totalBaseAmount", "taxAmount", "discountAmount", "totalQuoteAmount", "commercialTerms",
     "paymentTermsOffered", "deliveryLeadTimeDays", "validUntil", "submittedAt", "submittedBy",

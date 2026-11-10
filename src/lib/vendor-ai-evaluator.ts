@@ -1,5 +1,21 @@
-import type { VendorEvaluationInput, CriterionEvaluation, AiEvaluationReport } from "@app-types/lib/vendor-ai-evaluator.types";
-export type { VendorEvaluationInput, CriterionEvaluation, AiEvaluationReport };
+import type {
+  VendorEvaluationInput,
+  CriterionEvaluation,
+  AiEvaluationReport,
+  VendorEvaluationOptions,
+  VendorEvaluationInputDataIssue,
+} from "@app-types/lib/vendor-ai-evaluator.types";
+export type {
+  VendorEvaluationInput,
+  CriterionEvaluation,
+  AiEvaluationReport,
+  VendorEvaluationOptions,
+  VendorEvaluationInputDataIssue,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 
 // Indian GSTIN syntax verification: 2 digits state + 10 chars PAN + 1 entity + 'Z' + 1 checksum
@@ -20,7 +36,7 @@ function validatePanSyntax(pan?: string | null): { valid: boolean; reason?: stri
   return { valid: false, reason: `PAN "${clean}" does not match 10-character Indian PAN syntax` };
 }
 
-export function evaluateVendorProfile(vendor: VendorEvaluationInput): AiEvaluationReport {
+export function evaluateVendorProfile(vendor: VendorEvaluationInput, options: VendorEvaluationOptions = {}): AiEvaluationReport {
   const criteria: Record<string, CriterionEvaluation> = {};
   const strengths: string[] = [];
   const weaknesses: string[] = [];
@@ -29,18 +45,56 @@ export function evaluateVendorProfile(vendor: VendorEvaluationInput): AiEvaluati
   const contradictions: string[] = [];
 
   // Parse JSON fields safely
-  let docs: any[] = [];
-  try {
-    if (vendor.documents) docs = JSON.parse(vendor.documents);
-  } catch (e) {
-    docs = [];
+  let docs: Array<Record<string, unknown>> = [];
+  if (vendor.documents) {
+    try {
+      const parsed: unknown = JSON.parse(vendor.documents);
+      if (Array.isArray(parsed)) {
+        docs = parsed.filter(isRecord);
+        const invalidEntryCount = parsed.length - docs.length;
+        if (invalidEntryCount > 0) {
+          options.onInputDataIssue?.({
+            fieldName: 'documents', reason: 'invalid_shape', fallback: 'filtered_invalid_entries', invalidEntryCount,
+          });
+        }
+      }
+      else options.onInputDataIssue?.({ fieldName: 'documents', reason: 'invalid_shape', fallback: 'empty_array' });
+    } catch {
+      options.onInputDataIssue?.({ fieldName: 'documents', reason: 'invalid_json', fallback: 'empty_array' });
+    }
   }
 
-  let references: any[] = [];
-  try {
-    if (vendor.clientReferences) references = JSON.parse(vendor.clientReferences);
-  } catch (e) {
-    if (vendor.clientReferences) references = [{ client: vendor.clientReferences }];
+  let references: Array<Record<string, unknown>> = [];
+  if (vendor.clientReferences) {
+    const trimmedReferences = vendor.clientReferences.trimStart();
+    try {
+      const parsed: unknown = JSON.parse(vendor.clientReferences);
+      if (Array.isArray(parsed)) {
+        let invalidEntryCount = 0;
+        references = parsed.flatMap((reference) => {
+          if (isRecord(reference)) return [reference];
+          if (typeof reference === 'string' && reference.trim()) return [{ client: reference }];
+          invalidEntryCount += 1;
+          return [];
+        });
+        if (invalidEntryCount > 0) {
+          options.onInputDataIssue?.({
+            fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'filtered_invalid_entries', invalidEntryCount,
+          });
+        }
+      }
+      else if (typeof parsed === 'string' && parsed.trim()) {
+        references = [{ client: parsed }];
+        options.onInputDataIssue?.({ fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'legacy_text' });
+      } else {
+        options.onInputDataIssue?.({ fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'empty_array' });
+      }
+    } catch {
+      references = [{ client: vendor.clientReferences }];
+      if (trimmedReferences.startsWith('{') || trimmedReferences.startsWith('[') || trimmedReferences.startsWith('"')) {
+        options.onInputDataIssue?.({ fieldName: 'clientReferences', reason: 'invalid_json', fallback: 'legacy_text' });
+      }
+    }
   }
 
   // CRITICAL RISK: Blacklist check
@@ -134,7 +188,11 @@ export function evaluateVendorProfile(vendor: VendorEvaluationInput): AiEvaluati
       weaknesses.push('Financial statements or audited turnover missing from vendor profile');
     }
 
-    const finDocs = docs.filter(d => (d.type || '').toLowerCase().includes('financial') || (d.name || '').toLowerCase().includes('balance'));
+    const finDocs = docs.filter((document) => {
+      const type = typeof document.type === 'string' ? document.type.toLowerCase() : '';
+      const name = typeof document.name === 'string' ? document.name.toLowerCase() : '';
+      return type.includes('financial') || name.includes('balance');
+    });
     if (finDocs.length > 0) {
       score += 8;
       evidence.push(`${finDocs.length} financial supporting document(s) attached`);

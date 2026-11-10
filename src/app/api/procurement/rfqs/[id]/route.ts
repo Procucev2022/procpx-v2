@@ -10,7 +10,13 @@ import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { getNegotiationHistoryPageMetadata, paginateNegotiationHistory } from '@/lib/negotiation-history';
 import { NEGOTIATION_HISTORY_PAGE_SIZE } from '@/lib/negotiation-history.constants';
-import { RFQ_INVITATION_MARK_RELEASED_SQL, RFQ_TRANSITION_ALLOWED_FIELDS } from './route.constants';
+import {
+  RFQ_CANCELLED_STATUS,
+  RFQ_INVITATION_MARK_RELEASED_SQL,
+  RFQ_RELEASED_STATUS,
+  RFQ_TRANSITION_ACTIONS,
+  RFQ_TRANSITION_ALLOWED_FIELDS,
+} from './route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { RfqDetailQuoteSummary, RfqLatestQuoteSummaryRow } from '@app-types/app/api/procurement/rfqs.types';
@@ -313,6 +319,16 @@ export async function PUT(
       .some((field) => updateFields[field] !== undefined && typeof updateFields[field] !== 'string')) {
     return apiError(UI_STRINGS.common.invalidRequestBody, 400);
   }
+  if (typeof action === 'string' && !(RFQ_TRANSITION_ACTIONS as readonly string[]).includes(action)) {
+    return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  }
+  const releaseRequested = action === 'RELEASE' || status === RFQ_RELEASED_STATUS;
+  const cancellationRequested = action === 'CANCEL' || status === RFQ_CANCELLED_STATUS;
+  if ((releaseRequested && cancellationRequested)
+    || (action === 'RELEASE' && status !== undefined && status !== RFQ_RELEASED_STATUS)
+    || (action === 'CANCEL' && status !== undefined && status !== RFQ_CANCELLED_STATUS)) {
+    return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.rfqStatusChangeRequiresWorkflowAction, 400);
+  }
   for (const field of ['submissionDeadline', 'clarificationDeadline']) {
     const value = updateFields[field];
     if (typeof value === 'string' && !Number.isFinite(new Date(value).getTime())) {
@@ -320,7 +336,7 @@ export async function PUT(
     }
   }
 
-  const requiredPerm = action === 'RELEASE' ? 'RFQ_RELEASE' : action === 'CANCEL' ? 'RFQ_CANCEL' : 'RFQ_EDIT';
+  const requiredPerm = releaseRequested ? 'RFQ_RELEASE' : cancellationRequested ? 'RFQ_CANCEL' : 'RFQ_EDIT';
   const ctx = await requireAuth(requiredPerm);
   if (!isApiContext(ctx)) return ctx;
 
@@ -344,23 +360,27 @@ export async function PUT(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
     }
 
+    if (status !== undefined && !releaseRequested && !cancellationRequested && status !== existing.status) {
+      return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.rfqStatusChangeRequiresWorkflowAction, 400);
+    }
+
     const updateData: any = {};
     let auditAction = 'RFQ_UPDATED';
     let auditDesc = `RFQ ${existing.rfqNumber} updated`;
 
-    if (action === 'RELEASE' || status === 'RELEASED') {
+    if (releaseRequested) {
       if (existing.status !== 'DRAFT' && existing.status !== 'UNDER_REVIEW') {
         return apiError(interpolateUiString(UI_STRINGS.appApiProcurementRfqsIdRoute.cannotReleaseRFQInStatusStatus, { "status": existing.status }), 400, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
       }
-      updateData.status = 'RELEASED';
+      updateData.status = RFQ_RELEASED_STATUS;
       updateData.releasedAt = new Date();
       auditAction = 'RFQ_RELEASED';
       auditDesc = `RFQ ${existing.rfqNumber} released to ${existing._count.invitedVendors} vendors`;
-    } else if (action === 'CANCEL' || status === 'CANCELLED') {
+    } else if (cancellationRequested) {
       if (!reason) {
         return apiError(UI_STRINGS.appApiProcurementRfqsIdRoute.cancellationReasonIsRequired, 400, { route: '/api/procurement/rfqs/[id]', method: 'PUT' });
       }
-      updateData.status = 'CANCELLED';
+      updateData.status = RFQ_CANCELLED_STATUS;
       auditAction = 'RFQ_CANCELLED';
       auditDesc = `RFQ ${existing.rfqNumber} cancelled. Reason: ${reason}`;
     } else if (status) {
@@ -399,7 +419,7 @@ export async function PUT(
         ],
       },
     ];
-    if (action === 'RELEASE' || status === 'RELEASED') {
+    if (releaseRequested) {
       batch.push({
         sql: RFQ_INVITATION_MARK_RELEASED_SQL,
         values: [id, ctx.tenantId, id, ctx.tenantId],

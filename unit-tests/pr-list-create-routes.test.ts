@@ -5,7 +5,10 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '../src/lib/project-auth';
+import { logEvent } from '../src/lib/observability/server-logger';
 import { MAX_PR_BATCH_LINES } from '../src/lib/d1-batch.constants';
+import { MAX_D1_QUERY_FILTER_VALUES } from '../src/lib/d1-query.constants';
+import { readSelectedPrBoqLines } from '../src/lib/pr-line-selection';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -20,10 +23,12 @@ jest.mock('../src/lib/prisma', () => ({
   },
 }));
 jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/pr-line-selection', () => ({ readSelectedPrBoqLines: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({
   getUserProjectAccessFilter: jest.fn(),
   isUserAuthorizedForProject: jest.fn(),
 }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
   isApiContext: jest.fn(),
@@ -43,6 +48,8 @@ const isContext = isApiContext as unknown as jest.Mock;
 const batchWrite = writeD1BatchAtomically as jest.Mock;
 const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
 const projectAuthorized = isUserAuthorizedForProject as jest.Mock;
+const backgroundLog = logEvent as jest.Mock;
+const readSelectedLines = readSelectedPrBoqLines as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const getRequest = (query = '') => new NextRequest(`http://localhost/api/pr${query}`);
 const postRequest = (body: unknown) => new NextRequest('http://localhost/api/pr', {
@@ -80,6 +87,7 @@ describe('PR list and create API', () => {
     db.costCentre.findFirst.mockResolvedValue({ id: 'cc-1', code: 'CC01', name: 'North Wing' });
     db.procurementRequest.count.mockResolvedValue(4);
     db.procurementRequest.groupBy.mockResolvedValue([]);
+    readSelectedLines.mockResolvedValue([]);
     rawQuery.mockResolvedValue([]);
     db.procurementRequest.create.mockResolvedValue({ id: 'pr-1', prNumber: 'PR-2026-000005' });
     db.pRLine.create.mockResolvedValue({ id: 'pr-line' });
@@ -231,6 +239,22 @@ describe('PR list and create API', () => {
     expect(db.auditLog.create).not.toHaveBeenCalled();
   });
 
+  it('loads large line selections through the D1-safe chunk reader', async () => {
+    const selectedLineIds = Array.from({ length: MAX_D1_QUERY_FILTER_VALUES + 1 }, (_, index) => `line-${index}`);
+    const selectedLines = selectedLineIds.map((id, index) => ({
+      id, lineNumber: String(index + 1).padStart(3, '0'), quantity: 1,
+      aiUnitCost: 1, aiTotalCost: 1, originalDescription: 'Selected item',
+    }));
+    readSelectedLines.mockResolvedValueOnce(selectedLines);
+
+    await expect(POST(postRequest({
+      boqRevisionId: 'revision-1', costCentreId: 'cc-1', selectedLineIds,
+    }))).resolves.toMatchObject({ ok: true, data: { totalLines: selectedLineIds.length } });
+
+    expect(readSelectedLines).toHaveBeenCalledWith('tenant-1', 'revision-1', selectedLineIds);
+    expect(db.boqRevision.findFirst.mock.calls[0][0].include.lines).toBeUndefined();
+  });
+
   it('creates a draft PR using revision defaults when optional request values are absent', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(revision({
       boq: { projectId: 'project-1', boqCode: 'BOQ-000001', purpose: 'PR' },
@@ -290,5 +314,8 @@ describe('PR list and create API', () => {
     await expect(POST(postRequest({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.common.userMessages.failedToCreateProcurementRequest, status: 500,
     });
+    expect(backgroundLog).toHaveBeenCalledWith('error', 'purchase_request.creation_failed', expect.objectContaining({
+      operation: 'create', route: '/api/pr', tenantId: 'tenant-1',
+    }), 'next');
   });
 });

@@ -1,11 +1,17 @@
 // app/api/dashboard/route.ts - Role-aware dashboard stats
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { Prisma } from '@prisma/client';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { prisma } from '@/lib/prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
+import { getPrLinePaginationMetadata, paginatePrLineRecords } from '@/lib/pr-line-pagination';
+import { PR_DETAIL_LINE_PAGE_SIZE } from '@/lib/pr-line-pagination.constants';
+import { PR_DETAIL_LINE_SELECT } from '@/app/api/pr/[id]/route.constants';
 import {
+  DASHBOARD_APPROVER_CATEGORY_PREVIEW_LIMIT,
   DASHBOARD_EXCEPTION_PREVIEW_LIMIT,
   DASHBOARD_REGISTER_PREVIEW_LIMIT,
   DASHBOARD_RFQ_PREVIEW_LIMIT,
@@ -14,6 +20,10 @@ import {
   DASHBOARD_UOM_PREVIEW_LIMIT,
   DASHBOARD_VIEWER_PROJECT_PREVIEW_LIMIT,
 } from './route.constants';
+import type {
+  DashboardApprovedBoqLineAggregate,
+  DashboardRecentBoqLineValueAggregate,
+} from '@app-types/app/api/dashboard/route.types';
 
 
 export async function GET(request?: Request) {
@@ -109,31 +119,53 @@ export async function GET(request?: Request) {
           boq: { select: { id: true, boqCode: true, title: true, description: true, category: true } },
           boqRevision: { select: { id: true, revisionNumber: true, revisionCode: true } },
           lines: {
-            include: {
-              boqLine: true,
-            },
+            where: { tenantId },
+            select: PR_DETAIL_LINE_SELECT,
+            orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+            take: PR_DETAIL_LINE_PAGE_SIZE + 1,
           },
+          _count: { select: { lines: true } },
           approvals: { orderBy: { timestamp: 'desc' }, take: 1 },
         },
       }),
     ]);
 
+    const pendingPrIds = rawPendingPrs.map((pr) => pr.id);
     const requesterIds = Array.from(new Set(rawPendingPrs.map((pr) => pr.requestedBy).filter(Boolean)));
-    const users = requesterIds.length > 0 ? await prisma.user.findMany({
-      where: { tenantId, id: { in: requesterIds } },
-      select: { id: true, name: true, email: true },
-    }) : [];
+    const [users, categoryGroups] = await Promise.all([
+      requesterIds.length > 0 ? prisma.user.findMany({
+        where: { tenantId, id: { in: requesterIds } },
+        select: { id: true, name: true, email: true },
+      }) : Promise.resolve([]),
+      pendingPrIds.length > 0 ? prisma.pRLine.groupBy({
+        by: ['prId', 'category'],
+        where: { tenantId, prId: { in: pendingPrIds } },
+        orderBy: [{ prId: 'asc' }, { category: 'asc' }],
+        take: DASHBOARD_APPROVER_CATEGORY_PREVIEW_LIMIT,
+      }) : Promise.resolve([]),
+    ]);
     const userMap = new Map<string, { name: string; email: string }>();
     users.forEach((user) => {
       userMap.set(user.id, { name: user.name, email: user.email });
       userMap.set(user.email, { name: user.name, email: user.email });
     });
 
+    const categoriesByPr = new Map<string, string[]>();
+    categoryGroups.forEach((group) => {
+      const categories = categoriesByPr.get(group.prId) || [];
+      categories.push(group.category);
+      categoriesByPr.set(group.prId, categories);
+    });
+
     const pendingPrs = rawPendingPrs.map(pr => {
       const requester = userMap.get(pr.requestedBy);
-      const categories = Array.from(new Set(pr.lines.map(l => l.category).filter(Boolean)));
+      const categories = categoriesByPr.get(pr.id) || [];
+      const linePage = paginatePrLineRecords(pr.lines);
       return {
         ...pr,
+        lines: linePage.lines,
+        linePagination: getPrLinePaginationMetadata(linePage),
+        lineCount: pr._count.lines,
         requesterName: requester?.name || pr.requestedBy,
         requesterEmail: requester?.email || '',
         categories: categories.length > 0 ? categories : (pr.boq?.category ? [pr.boq.category] : ['Standard']),
@@ -388,23 +420,23 @@ export async function GET(request?: Request) {
     ]);
 
     const lineGroups = approvedRevisions.length > 0
-      ? await prisma.boqLine.groupBy({
-        by: ['boqRevisionId', 'aiUnitCost'],
-        where: {
-          tenantId,
-          boqRevisionId: { in: approvedRevisions.map((revision) => revision.id) },
-          isDeleted: false,
-        },
-        _count: { _all: true },
-        _sum: { quantity: true },
-      })
+      ? await prisma.$queryRaw<DashboardApprovedBoqLineAggregate[]>(Prisma.sql`
+        SELECT "boqRevisionId", COUNT(*) AS "lineCount",
+          COALESCE(SUM(COALESCE("quantity", 0) * CASE WHEN "aiUnitCost" > 0 THEN "aiUnitCost" ELSE 100 END), 0) AS "amount"
+        FROM "boq_lines"
+        WHERE "tenantId" = ${tenantId}
+          AND "boqRevisionId" IN (${Prisma.join(approvedRevisions.map((revision) => revision.id))})
+          AND "isDeleted" = false
+        GROUP BY "boqRevisionId"
+        ORDER BY "boqRevisionId" ASC
+      `)
       : [];
     const lineSummaryByRevision = new Map<string, { count: number; amount: number }>();
     for (const group of lineGroups) {
-      const current = lineSummaryByRevision.get(group.boqRevisionId) || { count: 0, amount: 0 };
-      current.count += Number(group._count._all || 0);
-      current.amount += Number(group._sum.quantity || 0) * (Number(group.aiUnitCost) > 0 ? Number(group.aiUnitCost) : 100);
-      lineSummaryByRevision.set(group.boqRevisionId, current);
+      lineSummaryByRevision.set(group.boqRevisionId, {
+        count: Number(group.lineCount || 0),
+        amount: Number(group.amount || 0),
+      });
     }
 
     const revisionLineCount = (revisionId: string, fallbackCount = 0) => lineSummaryByRevision.get(revisionId)?.count ?? fallbackCount;
@@ -771,7 +803,7 @@ export async function GET(request?: Request) {
     ]);
     const categoryIds = Array.from(new Set(revisionLineGroups.map((group) => group.categoryId).filter((id): id is string => Boolean(id))));
     const lineCategories = categoryIds.length > 0
-      ? await prisma.category.findMany({ where: { tenantId, id: { in: categoryIds } }, select: { id: true, name: true } })
+      ? await readByD1FilterChunks(categoryIds, (chunk) => prisma.category.findMany({ where: { tenantId, id: { in: chunk } }, select: { id: true, name: true } }))
       : [];
     const categoryNameById = new Map(lineCategories.map((category) => [category.id, category.name]));
     const revisionLineSummary = new Map<string, { count: number; amount: number; categories: Set<string> }>();
@@ -1214,19 +1246,36 @@ export async function GET(request?: Request) {
       revisions: {
         orderBy: { revisionNumber: 'desc' },
         take: 1,
-        include: {
-          lines: {
-            where: { isDeleted: false },
-            select: { aiTotalCost: true, quantity: true, aiUnitCost: true },
-          },
-        },
+        select: { id: true },
       },
     },
   });
 
+  const latestRevisionIds = Array.from(new Set(recentBoqsData.flatMap((boq) => {
+    const revisionId = boq.revisions[0]?.id;
+    return revisionId ? [revisionId] : [];
+  })));
+  const recentBoqLineValues = latestRevisionIds.length > 0
+    ? await prisma.$queryRaw<DashboardRecentBoqLineValueAggregate[]>(Prisma.sql`
+      SELECT "boqRevisionId",
+        COALESCE(SUM(CASE
+          WHEN "aiTotalCost" IS NOT NULL AND "aiTotalCost" != 0 THEN "aiTotalCost"
+          WHEN "quantity" IS NOT NULL AND "quantity" != 0
+            AND "aiUnitCost" IS NOT NULL AND "aiUnitCost" != 0 THEN "quantity" * "aiUnitCost"
+          ELSE 0
+        END), 0) AS "estimatedValue"
+      FROM "boq_lines"
+      WHERE "tenantId" = ${tenantId}
+        AND "isDeleted" = 0
+        AND "boqRevisionId" IN (${Prisma.join(latestRevisionIds)})
+      GROUP BY "boqRevisionId"
+    `)
+    : [];
+  const estimatedValueByRevision = new Map(recentBoqLineValues.map((row) => [row.boqRevisionId, Number(row.estimatedValue || 0)]));
+
   const recentBoqs = recentBoqsData.map((b) => {
     const latestRev = b.revisions[0];
-    let estimatedValue = latestRev?.lines?.reduce((sum, l) => sum + (l.aiTotalCost || (l.quantity && l.aiUnitCost ? l.quantity * l.aiUnitCost : 0) || 0), 0) || 0;
+    let estimatedValue = latestRev ? estimatedValueByRevision.get(latestRev.id) || 0 : 0;
     if (estimatedValue === 0 && b.budgetContributions?.[0]) {
       estimatedValue = b.budgetContributions[0].totalEstimatedValue || 0;
     }

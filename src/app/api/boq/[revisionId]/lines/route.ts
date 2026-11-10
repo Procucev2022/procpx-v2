@@ -7,6 +7,8 @@ import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_LINE_DEFAULT_PAGE_SIZE, BOQ_LINE_MAX_PAGE_NUMBER, BOQ_LINE_MAX_PAGE_SIZE } from './route.constants';
+import { BOQ_LINE_MAX_BATCH_EDITS } from '@/lib/boq-line-pagination.constants';
+import { decodeBoqLineCursor, encodeBoqLineCursor } from '@/lib/boq-line-pagination';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
@@ -17,12 +19,11 @@ import {
   BOQ_LINE_ASSERT_UPDATED_SQL,
   BOQ_LINE_EDITABLE_TEXT_FIELDS,
   BOQ_LINE_INSERT_NEXT_NUMBER_SQL,
-  BOQ_LINE_MAX_BATCH_EDITS,
   BOQ_LINE_SOFT_DELETE_IF_CURRENT_SQL,
   BOQ_LINE_UPDATE_EDIT_SQL,
   BOQ_REVISION_RECALCULATE_LINE_COUNTS_AFTER_AUDIT_SQL,
 } from './route.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -56,6 +57,7 @@ async function resolveRevision(idOrBoqId: string, tenantId: string) {
 }
 
 export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteContext) {
+  const startedAt = Date.now();
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
   const { revisionId } = await params;
@@ -69,6 +71,10 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
   const pageSize = Number.isSafeInteger(requestedPageSize) && requestedPageSize > 0
     ? Math.min(requestedPageSize, BOQ_LINE_MAX_PAGE_SIZE)
     : BOQ_LINE_DEFAULT_PAGE_SIZE;
+  const cursorParam = searchParams.get('cursor');
+  const cursor = cursorParam === null ? null : decodeBoqLineCursor(cursorParam);
+  if (cursorParam !== null && !cursor) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  const includeTotal = searchParams.get('includeTotal') !== 'false';
   const validationStatus = searchParams.get('validationStatus') || '';
   const search = (searchParams.get('search') || '').trim().slice(0, 120);
 
@@ -81,18 +87,32 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     where.OR = [
       { originalDescription: { contains: search } },
       { standardDescription: { contains: search } },
+      { specification: { contains: search } },
       { lineNumber: { contains: search } },
       { itemCode: { contains: search } },
     ];
   }
+  const pagedWhere = cursor
+    ? {
+      AND: [
+        where,
+        {
+          OR: [
+            { lineNumber: { gt: cursor.lineNumber } },
+            { lineNumber: cursor.lineNumber, id: { gt: cursor.id } },
+          ],
+        },
+      ],
+    }
+    : where;
 
   const [total, lines] = await Promise.all([
-    prisma.boqLine.count({ where }),
+    includeTotal ? prisma.boqLine.count({ where }) : Promise.resolve(null),
     prisma.boqLine.findMany({
-      where,
+      where: pagedWhere,
       orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      ...(!cursor ? { skip: (page - 1) * pageSize } : {}),
+      take: pageSize + 1,
       include: {
         category: { select: { id: true, name: true } },
         subcategory: { select: { id: true, name: true } },
@@ -101,13 +121,27 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
     }),
   ]);
 
-  const enrichedLines = lines.map(l => {
+  const hasMore = lines.length > pageSize;
+  const pageLines = lines.slice(0, pageSize);
+  const nextCursor = hasMore && pageLines.length > 0
+    ? encodeBoqLineCursor(pageLines[pageLines.length - 1])
+    : null;
+  let malformedCostBreakdownCount = 0;
+  let fallbackAppliedCount = 0;
+  let fallbackUnavailableCount = 0;
+  const malformedCostBreakdownLineIds: string[] = [];
+  const enrichedLines = pageLines.map(l => {
     let costBreakdown = null;
-    if (l.aiReason) {
+    let malformedCostBreakdown = false;
+    if (typeof l.aiReason === 'string' && l.aiReason.trimStart().startsWith('{')) {
       try {
         const parsed = JSON.parse(l.aiReason);
         if (parsed.costBreakdown) costBreakdown = parsed.costBreakdown;
-      } catch {}
+      } catch {
+        malformedCostBreakdown = true;
+        malformedCostBreakdownCount += 1;
+        if (malformedCostBreakdownLineIds.length < 20) malformedCostBreakdownLineIds.push(l.id);
+      }
     }
     if (!costBreakdown && l.aiUnitCost !== null && l.aiUnitCost !== undefined && Number(l.aiUnitCost) > 0) {
       costBreakdown = computeLineCostBreakdown(
@@ -116,19 +150,41 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
         l.category?.name,
         l.standardDescription || l.originalDescription
       );
+      if (malformedCostBreakdown) fallbackAppliedCount += 1;
+    } else if (malformedCostBreakdown) {
+      fallbackUnavailableCount += 1;
     }
     return {
       ...l,
       costBreakdown,
     };
   });
+  if (malformedCostBreakdownCount > 0) {
+    const requestId = (req.headers.get('x-request-id') || req.headers.get('cf-ray') || '').trim().slice(0, 128);
+    logEvent('warn', 'boq.cost_breakdown_parse_failed', {
+      operation: 'parse_saved_cost_breakdown',
+      route: '/api/boq/[revisionId]/lines',
+      ...(requestId ? { requestId } : {}),
+      tenantId: ctx.tenantId,
+      revisionId: revision.id,
+      durationMs: Date.now() - startedAt,
+      status: 'degraded',
+      malformedLineCount: malformedCostBreakdownCount,
+      fallbackAppliedCount,
+      fallbackUnavailableCount,
+      lineIds: malformedCostBreakdownLineIds,
+      omittedLineIdCount: Math.max(0, malformedCostBreakdownCount - malformedCostBreakdownLineIds.length),
+      errorType: 'SyntaxError',
+    });
+  }
 
   return apiSuccess({
     data: enrichedLines,
-    total,
+    ...(total === null ? {} : { total, totalPages: Math.ceil(total / pageSize) }),
     page,
     pageSize,
-    totalPages: Math.ceil(total / pageSize),
+    hasMore,
+    nextCursor,
     revision,
   });
 }

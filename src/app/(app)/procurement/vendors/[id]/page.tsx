@@ -18,7 +18,6 @@ import {
   FileText,
   Star,
   Sparkles,
-  ExternalLink,
   Edit3,
   RefreshCw,
   Phone,

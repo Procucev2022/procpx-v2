@@ -1,16 +1,25 @@
-import type { D1BatchDatabase, D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
+import type {
+  D1BatchDatabase,
+  D1BatchInputStatement,
+  D1BatchResult,
+  RfqVendorInvitationWriteInput,
+} from '@app-types/lib/d1-batch.types';
 import {
   D1_BATCH_STATEMENT_FAILED,
   D1_BATCH_STATEMENT_LIMIT_EXCEEDED,
   D1_BATCH_BINDING_LIMIT_EXCEEDED,
   D1_STATEMENT_BINDING_LIMIT_EXCEEDED,
   D1_BINDING_SIZE_LIMIT_EXCEEDED,
+  D1_BATCH_SLOW_LOG_THRESHOLD_MS,
   MAX_D1_BATCH_BINDINGS,
   MAX_D1_BATCH_STATEMENTS,
   MAX_D1_STATEMENT_BINDINGS,
   MAX_D1_BINDING_BYTES,
-  RFQ_VENDOR_INVITATION_UPSERT_SQL,
+  MAX_RFQ_VENDOR_INVITE_COUNT,
+  RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
+  RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,
   RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
+  RATE_CARD_TRANSITION_ASSERT_SQL,
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
 } from './d1-batch.constants';
 import { UI_STRINGS } from './ui-strings.constants';
@@ -57,6 +66,57 @@ async function logD1BatchLimitViolation(input: D1BatchInputStatement[], violatio
   });
 }
 
+async function logD1BatchFailure(
+  input: D1BatchInputStatement[],
+  startedAt: number,
+  error: unknown,
+  failedStatementIndexes?: number[],
+): Promise<void> {
+  const bindingCount = input.reduce((total, statement) => total + statement.values.length, 0);
+  try {
+    await writeStructuredLog('error', 'database.d1_batch_failed', {
+      operation: 'execute_d1_batch',
+      statementCount: input.length,
+      bindingCount,
+      durationMs: Date.now() - startedAt,
+      ...(failedStatementIndexes ? { failedStatementIndexes } : {}),
+      error: error instanceof Error
+        ? { name: error.name, message: error.message.slice(0, 500) }
+        : { type: typeof error },
+    });
+  } catch {
+    // Preserve the database failure when optional log storage is unavailable.
+  }
+}
+
+function getBatchMetricTotal(results: D1BatchResult[], metric: 'duration' | 'rows_read' | 'rows_written'): number | undefined {
+  const values = results.map((result) => result.meta?.[metric])
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return values.length > 0 ? values.reduce((total, value) => total + value, 0) : undefined;
+}
+
+async function logSlowD1Batch(
+  input: D1BatchInputStatement[],
+  durationMs: number,
+  results: D1BatchResult[],
+): Promise<void> {
+  const bindingCount = input.reduce((total, statement) => total + statement.values.length, 0);
+  try {
+    await writeStructuredLog('warn', 'database.d1_batch_slow', {
+      operation: 'execute_d1_batch',
+      statementCount: input.length,
+      bindingCount,
+      durationMs,
+      d1DurationMs: getBatchMetricTotal(results, 'duration'),
+      rowsRead: getBatchMetricTotal(results, 'rows_read'),
+      rowsWritten: getBatchMetricTotal(results, 'rows_written'),
+      slowThresholdMs: D1_BATCH_SLOW_LOG_THRESHOLD_MS,
+    });
+  } catch {
+    // Preserve the successful database write when optional log storage is unavailable.
+  }
+}
+
 export function getD1BatchDatabase(): D1BatchDatabase {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { getCloudflareContext } = require('@opennextjs/cloudflare') as typeof import('@opennextjs/cloudflare');
@@ -85,11 +145,26 @@ export async function runD1BatchAtomically(
     if (violation === 'binding_size') throw new Error(D1_BINDING_SIZE_LIMIT_EXCEEDED);
     throw new Error(D1_BATCH_BINDING_LIMIT_EXCEEDED);
   }
-  const results = await database.batch(input.map(({ sql, values }) => database.prepare(sql).bind(
-    ...values.map((value) => value instanceof Date ? value.toISOString() : value),
-  )));
-  if (results.some((result) => result.success === false)) {
-    throw new Error(D1_BATCH_STATEMENT_FAILED);
+  const startedAt = Date.now();
+  let results: D1BatchResult[];
+  try {
+    results = await database.batch(input.map(({ sql, values }) => database.prepare(sql).bind(
+      ...values.map((value) => value instanceof Date ? value.toISOString() : value),
+    )));
+  } catch (error) {
+    await logD1BatchFailure(input, startedAt, error);
+    throw error;
+  }
+  const failedStatementIndexes = results.flatMap((result, index) => result.success === false ? [index] : []);
+  if (failedStatementIndexes.length > 0) {
+    const error = new Error(D1_BATCH_STATEMENT_FAILED);
+    await logD1BatchFailure(input, startedAt, error, failedStatementIndexes);
+    throw error;
+  }
+  const durationMs = Date.now() - startedAt;
+  const d1DurationMs = getBatchMetricTotal(results, 'duration');
+  if (durationMs >= D1_BATCH_SLOW_LOG_THRESHOLD_MS || (d1DurationMs ?? 0) >= D1_BATCH_SLOW_LOG_THRESHOLD_MS) {
+    await logSlowD1Batch(input, durationMs, results);
   }
   return results;
 }
@@ -98,34 +173,38 @@ export async function writeD1BatchAtomically(input: D1BatchInputStatement[]): Pr
   return runD1BatchAtomically(getD1BatchDatabase(), input);
 }
 
-export async function upsertRfqVendorInvitations(
-  database: D1BatchDatabase,
-  input: { tenantId: string; rfqId: string; vendorIds: string[]; invitationStatus: string },
-): Promise<number> {
-  if (input.vendorIds.length === 0) return 0;
-  if (input.vendorIds.length > MAX_D1_BATCH_STATEMENTS) {
+export async function writeRfqVendorInvitationsAtomically(input: RfqVendorInvitationWriteInput): Promise<number> {
+  const vendorIds = [...new Set(input.vendorIds)];
+  if (vendorIds.length === 0) return 0;
+  if (vendorIds.length > MAX_RFQ_VENDOR_INVITE_COUNT) {
     throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.maximumVendorInviteBatchLimit);
   }
 
+  const createdAt = input.createdAt || new Date();
+  const invitationRows = vendorIds.map((vendorId) => ({ id: crypto.randomUUID(), vendorId }));
   let results: D1BatchResult[];
   try {
-    results = await runD1BatchAtomically(database, input.vendorIds.map((vendorId) => ({
-      sql: RFQ_VENDOR_INVITATION_UPSERT_SQL,
-      values: [crypto.randomUUID(), input.tenantId, input.rfqId, vendorId, input.invitationStatus],
-    })));
+    results = await runD1BatchAtomically(getD1BatchDatabase(), [
+      {
+        sql: RFQ_VENDOR_INVITATION_BULK_UPSERT_SQL,
+        values: [JSON.stringify(invitationRows), input.tenantId, input.rfqId, input.tenantId],
+      },
+      {
+        sql: RFQ_VENDOR_INVITATION_AUDIT_INSERT_SQL,
+        values: [crypto.randomUUID(), input.tenantId, input.audit.userId || null, input.audit.projectId || null,
+          input.rfqId, input.audit.description, JSON.stringify({ vendorIds }), createdAt],
+      },
+    ]);
   } catch (error) {
     if (error instanceof Error && error.message === D1_BATCH_STATEMENT_FAILED) {
       throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors);
     }
     throw error;
   }
-  return results.reduce((total, result) => total + Number(result.meta?.changes || 0), 0);
-}
-
-export async function writeRfqVendorInvitationsAtomically(
-  input: { tenantId: string; rfqId: string; vendorIds: string[]; invitationStatus: string },
-): Promise<number> {
-  return upsertRfqVendorInvitations(getD1BatchDatabase(), input);
+  if (Number(results[1]?.meta?.changes || 0) !== 1) {
+    throw new Error(UI_STRINGS.appApiProcurementRfqsIdVendorsRoute.failedToInviteVendors);
+  }
+  return Number(results[0]?.meta?.changes || 0);
 }
 
 export async function writeRateCardTransitionAtomically(input: {
@@ -138,6 +217,14 @@ export async function writeRateCardTransitionAtomically(input: {
     { sql: input.updateSql, values: input.updateValues },
     { sql: RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL, values: input.approvalValues },
     { sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: input.auditValues },
+    {
+      sql: RATE_CARD_TRANSITION_ASSERT_SQL,
+      values: [
+        input.approvalValues[0], input.approvalValues[1], input.approvalValues[2],
+        input.auditValues[0], input.auditValues[1], input.auditValues[4], input.auditValues[5],
+      ],
+    },
   ]);
-  return results.every((result) => Number(result.meta?.changes || 0) === 1);
+  return results.slice(0, 3).every((result) => Number(result.meta?.changes || 0) === 1)
+    && results[3]?.results?.[0]?.transition === '{}';
 }

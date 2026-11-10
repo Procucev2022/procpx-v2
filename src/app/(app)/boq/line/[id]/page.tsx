@@ -6,20 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  FileText,
   Copy,
   Check,
-  Building2,
-  Calendar,
-  Layers,
-  MapPin,
-  Tag,
-  Sparkles,
-  ShieldCheck,
   AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Coins,
   ExternalLink,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';

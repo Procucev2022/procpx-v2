@@ -9,7 +9,12 @@ export type D1BatchInputStatement = {
 
 export type D1BatchResult = {
   success?: boolean;
-  meta?: { changes?: number };
+  meta?: {
+    changes?: number;
+    duration?: number;
+    rows_read?: number;
+    rows_written?: number;
+  };
   results?: Array<Record<string, unknown>>;
 };
 
@@ -17,3 +22,17 @@ export type D1BatchDatabase = {
   prepare(sql: string): D1BatchStatement;
   batch(statements: D1BatchStatement[]): Promise<D1BatchResult[]>;
 };
+
+export interface RfqVendorInvitationAuditContext {
+  userId?: string | null;
+  projectId?: string | null;
+  description: string;
+}
+
+export interface RfqVendorInvitationWriteInput {
+  tenantId: string;
+  rfqId: string;
+  vendorIds: string[];
+  audit: RfqVendorInvitationAuditContext;
+  createdAt?: Date;
+}

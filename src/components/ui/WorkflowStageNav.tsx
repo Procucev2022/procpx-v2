@@ -2,7 +2,6 @@
 // src/components/ui/WorkflowStageNav.tsx
 // Standardized Enterprise Reusable Workflow Stage Navigation Bar
 // Prominent 44-48px clickable tabs with clear Procucev blue styling and discrete status indicators
-import React from 'react';
 import { Check } from 'lucide-react';
 import type { WorkflowStageItem, WorkflowStageNavProps } from "@app-types/components/ui/WorkflowStageNav.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";

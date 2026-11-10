@@ -1,9 +1,9 @@
 // src/app/api/boq/template/route.ts - Download proCPX Standard BOQ Template in XLSX format
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAuth, isApiContext } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
 

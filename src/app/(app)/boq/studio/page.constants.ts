@@ -59,3 +59,5 @@ export const ALL_STANDARD_CATEGORIES = [
   'Security',
   'External Development',
 ];
+
+export const BOQ_FINANCIAL_CATEGORY_KEYS = ['Material', 'Electrical', 'Civil', 'Interior', 'Other'] as const;

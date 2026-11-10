@@ -8,6 +8,7 @@ import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, MAX_BOQ_BATCH_LINES } from '@/lib/d1
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 import type { BoqRevisionLinesRouteContext } from '@app-types/app/api/boq/revision-lines.types';
 import type { BoqLineInput } from '@app-types/lib/boq-validate.types';
 import { BOQ_STANDARDISE_LINES_UPDATE_JSON_SQL, BOQ_STANDARDISE_REVISION_UPDATE_SQL } from './route.constants';
@@ -37,17 +38,20 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
     }
     if (revision.lines.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
 
-    const [uoms, categories] = await Promise.all([
-      prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId, isActive: true }, select: { id: true, code: true } }),
-      prisma.category.findMany({
-        where: { tenantId: ctx.tenantId, isActive: true },
-        select: {
-          id: true,
-          name: true,
-          children: { where: { tenantId: ctx.tenantId, isActive: true }, select: { id: true, name: true } },
-        },
-      }),
-    ]);
+    const referenceCatalog = await loadActiveBoqReferenceCatalog({
+      tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/[revisionId]/standardise',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+    });
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const { uoms, categories } = referenceCatalog;
+
+    const categoryChildrenByParentId = new Map<string, Array<{ id: string; name: string }>>();
+    for (const category of categories) {
+      if (!category.parentId) continue;
+      const children = categoryChildrenByParentId.get(category.parentId) || [];
+      children.push({ id: category.id, name: category.name });
+      categoryChildrenByParentId.set(category.parentId, children);
+    }
 
     let standardisedCount = 0;
     let uomNormalisedCount = 0;
@@ -90,7 +94,8 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
           categoryId = matchingCategory.id;
           changed = true;
           if (descriptionResult.subcategory) {
-            const matchingSubcategory = matchingCategory.children.find((child) => child.name.toLowerCase() === descriptionResult.subcategory?.toLowerCase());
+            const matchingSubcategory = (categoryChildrenByParentId.get(matchingCategory.id) || [])
+              .find((child) => child.name.toLowerCase() === descriptionResult.subcategory?.toLowerCase());
             if (matchingSubcategory) subcategoryId = matchingSubcategory.id;
           }
         }

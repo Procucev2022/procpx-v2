@@ -3,7 +3,7 @@
 // Dedicated Vendor Portal Dashboard
 import { useState, useEffect } from 'react';
 import VendorSourcingDashboard from '@/components/VendorSourcingDashboard';
-import { Building2, AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 

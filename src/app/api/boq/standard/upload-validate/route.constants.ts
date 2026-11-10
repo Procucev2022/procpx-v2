@@ -1,0 +1,2 @@
+export const BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_EVENT = 'boq.standard_upload_invalid_uom_aliases';
+export const BOQ_STANDARD_UPLOAD_INVALID_UOM_ALIASES_ID_LIMIT = 10;

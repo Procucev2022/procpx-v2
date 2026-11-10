@@ -4,10 +4,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import {
-  ArrowLeft,
-  FileText,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -16,10 +13,7 @@ import {
   Send,
   RefreshCw,
   Sparkles,
-  Layers,
   History,
-  Building2,
-  Info,
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import { useToast } from '@/components/ui/Toast';
@@ -27,6 +21,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 
 
 export default function VendorRfqWorkspacePage() {
@@ -66,7 +61,15 @@ export default function VendorRfqWorkspacePage() {
     try {
       const res = await fetch(`/api/vendor-portal/rfqs/${rfqId}`);
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.json().catch((error: unknown) => {
+          reportHandledClientFailure(error, {
+            operation: 'parse_vendor_rfq_load_error_response',
+            route: '/api/vendor-portal/rfqs/:id',
+            recordId: rfqId,
+            fallback: 'show_generic_load_error',
+          });
+          return {};
+        });
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadRfqWorkspace }));
       }
       const data = await res.json();
@@ -113,10 +116,21 @@ export default function VendorRfqWorkspacePage() {
             if (parsed.savedAt) setDraftSavedAt(parsed.savedAt);
           }
         }
-      } catch {
-        // ignore storage error
+      } catch (error: unknown) {
+        reportHandledClientFailure(error, {
+          operation: 'restore_vendor_quote_draft',
+          route: '/vendor-portal/rfqs/:id',
+          recordId: rfqId,
+          fallback: 'use_quote_values_from_rfq',
+        });
       }
     } catch (e: any) {
+      reportHandledClientFailure(e, {
+        operation: 'load_vendor_rfq_detail',
+        route: '/api/vendor-portal/rfqs/:id',
+        recordId: rfqId,
+        fallback: 'show_load_error',
+      });
       setError(e.message);
     } finally {
       setLoading(false);
@@ -179,7 +193,13 @@ export default function VendorRfqWorkspacePage() {
       setDraftSavedAt(now);
       setSuccessMessage(interpolateUiString(UI_STRINGS.appAppVendorPortalRfqsIdPage.draftSavedLocallyAtNowYouCanSafelyRefreshOrReturnAnytime, { "now": now }));
       setTimeout(() => setSuccessMessage(null), 4000);
-    } catch {
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'persist_vendor_quote_draft',
+        route: '/vendor-portal/rfqs/:id',
+        recordId: rfqId,
+        fallback: 'show_draft_save_error',
+      });
       setError(UI_STRINGS.common.failedToSaveDraftLocallyInBrowserStorage);
     }
   };
@@ -215,19 +235,39 @@ export default function VendorRfqWorkspacePage() {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.json().catch((error: unknown) => {
+          reportHandledClientFailure(error, {
+            operation: 'parse_vendor_quote_submit_error_response',
+            route: '/api/vendor-portal/rfqs/:id',
+            recordId: rfqId,
+            fallback: 'show_generic_submission_error',
+          });
+          return {};
+        });
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSubmitQuotation }));
       }
 
-      const resData = await res.json();
       try {
         localStorage.removeItem(draftStorageKey);
         setDraftSavedAt(null);
-      } catch {}
+      } catch (error: unknown) {
+        reportHandledClientFailure(error, {
+          operation: 'clear_submitted_quote_draft',
+          route: '/api/vendor-portal/rfqs/:id/quotes',
+          recordId: rfqId,
+          fallback: 'quotation_succeeded_but_local_draft_remains',
+        });
+      }
       toast.success(UI_STRINGS.appAppVendorPortalRfqsIdPage.quoteSubmittedSuccessfully, rfq?.rfqNumber, UI_STRINGS.common.userMessages.awaitingBuyerEvaluation);
       setSuccessMessage(UI_STRINGS.appAppVendorPortalRfqsIdPage.quoteSubmittedSuccessfully);
       loadRfqDetail();
     } catch (e: any) {
+      reportHandledClientFailure(e, {
+        operation: 'submit_vendor_quote',
+        route: '/api/vendor-portal/rfqs/:id',
+        recordId: rfqId,
+        fallback: 'show_submission_error',
+      });
       setError(e.message);
     } finally {
       setSubmitting(false);
@@ -286,7 +326,16 @@ export default function VendorRfqWorkspacePage() {
           }
         });
       }
-    } catch {}
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'parse_vendor_buyer_counter_offer_lines',
+        route: '/api/vendor-portal/rfqs/:id',
+        recordId: rfqId,
+        roundId: latestRound.id,
+        field: 'lineItemsJson',
+        fallback: 'omit_counter_offer_line_rates',
+      });
+    }
   }
 
   if (loading) {

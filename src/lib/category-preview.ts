@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { CATEGORY_PREVIEW_LIMIT, CATEGORY_PREVIEW_SOURCES } from './category-preview.constants';
 import type { CategoryPreview, CategoryPreviewQuery, CategoryPreviewRow } from '@app-types/lib/category-preview.types';
+import { readByD1FilterChunks } from './d1-query';
 
 function mapCategoryPreviewRows(rows: CategoryPreviewRow[]) {
   const previews = new Map<string, CategoryPreview>();
@@ -19,12 +20,12 @@ export async function getCategoryPreviews(input: CategoryPreviewQuery) {
   const source = CATEGORY_PREVIEW_SOURCES[input.source];
   const tableName = Prisma.raw(`"${source.table}"`);
   const entityColumn = Prisma.raw(`"${source.entityColumn}"`);
-  const rows = await prisma.$queryRaw<CategoryPreviewRow[]>(Prisma.sql`
+  const rows = await readByD1FilterChunks(input.entityIds, (entityIds) => prisma.$queryRaw<CategoryPreviewRow[]>(Prisma.sql`
     WITH distinct_categories AS (
       SELECT DISTINCT ${entityColumn} AS "entityId", "category"
       FROM ${tableName}
       WHERE "tenantId" = ${input.tenantId}
-        AND ${entityColumn} IN (${Prisma.join(input.entityIds)})
+        AND ${entityColumn} IN (${Prisma.join(entityIds)})
         AND "category" IS NOT NULL AND TRIM("category") <> ''
     ), ranked_categories AS (
       SELECT "entityId", "category",
@@ -36,6 +37,6 @@ export async function getCategoryPreviews(input: CategoryPreviewQuery) {
     FROM ranked_categories
     WHERE "categoryRank" <= ${CATEGORY_PREVIEW_LIMIT}
     ORDER BY "entityId" ASC, "categoryRank" ASC
-  `);
+  `));
   return mapCategoryPreviewRows(rows);
 }

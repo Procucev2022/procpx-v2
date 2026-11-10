@@ -3,23 +3,19 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   Landmark,
   Scale,
   History,
-  Building2,
   Layers,
   CheckCircle2,
   Clock,
   AlertCircle,
   FileSpreadsheet,
-  ArrowRight,
   TrendingDown,
-  TrendingUp,
   RefreshCw,
   Sparkles,
-  ShieldCheck,
   Check,
   X,
 } from 'lucide-react';
@@ -27,7 +23,6 @@ import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import EmptyState from '@/components/ui/EmptyState';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { BudgetCategoriesResponse, BudgetCategory, BudgetCategoryWorkspaceState } from '@app-types/app/api/budgets/categories.types';
@@ -35,7 +30,6 @@ import type { BudgetCategoriesResponse, BudgetCategory, BudgetCategoryWorkspaceS
 
 function ProjectBudgetContent() {
   const toast = useToast();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [projects, setProjects] = useState<any[]>([]);
@@ -266,7 +260,6 @@ function ProjectBudgetContent() {
 
   const budgetPerSqFt = ccArea > 0 ? Math.round(((ccApprovedBudget > 0 ? ccApprovedBudget : ccTotalBudget) / ccArea) * 100) / 100 : null;
   const actualPerSqFt = ccArea > 0 ? Math.round((ccActual / ccArea) * 100) / 100 : null;
-  const balancePerSqFt = ccArea > 0 ? Math.round((ccBalance / ccArea) * 100) / 100 : null;
 
   // Approval Actions
   const handleApproveContribution = async (contribId: string) => {

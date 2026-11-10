@@ -30,3 +30,25 @@ export type BudgetVsActualSummaryGroup = {
   committedAmount: number | bigint | null;
   actualAmount: number | bigint | null;
 };
+
+export type BudgetVsActualCostCentreSummary = {
+  id: string;
+  code: string;
+  name: string;
+  areaSqFt: number;
+  budgetAmount: number;
+  committedAmount: number;
+  actualAmount: number;
+  budgetVariance: number;
+  costPerSqFtBudget: number;
+  costPerSqFtActual: number;
+};
+
+export type BudgetVsActualCategorySummary = {
+  category: string;
+  budgetAmount: number;
+  committedAmount: number;
+  actualAmount: number;
+  budgetVariance: number;
+  variancePercent: number;
+};

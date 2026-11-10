@@ -14,7 +14,7 @@ import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent } from '@/lib/observability/server-logger';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import {
   DIRECT_RATE_CARD_PPO_CODE_RETRIES,
@@ -365,7 +365,7 @@ export async function POST(req: NextRequest) {
             { ppoNumber: duplicate.ppoNumber },
           ), 409);
         }
-        void writeStructuredLog('warn', 'ppo.direct_rate_card_persistence_guard_rejected', {
+        logEvent('warn', 'ppo.direct_rate_card_persistence_guard_rejected', {
           operation: 'create', route: '/api/procurement/rate-cards/direct-ppo', requestId: requestId(req),
           tenantId: ctx.tenantId, projectId, recordId: ppoId, ppoNumber, headerInserted, linesInserted, auditInserted,
         }, 'next');
@@ -421,7 +421,7 @@ export async function POST(req: NextRequest) {
 
     return apiError(UI_STRINGS.appApiProcurementRateCardsDirectPpoRoute.ppoNumberConflictRetryTheRequest, 409);
   } catch (error) {
-    void writeStructuredLog('error', 'ppo.direct_rate_card_create_failed', {
+    logEvent('error', 'ppo.direct_rate_card_create_failed', {
       operation: 'create', route: '/api/procurement/rate-cards/direct-ppo', requestId: requestId(req),
       tenantId: ctx.tenantId, projectId, recordId, durationMs: Date.now() - startedAt, error,
     }, 'next');

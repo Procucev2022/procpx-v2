@@ -12,6 +12,7 @@ import { VENDOR_DIRECTORY_MAX_SEARCH_LENGTH } from './route.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL, VENDOR_INSERT_NEXT_CODE_SQL } from '@/lib/d1-batch.constants';
 import type { Prisma } from '@prisma/client';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function GET(req: NextRequest) {
@@ -138,16 +139,16 @@ export async function GET(req: NextRequest) {
     const vendors = hasMore ? vendorRows.slice(0, pageSize) : vendorRows;
     const pageVendorIds = vendors.map((vendor) => vendor.id);
     const approvedRatingAggregates = pageVendorIds.length > 0
-      ? await prisma.ppoVendorRating.groupBy({
+      ? await readByD1FilterChunks(pageVendorIds, (chunk) => prisma.ppoVendorRating.groupBy({
           by: ['vendorId'],
           where: {
             tenantId: ctx.tenantId,
             status: 'APPROVED',
-            vendorId: { in: pageVendorIds },
+            vendorId: { in: chunk },
           },
           _count: { _all: true },
           _avg: { overallScore: true },
-        })
+        }))
       : [];
     const ratingSummaryByVendor = new Map(approvedRatingAggregates.map((rating) => [
       rating.vendorId,

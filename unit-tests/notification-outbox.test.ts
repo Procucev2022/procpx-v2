@@ -15,6 +15,7 @@ import {
   NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL,
   NOTIFICATION_OUTBOX_INSERT_AFTER_RFQ_AUDIT_SQL,
   NOTIFICATION_OUTBOX_INSERT_AFTER_RATE_CARD_AUDIT_SQL,
+  NOTIFICATION_OUTBOX_INSPECT_STATE_SQL,
   NOTIFICATION_OUTBOX_MARK_DELIVERED_SQL,
   NOTIFICATION_OUTBOX_RESCHEDULE_SQL,
 } from '../src/lib/notification-outbox.constants';
@@ -243,6 +244,15 @@ describe('notification outbox dispatch', () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain('user@example.com');
   });
 
+  it('returns cleanly when the log sink also fails during a claim failure', async () => {
+    runBatch.mockRejectedValueOnce(new Error('database unavailable'));
+    log.mockRejectedValueOnce(new Error('log storage unavailable'));
+
+    await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
+      claimed: 0, delivered: 0, retried: 0, dead: 0,
+    });
+  });
+
   it('marks malformed or cross-tenant payloads dead after the maximum attempts', async () => {
     const malformed = { ...outboxRow(), payload: '{not-json' };
     runBatch
@@ -286,15 +296,37 @@ describe('notification outbox dispatch', () => {
     runBatch
       .mockResolvedValueOnce([{ results: [outboxRow()] }])
       .mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }])
-      .mockResolvedValueOnce([{ results: [] }]);
+      .mockResolvedValueOnce([{ results: [] }])
+      .mockResolvedValueOnce([{ results: [{ status: 'PROCESSING', lockToken: 'another-worker-token' }] }]);
 
     await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
       claimed: 1, delivered: 0, retried: 0, dead: 0,
     });
     expect(runBatch.mock.calls[1][1][0].sql).toContain('"lockToken" = ?');
-    expect(log).toHaveBeenCalledWith('error', 'notification.outbox_retry_state_failed', expect.objectContaining({
+    expect(runBatch.mock.calls[3][1][0]).toEqual({
+      sql: NOTIFICATION_OUTBOX_INSPECT_STATE_SQL,
+      values: ['outbox-1', 'tenant-1'],
+    });
+    expect(log).toHaveBeenCalledWith('warn', 'notification.outbox_retry_ownership_lost', expect.objectContaining({
       outboxId: 'outbox-1', error: 'Error',
     }), 'application', undefined);
+  });
+
+  it('counts a delivery as complete when D1 committed but the worker lost its acknowledgement', async () => {
+    runBatch
+      .mockResolvedValueOnce([{ results: [outboxRow()] }])
+      .mockRejectedValueOnce(new Error('database acknowledgement lost'))
+      .mockResolvedValueOnce([{ results: [] }])
+      .mockResolvedValueOnce([{ results: [{ status: 'DELIVERED', lockToken: null }] }]);
+
+    await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
+      claimed: 1, delivered: 1, retried: 0, dead: 0,
+    });
+    expect(log).toHaveBeenCalledWith('warn', 'notification.outbox_delivery_acknowledgement_lost', expect.objectContaining({
+      operation: 'reconcile_notification_outbox_delivery', outboxId: 'outbox-1', tenantId: 'tenant-1',
+      attemptCount: 1, error: 'Error',
+    }), 'application', undefined);
+    expect(log).not.toHaveBeenCalledWith('error', 'notification.outbox_dispatch_failed', expect.any(Object), 'application', undefined);
   });
 
   it('contains a row when retry-state persistence itself fails', async () => {
@@ -309,11 +341,28 @@ describe('notification outbox dispatch', () => {
     expect(log).toHaveBeenCalledWith('error', 'notification.outbox_dispatch_failed', expect.any(Object), 'application', undefined);
   });
 
+  it('continues processing sibling rows when optional failure logging rejects', async () => {
+    runBatch
+      .mockResolvedValueOnce([{ results: [outboxRow(), { ...outboxRow(), id: 'outbox-2' }] }])
+      .mockRejectedValueOnce(new Error('delivery failed'))
+      .mockResolvedValueOnce([{ results: [{ status: 'PENDING' }] }])
+      .mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    log.mockRejectedValueOnce(new Error('log storage unavailable'));
+
+    await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
+      claimed: 2, delivered: 1, retried: 1, dead: 0,
+    });
+    expect(runBatch).toHaveBeenCalledTimes(4);
+  });
+
   it('sanitizes unknown errors and rejects unrecognized retry states', async () => {
     runBatch
       .mockResolvedValueOnce([{ results: [outboxRow()] }])
       .mockRejectedValueOnce({ detail: 'private-value' })
-      .mockResolvedValueOnce([{ results: [{ status: 'UNEXPECTED' }] }]);
+      .mockResolvedValueOnce([{ results: [{ status: 'UNEXPECTED' }] }])
+      .mockImplementationOnce(async () => [{
+        results: [{ status: 'PROCESSING', lockToken: runBatch.mock.calls[2][1][0].values[5] }],
+      }]);
     await expect(dispatchNotificationOutbox(database, { now })).resolves.toEqual({
       claimed: 1, delivered: 0, retried: 0, dead: 0,
     });

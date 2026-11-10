@@ -7,6 +7,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { createRfq } from './post';
 import { RFQ_REGISTER_VENDOR_PREVIEW_LIMIT } from './route.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function GET(req: NextRequest) {
@@ -162,12 +163,14 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const quoteGroups = rfqs.length > 0 ? await prisma.quote.groupBy({
-      by: ['rfqId'],
-      where: { tenantId: ctx.tenantId, rfqId: { in: rfqs.map(({ id }) => id) } },
-      _count: { _all: true },
-      _min: { totalQuoteAmount: true },
-    }) : [];
+    const quoteGroups = rfqs.length > 0
+      ? await readByD1FilterChunks(rfqs.map(({ id }) => id), (chunk) => prisma.quote.groupBy({
+        by: ['rfqId'],
+        where: { tenantId: ctx.tenantId, rfqId: { in: chunk } },
+        _count: { _all: true },
+        _min: { totalQuoteAmount: true },
+      }))
+      : [];
     const quotesByRfqId = new Map(quoteGroups.map((group) => [group.rfqId, group]));
 
     const relationshipIssues = rfqs.flatMap((rfq: any) => {

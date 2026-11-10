@@ -12,7 +12,7 @@ import {
   PPO_LINE_COMPLETION_UPDATE_SQL,
   PPO_STATUS_UPDATE_AFTER_COMPLETION_SQL,
 } from '@/lib/d1-batch.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import type { PreparedPpoLineCompletion } from '@app-types/app/api/procurement/ppos/complete.types';
 
 function canonicalize(value: unknown): unknown {
@@ -39,7 +39,7 @@ async function getReplayResponse(tenantId: string, ppoId: string, requestId: str
     take: MAX_PPO_COMPLETION_LINES + 1,
   });
   if (actualTransactions.length > MAX_PPO_COMPLETION_LINES) {
-    void writeStructuredLog('error', 'procurement.ppo_completion_replay_limit_exceeded', {
+    logEvent('error', 'procurement.ppo_completion_replay_limit_exceeded', {
       operation: 'replay_completion',
       route: '/api/procurement/ppos/[id]/complete',
       tenantId,
@@ -58,11 +58,19 @@ async function getReplayResponse(tenantId: string, ppoId: string, requestId: str
     include: {
       lines: {
         orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-        take: MAX_PPO_CREATE_LINES,
+        take: MAX_PPO_CREATE_LINES + 1,
       },
     },
   });
   if (!ppo) return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
+  if ((ppo.lines?.length ?? 0) > MAX_PPO_CREATE_LINES) {
+    await writeStructuredLog('error', 'procurement.ppo_line_limit_exceeded', {
+      operation: 'replay_completion', route: '/api/procurement/ppos/[id]/complete',
+      tenantId, ppoId, observedLineCountAtLeast: ppo.lines.length,
+      maximumLines: MAX_PPO_CREATE_LINES,
+    }, 'application');
+    return apiError(UI_STRINGS.common.userMessages.failedToCompletePpo, 500);
+  }
   return apiSuccess({
     message: interpolateUiString(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOCompletionRecordedSuccessfullyGeneratedLengthActualCostTransactionS, { length: actualTransactions.length }),
     ppo,
@@ -98,12 +106,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const ppo = await prisma.ppo.findFirst({
       where: { id: ppoId, tenantId: ctx.tenantId },
       include: {
-        lines: true,
+        lines: {
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: MAX_PPO_CREATE_LINES + 1,
+        },
         project: true,
         rfq: { include: { pr: true, boqRevision: true } },
       },
     });
     if (!ppo) return apiError(UI_STRINGS.appApiProcurementPposIdCompleteRoute.pPOPONotFound, 404);
+    if ((ppo.lines?.length ?? 0) > MAX_PPO_CREATE_LINES) {
+      await writeStructuredLog('error', 'procurement.ppo_line_limit_exceeded', {
+        operation: 'complete_ppo', route: '/api/procurement/ppos/[id]/complete',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        tenantId: ctx.tenantId, userId: ctx.userId, ppoId,
+        observedLineCountAtLeast: ppo.lines.length, maximumLines: MAX_PPO_CREATE_LINES,
+        durationMs: Date.now() - startedAt,
+      }, 'application');
+      return apiError(UI_STRINGS.common.userMessages.failedToCompletePpo, 500);
+    }
 
     const replay = await getReplayResponse(ctx.tenantId, ppoId, idempotencyKey, fingerprint);
     if (replay) return replay;

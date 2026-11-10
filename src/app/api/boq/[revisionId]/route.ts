@@ -6,9 +6,14 @@ import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_DETAIL_LATEST_REVISION_LIMIT } from './route.constants';
+import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
+import { encodeBoqLineCursor } from '@/lib/boq-line-pagination';
+import { getBoqLineSummary } from '@/lib/boq-line-summary';
+import { logEvent } from '@/lib/observability/server-logger';
 
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ revisionId: string }> }) {
+  const startedAt = Date.now();
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
   const { revisionId } = await params;
@@ -41,15 +46,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
               areaSqFt: true,
             },
           },
-        },
-      },
-      lines: {
-        where: { isDeleted: false },
-        orderBy: [{ lineNumber: 'asc' }],
-        include: {
-          category: { select: { id: true, name: true } },
-          subcategory: { select: { id: true, name: true } },
-          uom: { select: { id: true, code: true, name: true } },
         },
       },
     },
@@ -88,17 +84,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
         revisions: {
           orderBy: { revisionNumber: 'desc' },
           take: BOQ_DETAIL_LATEST_REVISION_LIMIT,
-          include: {
-            lines: {
-              where: { isDeleted: false },
-              orderBy: [{ lineNumber: 'asc' }],
-              include: {
-                category: { select: { id: true, name: true } },
-                subcategory: { select: { id: true, name: true } },
-                uom: { select: { id: true, code: true, name: true } },
-              },
-            },
-          },
         },
       },
     });
@@ -112,14 +97,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     return apiError(UI_STRINGS.appApiBoqRevisionIdRoute.bOQOrRevisionNotFound, 404, { route: '/api/boq/[revisionId]', method: 'GET' });
   }
 
-  const rawLines = revision?.lines || [];
+  const lineWhere = revision
+    ? { boqRevisionId: revision.id, tenantId: ctx.tenantId, isDeleted: false }
+    : null;
+  const [lineSummary, rawLines] = lineWhere
+    ? await Promise.all([
+      getBoqLineSummary((query) => prisma.$queryRaw(query), revision.id, ctx.tenantId),
+      prisma.boqLine.findMany({
+        where: lineWhere,
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        take: BOQ_LINE_DETAIL_PAGE_SIZE,
+        include: {
+          category: { select: { id: true, name: true } },
+          subcategory: { select: { id: true, name: true } },
+          uom: { select: { id: true, code: true, name: true } },
+        },
+      }),
+    ])
+    : [null, []];
+  let malformedCostBreakdownCount = 0;
+  let fallbackAppliedCount = 0;
+  let fallbackUnavailableCount = 0;
+  const malformedCostBreakdownLineIds: string[] = [];
   const lines = rawLines.map((l: any) => {
     let costBreakdown = null;
-    if (l.aiReason) {
+    let malformedCostBreakdown = false;
+    if (typeof l.aiReason === 'string' && l.aiReason.trimStart().startsWith('{')) {
       try {
         const parsed = JSON.parse(l.aiReason);
         if (parsed.costBreakdown) costBreakdown = parsed.costBreakdown;
-      } catch {}
+      } catch {
+        malformedCostBreakdown = true;
+        malformedCostBreakdownCount += 1;
+        if (malformedCostBreakdownLineIds.length < 20) malformedCostBreakdownLineIds.push(l.id);
+      }
     }
     if (!costBreakdown && l.aiUnitCost !== null && l.aiUnitCost !== undefined && Number(l.aiUnitCost) > 0) {
       costBreakdown = computeLineCostBreakdown(
@@ -128,13 +139,38 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
         l.category?.name,
         l.standardDescription || l.originalDescription
       );
+      if (malformedCostBreakdown) fallbackAppliedCount += 1;
+    } else if (malformedCostBreakdown) {
+      fallbackUnavailableCount += 1;
     }
     return {
       ...l,
       costBreakdown,
     };
   });
-  const totalValue = lines.reduce((sum: number, l: any) => sum + (l.aiTotalCost || 0), 0);
+  if (malformedCostBreakdownCount > 0) {
+    const requestId = (req.headers.get('x-request-id') || req.headers.get('cf-ray') || '').trim().slice(0, 128);
+    logEvent('warn', 'boq.cost_breakdown_parse_failed', {
+      operation: 'parse_saved_cost_breakdown',
+      route: '/api/boq/[revisionId]',
+      ...(requestId ? { requestId } : {}),
+      tenantId: ctx.tenantId,
+      revisionId: revision?.id || revisionId,
+      durationMs: Date.now() - startedAt,
+      status: 'degraded',
+      malformedLineCount: malformedCostBreakdownCount,
+      fallbackAppliedCount,
+      fallbackUnavailableCount,
+      lineIds: malformedCostBreakdownLineIds,
+      omittedLineIdCount: Math.max(0, malformedCostBreakdownCount - malformedCostBreakdownLineIds.length),
+      errorType: 'SyntaxError',
+    });
+  }
+  const totalLines = lineSummary?.totalLines ?? 0;
+  const totalValue = lineSummary?.totalAiEstimate ?? 0;
+  const nextCursor = totalLines > lines.length && lines.length > 0
+    ? encodeBoqLineCursor(lines[lines.length - 1])
+    : null;
 
   return apiSuccess({
     boq: {
@@ -143,7 +179,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
     },
     revision,
     lines,
-    totalLines: lines.length,
+    summary: lineSummary,
+    totalLines,
+    linesTruncated: totalLines > lines.length,
+    nextCursor,
     qualityScore: revision?.qualityScore ?? 100,
   });
 }

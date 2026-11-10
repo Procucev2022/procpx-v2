@@ -3,8 +3,10 @@
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 
 import { uiStringPattern, interpolateUiString } from '@/lib/i18n';
+import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
+import { BOQ_LINE_MAX_BATCH_EDITS } from '../src/lib/boq-line-pagination.constants';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import BoqStudioPage from '../src/app/(app)/boq/studio/page';
 
 const mockToast = { success: jest.fn(), error: jest.fn(), warning: jest.fn(), info: jest.fn() };
@@ -55,6 +57,13 @@ function setupFetch() {
     if (url === '/api/boq/drawing-extract' && init?.body instanceof FormData) return response({ drawingNumber: 'DWG-1', fileName: 'plan.pdf', items: [{ description: 'Floor tiles', specification: 'Ceramic', quantity: 3, quantityType: 'EXPLICIT' }], totalDetected: 1 });
     if (url === '/api/boq/drawing-extract') return response({ boqId: 'boq-1', boqCode: 'BOQ-1', revisionCode: 'R2', totalLines: 2 });
     if (url === '/api/boq/revision-1/lines') return response({ lines });
+    if (url.startsWith('/api/boq/revision-1/lines?')) {
+      const search = new URL(url, 'http://localhost').searchParams.get('search')?.toLowerCase() || '';
+      const matchingLines = search
+        ? lines.filter((line) => `${line.lineNumber} ${line.originalDescription} ${line.standardDescription} ${line.specification}`.toLowerCase().includes(search))
+        : lines;
+      return response({ data: matchingLines, total: matchingLines.length, nextCursor: null });
+    }
     if (url === '/api/boq/revision-1/lines?lineId=line-1') return response({});
     throw new Error(`Unexpected fetch: ${url}`);
   });
@@ -93,7 +102,10 @@ describe('BOQ studio page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cREATEMANUALBOQ) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/manual', expect.objectContaining({ method: 'POST' })));
-    expect(await screen.findByText(/Manual BOQ BOQ-1 updated with 2 lines/)).toBeInTheDocument();
+    const manualRequest = mockFetch.mock.calls.find(([url]) => url === '/api/boq/manual');
+    // Creating a manual BOQ must never write placeholder lines or replace existing ones.
+    expect(JSON.parse(String((manualRequest?.[1] as RequestInit).body))).toMatchObject({ lines: [], action: 'APPEND' });
+    expect(await screen.findByText(/Manual BOQ BOQ-1 updated with 0 lines/)).toBeInTheDocument();
     expect((await screen.findAllByText('North Store BOQ')).length).toBeGreaterThan(0);
     expect(screen.getByText('Vitrified tiles')).toBeInTheDocument();
 
@@ -101,6 +113,287 @@ describe('BOQ studio page', () => {
     expect(screen.getAllByText('Fitout scope').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges, "", false) })).toBeInTheDocument();
+  });
+
+  it('loads bounded BOQ pages on demand and supports cursor-based previous navigation', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const previewLines = Array.from({ length: 90 }, (_, index) => ({
+      ...lines[0],
+      id: `line-${index + 1}`,
+      lineNumber: String(index + 1),
+      originalDescription: `Tile works ${index + 1}`,
+    }));
+    const previewCursor = encodeBoqLineCursor({ id: 'line-90', lineNumber: '90' });
+    const continuationUrl = `/api/boq/revision-1/lines?${new URLSearchParams({ pageSize: '90', cursor: previewCursor, includeTotal: 'false' })}`;
+    const firstPageUrl = '/api/boq/revision-1/lines?pageSize=90';
+    const previousPageUrl = '/api/boq/revision-1/lines?pageSize=90&includeTotal=false';
+    const summary = {
+      totalLines: 91,
+      validQuantityLines: 80,
+      missingQuantityLines: 11,
+      missingRateLines: 30,
+      validationErrorLines: 2,
+      estimatedLineCount: 61,
+      totalAiEstimate: 42,
+      categoryTotals: { Material: 3, Electrical: 7, Civil: 11, Interior: 13, Other: 8 },
+    };
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq/boq-1' && init?.method !== 'PATCH') return response({ boq, revision, lines: previewLines, summary, totalLines: 91, linesTruncated: true, nextCursor: previewCursor });
+      if (url === continuationUrl) return response({ data: [{ ...lines[1], id: 'line-91', lineNumber: '91', standardDescription: 'Cable works page 2' }], nextCursor: null, total: 91 });
+      if (url === firstPageUrl) return response({ data: previewLines, nextCursor: previewCursor, total: 91 });
+      if (url === previousPageUrl) return response({ data: previewLines, nextCursor: previewCursor });
+      if (url === '/api/masters/categories') return response({ data: [] });
+      if (url === '/api/projects') return response({ data: [project] });
+      if (url === '/api/boq') return response({ data: [boq] });
+      if (url.startsWith('/api/cost-centres?')) return response([costCentre]);
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(<BoqStudioPage />);
+
+    expect(await screen.findByText('Tile works 1')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: 1, value2: 2 })))).toBeInTheDocument();
+    expect(screen.getByText(UI_STRINGS.appAppBoqStudioPage.aIEstimatedValue).parentElement?.parentElement).toHaveTextContent('42');
+    expect(screen.getByText(UI_STRINGS.appAppBoqStudioPage.bOQLineItems).parentElement).toHaveTextContent('91');
+    expect(mockFetch).not.toHaveBeenCalledWith(continuationUrl);
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.nextPage) }));
+    expect(await screen.findByText('Cable works page 2')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(continuationUrl);
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.previousPage) }));
+    expect(await screen.findByText('Tile works 1')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(previousPageUrl);
+  });
+
+  it('retains search totals while navigating several cursor pages in both directions', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const pageLine = (page: number) => ({
+      ...lines[0],
+      id: `search-page-${page}-line-${page === 1 ? 90 : page === 2 ? 180 : 181}`,
+      lineNumber: String(page === 1 ? 90 : page === 2 ? 180 : 181),
+      originalDescription: `Search page ${page} line 1`,
+    });
+    const pageLines = (page: number) => [pageLine(page)];
+    const firstCursor = encodeBoqLineCursor(pageLine(1));
+    const secondCursor = encodeBoqLineCursor(pageLine(2));
+    const searchQuery = new URLSearchParams({ pageSize: '90', search: 'wire' });
+    const pageTwoQuery = new URLSearchParams({ pageSize: '90', cursor: firstCursor, search: 'wire', includeTotal: 'false' });
+    const pageThreeQuery = new URLSearchParams({ pageSize: '90', cursor: secondCursor, search: 'wire', includeTotal: 'false' });
+    const previousPageQuery = new URLSearchParams({ pageSize: '90', cursor: firstCursor, search: 'wire', includeTotal: 'false' });
+    const firstPageAgainQuery = new URLSearchParams({ pageSize: '90', search: 'wire', includeTotal: 'false' });
+    const searchPageOneUrl = `/api/boq/revision-1/lines?${searchQuery}`;
+    const searchPageTwoUrl = `/api/boq/revision-1/lines?${pageTwoQuery}`;
+    const searchPageThreeUrl = `/api/boq/revision-1/lines?${pageThreeQuery}`;
+    const previousPageUrl = `/api/boq/revision-1/lines?${previousPageQuery}`;
+    const firstPageAgainUrl = `/api/boq/revision-1/lines?${firstPageAgainQuery}`;
+    const summary = {
+      totalLines: 181,
+      validQuantityLines: 181,
+      missingQuantityLines: 0,
+      missingRateLines: 0,
+      validationErrorLines: 0,
+      estimatedLineCount: 181,
+      totalAiEstimate: 181,
+      categoryTotals: { Material: 181, Electrical: 0, Civil: 0, Interior: 0, Other: 0 },
+    };
+    const mockPage = (page: number) => ({
+      data: pageLines(page),
+      ...(page === 1 ? { total: 181 } : {}),
+      nextCursor: page === 1 ? firstCursor : page === 2 ? secondCursor : null,
+    });
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq/boq-1' && init?.method !== 'PATCH') {
+        return response({ boq, revision, lines, summary, totalLines: 181, nextCursor: firstCursor });
+      }
+      if (url === searchPageOneUrl || url === firstPageAgainUrl) return response(mockPage(1));
+      if (url === searchPageTwoUrl || url === previousPageUrl) return response(mockPage(2));
+      if (url === searchPageThreeUrl) return response(mockPage(3));
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    expect(await screen.findByText('Vitrified tiles')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.searchLineItems)), { target: { value: 'wire' } });
+    expect(await screen.findByText('Search page 1 line 1')).toBeInTheDocument();
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(searchPageOneUrl));
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.nextPage) }));
+    expect(await screen.findByText('Search page 2 line 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.nextPage) }));
+    expect(await screen.findByText('Search page 3 line 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.previousPage) }));
+    expect(await screen.findByText('Search page 2 line 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.previousPage) }));
+    expect(await screen.findByText('Search page 1 line 1')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, { value1: 1, value2: 3 })))).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith(searchPageTwoUrl);
+    expect(mockFetch).toHaveBeenCalledWith(searchPageThreeUrl);
+    expect(mockFetch).toHaveBeenCalledWith(previousPageUrl);
+    expect(mockFetch).toHaveBeenCalledWith(firstPageAgainUrl);
+  });
+
+  it('keeps the current page visible and recovers from failed or malformed cursor responses', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const previewLines = [{
+      ...lines[0],
+      id: 'failure-line-90',
+      lineNumber: '90',
+      originalDescription: 'Failure page line 1',
+    }];
+    const cursor = encodeBoqLineCursor({ id: 'failure-line-90', lineNumber: '90' });
+    const nextPageUrl = `/api/boq/revision-1/lines?${new URLSearchParams({ pageSize: '90', cursor, includeTotal: 'false' })}`;
+    let pageRequestCount = 0;
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq/boq-1' && init?.method !== 'PATCH') {
+        return response({ boq, revision, lines: previewLines, totalLines: 91, nextCursor: cursor });
+      }
+      if (url === nextPageUrl) {
+        pageRequestCount += 1;
+        return pageRequestCount === 1
+          ? response({}, false)
+          : response({ data: 'malformed-page-payload' });
+      }
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    expect(await screen.findByText('Failure page line 1')).toBeInTheDocument();
+    const nextButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.nextPage) });
+    fireEvent.click(nextButton);
+    await waitFor(() => expect(nextButton).toBeEnabled());
+    expect(screen.getByText('Failure page line 1')).toBeInTheDocument();
+
+    fireEvent.click(nextButton);
+    await waitFor(() => expect(nextButton).toBeEnabled());
+    expect(mockFetch).toHaveBeenCalledWith(nextPageUrl);
+    expect(pageRequestCount).toBe(2);
+    expect(screen.getByText('Failure page line 1')).toBeInTheDocument();
+  });
+
+  it('blocks bulk edit above the D1 batch limit and keeps row-level edits available', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const overLimitLines = Array.from({ length: BOQ_LINE_MAX_BATCH_EDITS + 1 }, (_, index) => ({
+      ...lines[0],
+      id: `line-${index + 1}`,
+      lineNumber: String(index + 1),
+      originalDescription: `Tile work ${index + 1}`,
+    }));
+    const defaultFetch = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq/boq-1') {
+        return response({ boq, revision, lines: overLimitLines, totalLines: overLimitLines.length });
+      }
+      return defaultFetch!(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    expect(await screen.findByText('Tile work 91')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
+
+    expect(screen.getByText(uiStringPattern(interpolateUiString(
+      UI_STRINGS.appApiBoqRevisionIdLinesRoute.batchLineUpdateLimitExceeded,
+      { limit: BOQ_LINE_MAX_BATCH_EDITS },
+    )))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.exitEditMode) })).not.toBeInTheDocument();
+    expect(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.editLine))).toHaveLength(BOQ_LINE_MAX_BATCH_EDITS + 1);
+  });
+
+  it('ignores a BOQ response that arrives after a newer selection', async () => {
+    const secondBoq = { ...boq, id: 'boq-2', boqCode: 'BOQ-2', title: 'Second BOQ' };
+    const secondRevision = { ...revision, id: 'revision-2' };
+    const latestLine = { ...lines[1], id: 'latest-line', standardDescription: 'Latest selected BOQ line' };
+    const staleLine = { ...lines[0], id: 'stale-line', standardDescription: 'Stale first BOQ line' };
+    let releaseFirstBody!: (body: unknown) => void;
+    const firstBody = new Promise<unknown>((resolve) => { releaseFirstBody = resolve; });
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [boq, secondBoq] });
+      if (url === '/api/boq/boq-1') return { ok: true, json: () => firstBody };
+      if (url === '/api/boq/boq-2') return response({ boq: secondBoq, revision: secondRevision, lines: [latestLine] });
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    const firstRow = (await screen.findByText('BOQ-1')).closest('tr')!;
+    const secondRow = screen.getByText('BOQ-2').closest('tr')!;
+    fireEvent.click(within(firstRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/boq-1'));
+    fireEvent.click(within(secondRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+
+    expect(await screen.findByText('Latest selected BOQ line')).toBeInTheDocument();
+    await act(async () => {
+      releaseFirstBody({ boq, revision, lines: [staleLine] });
+      await firstBody;
+    });
+
+    expect(screen.getByText('Latest selected BOQ line')).toBeInTheDocument();
+    expect(screen.queryByText('Stale first BOQ line')).not.toBeInTheDocument();
+  });
+
+  it('ignores a stale searched line page after a newer BOQ selection', async () => {
+    const secondBoq = { ...boq, id: 'boq-2', boqCode: 'BOQ-2', title: 'Second BOQ' };
+    const secondRevision = { ...revision, id: 'revision-2' };
+    const latestLine = { ...lines[1], id: 'latest-line', standardDescription: 'Latest selected BOQ line' };
+    const previewLine = { ...lines[0], id: 'preview-line', lineNumber: '1' };
+    const previewCursor = encodeBoqLineCursor({ id: 'preview-line', lineNumber: '1' });
+    const searchUrl = '/api/boq/revision-1/lines?pageSize=90&search=stale';
+    let releaseSearch!: (value: unknown) => void;
+    const searchRequest = new Promise<unknown>((resolve) => { releaseSearch = resolve; });
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [boq, secondBoq] });
+      if (url === '/api/boq/boq-1') return response({ boq, revision, lines: [previewLine], totalLines: 2, nextCursor: previewCursor });
+      if (url === searchUrl) return searchRequest;
+      if (url === '/api/boq/boq-2') return response({ boq: secondBoq, revision: secondRevision, lines: [latestLine] });
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    const firstRow = (await screen.findByText('BOQ-1')).closest('tr')!;
+    const secondRow = screen.getByText('BOQ-2').closest('tr')!;
+    fireEvent.click(within(firstRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+    await screen.findByText('Vitrified tiles');
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.searchLineItems)), { target: { value: 'stale' } });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(searchUrl));
+    fireEvent.click(within(secondRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+    expect(await screen.findByText('Latest selected BOQ line')).toBeInTheDocument();
+
+    await act(async () => {
+      releaseSearch(response({ data: [{ ...lines[0], id: 'stale-search-line', standardDescription: 'Stale search line' }], nextCursor: null, total: 1 }));
+      await searchRequest;
+    });
+
+    expect(screen.getByText('Latest selected BOQ line')).toBeInTheDocument();
+    expect(screen.queryByText('Stale search line')).not.toBeInTheDocument();
+  });
+
+  it('releases the inline edit copy when switching BOQs', async () => {
+    queryParams = { projectId: 'project-1', boqId: 'boq-1' };
+    const secondBoq = { ...boq, id: 'boq-2', boqCode: 'BOQ-2', title: 'Second BOQ' };
+    const secondRevision = { ...revision, id: 'revision-2' };
+    const latestLine = { ...lines[1], id: 'latest-line', standardDescription: 'Latest selected BOQ line' };
+    const defaultFetch = mockFetch.getMockImplementation()!;
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/boq' && init?.method !== 'POST') return response({ data: [boq, secondBoq] });
+      if (url === '/api/boq/boq-2') return response({ boq: secondBoq, revision: secondRevision, lines: [latestLine] });
+      return defaultFetch(url, init);
+    });
+
+    render(<BoqStudioPage />);
+    expect(await screen.findByText('Vitrified tiles')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
+    fireEvent.change(screen.getByDisplayValue('Vitrified tiles'), { target: { value: 'Unsaved line edit' } });
+
+    const secondRow = screen.getByText('BOQ-2').closest('tr')!;
+    fireEvent.click(within(secondRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.oPEN) }));
+
+    expect(await screen.findByText('Latest selected BOQ line')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges, '', false) })).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Unsaved line edit')).not.toBeInTheDocument();
   });
 
   it('loads project cost centres in stable pages and supports a bounded search', async () => {
@@ -173,8 +466,10 @@ describe('BOQ studio page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.showCategoryDistribution) }));
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical)).length).toBeGreaterThan(0);
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.searchLineItems)), { target: { value: 'cable' } });
-    expect(screen.queryByText('Vitrified tiles')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Vitrified tiles')).not.toBeInTheDocument());
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('search=cable'));
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.searchLineItems)), { target: { value: '' } });
+    await waitFor(() => expect(screen.getByText('Vitrified tiles')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
@@ -515,8 +810,9 @@ describe('BOQ studio page', () => {
     render(<BoqStudioPage />);
     expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.bOQCreationStudio) })).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.copy1slme3c)), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.eGCivilInteriorKundanahalliProject)), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cREATEMANUALBOQ) }));
-    expect(await screen.findByText(/Manual BOQ BOQ-EDGE updated with 2 lines/)).toBeInTheDocument();
+    expect(await screen.findByText(/Manual BOQ BOQ-EDGE updated with 0 lines/)).toBeInTheDocument();
     const createRequest = mockFetch.mock.calls.find(([url, init]) => url === '/api/boq' && (init as RequestInit)?.method === 'POST');
     expect(JSON.parse(String(createRequest?.[1]?.body))).toEqual(expect.objectContaining({ projectId: 'project-edge', areaSqFt: 10000 }));
 

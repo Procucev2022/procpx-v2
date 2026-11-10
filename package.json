@@ -37,19 +37,13 @@
     "@opennextjs/cloudflare": "1.20.11",
     "@prisma/adapter-d1": "6.19.3",
     "@prisma/client": "6.19.3",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/multer": "^2.3.0",
-    "@types/uuid": "^10.0.0",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.52.0",
-    "multer": "^2.4.0",
     "next": "16.3.8",
     "next-auth": "^5.0.0-beta.32",
     "prisma": "6.19.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "tesseract.js": "^7.0.0",
-    "uuid": "^14.0.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -66,8 +60,6 @@
     "jest": "^30.5.2",
     "jest-environment-jsdom": "^30.5.1",
     "playwright": "^1.64.1",
-    "playwright-core": "^1.57.0",
-    "puppeteer-core": "^25.13.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "4.156.0"

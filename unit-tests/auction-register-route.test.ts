@@ -13,7 +13,7 @@ jest.mock('../src/lib/prisma', () => ({
     auction: { count: jest.fn(), findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
     vendor: { findFirst: jest.fn(), count: jest.fn() },
     rfq: { findFirst: jest.fn() },
-    quote: { findFirst: jest.fn() },
+    quote: { groupBy: jest.fn() },
     rfqLine: { findMany: jest.fn() },
   },
 }));
@@ -70,7 +70,7 @@ describe('auction register API', () => {
     db.vendor.findFirst.mockReset().mockResolvedValue({ id: 'v-1' });
     db.vendor.count.mockReset().mockResolvedValue(1);
     db.rfq.findFirst.mockReset().mockResolvedValue({ id: 'rfq-1', projectId: 'project-1', rfqNumber: 'RFQ-1' });
-    db.quote.findFirst.mockReset().mockResolvedValue(null);
+    db.quote.groupBy.mockReset().mockResolvedValue([]);
     db.rfqLine.findMany.mockReset().mockResolvedValue([{ id: 'line-2' }]);
     d1Batch.mockReset().mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => statements.map((_, index) => ({
       meta: { changes: 1 },
@@ -178,7 +178,7 @@ describe('auction register API', () => {
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.selectedRFQWasNotFoundOrIsInaccessibleInThisWorkspace, status: 404,
     });
 
-    db.quote.findFirst.mockResolvedValueOnce({ id: 'quote-excluded' });
+    db.quote.groupBy.mockResolvedValueOnce([{ vendorId: 'quote-excluded-vendor' }]);
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Auction', invitedVendorIds: [] }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.mandatoryJustificationIsRequiredWhenExcludingQuotedVendorsFromTheInvitedList, status: 400,
     });
@@ -224,9 +224,11 @@ describe('auction register API', () => {
     expect(auctionBatch[5].sql).toContain('INSERT INTO "auction_items"');
     expect(db.auction.count).not.toHaveBeenCalled();
     expect(db.auction.create).not.toHaveBeenCalled();
-    expect(db.quote.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: { notIn: ['v-1'] } }),
-      select: { id: true },
+    expect(db.quote.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      by: ['vendorId'],
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1', status: { not: 'REJECTED' } },
+      orderBy: { vendorId: 'asc' },
+      take: 101,
     }));
 
     const draft = await POST(postRequest({ rfqId: 'rfq-1', title: 'Sealed draft', auctionType: 'SEALED_BID', isDraft: true,
@@ -283,13 +285,14 @@ describe('auction register API', () => {
   });
 
   it('rejects an auction whose combined invitation and item writes exceed the safe D1 binding budget', async () => {
-    db.vendor.count.mockResolvedValueOnce(100);
+    db.vendor.count.mockResolvedValueOnce(90).mockResolvedValueOnce(10);
     const invitedVendorIds = Array.from({ length: 100 }, (_, index) => `vendor-${index}`);
     const items = Array.from({ length: 200 }, (_, index) => ({ itemCode: `item-${index}` }));
 
     await expect(POST(postRequest({ rfqId: 'rfq-1', title: 'Large auction', invitedVendorIds, items }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementAuctionsRoute.auctionExceedsSafeAtomicWriteLimit, status: 400,
     });
+    expect(db.vendor.count.mock.calls.map(([query]) => query.where.id.in.length)).toEqual([90, 10]);
     expect(d1Batch).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith('warn', 'auction.creation_rejected_batch_limit', expect.objectContaining({
       violation: 'batch_bindings', invitedVendorCount: 100, itemCount: 200,

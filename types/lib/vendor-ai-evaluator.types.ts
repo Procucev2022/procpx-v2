@@ -33,6 +33,17 @@ export interface VendorEvaluationInput {
   documents?: string | null;
 }
 
+export interface VendorEvaluationInputDataIssue {
+  fieldName: 'documents' | 'clientReferences';
+  reason: 'invalid_json' | 'invalid_shape';
+  fallback: 'empty_array' | 'legacy_text' | 'filtered_invalid_entries';
+  invalidEntryCount?: number;
+}
+
+export interface VendorEvaluationOptions {
+  onInputDataIssue?: (issue: VendorEvaluationInputDataIssue) => void;
+}
+
 export interface CriterionEvaluation {
   id: string;
   name: string;

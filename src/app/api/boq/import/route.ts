@@ -19,6 +19,7 @@ import {
 import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { MAX_BOQ_IMPORT_SHEET_ROWS, MAX_BOQ_UPLOAD_BYTES } from '@/lib/boq-upload.constants';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
 
 type ImportedLine = {
   lineNumber: string;
@@ -129,10 +130,12 @@ export async function POST(req: NextRequest) {
 
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Array<Record<string, unknown>>;
     if (rows.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
-    const uomMasters = await prisma.uomMaster.findMany({
-      where: { tenantId: ctx.tenantId, isActive: true },
-      select: { id: true, code: true },
-    });
+    const referenceCatalog = await loadActiveBoqReferenceCatalog({
+      tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/import',
+      requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+    }, { categories: false, uoms: true });
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const uomMasters = referenceCatalog.uoms;
     const uomByCode = new Map(uomMasters.map((uom) => [uom.code.toUpperCase(), uom.id]));
     const importedLines: ImportedLine[] = [];
     const lineNumbers = new Set<string>();

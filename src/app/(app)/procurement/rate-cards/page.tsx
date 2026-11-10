@@ -3,11 +3,9 @@
 // Corrected Rate Card Management Architecture: Focused, full-width workflow workspaces
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import Link from 'next/link';
 import {
   CheckCircle2,
   AlertCircle,
-  ArrowLeft,
 } from 'lucide-react';
 import HomeWorkspace, { RateCardRow } from '@/components/rate-cards/HomeWorkspace';
 import InitiateRateCardWorkspace from '@/components/rate-cards/InitiateRateCardWorkspace';
@@ -62,7 +60,6 @@ export default function RateCardManagementPage() {
 
   // Master rate cards state
   const [rateCards, setRateCards] = useState<RateCardPageRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingMoreRateCards, setLoadingMoreRateCards] = useState(false);
   const rateCardPageRef = useRef(1);
   const [hasMoreRateCards, setHasMoreRateCards] = useState(false);
@@ -94,7 +91,6 @@ export default function RateCardManagementPage() {
   const fetchRateCards = useCallback(async (append = false) => {
     const page = append ? rateCardPageRef.current + 1 : 1;
     if (append) setLoadingMoreRateCards(true);
-    else setLoading(true);
     try {
       const query = new URLSearchParams({ page: String(page), pageSize: String(DEFAULT_RATE_CARD_LIST_PAGE_SIZE) });
       const res = await fetch(`/api/procurement/rate-cards?${query.toString()}`);
@@ -116,7 +112,6 @@ export default function RateCardManagementPage() {
       return false;
     } finally {
       if (append) setLoadingMoreRateCards(false);
-      else setLoading(false);
     }
   }, []);
 

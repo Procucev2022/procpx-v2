@@ -2,6 +2,7 @@
 // src/components/VendorNegotiationWorkspace.tsx
 // proCPX — Dedicated Full-Window Commercial Negotiation Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
@@ -14,14 +15,7 @@ import {
   Send,
   Save,
   RotateCcw,
-  TrendingDown,
-  Info,
-  Layers,
-  ChevronRight,
   ShieldCheck,
-  Check,
-  X,
-  FileText,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { VendorNegotiationWorkspaceProps } from "@app-types/components/VendorNegotiationWorkspace.types";
@@ -53,7 +47,9 @@ export default function VendorNegotiationWorkspace({
           setCurrentUserRole(session.user.role);
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_negotiation_user_role', route: '/api/auth/session',
+      }));
   }, []);
 
   const isBuyerRole = isBuyer !== undefined ? isBuyer : (currentUserRole !== '' && currentUserRole !== 'VENDOR');
@@ -98,7 +94,14 @@ export default function VendorNegotiationWorkspace({
           setCurrentRfqData(json.rfq);
         }
       }
-    } catch {} finally {
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'refresh_negotiation_rfq',
+        route: isBuyerRole ? '/api/procurement/rfqs/:id' : '/api/vendor-portal/rfqs/:id',
+        recordId: data.id,
+        fallback: 'continue_with_initial_rfq_data',
+      });
+    } finally {
       setIsRefreshing(false);
     }
   };
@@ -170,8 +173,15 @@ export default function VendorNegotiationWorkspace({
               }
             });
           }
-        } catch {
-          // ignore parse error
+        } catch (error: unknown) {
+          reportHandledClientFailure(error, {
+            operation: 'parse_negotiation_round_line_items',
+            route: isBuyerRole ? '/api/procurement/rfqs/:id' : '/api/vendor-portal/rfqs/:id',
+            recordId: data.id,
+            roundId: rnd.id,
+            field: 'lineItemsJson',
+            fallback: 'show_round_without_line_rate_metadata',
+          });
         }
       }
       return {
@@ -192,7 +202,7 @@ export default function VendorNegotiationWorkspace({
         isFinalOffer: rnd.isFinalOffer,
       };
     });
-  }, [isRfq, historicalRounds]);
+  }, [isRfq, historicalRounds, isBuyerRole, data.id]);
 
   const latestRound = parsedRoundRates[parsedRoundRates.length - 1] || null;
 
@@ -207,11 +217,6 @@ export default function VendorNegotiationWorkspace({
   );
 
   // Active buyer counteroffer awaiting vendor response
-  const hasActiveBuyerCounter = Boolean(
-    latestRound &&
-    (latestRound.counterOfferAmount || Object.keys(latestRound.buyerRateMap || {}).length > 0) &&
-    (!latestRound.revisedQuoteAmount || latestRound.status === 'ROUND_ACTIVE' || latestRound.nextResponsibleParty === 'VENDOR')
-  );
 
   // Initialize editable rates
   useEffect(() => {
@@ -254,14 +259,19 @@ export default function VendorNegotiationWorkspace({
             return;
           }
         }
-      } catch {
-        // ignore storage error
+      } catch (error: unknown) {
+        reportHandledClientFailure(error, {
+          operation: 'restore_negotiation_draft',
+          route: isBuyerRole ? '/procurement/rfqs/:id' : '/vendor-portal/rfqs/:id',
+          recordId: data.id,
+          fallback: 'use_initial_rate_and_note_values',
+        });
       }
     }
 
     // Default: empty rates so inputs are not pre-treated as submitted revised quote!
     setRates({});
-  }, [lines, isRfq, isVendorRevisionSubmitted, latestRound, isBuyerRole, storageKey]);
+  }, [lines, isRfq, isVendorRevisionSubmitted, latestRound, isBuyerRole, storageKey, data.id]);
 
   // Handle single rate change
   const handleRateChange = (lineId: string, val: number) => {
@@ -287,7 +297,13 @@ export default function VendorNegotiationWorkspace({
       setDraftSavedAt(now);
       setServerSuccess(interpolateUiString(UI_STRINGS.componentsVendorNegotiationWorkspace.draftSavedLocallyAtNowYouCanSafelyReturnToTheRegisterAnytime, { "now": now }));
       setTimeout(() => setServerSuccess(null), 4000);
-    } catch {
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'persist_negotiation_draft',
+        route: isBuyerRole ? '/procurement/rfqs/:id' : '/vendor-portal/rfqs/:id',
+        recordId: data.id,
+        fallback: 'show_draft_save_error',
+      });
       setServerError(UI_STRINGS.common.failedToSaveDraftLocallyInBrowserStorage);
     }
   };
@@ -303,8 +319,13 @@ export default function VendorNegotiationWorkspace({
       setIsFinalOffer(false);
       setServerSuccess(UI_STRINGS.componentsVendorNegotiationWorkspace.enteredRatesCleared);
       setTimeout(() => setServerSuccess(null), 3000);
-    } catch {
-      // ignore
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'reset_negotiation_draft',
+        route: isBuyerRole ? '/procurement/rfqs/:id' : '/vendor-portal/rfqs/:id',
+        recordId: data.id,
+        fallback: 'preserve_current_rates_and_notes',
+      });
     }
   };
 
@@ -394,7 +415,14 @@ export default function VendorNegotiationWorkspace({
 
         try {
           localStorage.removeItem(storageKey);
-        } catch {}
+        } catch (error: unknown) {
+          reportHandledClientFailure(error, {
+            operation: 'clear_submitted_negotiation_draft',
+            route: '/api/procurement/negotiations/submit-offer',
+            recordId: data.id,
+            fallback: 'submission_succeeded_but_local_draft_remains',
+          });
+        }
 
         toast.success(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully, data?.rfqNumber, UI_STRINGS.common.userMessages.awaitingBuyerEvaluation);
         setServerSuccess(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully);
@@ -428,7 +456,14 @@ export default function VendorNegotiationWorkspace({
 
         try {
           localStorage.removeItem(storageKey);
-        } catch {}
+        } catch (error: unknown) {
+          reportHandledClientFailure(error, {
+            operation: 'clear_submitted_rate_card_draft',
+            route: '/api/vendor-portal/rate-cards',
+            recordId: data.id,
+            fallback: 'submission_succeeded_but_local_draft_remains',
+          });
+        }
 
         toast.success(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully, data?.rateCardNumber, UI_STRINGS.common.userMessages.awaitingBuyerEvaluation);
         setServerSuccess(UI_STRINGS.componentsVendorNegotiationWorkspace.offerSubmittedSuccessfully);
@@ -440,6 +475,12 @@ export default function VendorNegotiationWorkspace({
         }, 1800);
       }
     } catch (err: any) {
+      reportHandledClientFailure(err, {
+        operation: isRfq ? 'submit_negotiation_offer' : 'submit_rate_card_proposal',
+        route: isRfq ? '/api/procurement/negotiations/submit-offer' : '/api/vendor-portal/rate-cards',
+        recordId: data.id,
+        fallback: 'show_submission_error',
+      });
       setServerError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.message || UI_STRINGS.common.userMessages.anErrorOccurredDuringSubmissionPleaseTryAgain }));
     } finally {
       setSubmitting(false);

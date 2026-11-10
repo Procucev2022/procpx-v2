@@ -21,7 +21,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
-  FileText,
 } from 'lucide-react';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
@@ -34,6 +33,7 @@ export type { RateLineItem };
 import { INITIAL_RATE_LINES } from "./InitiateRateCardWorkspace.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 
 
 
@@ -76,6 +76,7 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
   >([]);
   const [uploadGeneralErrors, setUploadGeneralErrors] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const draftPersistenceFailureLogged = useRef(false);
 
   // Auto-dismiss compact toast notification
   useEffect(() => {
@@ -98,13 +99,28 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
           setForm(parsed.form);
         }
       }
-    } catch {}
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'restore_rate_card_initiation_draft',
+        route: '/procurement/rate-cards/new',
+        fallback: 'use_initial_form_and_rate_lines',
+      });
+    }
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({ form, items }));
-    } catch {}
+    } catch (error: unknown) {
+      if (!draftPersistenceFailureLogged.current) {
+        draftPersistenceFailureLogged.current = true;
+        reportHandledClientFailure(error, {
+          operation: 'persist_rate_card_initiation_draft',
+          route: '/procurement/rate-cards/new',
+          fallback: 'keep_current_form_in_memory',
+        });
+      }
+    }
   }, [form, items]);
 
   // Authoritative Aggregate Calculations
@@ -279,7 +295,12 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
         type: 'success',
         message: interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.templateDownloadedFilename, { "filename": filename }),
       });
-    } catch {
+    } catch (error: unknown) {
+      reportHandledClientFailure(error, {
+        operation: 'export_rate_card_template',
+        route: '/procurement/rate-cards/new',
+        fallback: 'show_template_download_error',
+      });
       setNotification({ type: 'error', message: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToGenerateExcelDownload });
     }
   };
@@ -410,6 +431,11 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
         setUploadGeneralErrors(generalErrs);
         setShowUploadPreview(true);
       } catch (err: any) {
+        reportHandledClientFailure(err, {
+          operation: 'parse_rate_card_import_workbook',
+          route: '/procurement/rate-cards/new',
+          fallback: 'show_import_validation_error',
+        });
         setUploadGeneralErrors([interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.failedToParseFileMessage, {
           message: err.message || UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.invalidFormat,
         })]);

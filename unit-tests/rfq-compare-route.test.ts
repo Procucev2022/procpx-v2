@@ -6,12 +6,15 @@ import { createAuditLog } from '../src/lib/audit';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '../src/lib/d1-batch.constants';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT, RFQ_COMPARE_LINE_PAGE_SIZE } from '../src/app/api/procurement/rfqs/[id]/compare/route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     rfq: { findFirst: jest.fn(), update: jest.fn() },
+    rfqLine: { count: jest.fn(), findMany: jest.fn() },
+    boqLine: { findMany: jest.fn() },
     ppoLine: { findMany: jest.fn() },
     vendorRateCard: { count: jest.fn() },
     $queryRaw: jest.fn(),
@@ -29,6 +32,8 @@ jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog:
 
 const db = prisma as unknown as {
   rfq: Record<string, jest.Mock>;
+  rfqLine: Record<string, jest.Mock>;
+  boqLine: Record<string, jest.Mock>;
   ppoLine: Record<string, jest.Mock>;
   vendorRateCard: Record<string, jest.Mock>;
   $queryRaw: jest.Mock;
@@ -40,7 +45,7 @@ const writeBatch = writeD1BatchAtomically as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'buyer-1' };
 const params = (id = 'rfq-1') => ({ params: Promise.resolve({ id }) });
-const request = () => new NextRequest('http://localhost/api/procurement/rfqs/rfq-1/compare');
+const request = (query = '') => new NextRequest(`http://localhost/api/procurement/rfqs/rfq-1/compare${query}`);
 
 const fullRfq = (overrides: Record<string, any> = {}) => {
   const sourceOne = { id: 'boq-line-1', itemCode: 'CAB-1', standardDescription: 'Copper cable', originalDescription: 'Copper cable 4 core',
@@ -112,7 +117,7 @@ const latestNegotiationRoundRows = () => [
     pendingRevisedQuoteAmount: null, pendingStatus: null, pendingNextResponsibleParty: null, pendingBuyerDecision: null },
 ];
 
-const latestCompareQuoteRows = (rfq = fullRfq()) => {
+const latestCompareQuoteRows = (rfq = fullRfq(), visibleLineIds = new Set(rfq.lines.map((line) => line.id))) => {
   const latestByVendor = new Map<string, typeof rfq.quotes[number]>();
   const versionCounts = new Map<string, number>();
   for (const quote of rfq.quotes) {
@@ -130,14 +135,16 @@ const latestCompareQuoteRows = (rfq = fullRfq()) => {
     const header = {
       quoteId: quote.id, vendorId: quote.vendorId, quoteNumber: quote.quoteNumber, quoteVersion: quote.quoteVersion,
       versionCount: versionCounts.get(quote.vendorId), totalQuoteAmount: quote.totalQuoteAmount,
+      quotedCount: new Set(quote.lines.filter((line) => line.unitRate > 0).map((line) => line.rfqLineId)).size,
       submittedAt: quote.submittedAt, status: quote.status, commercialTerms: quote.commercialTerms,
       paymentTermsOffered: quote.paymentTermsOffered, deliveryLeadTimeDays: quote.deliveryLeadTimeDays,
       vendorName: vendor.name, vendorCode: vendor.code, vendorType: vendor.vendorType ?? null,
       qualificationStatus: vendor.qualificationStatus ?? null, complianceStatus: vendor.complianceStatus ?? null,
       performanceScore: vendor.performanceScore ?? null,
     };
-    return quote.lines.length > 0
-      ? quote.lines.map((line) => ({ ...header, quoteLineId: line.id, ...line }))
+    const visibleQuoteLines = quote.lines.filter((line) => visibleLineIds.has(line.rfqLineId));
+    return visibleQuoteLines.length > 0
+      ? visibleQuoteLines.map((line) => ({ ...header, quoteLineId: line.id, ...line }))
       : [{ ...header, quoteLineId: null, rfqLineId: null, unitRate: null, lineTotal: null, discountPercent: null, taxPercent: null }];
   });
 };
@@ -150,6 +157,10 @@ describe('RFQ quote comparison API', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     db.rfq.findFirst.mockReset().mockResolvedValue(fullRfq());
+    db.rfqLine.count.mockReset().mockResolvedValue(fullRfq().lines.length);
+    db.rfqLine.findMany.mockReset().mockImplementation(({ skip = 0, take = 50 }: { skip?: number; take?: number }) =>
+      Promise.resolve(fullRfq().lines.slice(skip, skip + take)));
+    db.boqLine.findMany.mockReset().mockResolvedValue([]);
     db.rfq.update.mockReset().mockResolvedValue({});
     db.ppoLine.findMany.mockReset().mockResolvedValue([
       { itemDescription: ' copper cable ', orderedUnitRate: 90, orderedAmount: 900, uom: 'M', orderDate: new Date('2026-08-01'), ppo: null },
@@ -161,7 +172,9 @@ describe('RFQ quote comparison API', () => {
       ? latestCompareQuoteRows()
       : query.sql.includes('negotiation_round_summaries')
         ? latestNegotiationRoundRows()
-        : [
+        : query.sql.includes('totalAiBenchmark')
+          ? [{ totalAiBenchmark: 1160 }]
+          : [
       { description: ' copper cable ', rate: 85, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
         validFrom: new Date('2026-01-01'), validTo: new Date('2026-12-31'), vendorId: 'v1', vendorName: 'Vendor v1' },
       { description: 'Panel', rate: 75, rateCardNumber: 'RC-1', version: 3, status: 'APPROVED',
@@ -195,10 +208,13 @@ describe('RFQ quote comparison API', () => {
       rfqId: 'rfq-1', invalidRoundCount: 1,
     }));
     expect(db.vendorRateCard.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', status: 'APPROVED' }) }));
-    expect(db.$queryRaw).toHaveBeenCalledTimes(3);
+    expect(db.$queryRaw).toHaveBeenCalledTimes(4);
     const rfqQuery = db.rfq.findFirst.mock.calls[0][0];
     expect(rfqQuery.include).not.toHaveProperty('quotes');
+    expect(rfqQuery.include).not.toHaveProperty('lines');
+    expect(rfqQuery.include.boqRevision.select).not.toHaveProperty('lines');
     expect(rfqQuery.include.negotiations.select).not.toHaveProperty('rounds');
+    expect(db.boqLine.findMany).not.toHaveBeenCalled();
     const latestQuoteQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
     expect(latestQuoteQuery).toBeDefined();
     if (!latestQuoteQuery) throw new Error('Latest quote query was not executed');
@@ -218,8 +234,16 @@ describe('RFQ quote comparison API', () => {
     expect(negotiationRoundQuery.sql).toContain('pending."id" AS "pendingRoundId"');
     expect(negotiationRoundQuery.sql).toContain('negotiation."rfqId" = ?');
     expect(negotiationRoundQuery.values).toEqual(expect.arrayContaining(['tenant-1', 'rfq-1']));
+    expect(db.rfqLine.count).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', rfqId: 'rfq-1' } });
+    expect(db.rfqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1' }, skip: 0, take: RFQ_COMPARE_LINE_PAGE_SIZE,
+    }));
+    const benchmarkQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('totalAiBenchmark'))?.[0];
+    expect(benchmarkQuery?.sql).toContain('LEFT JOIN "boq_lines" AS boqLine');
+    expect(benchmarkQuery?.sql).toContain('LEFT JOIN "pr_lines" AS prLine');
+    expect(benchmarkQuery?.values).toEqual(['tenant-1', 'rfq-1']);
     expect(result).toMatchObject({ ok: true, data: {
-      rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' } },
+      rfq: { id: 'rfq-1', status: 'COMPARISON', project: { name: 'North Plant' }, boqRevision: { id: 'rev-1', revisionCode: 'R2' } },
       vendors: [
         { vendorId: 'v1', vendorType: 'CLIENT_VENDOR', qualificationStatus: 'NOT_EVALUATED', quoteId: 'v1-new', quoteVersion: 2,
           versionCount: 2, completenessPercent: 100, rank: 1, rankLabel: 'L1' },
@@ -255,6 +279,79 @@ describe('RFQ quote comparison API', () => {
       expect.objectContaining({ sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, values: expect.arrayContaining(['QUOTE_COMPARED', 'rfq-1']) }),
     ]));
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it('pages the vendor-by-line matrix while retaining whole-RFQ totals and quote completeness', async () => {
+    const base = fullRfq();
+    const lines = Array.from({ length: 52 }, (_, index) => ({
+      ...base.lines[0],
+      id: `page-line-${String(index + 1).padStart(3, '0')}`,
+      lineNumber: String(index + 1).padStart(3, '0'),
+      description: `Package line ${index + 1}`,
+      boqLine: null,
+      boqLineId: null,
+      prLine: null,
+      benchmarkRate: 100,
+      quantity: 1,
+    }));
+    const pagedRfq = {
+      ...base,
+      estimatedBenchmarkValue: 0,
+      lines,
+      quotes: base.quotes.map((quote) => quote.vendorId === 'v1' && quote.quoteVersion === 2
+        ? {
+          ...quote,
+          lines: lines.map((line, index) => ({
+            id: `quote-line-${index + 1}`,
+            rfqLineId: line.id,
+            unitRate: 100,
+            lineTotal: 100,
+            discountPercent: 0,
+            taxPercent: 0,
+          })),
+        }
+        : quote),
+    } as unknown as ReturnType<typeof fullRfq>;
+    const pageLineIds = new Set(lines.slice(50).map((line) => line.id));
+    db.rfq.findFirst.mockResolvedValueOnce(pagedRfq);
+    db.rfqLine.count.mockResolvedValueOnce(lines.length);
+    db.rfqLine.findMany.mockResolvedValueOnce(lines.slice(50));
+    db.$queryRaw.mockImplementation((query: { sql: string }) => query.sql.includes('latest_quotes')
+      ? latestCompareQuoteRows(pagedRfq, pageLineIds)
+      : query.sql.includes('negotiation_round_summaries')
+        ? latestNegotiationRoundRows()
+        : query.sql.includes('totalAiBenchmark')
+          ? [{ totalAiBenchmark: 5200 }]
+          : []);
+
+    const result = await GET(request('?page=2'), params());
+    const response = result as unknown as { data: {
+      lines: Array<{ id: string }>;
+      vendors: Array<{ vendorId: string; quotedCount: number; completenessPercent: number }>;
+      pagination: { page: number; pageSize: number; totalItems: number; totalPages: number; hasPreviousPage: boolean; hasNextPage: boolean };
+      summary: { benchmarkTotal: number };
+    } };
+    expect(response.data.lines.map((line) => line.id)).toEqual(['page-line-051', 'page-line-052']);
+    expect(response.data.pagination).toEqual({
+      page: 2, pageSize: 50, totalItems: 52, totalPages: 2, hasPreviousPage: true, hasNextPage: false,
+    });
+    expect(response.data.summary.benchmarkTotal).toBe(5200);
+    expect(response.data.vendors.find((vendor) => vendor.vendorId === 'v1')).toMatchObject({
+      quotedCount: 52,
+      completenessPercent: 100,
+    });
+    expect(db.rfqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', rfqId: 'rfq-1' },
+      skip: 50,
+      take: 50,
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    }));
+
+    const latestQuoteQuery = db.$queryRaw.mock.calls.find(([query]) => query.sql.includes('latest_quotes'))?.[0];
+    expect(latestQuoteQuery?.sql).toContain('latest_quote_line_summaries');
+    expect(latestQuoteQuery?.sql).toContain('quoteLine."rfqLineId" IN (?,?)');
+    expect(latestQuoteQuery?.values).toEqual(expect.arrayContaining(['page-line-051', 'page-line-052']));
+    expect(latestQuoteQuery?.values).not.toContain('page-line-001');
   });
 
   it('keeps vendors when the latest quote has no lines and captures latest-quote query failures', async () => {
@@ -298,7 +395,11 @@ describe('RFQ quote comparison API', () => {
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq({
       status: 'COMPARISON', quotes: [], lines: [], negotiations: [], awards: [], boqRevision: null, estimatedBenchmarkValue: 500,
     }));
-    db.$queryRaw.mockImplementationOnce(() => []);
+    db.rfqLine.count.mockResolvedValueOnce(0);
+    db.rfqLine.findMany.mockResolvedValueOnce([]);
+    db.$queryRaw.mockImplementation((query: { sql: string }) => query.sql.includes('totalAiBenchmark')
+      ? [{ totalAiBenchmark: 0 }]
+      : []);
     await expect(GET(request(), params())).resolves.toMatchObject({ ok: true, data: {
       vendors: [], lines: [], activeNegotiation: null,
       summary: { packageTotal: 500, benchmarkTotal: 500, lowestQuoteTotal: 0, lowestVendor: '—', savings: 500,
@@ -306,20 +407,32 @@ describe('RFQ quote comparison API', () => {
     } });
     expect(db.rfq.update).not.toHaveBeenCalled();
 
+    const fallbackLines = [
+      { id: 'line-revision', lineNumber: 'L-3', description: 'Revision item', quantity: 1, uom: 'EA' },
+      { id: 'line-standard', lineNumber: 'L-9', description: 'Standard match', quantity: 1, uom: 'EA' },
+      { id: 'line-original', lineNumber: 'L-10', description: 'Original match', quantity: 1, uom: 'EA' },
+      { id: 'line-none', lineNumber: '99', description: '', quantity: 2, uom: 'EA' },
+    ];
     db.rfq.findFirst.mockResolvedValueOnce(fullRfq({
       status: 'COMPARISON', estimatedBenchmarkValue: 0, quotes: [], negotiations: [{ id: 'closed-neg', status: 'CONCLUDED', currentRound: 1 }],
-      boqRevision: { lines: [
+      boqRevision: { id: 'rev-1', revisionCode: 'R2', lines: [
         { id: 'revision-line', lineNumber: '3', itemCode: 'REV-3', standardDescription: 'Revision source', originalDescription: 'Other wording' },
         { id: 'standard-line', lineNumber: '4', standardDescription: 'Standard match', originalDescription: 'Standard source wording' },
         { id: 'original-line', lineNumber: '5', standardDescription: 'Other standard', originalDescription: 'Original match' },
       ] },
-      lines: [
-        { id: 'line-revision', lineNumber: 'L-3', description: 'Revision item', quantity: 1, uom: 'EA' },
-        { id: 'line-standard', lineNumber: 'L-9', description: 'Standard match', quantity: 1, uom: 'EA' },
-        { id: 'line-original', lineNumber: 'L-10', description: 'Original match', quantity: 1, uom: 'EA' },
-        { id: 'line-none', lineNumber: '99', description: '', itemCode: 'FALLBACK-99', quantity: 2, uom: 'EA' },
-      ],
+      lines: fallbackLines,
     }));
+    db.rfqLine.count.mockResolvedValueOnce(fallbackLines.length);
+    db.rfqLine.findMany.mockResolvedValueOnce(fallbackLines);
+    db.$queryRaw.mockImplementation((query: { sql: string }) => query.sql.includes('totalAiBenchmark')
+      ? [{ totalAiBenchmark: 0 }]
+      : []);
+    db.boqLine.findMany.mockResolvedValueOnce([
+      { id: 'revision-line', lineNumber: '3', itemCode: 'REV-3', standardDescription: 'Revision source', originalDescription: 'Other wording' },
+    ]).mockResolvedValueOnce([
+      { id: 'standard-line', lineNumber: '4', standardDescription: 'Standard match', originalDescription: 'Standard source wording' },
+      { id: 'original-line', lineNumber: '5', standardDescription: 'Other standard', originalDescription: 'Original match' },
+    ]);
     await expect(GET(request(), params())).resolves.toMatchObject({ ok: true, data: {
       activeNegotiation: { id: 'closed-neg' },
       lines: [
@@ -328,12 +441,33 @@ describe('RFQ quote comparison API', () => {
           category: 'General', specification: null },
         { id: 'line-standard', itemCode: null, boqDescription: 'Standard source wording' },
         { id: 'line-original', itemCode: null, boqDescription: null },
-        { id: 'line-none', itemCode: 'FALLBACK-99', itemDescription: 'Line item', boqDescription: null,
+        { id: 'line-none', itemCode: null, itemDescription: 'Line item', boqDescription: null,
           category: 'General', historicalPpoRate: null, rateCardRate: null },
       ],
       summary: { packageTotal: 0, benchmarkTotal: 0, lowestQuoteTotal: 0, lowestVendor: '—', savings: 0,
         savingsPercent: 0, isFavorable: true },
     } });
+    expect(db.boqLine.findMany).toHaveBeenCalledTimes(2);
+    expect(db.boqLine.findMany.mock.calls[0][0]).toMatchObject({
+      where: expect.objectContaining({
+        tenantId: 'tenant-1', boqRevisionId: 'rev-1',
+        OR: expect.arrayContaining([
+          { lineNumber: { in: expect.arrayContaining(['L-3', '3']) } },
+        ]),
+      }),
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+    });
+    expect(db.boqLine.findMany.mock.calls[0][0].where.OR).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ standardDescription: expect.anything() }),
+    ]));
+    expect(db.boqLine.findMany.mock.calls[1][0]).toMatchObject({
+      where: expect.objectContaining({
+        tenantId: 'tenant-1', boqRevisionId: 'rev-1',
+        OR: expect.arrayContaining([{ standardDescription: { contains: 'Standard match' } }]),
+      }),
+      take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+    });
 
     db.ppoLine.findMany.mockRejectedValueOnce(new Error('history unavailable'));
     await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
@@ -341,5 +475,79 @@ describe('RFQ quote comparison API', () => {
     audit.mockRejectedValueOnce(new Error('audit unavailable'));
     await expect(GET(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500 });
     expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it('fails closed and logs when fallback BOQ matching exceeds its candidate cap', async () => {
+    const oneLine = [{ id: 'line-1', lineNumber: '1', description: 'Copper cable', quantity: 1, uom: 'M', boqLine: null, prLine: null }];
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ lines: oneLine }));
+    db.rfqLine.count.mockResolvedValueOnce(1);
+    db.rfqLine.findMany.mockResolvedValueOnce(oneLine);
+    db.boqLine.findMany.mockResolvedValueOnce(Array.from(
+      { length: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1 }, (_, index) => ({ id: `candidate-${index}` }),
+    ));
+
+    await expect(GET(request(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
+    });
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1 }));
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', expect.objectContaining({
+      tenantId: 'tenant-1', rfqId: 'rfq-1',
+      candidateCountAtLeast: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+      maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+    }));
+    expect(db.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('only scans descriptions after indexed fallback matching misses', async () => {
+    const oneLine = [{ id: 'line-1', lineNumber: 'L-3', description: 'Copper cable', quantity: 1, uom: 'M', boqLine: null, prLine: null }];
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ lines: oneLine }));
+    db.rfqLine.count.mockResolvedValueOnce(1);
+    db.rfqLine.findMany.mockResolvedValueOnce(oneLine);
+    db.boqLine.findMany.mockResolvedValueOnce([{
+      id: 'boq-line-1', lineNumber: '3', itemCode: 'CAB-1', originalDescription: 'Copper cable',
+    }]);
+
+    await expect(GET(request(), params())).resolves.toMatchObject({ ok: true });
+    expect(db.boqLine.findMany).toHaveBeenCalledTimes(1);
+    expect(db.boqLine.findMany.mock.calls[0][0].where.OR).toEqual(expect.arrayContaining([
+      { lineNumber: { in: expect.arrayContaining(['L-3', '3']) } },
+    ]));
+    expect(db.boqLine.findMany.mock.calls[0][0].where.OR).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ standardDescription: expect.anything() }),
+    ]));
+  });
+
+  it('skips description fallback when unmatched legacy lines have no description', async () => {
+    const oneLine = [{ id: 'line-1', lineNumber: '99', description: '', quantity: 1, uom: 'EA', boqLine: null, prLine: null }];
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ lines: oneLine }));
+    db.rfqLine.count.mockResolvedValueOnce(1);
+    db.rfqLine.findMany.mockResolvedValueOnce(oneLine);
+    db.boqLine.findMany.mockResolvedValueOnce([]);
+
+    await expect(GET(request(), params())).resolves.toMatchObject({ ok: true });
+    expect(db.boqLine.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed and logs when description-only fallback exceeds its candidate cap', async () => {
+    const oneLine = [{ id: 'line-1', lineNumber: '99', description: 'Copper cable', quantity: 1, uom: 'M', boqLine: null, prLine: null }];
+    db.rfq.findFirst.mockResolvedValueOnce(fullRfq({ lines: oneLine }));
+    db.rfqLine.count.mockResolvedValueOnce(1);
+    db.rfqLine.findMany.mockResolvedValueOnce(oneLine);
+    db.boqLine.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce(Array.from(
+      { length: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1 }, (_, index) => ({ id: `candidate-${index}` }),
+    ));
+
+    await expect(GET(request(), params())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCompareQuotes, status: 500,
+    });
+    expect(db.boqLine.findMany).toHaveBeenCalledTimes(2);
+    expect(db.boqLine.findMany.mock.calls[1][0].where.OR).toEqual(expect.arrayContaining([
+      { standardDescription: { contains: 'Copper cable' } },
+      { originalDescription: { contains: 'Copper cable' } },
+    ]));
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', expect.objectContaining({
+      candidateCountAtLeast: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+      maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+    }));
   });
 });

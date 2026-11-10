@@ -8,8 +8,17 @@ import { createAuditLog } from '@/lib/audit';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import { RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE, RFQ_COMPARE_STATUS_UPDATE_SQL } from './route.constants';
+import {
+  RFQ_COMPARE_LINE_PAGE_SIZE,
+  RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE,
+  RFQ_COMPARE_FALLBACK_DESCRIPTION_CHUNK_SIZE,
+  RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+  RFQ_COMPARE_FALLBACK_BOQ_LINE_SELECT,
+  RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE,
+  RFQ_COMPARE_STATUS_UPDATE_SQL,
+} from './route.constants';
 import type {
+  RfqCompareFallbackBoqLine,
   RfqCompareRateCardRow,
   RfqLatestCompareNegotiationRoundRow,
   RfqLatestCompareQuoteRow,
@@ -37,29 +46,6 @@ export async function GET(
           select: {
             id: true,
             revisionCode: true,
-            lines: {
-              select: {
-                id: true,
-                lineNumber: true,
-                itemCode: true,
-                standardDescription: true,
-                originalDescription: true,
-                specification: true,
-                category: { select: { name: true } },
-                subcategory: { select: { name: true } },
-                uom: { select: { code: true } },
-                costSource: true,
-                costDate: true,
-                aiUnitCost: true,
-                location: true,
-                drawingReference: true,
-                brand: true,
-                model: true,
-                material: true,
-                grade: true,
-                remarks: true,
-              },
-            },
           },
         },
         pr: {
@@ -70,42 +56,6 @@ export async function GET(
             status: true,
             costCentre: { select: { id: true, code: true, name: true } },
           },
-        },
-        lines: {
-          select: {
-            id: true,
-            lineNumber: true,
-            description: true,
-            specification: true,
-            category: true,
-            subcategory: true,
-            uom: true,
-            quantity: true,
-            benchmarkRate: true,
-            boqLineId: true,
-            boqLine: {
-              select: {
-                id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
-                category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
-                costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
-                brand: true, model: true, material: true, grade: true, remarks: true,
-              },
-            },
-            prLine: {
-              select: {
-                estimatedRate: true,
-                boqLine: {
-                  select: {
-                    id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
-                    category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
-                    costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
-                    brand: true, model: true, material: true, grade: true, remarks: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { lineNumber: 'asc' },
         },
         negotiations: {
           select: {
@@ -129,6 +79,140 @@ export async function GET(
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/rfqs/[id]/compare', method: 'GET' });
     }
 
+    const lineWhere = { tenantId: ctx.tenantId, rfqId: id };
+    const totalLineCount = await prisma.rfqLine.count({ where: lineWhere });
+    const totalLinePages = Math.max(1, Math.ceil(totalLineCount / RFQ_COMPARE_LINE_PAGE_SIZE));
+    const requestedLinePage = Number(req.nextUrl.searchParams.get('page'));
+    const linePage = Number.isSafeInteger(requestedLinePage) && requestedLinePage > 0
+      ? Math.min(requestedLinePage, totalLinePages)
+      : 1;
+    const linePageOffset = (linePage - 1) * RFQ_COMPARE_LINE_PAGE_SIZE;
+    const comparisonSourceLines = await prisma.rfqLine.findMany({
+      where: lineWhere,
+      skip: linePageOffset,
+      take: RFQ_COMPARE_LINE_PAGE_SIZE,
+      select: {
+        id: true,
+        lineNumber: true,
+        description: true,
+        specification: true,
+        category: true,
+        subcategory: true,
+        uom: true,
+        quantity: true,
+        benchmarkRate: true,
+        boqLineId: true,
+        boqLine: {
+          select: {
+            id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+            category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+            costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+            brand: true, model: true, material: true, grade: true, remarks: true,
+          },
+        },
+        prLine: {
+          select: {
+            estimatedRate: true,
+            boqLine: {
+              select: {
+                id: true, itemCode: true, standardDescription: true, originalDescription: true, specification: true,
+                category: { select: { name: true } }, subcategory: { select: { name: true } }, uom: { select: { code: true } },
+                costSource: true, costDate: true, aiUnitCost: true, location: true, drawingReference: true,
+                brand: true, model: true, material: true, grade: true, remarks: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    });
+    const comparisonLineIds = comparisonSourceLines.length > 0
+      ? comparisonSourceLines.map((line) => line.id)
+      : ['__empty_rfq_comparison_page__'];
+
+    const needsRevisionBoqFallback = comparisonSourceLines.some((line) => !line.boqLine && !line.prLine?.boqLine);
+    const fallbackSourceLines = rfq.boqRevision?.id && needsRevisionBoqFallback
+      ? comparisonSourceLines.filter((line) => !line.boqLine && !line.prLine?.boqLine)
+      : [];
+    const fallbackBoqLineBySourceId = new Map<string, RfqCompareFallbackBoqLine>();
+    for (let offset = 0; offset < fallbackSourceLines.length; offset += RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE) {
+      const fallbackChunk = fallbackSourceLines.slice(offset, offset + RFQ_COMPARE_FALLBACK_MATCH_CHUNK_SIZE);
+      const ids = [...new Set(fallbackChunk.map((line) => line.boqLineId).filter((value): value is string => Boolean(value)))];
+      const lineNumbers = [...new Set(fallbackChunk.flatMap((line) => [
+        line.lineNumber,
+        String(line.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, ''),
+      ]))];
+      const exactCandidateFilters: Prisma.BoqLineWhereInput[] = [];
+      if (ids.length > 0) exactCandidateFilters.push({ id: { in: ids } });
+      if (lineNumbers.length > 0) exactCandidateFilters.push({ lineNumber: { in: lineNumbers } });
+      const exactFallbackCandidates = await prisma.boqLine.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          boqRevisionId: rfq.boqRevision?.id,
+          OR: exactCandidateFilters,
+        },
+        select: RFQ_COMPARE_FALLBACK_BOQ_LINE_SELECT,
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+      });
+      if (exactFallbackCandidates.length > RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT) {
+        await writeStructuredLog('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', {
+          operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
+          requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+          rfqId: rfq.id, revisionId: rfq.boqRevision?.id, linePage,
+          candidateCountAtLeast: exactFallbackCandidates.length, maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+        });
+        return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
+      }
+      for (const line of fallbackChunk) {
+        const exactCandidate = exactFallbackCandidates.find((candidate) =>
+          candidate.id === line.boqLineId || candidate.lineNumber === line.lineNumber ||
+          candidate.lineNumber === String(line.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, '')
+        );
+        if (exactCandidate) fallbackBoqLineBySourceId.set(line.id, exactCandidate);
+      }
+      const descriptionFallbackLines = fallbackChunk.filter((line) => !fallbackBoqLineBySourceId.has(line.id));
+      for (let descriptionOffset = 0; descriptionOffset < descriptionFallbackLines.length;
+        descriptionOffset += RFQ_COMPARE_FALLBACK_DESCRIPTION_CHUNK_SIZE) {
+        const descriptionChunk = descriptionFallbackLines.slice(
+          descriptionOffset, descriptionOffset + RFQ_COMPARE_FALLBACK_DESCRIPTION_CHUNK_SIZE,
+        );
+        const descriptions = [...new Set(descriptionChunk.map((line) => line.description.trim()).filter(Boolean))];
+        if (descriptions.length === 0) continue;
+        const descriptionFilters: Prisma.BoqLineWhereInput[] = descriptions.flatMap((description) => [
+          { standardDescription: { contains: description } },
+          { originalDescription: { contains: description } },
+        ]);
+        const descriptionCandidates = await prisma.boqLine.findMany({
+          where: {
+            tenantId: ctx.tenantId,
+            boqRevisionId: rfq.boqRevision?.id,
+            OR: descriptionFilters,
+          },
+          select: RFQ_COMPARE_FALLBACK_BOQ_LINE_SELECT,
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT + 1,
+        });
+        if (descriptionCandidates.length > RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT) {
+          await writeStructuredLog('warn', 'procurement.rfq_compare_fallback_candidates_exceeded', {
+            operation: 'compare_rfq_quotes', route: '/api/procurement/rfqs/[id]/compare',
+            requestId: req.headers.get('x-request-id'), tenantId: ctx.tenantId, userId: ctx.userId,
+            rfqId: rfq.id, revisionId: rfq.boqRevision?.id, linePage,
+            candidateCountAtLeast: descriptionCandidates.length, maxCandidates: RFQ_COMPARE_FALLBACK_BOQ_CANDIDATE_LIMIT,
+          });
+          return apiError(UI_STRINGS.common.userMessages.failedToCompareQuotes, 500);
+        }
+        for (const line of descriptionChunk) {
+          const normalizedDescription = line.description.toLowerCase();
+          const match = descriptionCandidates.find((candidate) =>
+            candidate.standardDescription?.toLowerCase() === normalizedDescription ||
+            candidate.originalDescription.toLowerCase() === normalizedDescription
+          );
+          if (match) fallbackBoqLineBySourceId.set(line.id, match);
+        }
+      }
+    }
+
     // 1. Read only each vendor's latest quote and its line rows; version history is not used by this screen.
     const latestQuoteRows = await prisma.$queryRaw<RfqLatestCompareQuoteRow[]>(Prisma.sql`
       WITH latest_quotes AS (
@@ -137,9 +221,20 @@ export async function GET(
         FROM "quotes" AS quote
         WHERE quote."tenantId" = ${ctx.tenantId} AND quote."rfqId" = ${id}
         GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
+      ), latest_quote_line_summaries AS (
+        SELECT latest."tenantId", latest."id" AS "quoteId",
+          COUNT(DISTINCT CASE WHEN quoteLine."unitRate" > 0 THEN quoteLine."rfqLineId" END) AS "quotedCount"
+        FROM latest_quotes AS summary
+        INNER JOIN "quotes" AS latest
+          ON latest."tenantId" = summary."tenantId" AND latest."rfqId" = summary."rfqId"
+            AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
+        LEFT JOIN "quote_lines" AS quoteLine
+          ON quoteLine."tenantId" = latest."tenantId" AND quoteLine."quoteId" = latest."id"
+        GROUP BY latest."tenantId", latest."id"
       )
       SELECT latest."id" AS "quoteId", latest."vendorId", latest."quoteNumber", latest."quoteVersion",
-        summary."versionCount", latest."totalQuoteAmount", latest."submittedAt", latest."status",
+        summary."versionCount", COALESCE(lineSummary."quotedCount", 0) AS "quotedCount",
+        latest."totalQuoteAmount", latest."submittedAt", latest."status",
         latest."commercialTerms", latest."paymentTermsOffered", latest."deliveryLeadTimeDays",
         vendor."name" AS "vendorName", vendor."code" AS "vendorCode", vendor."vendorType",
         vendor."qualificationStatus", vendor."complianceStatus", vendor."performanceScore",
@@ -151,8 +246,11 @@ export async function GET(
           AND latest."vendorId" = summary."vendorId" AND latest."quoteVersion" = summary."latestVersion"
       LEFT JOIN "vendors" AS vendor
         ON vendor."id" = latest."vendorId" AND vendor."tenantId" = latest."tenantId"
+      LEFT JOIN latest_quote_line_summaries AS lineSummary
+        ON lineSummary."tenantId" = latest."tenantId" AND lineSummary."quoteId" = latest."id"
       LEFT JOIN "quote_lines" AS quoteLine
         ON quoteLine."quoteId" = latest."id" AND quoteLine."tenantId" = latest."tenantId"
+          AND quoteLine."rfqLineId" IN (${Prisma.join(comparisonLineIds)})
     `);
     const latestQuotesById = new Map<string, {
       id: string;
@@ -160,6 +258,7 @@ export async function GET(
       quoteNumber: string;
       quoteVersion: number;
       versionCount: number;
+      quotedCount: number;
       totalQuoteAmount: number;
       submittedAt: string | Date;
       status: string;
@@ -193,6 +292,7 @@ export async function GET(
           quoteNumber: row.quoteNumber,
           quoteVersion: Number(row.quoteVersion),
           versionCount: Number(row.versionCount),
+          quotedCount: Number(row.quotedCount || 0),
           totalQuoteAmount: Number(row.totalQuoteAmount),
           submittedAt: row.submittedAt,
           status: row.status,
@@ -341,7 +441,7 @@ export async function GET(
 
     // 3. Fetch active approved rate cards in the tenant
     const now = new Date();
-    const rateCardDescriptions = [...new Set(rfq.lines.map((line) => line.description.toLowerCase().trim()).filter(Boolean))];
+    const rateCardDescriptions = [...new Set(comparisonSourceLines.map((line) => line.description.toLowerCase().trim()).filter(Boolean))];
     const descriptionChunks: string[][] = [];
     for (let offset = 0; offset < rateCardDescriptions.length; offset += RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE) {
       descriptionChunks.push(rateCardDescriptions.slice(offset, offset + RFQ_COMPARE_RATE_CARD_DESCRIPTION_CHUNK_SIZE));
@@ -395,9 +495,8 @@ export async function GET(
 
     // 4. Vendors participating in comparison
     const vendors = evaluatedQuotes.map((q) => {
-      const quotedLineIds = new Set(q.lines.filter((l) => l.unitRate > 0).map((l) => l.rfqLineId));
-      const totalRfqLines = rfq.lines.length;
-      const quotedCount = quotedLineIds.size;
+      const totalRfqLines = totalLineCount;
+      const quotedCount = q.quotedCount;
       const completenessPercent = totalRfqLines > 0 ? Math.round((quotedCount / totalRfqLines) * 100) : 0;
       const missingLineCount = totalRfqLines - quotedCount;
 
@@ -426,17 +525,25 @@ export async function GET(
     });
 
     // 5. Line-level comparison matrix
-    let totalAiBenchmark = 0;
-    const vendorTotals: Record<string, number> = {};
+    const benchmarkTotals = await prisma.$queryRaw<Array<{ totalAiBenchmark: number | string }>>(Prisma.sql`
+      SELECT COALESCE(SUM(
+        COALESCE(NULLIF(boqLine."aiUnitCost", 0), NULLIF(rfqLine."benchmarkRate", 0), NULLIF(prLine."estimatedRate", 0))
+        * rfqLine."quantity"
+      ), 0) AS "totalAiBenchmark"
+      FROM "rfq_lines" AS rfqLine
+      LEFT JOIN "boq_lines" AS boqLine
+        ON boqLine."id" = rfqLine."boqLineId" AND boqLine."tenantId" = rfqLine."tenantId"
+      LEFT JOIN "pr_lines" AS prLine
+        ON prLine."id" = rfqLine."prLineId" AND prLine."tenantId" = rfqLine."tenantId"
+      WHERE rfqLine."tenantId" = ${ctx.tenantId} AND rfqLine."rfqId" = ${id}
+    `);
+    const totalAiBenchmark = Number(benchmarkTotals[0]?.totalAiBenchmark || 0);
     const invalidNegotiationRounds = new Set<string>();
-    vendors.forEach((v) => (vendorTotals[v.vendorId] = 0));
 
-    const lineComparison = rfq.lines.map((rfqLine) => {
+    const lineComparison = comparisonSourceLines.map((rfqLine) => {
       // AI Estimated Unit Cost
       const aiCost = rfqLine.boqLine?.aiUnitCost || rfqLine.benchmarkRate || rfqLine.prLine?.estimatedRate || null;
       const aiTotal = aiCost !== null ? aiCost * rfqLine.quantity : null;
-      if (aiTotal !== null) totalAiBenchmark += aiTotal;
-
       const aiSource = rfqLine.boqLine?.costSource || (aiCost ? 'AI Costing Engine / Baseline Benchmark' : null);
       const aiDate = rfqLine.boqLine?.costDate ? rfqLine.boqLine.costDate.toISOString().split('T')[0] : null;
 
@@ -536,7 +643,6 @@ export async function GET(
         };
 
         if (quoted) {
-          vendorTotals[q.vendorId] = (vendorTotals[q.vendorId] || 0) + amount;
           if (rate < lowestRate) {
             lowestRate = rate;
             lowestVendorId = q.vendorId;
@@ -551,16 +657,9 @@ export async function GET(
       const sourceBoq =
         rfqLine.boqLine ||
         rfqLine.prLine?.boqLine ||
-        rfq.boqRevision?.lines?.find((b: any) =>
-          b.id === rfqLine.boqLineId ||
-          (b.itemCode && b.itemCode === (rfqLine as any).itemCode) ||
-          b.lineNumber === rfqLine.lineNumber ||
-          b.lineNumber === String(rfqLine.lineNumber).replace(/^RFQ-L|^PR-L|^L-/, '') ||
-          (b.standardDescription && b.standardDescription.toLowerCase() === (rfqLine.description || '').toLowerCase()) ||
-          (b.originalDescription && b.originalDescription.toLowerCase() === (rfqLine.description || '').toLowerCase())
-        );
+        fallbackBoqLineBySourceId.get(rfqLine.id) || null;
 
-      const itemCode = sourceBoq?.itemCode || (rfqLine as any).itemCode || null;
+      const itemCode = sourceBoq?.itemCode || null;
       const itemDescription = rfqLine.description || sourceBoq?.standardDescription || sourceBoq?.originalDescription || 'Line item';
       
       // BOQ Description: The source BOQ-specific description.
@@ -676,6 +775,8 @@ export async function GET(
         entityId: rfq.id,
         action: 'QUOTE_COMPARED',
         description: comparisonDescription,
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        route: '/api/procurement/rfqs/[id]/compare',
       });
     }
 
@@ -695,7 +796,7 @@ export async function GET(
         title: rfq.title,
         status: responseStatus,
         project: rfq.project,
-        boqRevision: rfq.boqRevision,
+        boqRevision: rfq.boqRevision ? { id: rfq.boqRevision.id, revisionCode: rfq.boqRevision.revisionCode } : null,
         pr: rfq.pr,
         submissionDeadline: rfq.submissionDeadline,
         commercialValidityDays: rfq.commercialValidityDays,
@@ -704,6 +805,14 @@ export async function GET(
       },
       vendors: allRankedVendors,
       lines: lineComparison,
+      pagination: {
+        page: linePage,
+        pageSize: RFQ_COMPARE_LINE_PAGE_SIZE,
+        totalItems: totalLineCount,
+        totalPages: totalLinePages,
+        hasPreviousPage: linePage > 1,
+        hasNextPage: linePage < totalLinePages,
+      },
       activeNegotiation,
       negotiationSummaries,
       awards: rfq.awards,

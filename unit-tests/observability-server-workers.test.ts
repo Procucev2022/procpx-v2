@@ -47,8 +47,17 @@ describe('logEvent', () => {
     expect(stderr).toHaveBeenCalledWith(expect.stringContaining('observability.log_failed Error: stream closed'));
 
     stdout.mockImplementation(() => true);
-    logEvent('warn', 'example.second');
+    logEvent('warn', 'example.second', {}, 'next');
     await flushLogWrites();
     expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"message":"example.second"'));
+    expect(stdout).toHaveBeenCalledWith(expect.stringContaining('"source":"next"'));
+  });
+
+  it('swallows failures from the stderr fallback', async () => {
+    jest.spyOn(process.stdout, 'write').mockImplementationOnce(() => { throw new Error('stdout closed'); });
+    jest.spyOn(process.stderr, 'write').mockImplementationOnce(() => { throw new Error('stderr closed'); });
+
+    logEvent('error', 'example.failure');
+    await expect(flushLogWrites()).resolves.toBeUndefined();
   });
 });

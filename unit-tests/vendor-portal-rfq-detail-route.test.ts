@@ -19,6 +19,7 @@ import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { NEGOTIATION_HISTORY_PAGE_SIZE } from '../src/lib/negotiation-history.constants';
 import { encodeNegotiationHistoryCursor } from '../src/lib/negotiation-history';
+import { MAX_RFQ_WORKFLOW_LINES } from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -124,9 +125,14 @@ describe('vendor portal RFQ detail and quote API', () => {
       where: { id: 'rfq-custom', tenantId: 'tenant-1', invitedVendors: { some: { vendorId: 'vendor-1' } } },
       include: expect.objectContaining({
         project: { select: { id: true, name: true, projectCode: true } },
-        lines: { orderBy: { lineNumber: 'asc' } },
+        lines: { orderBy: { lineNumber: 'asc' }, take: MAX_RFQ_WORKFLOW_LINES + 1 },
         invitedVendors: { where: { vendorId: 'vendor-1' } },
-        quotes: { where: { vendorId: 'vendor-1' }, orderBy: { quoteVersion: 'desc' }, include: { lines: true } },
+        quotes: {
+          where: { vendorId: 'vendor-1' },
+          orderBy: [{ quoteVersion: 'desc' }, { id: 'desc' }],
+          take: 1,
+          include: { lines: { take: MAX_RFQ_WORKFLOW_LINES + 1 } },
+        },
         negotiations: {
           take: 1,
           orderBy: { updatedAt: 'desc' },
@@ -164,6 +170,27 @@ describe('vendor portal RFQ detail and quote API', () => {
         },
       },
     });
+  });
+
+  it.each([
+    ['RFQ', { lines: Array.from({ length: MAX_RFQ_WORKFLOW_LINES + 1 }, (_, index) => ({ id: `line-${index}` })) }],
+    ['quote', { quotes: [{ lines: Array.from({ length: MAX_RFQ_WORKFLOW_LINES + 1 }, (_, index) => ({ id: `quote-line-${index}` })) }] }],
+  ])('fails closed and logs when the %s detail exceeds its persisted workflow limit', async (_recordType, overrides) => {
+    db.rfq.findFirst.mockResolvedValueOnce(rfq(overrides));
+
+    await expect(GET(getRequest(), params())).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.common.userMessages.failedToFetchRfqDetail,
+      status: 500,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'vendor_portal.rfq_detail_line_limit_exceeded', expect.objectContaining({
+      operation: 'read_vendor_rfq_detail',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      vendorId: 'vendor-1',
+      rfqId: 'rfq-1',
+      maximumLineCount: MAX_RFQ_WORKFLOW_LINES,
+    }), 'application');
   });
 
   it('returns RFQ detail not-found and lookup errors', async () => {

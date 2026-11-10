@@ -7,6 +7,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { getListPageWindow } from "@/lib/api-utils";
 import type { Prisma } from '@prisma/client';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { MAX_PPO_CREATE_LINES } from '@/lib/d1-batch.constants';
 import { VENDOR_PPO_MAX_PAGE_SIZE, VENDOR_PPO_MAX_SEARCH_LENGTH, VENDOR_PPO_PAGE_SIZE } from './route.constants';
 import type { VendorPpoLineView, VendorPpoRouteQuery } from '@app-types/app/api/vendor-portal-ppos.types';
 
@@ -34,12 +35,26 @@ export async function GET(req: NextRequest) {
   };
 
   if (query.ppoId) {
+    const startedAt = Date.now();
     try {
       const ppo = await prisma.ppo.findFirst({
         where: { id: query.ppoId, tenantId: ctx.tenantId, vendorId },
-        include: { lines: { orderBy: { lineNumber: 'asc' } } },
+        include: { lines: {
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: MAX_PPO_CREATE_LINES + 1,
+        } },
       });
       if (!ppo) return apiError(UI_STRINGS.common.purchaseOrderNotFoundOrAccessDenied, 404);
+      if ((ppo.lines?.length ?? 0) > MAX_PPO_CREATE_LINES) {
+        await writeStructuredLog('error', 'vendor_portal.ppo_line_limit_exceeded', {
+          operation: 'read_vendor_ppo_detail', route: '/api/vendor-portal/ppos',
+          requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+          tenantId: ctx.tenantId, userId: ctx.userId, vendorId, ppoId: query.ppoId,
+          observedLineCountAtLeast: ppo.lines.length, maximumLines: MAX_PPO_CREATE_LINES,
+          durationMs: Date.now() - startedAt,
+        });
+        return apiError(UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders, 500);
+      }
       const lines: VendorPpoLineView[] = ppo.lines.map((line) => ({
         id: line.id,
         itemDescription: line.itemDescription,
@@ -53,7 +68,7 @@ export async function GET(req: NextRequest) {
     } catch (error) {
       await writeStructuredLog('error', 'vendor_portal.ppo_detail_read_failed', {
         operation: 'read_vendor_ppo_details', route: '/api/vendor-portal/ppos', requestId: req.headers.get('x-request-id'),
-        tenantId: ctx.tenantId, vendorId, ppoId: query.ppoId,
+        tenantId: ctx.tenantId, vendorId, ppoId: query.ppoId, durationMs: Date.now() - startedAt,
         error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
       });
       return apiError(UI_STRINGS.common.userMessages.failedToLoadPurchaseOrders, 500);

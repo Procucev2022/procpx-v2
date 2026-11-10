@@ -55,7 +55,12 @@ export async function POST(req: NextRequest) {
         revisions: {
           orderBy: { revisionNumber: 'desc' },
           take: 1,
-          include: { lines: { orderBy: { lineNumber: 'asc' } } },
+          include: {
+            lines: {
+              orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+              take: MAX_BOQ_BATCH_LINES + 1,
+            },
+          },
         },
       },
     });

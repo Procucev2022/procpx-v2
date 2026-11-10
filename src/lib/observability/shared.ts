@@ -1,7 +1,19 @@
-import type { LogLevel, LogSource, LogRecord } from "@app-types/lib/observability/shared.types";
-export type { LogLevel, LogSource, LogRecord };
+import type { InstrumentationRequestHeaders, LogLevel, LogSource, LogRecord } from "@app-types/lib/observability/shared.types";
+export type { InstrumentationRequestHeaders, LogLevel, LogSource, LogRecord };
 import { LOG_LEVELS, sensitiveKeyPattern, secretTextPattern, emailPattern } from "./shared.constants";
 export { LOG_LEVELS };
+
+function getFirstHeaderValue(headers: InstrumentationRequestHeaders, headerName: string): string | undefined {
+  const header = Object.entries(headers).find(([name]) => name.toLowerCase() === headerName)?.[1];
+  const firstValue = Array.isArray(header) ? header[0] : header;
+  if (typeof firstValue !== 'string') return undefined;
+  const normalized = firstValue.trim().slice(0, 128);
+  return normalized || undefined;
+}
+
+export function getRequestCorrelationId(headers: InstrumentationRequestHeaders): string | undefined {
+  return getFirstHeaderValue(headers, 'x-request-id') || getFirstHeaderValue(headers, 'cf-ray');
+}
 
 
 export function redactText(value: string): string {

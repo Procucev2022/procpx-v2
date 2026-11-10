@@ -20,6 +20,7 @@ import {
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { getListPageWindow } from '@/lib/api-utils';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import type {
@@ -101,8 +102,15 @@ export async function POST(req: NextRequest) {
       allowSupersede = false,
     } = body;
 
+    const isBulkRequest = Boolean(
+      (Array.isArray(vendorIds) && vendorIds.length > 0) || bulkAllEligible,
+    );
+
     if (!rfqId) {
       return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.rFQIDIsRequired, 400, { route: '/api/procurement/negotiations', method: 'POST' });
+    }
+    if (!isBulkRequest && (typeof vendorId !== 'string' || vendorId.trim().length === 0)) {
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
     failedRfqId = rfqId;
 
@@ -115,6 +123,45 @@ export async function POST(req: NextRequest) {
 
     if (!rfq) {
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/procurement/negotiations', method: 'POST' });
+    }
+
+    const requestedTargetList: unknown[] = isBulkRequest
+      ? Array.isArray(vendorIds) && vendorIds.length > 0
+        ? vendorIds
+        : rfq.invitedVendors.map((iv) => iv.vendorId)
+      : [vendorId];
+    const validTargetIds = requestedTargetList.filter(
+      (targetVendorId): targetVendorId is string => typeof targetVendorId === 'string' && targetVendorId.trim().length > 0,
+    );
+    const targetList = Array.from(new Set(validTargetIds));
+    const invalidTargetCount = requestedTargetList.length - validTargetIds.length;
+    const duplicateTargetCount = validTargetIds.length - targetList.length;
+    if (invalidTargetCount > 0 || duplicateTargetCount > 0) {
+      await writeStructuredLog('warn', 'procurement.negotiation_targets_normalized', {
+        operation: 'normalize_dispatch_targets',
+        route: '/api/procurement/negotiations',
+        requestId,
+        tenantId: ctx.tenantId,
+        rfqId,
+        requestedTargetCount: requestedTargetList.length,
+        targetCount: targetList.length,
+        invalidTargetCount,
+        duplicateTargetCount,
+      });
+    }
+    if (targetList.length === 0) {
+      await writeStructuredLog('warn', 'procurement.negotiation_dispatch_rejected', {
+        operation: 'dispatch_negotiation_offers',
+        route: '/api/procurement/negotiations',
+        requestId,
+        tenantId: ctx.tenantId,
+        rfqId,
+        reason: 'no_valid_vendor_targets',
+        requestedTargetCount: requestedTargetList.length,
+        invalidTargetCount,
+        duplicateTargetCount,
+      });
+      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
     }
 
     const permittedStatuses = ['RELEASED', 'VENDOR_RESPONSE_OPEN', 'RESPONSE_CLOSED', 'COMPARISON', 'NEGOTIATION'];
@@ -175,11 +222,12 @@ export async function POST(req: NextRequest) {
     const requestedRevisedQuoteAmount = revisedQuoteAmount ? Number(revisedQuoteAmount) : null;
     const duplicateWindowStart = new Date(Date.now() - 4_000);
     const [latestQuoteRows, roundSummaryRows] = await Promise.all([
-      prisma.$queryRaw<NegotiationDispatchLatestQuoteRow[]>(Prisma.sql`
+      readByD1FilterChunks(targetList, (vendorIdChunk) => prisma.$queryRaw<NegotiationDispatchLatestQuoteRow[]>(Prisma.sql`
         WITH latest_vendor_quotes AS (
           SELECT quote."tenantId", quote."rfqId", quote."vendorId", MAX(quote."quoteVersion") AS "latestVersion"
           FROM "quotes" AS quote
           WHERE quote."tenantId" = ${currentTenantId} AND quote."rfqId" = ${rfqId}
+            AND quote."vendorId" IN (${Prisma.join(vendorIdChunk)})
           GROUP BY quote."tenantId", quote."rfqId", quote."vendorId"
         )
         SELECT quote."vendorId", quote."quoteVersion", quote."totalQuoteAmount"
@@ -188,7 +236,8 @@ export async function POST(req: NextRequest) {
           ON quote."tenantId" = latest."tenantId" AND quote."rfqId" = latest."rfqId"
             AND quote."vendorId" = latest."vendorId" AND quote."quoteVersion" = latest."latestVersion"
       `),
-      prisma.$queryRaw<NegotiationDispatchRoundSummaryRow[]>(Prisma.sql`
+      ),
+      readByD1FilterChunks(targetList, (vendorIdChunk) => prisma.$queryRaw<NegotiationDispatchRoundSummaryRow[]>(Prisma.sql`
         WITH vendor_round_stats AS (
           SELECT rounds."tenantId", rounds."negotiationId", rounds."vendorId",
             MAX(rounds."roundNumber") AS "latestRoundNumber",
@@ -209,6 +258,7 @@ export async function POST(req: NextRequest) {
               THEN rounds."roundNumber" END) AS "duplicateRoundNumber"
           FROM "negotiation_rounds" AS rounds
           WHERE rounds."tenantId" = ${currentTenantId} AND rounds."negotiationId" = ${currentNegotiation.id}
+            AND rounds."vendorId" IN (${Prisma.join(vendorIdChunk)})
           GROUP BY rounds."tenantId", rounds."negotiationId", rounds."vendorId"
         )
         SELECT stats."vendorId", stats."latestRoundNumber", stats."activeBuyerOfferCount",
@@ -238,15 +288,23 @@ export async function POST(req: NextRequest) {
             AND duplicate."vendorId" = stats."vendorId" AND duplicate."roundNumber" = stats."duplicateRoundNumber"
             AND duplicate."status" <> 'SUPERSEDED'
       `),
+      ),
     ]);
     const latestQuoteByVendor = new Map(latestQuoteRows.map((quote) => [quote.vendorId, quote]));
     const roundSummaryByVendor = new Map(roundSummaryRows.map((summary) => [summary.vendorId, summary]));
+    const vendorById = new Map<string, { id: string; name: string }>();
+
+    async function loadDispatchVendors(vendorIdsToLoad: string[]) {
+      const vendors = await readByD1FilterChunks(vendorIdsToLoad, (vendorIdChunk) => prisma.vendor.findMany({
+        where: { tenantId: currentTenantId, id: { in: vendorIdChunk } },
+        select: { id: true, name: true },
+      }));
+      for (const vendor of vendors) vendorById.set(vendor.id, vendor);
+    }
 
     // Internal helper to dispatch an offer to a single vendor
     async function dispatchToVendor(targetVendorId: string) {
-      const vendor = await prisma.vendor.findFirst({
-        where: { id: targetVendorId, tenantId: currentTenantId },
-      });
+      const vendor = vendorById.get(targetVendorId);
       if (!vendor) {
         return { success: false, vendorId: targetVendorId, vendorName: 'Unknown', reason: 'Vendor not found' };
       }
@@ -496,17 +554,8 @@ export async function POST(req: NextRequest) {
     }
 
     // CHECK IF BULK DISPATCH REQUESTED
-    const isBulkRequest = Boolean(
-      (Array.isArray(vendorIds) && vendorIds.length > 0) || bulkAllEligible
-    );
-
     if (isBulkRequest) {
-      let targetList: string[] = [];
-      if (Array.isArray(vendorIds) && vendorIds.length > 0) {
-        targetList = vendorIds;
-      } else {
-        targetList = rfq.invitedVendors.map((iv) => iv.vendorId);
-      }
+      await loadDispatchVendors(targetList);
 
       const dispatched: any[] = [];
       const failed: any[] = [];
@@ -551,10 +600,7 @@ export async function POST(req: NextRequest) {
     }
 
     // SINGLE VENDOR DISPATCH
-    if (!vendorId) {
-      return apiError(UI_STRINGS.appApiProcurementNegotiationsRoute.vendorIDIsRequiredForSingleCounterofferDispatch, 400, { route: '/api/procurement/negotiations', method: 'POST' });
-    }
-
+    await loadDispatchVendors([vendorId]);
     const singleResult = await dispatchToVendor(vendorId);
     if (!singleResult.success) {
       const { NextResponse } = await import('next/server');

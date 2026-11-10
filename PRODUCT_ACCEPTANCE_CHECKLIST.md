@@ -1,6 +1,6 @@
 # proCPX Product Acceptance Checklist
 
-Updated: 2026-11-05
+Updated: 2026-11-10
 
 This checklist is derived from the routes, screens, migrations, and automated tests in this checkout. No product requirements or approved acceptance backlog was found in the repository, so this is an evidence map, not a claim that every business requirement is known or accepted.
 
@@ -23,9 +23,9 @@ This checklist is derived from the routes, screens, migrations, and automated te
 
 ## Release blockers and evidence gaps
 
-- The latest full local integrity check finds 44 application tables, 493 rows, no duplicate groups in 25 logical checks, no foreign-key violations, and no cross-tenant references. This is local evidence only; remote production D1 could not be inspected because Cloudflare credentials and database ID are not configured here.
+- The latest full local integrity check finds 44 application tables, 493 rows, no duplicate groups in 25 logical checks, no foreign-key violations, and no cross-tenant references. This is local evidence only; remote D1 could not be inspected because the `dev` Cloudflare account/token lacks the required permissions, an external blocker.
 - The central isolated D1 scenario previously passed 70/70 checks through PPO issuance. It does not cover all ingestion paths, auction and rate-card lifecycles, actual-cost reconciliation, completion/reversal, or every reject/return branch.
-- The current coverage report has 59 source files below the enforced per-file 90% threshold. The workspace quality gate remains red until those files meet all four thresholds.
+- As of 2026-11-10, the full workspace quality gate passes: all 355 source files meet the per-file 90% statements, branches, functions, and lines thresholds. This confirms local automated coverage; it does not replace isolated D1 acceptance for the listed lifecycle paths.
 - Production D1 Insights, invocation logs, read/write usage, and log retention have not been verified from this environment.
 - Business acceptance remains open wherever rules are not stated in the code or an approved product specification. In particular, confirm which procurement methods, currencies/taxes, approval paths, vendor compliance documents, integrations, and reporting exports are required for initial release.
 

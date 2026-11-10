@@ -14,7 +14,8 @@ import {
   VENDOR_PERFORMANCE_SCORE_UPDATE_AFTER_AUDIT_SQL,
   VENDOR_RATING_DECISION_UPDATE_SQL,
 } from '@/lib/d1-batch.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import { VENDOR_RATING_DEFAULT_PAGE_SIZE, VENDOR_RATING_MAX_PAGE_SIZE } from './route.constants';
 
 
@@ -82,19 +83,28 @@ export async function GET(req: NextRequest) {
     const pageRatings = rawRatings.slice(0, pageSize);
     // Resolve submitters
     const userIds = Array.from(new Set(pageRatings.map((r) => r.ratedBy).filter(Boolean)));
-    const users = userIds.length > 0 ? await prisma.user.findMany({
-      where: { tenantId: ctx.tenantId, id: { in: userIds } },
+    const users = userIds.length > 0 ? await readByD1FilterChunks(userIds, (chunk) => prisma.user.findMany({
+      where: { tenantId: ctx.tenantId, id: { in: chunk } },
       select: { id: true, name: true, role: true, email: true },
-    }) : [];
+    })) : [];
     const userMap = new Map(users.map((u) => [u.id, u.name]));
 
+    let malformedCriteriaCount = 0;
+    let sampleMalformedRatingId: string | null = null;
     const ratings = pageRatings.map((r) => {
-      let parsedCriteria: any = {};
-      if (r.criteriaDetails) {
+      let parsedCriteria: Record<string, unknown> = {};
+      if (r.criteriaDetails !== null && r.criteriaDetails !== undefined) {
+        let malformed = false;
         try {
-          parsedCriteria = typeof r.criteriaDetails === 'string' ? JSON.parse(r.criteriaDetails) : r.criteriaDetails;
+          const parsed: unknown = typeof r.criteriaDetails === 'string' ? JSON.parse(r.criteriaDetails) : r.criteriaDetails;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) parsedCriteria = parsed as Record<string, unknown>;
+          else malformed = true;
         } catch {
-          parsedCriteria = {};
+          malformed = true;
+        }
+        if (malformed) {
+          malformedCriteriaCount += 1;
+          sampleMalformedRatingId ??= r.id;
         }
       }
 
@@ -116,6 +126,14 @@ export async function GET(req: NextRequest) {
         decisionHistory: parsedCriteria.history || [],
       };
     });
+    if (malformedCriteriaCount > 0) {
+      logEvent('warn', 'vendor_rating.criteria_details_invalid', {
+        operation: 'list_vendor_rating_approvals', route: '/api/approvals/vendor-ratings',
+        requestId: req.headers.get('x-request-id') || null, tenantId: ctx.tenantId, userId: ctx.userId,
+        fieldName: 'criteriaDetails', invalidCount: malformedCriteriaCount,
+        sampleRatingId: sampleMalformedRatingId, fallback: 'empty_object',
+      });
+    }
 
     // KPI Metrics scoped by project permissions
     const allWhereClause: any = { tenantId: ctx.tenantId };
@@ -209,13 +227,23 @@ export async function POST(req: NextRequest) {
     }
 
     let criteria: Record<string, any> = {};
-    if (rating.criteriaDetails) {
+    let malformedCriteria = false;
+    if (rating.criteriaDetails !== null && rating.criteriaDetails !== undefined) {
       try {
         const parsed = typeof rating.criteriaDetails === 'string' ? JSON.parse(rating.criteriaDetails) : rating.criteriaDetails;
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) criteria = parsed;
+        else malformedCriteria = true;
       } catch {
-        criteria = {};
+        malformedCriteria = true;
       }
+    }
+    if (malformedCriteria) {
+      logEvent('warn', 'vendor_rating.criteria_details_invalid', {
+        operation: 'decide_vendor_rating', route: '/api/approvals/vendor-ratings',
+        requestId: req.headers.get('x-request-id') || null, tenantId: ctx.tenantId, userId: ctx.userId,
+        ratingId: rating.id, vendorId: rating.vendorId, ppoId: rating.ppoId,
+        fieldName: 'criteriaDetails', fallback: 'empty_object',
+      });
     }
     const now = new Date();
     const timestamp = now.toISOString();

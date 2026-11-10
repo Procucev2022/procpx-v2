@@ -7,7 +7,7 @@ import { evaluateVendorProfile } from '../src/lib/vendor-ai-evaluator';
 import { POST as lockRates } from '../src/app/api/procurement/rfqs/[id]/lock-rates/route';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { persistVendorEvaluationAtomically } from '../src/lib/vendor-evaluation-persistence';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { POST as createReRfq } from '../src/app/api/procurement/rfqs/[id]/re-rfq/route';
 import { POST as submitEvaluation } from '../src/app/api/procurement/vendors/[id]/evaluation/route';
 import { POST as evaluateVendorAi } from '../src/app/api/procurement/vendors/[id]/evaluate-ai/route';
@@ -39,7 +39,7 @@ jest.mock('../src/lib/notifications', () => ({
 }));
 jest.mock('../src/lib/vendor-ai-evaluator', () => ({ evaluateVendorProfile: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -49,6 +49,7 @@ const notify = notifyNextResponsibleParty as jest.Mock;
 const dispatchPrepared = dispatchPreparedWorkflowNotification as jest.Mock;
 const evaluateProfile = evaluateVendorProfile as jest.Mock;
 const d1Batch = writeD1BatchAtomically as jest.Mock;
+const logHandled = logEvent as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', userName: 'Buyer', role: 'PROCUREMENT_MANAGER' };
 const post = (body: unknown) => new NextRequest('http://localhost/api/test', {
@@ -506,7 +507,10 @@ describe('vendor qualification endpoints', () => {
     await expect(evaluateVendorAi(post({}), routeParams)).resolves.toMatchObject({
       ok: true, data: { evaluation: { status: 'AI_GENERATED', overallWeightedScore: 78 }, report: evaluationReport, message: 'AI Evaluation completed. Suggested score: 78% (CONDITIONAL).' },
     });
-    expect(evaluateProfile).toHaveBeenCalledWith(expect.objectContaining({ id: 'vendor-1', email: 'acme@example.test', categories: [UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical] }));
+    expect(evaluateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'vendor-1', email: 'acme@example.test', categories: [UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical] }),
+      expect.objectContaining({ onInputDataIssue: expect.any(Function) }),
+    );
     const [vendorUpdate, evaluationInsert, auditInsert] = d1Batch.mock.calls.at(-1)?.[0] as Array<{ sql: string; values: unknown[] }>;
     expect(JSON.parse(String(evaluationInsert.values[0]))).toMatchObject({
       tenantId: 'tenant-1', vendorId: 'vendor-1', status: 'AI_GENERATED', overallWeightedScore: 78,
@@ -516,6 +520,25 @@ describe('vendor qualification endpoints', () => {
     expect(auditInsert.sql).toContain('INSERT INTO "audit_logs"');
     expect(db.vendor.update).not.toHaveBeenCalled();
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it('logs safe diagnostics when the evaluator falls back for malformed vendor profile fields', async () => {
+    db.vendor.findFirst.mockResolvedValueOnce({ ...vendor, documents: '{bad json', clientReferences: '{}' });
+    evaluateProfile.mockImplementationOnce((_input, options) => {
+      options.onInputDataIssue({ fieldName: 'documents', reason: 'invalid_json', fallback: 'empty_array' });
+      options.onInputDataIssue({ fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'empty_array' });
+      return evaluationReport;
+    });
+
+    await expect(evaluateVendorAi(post({}), routeParams)).resolves.toMatchObject({ ok: true });
+    expect(logHandled).toHaveBeenCalledWith('warn', 'vendor.ai_evaluation_input_invalid', expect.objectContaining({
+      operation: 'run_ai_vendor_evaluation', route: '/api/procurement/vendors/[id]/evaluate-ai',
+      requestId: null, tenantId: 'tenant-1', userId: 'user-1', vendorId: 'vendor-1', invalidCount: 2,
+      issues: [
+        { fieldName: 'documents', reason: 'invalid_json', fallback: 'empty_array' },
+        { fieldName: 'clientReferences', reason: 'invalid_shape', fallback: 'empty_array' },
+      ],
+    }));
   });
 
   it('stores AI assessments for shared vendors without changing their global qualification fields', async () => {

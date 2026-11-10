@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { apiError, apiSuccess, getListPageWindow, isApiContext, requireAuth } from '@/lib/api-utils';
 import { getUserProjectAccessFilter } from '@/lib/project-auth';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import {
   ACTUAL_COST_SUMMARY_STATUSES,
@@ -173,7 +173,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    void writeStructuredLog('error', 'budget.categories_read_failed', {
+    logEvent('error', 'budget.categories_read_failed', {
       operation: 'read_budget_categories', route: '/api/budgets/categories',
       requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
       tenantId: ctx.tenantId, projectId, costCentreId, page: pageWindow.page, pageSize: pageWindow.pageSize,

@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getListPageWindow, requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 import { COST_CENTRE_FILTER_PAGE_SIZE } from './route.constants';
 
 export async function GET(req: NextRequest) {
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
       ...(tx.contribution?.approvals || []).map((approval) => approval.approverId),
     ]).filter((id): id is string => Boolean(id))));
     const users = userIds.length > 0
-      ? await prisma.user.findMany({ where: { tenantId: ctx.tenantId, id: { in: userIds } }, select: { id: true, name: true, email: true } })
+      ? await readByD1FilterChunks(userIds, (chunk) => prisma.user.findMany({ where: { tenantId: ctx.tenantId, id: { in: chunk } }, select: { id: true, name: true, email: true } }))
       : [];
     const userMap = new Map(users.map((user) => [user.id, user.name || user.email]));
 
@@ -166,7 +167,7 @@ export async function GET(req: NextRequest) {
       pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     });
   } catch (error) {
-    void writeStructuredLog('error', onlyCostCentres ? 'budget.cost_centre_filter_options_failed' : 'budget.transaction_ledger_failed', {
+    logEvent('error', onlyCostCentres ? 'budget.cost_centre_filter_options_failed' : 'budget.transaction_ledger_failed', {
       operation: onlyCostCentres ? 'list_cost_centre_options' : 'list', route: '/api/budgets/transactions', tenantId: ctx.tenantId, projectId,
       costCentreId, page, pageSize, costCentrePage: costCentrePage.page,
       durationMs: Date.now() - startedAt, error,

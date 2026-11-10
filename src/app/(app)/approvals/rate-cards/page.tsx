@@ -2,25 +2,17 @@
 // src/app/(app)/approvals/rate-cards/page.tsx
 // Two-Level Rate Card Approval Queue (Level 1: Project Approver -> Level 2: Finance Approver)
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import Link from 'next/link';
 import {
-  Tag,
   CheckCircle2,
   XCircle,
   Clock,
-  FileText,
-  Building2,
   MessageSquare,
-  AlertTriangle,
   RotateCcw,
-  Check,
   Send,
   Eye,
-  Layers,
   Scale,
-  Sparkles,
-  History,
-  ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
@@ -80,7 +72,9 @@ export default function RateCardApprovalsPage() {
           setUserRole('FINANCE_APPROVER');
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_rate_card_approval_role', route: '/api/auth/session',
+      }));
   }, []);
 
   const fetchRateCards = useCallback(async (append = false) => {
@@ -439,13 +433,13 @@ export default function RateCardApprovalsPage() {
           category="Interior Works"
           vendorAcceptanceDate="24 Oct 2026"
           projectApproved={userRole === 'FINANCE_APPROVER'}
-          onApproveProject={(comments) => {
+          onApproveProject={() => {
             setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApprovalCompletedRoutedToLevel2FinanceApprover, type: 'success' });
           }}
-          onApproveFinance={(comments) => {
+          onApproveFinance={() => {
             setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApprovalCompletedRateCardRC20260006IsNowActive, type: 'success' });
           }}
-          onReject={(comments) => {
+          onReject={() => {
             setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRejectedWithRemarks, type: 'error' });
           }}
         />

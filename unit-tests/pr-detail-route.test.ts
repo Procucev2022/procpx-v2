@@ -7,6 +7,7 @@ import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { PR_DETAIL_LINE_PAGE_SIZE } from '../src/lib/pr-line-pagination.constants';
 import { encodePrLineCursor } from '../src/lib/pr-line-pagination';
+import { PR_DETAIL_RFQ_PREVIEW_LIMIT } from '../src/app/api/pr/[id]/route.constants';
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: { procurementRequest: { findFirst: jest.fn() } },
@@ -54,7 +55,11 @@ describe('purchase request detail API', () => {
             boqLine: { select: expect.objectContaining({ itemCode: true, standardDescription: true }) },
           }),
         }),
-        rfqs: expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+        rfqs: expect.objectContaining({
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: PR_DETAIL_RFQ_PREVIEW_LIMIT + 1,
+        }),
+        _count: { select: { rfqs: true } },
       }),
     }));
     const query = db.procurementRequest.findFirst.mock.calls[0][0];
@@ -102,6 +107,35 @@ describe('purchase request detail API', () => {
         lines: expect.objectContaining({ take: PR_DETAIL_LINE_PAGE_SIZE + 1 }),
       }),
     }));
+  });
+
+  it('bounds the linked RFQ preview while returning an exact count and truncation signal', async () => {
+    const rfqs = Array.from({ length: PR_DETAIL_RFQ_PREVIEW_LIMIT + 1 }, (_, index) => ({
+      id: `rfq-${index + 1}`, rfqNumber: `RFQ-${index + 1}`,
+    }));
+    db.procurementRequest.findFirst.mockResolvedValueOnce({
+      id: 'pr-1', lines: [], rfqs, _count: { rfqs: 52 },
+    });
+
+    await expect(GET(request(), params())).resolves.toMatchObject({
+      ok: true,
+      data: {
+        rfqs: rfqs.slice(0, PR_DETAIL_RFQ_PREVIEW_LIMIT),
+        rfqCount: 52,
+        rfqPreviewTruncated: true,
+      },
+    });
+  });
+
+  it('falls back to the selected RFQ preview length for legacy query results without relation counts', async () => {
+    db.procurementRequest.findFirst.mockResolvedValueOnce({
+      id: 'pr-1', lines: [], rfqs: [{ id: 'rfq-1' }],
+    });
+
+    await expect(GET(request(), params())).resolves.toMatchObject({
+      ok: true,
+      data: { rfqs: [{ id: 'rfq-1' }], rfqCount: 1, rfqPreviewTruncated: false },
+    });
   });
 
   it('handles a legacy detail result without a line collection and captures Cloudflare request IDs for unknown errors', async () => {

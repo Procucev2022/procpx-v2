@@ -56,6 +56,10 @@ const contributionDetails: Record<string, unknown> = {
       { id: 'tx-1', category: 'Electrical', amount: 2000, quantity: 5, uom: 'M' },
       { id: 'tx-2', category: 'General', amount: 0, quantity: 0 },
     ],
+    detailPages: {
+      lines: { hasMore: true, nextCursor: 'line-cursor-1' },
+      transactions: { hasMore: true, nextCursor: 'transaction-cursor-1' },
+    },
   },
   'contrib-2': { boqRevision: {}, transactions: [{ id: 'tx-3', category: 'Civil', amount: 1 }] },
 };
@@ -67,6 +71,14 @@ function response(body: unknown, ok = true) {
 function setupFetch() {
   mockFetch.mockImplementation((url: string) => {
     if (url.startsWith('/api/approvals?type=BUDGET')) return Promise.resolve(response({ budgetQueue: queue }));
+    if (url.includes('?section=lines&')) return Promise.resolve(response({
+      data: [{ id: 'line-4', lineNumber: '4', standardDescription: 'Field conduit', quantity: 2, uomRaw: 'M', aiUnitCost: 30, aiTotalCost: 60 }],
+      hasMore: false, nextCursor: null,
+    }));
+    if (url.includes('?section=transactions&')) return Promise.resolve(response({
+      data: [{ id: 'tx-3', category: 'Services', amount: 60, quantity: 2, uom: 'M' }],
+      hasMore: false, nextCursor: null,
+    }));
     if (url.startsWith('/api/budgets/contrib-')) return Promise.resolve(response(contributionDetails[url.split('/').at(-1) || ''] || {}));
     if (url === '/api/budgets/approve') return Promise.resolve(response(approveResult.body, approveResult.ok));
     if (url === '/api/budgets/reject') return Promise.resolve(response(rejectResult.body, rejectResult.ok));
@@ -104,6 +116,15 @@ describe('project budget approval workspace', () => {
     expect(await screen.findByText('Cable tray')).toBeInTheDocument();
     expect(await screen.findByText('Grounding strip')).toBeInTheDocument();
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.nOS))).toHaveLength(2);
+    const categoryReview = screen.getByText(uiStringPattern(UI_STRINGS.common.categoryWiseAllocationBreakdown)).parentElement;
+    const categoryCount = () => screen.getByText(uiStringPattern(UI_STRINGS.common.categoryWiseAllocationBreakdown))
+      .parentElement?.querySelector('div[style*="flex-wrap"]')?.children.length;
+    expect(categoryCount()).toBe(2);
+    fireEvent.click(within(categoryReview as HTMLElement).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    await waitFor(() => expect(categoryCount()).toBe(3));
+    const reviewTables = screen.getAllByRole('table');
+    fireEvent.click(within(reviewTables[reviewTables.length - 1]).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    expect(await screen.findByText('Field conduit')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppApprovalsBudgetPage.currentApprovedBudget)).parentElement).toHaveTextContent('5,000');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.askClarification) }));
     expect(await screen.findByTestId('approval-chat')).toHaveAttribute('data-mode', 'true');

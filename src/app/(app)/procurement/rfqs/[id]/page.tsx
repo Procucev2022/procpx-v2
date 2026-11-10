@@ -5,39 +5,26 @@ import { useEffect, useState, useMemo, use, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import PageHeader from '@/components/ui/PageHeader';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
-import SpecificationCell from '@/components/ui/SpecificationCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import {
   Send,
-  RotateCcw,
   Award,
   FileCheck,
-  ArrowLeft,
   CheckCircle2,
   AlertTriangle,
   FileText,
-  Scale,
   MessageSquare,
-  Building2,
-  Receipt,
   Users,
-  Check,
-  Sparkles,
-  Clock,
-  ExternalLink,
   Plus,
-  Percent,
   ShieldAlert,
-  Info,
   Calendar,
   Layers,
   ArrowRight,
-  TrendingDown,
   Tag,
   Eye,
   FileSpreadsheet,
@@ -75,7 +62,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
           }
         }
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_rfq_detail_role', route: '/api/auth/session',
+      }));
   }, [id, router]);
 
   const isDemoMode = id === 'RFQ-DEMO-001' || id === 'demo' || searchParams.get('demo') === 'true';
@@ -95,6 +84,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [loading, setLoading] = useState(true);
   const [comparison, setComparison] = useState<any>(null);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const comparisonRequestSequenceRef = useRef(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -160,7 +150,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [quoteLineRates, setQuoteLineRates] = useState<Record<string, number>>({});
   const [quoteCommercialTerms, setQuoteCommercialTerms] = useState('Payment net 30 days, FOB site delivery');
   const [quoteDeliveryDays, setQuoteDeliveryDays] = useState('30');
-  const [quoteValidityDays, setQuoteValidityDays] = useState('60');
+  const [quoteValidityDays] = useState('60');
 
   // 4. Award Recommendation Modal
   const [showAwardModal, setShowAwardModal] = useState(false);
@@ -264,21 +254,29 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  const fetchComparison = async () => {
+  const fetchComparison = async (page = 1) => {
+    const requestSequence = comparisonRequestSequenceRef.current + 1;
+    comparisonRequestSequenceRef.current = requestSequence;
     setLoadingCompare(true);
     try {
-      const res = await fetch(`/api/procurement/rfqs/${id}/compare`);
+      const pageQuery = page > 1 ? `?page=${page}` : '';
+      const res = await fetch(`/api/procurement/rfqs/${id}/compare${pageQuery}`);
       const data = await res.json();
+      if (requestSequence !== comparisonRequestSequenceRef.current) return;
       setComparison(data);
-      if (data.vendors?.length > 0) {
+      if (page === 1 && data.vendors?.length > 0) {
         // Default to L1 vendor
         const l1 = data.vendors[0];
         setAwardVendorId(l1.vendorId);
       }
     } catch (err) {
-      console.error('Failed to load quote comparison:', err);
+      if (requestSequence === comparisonRequestSequenceRef.current) {
+        console.error('Failed to load quote comparison:', err);
+      }
     } finally {
-      setLoadingCompare(false);
+      if (requestSequence === comparisonRequestSequenceRef.current) {
+        setLoadingCompare(false);
+      }
     }
   };
 
@@ -888,15 +886,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   // Derived calculations
-  const benchmark = rfq.estimatedBenchmarkValue || 0;
   const l1VendorInfo = rankedVendors[0];
-  const l2VendorInfo = rankedVendors[1];
-  const l3VendorInfo = rankedVendors[2];
   const l1VendorId = l1VendorInfo?.vendorId;
 
-  const lowestQuote = l1VendorInfo?.totalQuoteAmount || 0;
-  const savings = benchmark && lowestQuote ? benchmark - lowestQuote : 0;
-  const savingsPercent = benchmark && lowestQuote ? Math.round((savings / benchmark) * 1000) / 10 : 0;
 
   const hasApprovedAward = rfq.awards?.some((a: any) => a.status === 'APPROVED');
   const hasPpo = rfq.ppos?.length > 0;
@@ -1428,6 +1420,8 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
               fetchRfq();
               fetchComparison();
             }}
+            onComparisonPageChange={(page) => { void fetchComparison(page); }}
+            comparisonLoading={loadingCompare}
             actionLoading={actionLoading}
           />
         </div>

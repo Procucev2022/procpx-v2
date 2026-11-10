@@ -2,7 +2,6 @@
 import './globals.css';
 import { metadata } from "./layout.constants";
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import ClientObservability from '@/components/observability/ClientObservability';
 export { metadata };
 
 
@@ -13,7 +12,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // hydrates. This only ignores attribute differences on these two tags.
     <html lang={I18N_CONFIG.defaultLocale} suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <ClientObservability />
         {children}
       </body>
     </html>

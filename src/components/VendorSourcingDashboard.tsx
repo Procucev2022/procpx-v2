@@ -5,26 +5,17 @@ import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  FileText,
   TrendingDown,
   Clock,
   CheckCircle2,
   AlertTriangle,
   MessageSquare,
-  ShieldAlert,
-  ArrowRight,
   Sparkles,
   Layers,
   Building2,
   Calendar,
-  Send,
-  RotateCcw,
-  Receipt,
-  XCircle,
-  Check,
   AlertCircle,
   ExternalLink,
-  ChevronRight,
   PackageCheck,
   FileCheck2,
   HelpCircle,
@@ -41,7 +32,6 @@ import { interpolateUiString } from "@/lib/i18n";
 export default function VendorSourcingDashboard({
   vendorId,
   vendorName,
-  vendorCode,
   isBuyer,
 }: VendorSourcingDashboardProps) {
   const [loading, setLoading] = useState(true);

@@ -6,6 +6,7 @@ import type { LogLevel } from './shared';
 import type { ClientLogEvent } from '@app-types/lib/observability/client-reporter.types';
 import {
   CLIENT_LOG_ENDPOINT,
+  CLIENT_HANDLED_FAILURE_EVENT,
   CLIENT_LOG_FLUSH_DELAY_MS,
   CLIENT_LOG_MAX_BATCH,
   CLIENT_LOG_MAX_MESSAGE_LENGTH,
@@ -14,6 +15,7 @@ import {
 let queue: ClientLogEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let sendRequest: typeof fetch | null = null;
+let reportedFetchErrors = new WeakSet<object>();
 
 export function describeError(error: unknown): Record<string, unknown> | string {
   if (error instanceof Error) return { name: error.name, message: error.message, stack: error.stack };
@@ -65,6 +67,13 @@ export function reportClientEvent(level: LogLevel, message: string, context: Rec
   else flushTimer ??= setTimeout(flushClientEvents, CLIENT_LOG_FLUSH_DELAY_MS);
 }
 
+/** Reports handled failures unless the fetch boundary has already logged the same error. */
+export function reportHandledClientFailure(error: unknown, context: Record<string, unknown> = {}): void {
+  if ((error as { name?: string } | null)?.name === 'AbortError') return;
+  if (typeof error === 'object' && error !== null && reportedFetchErrors.has(error)) return;
+  reportClientEvent('error', CLIENT_HANDLED_FAILURE_EVENT, { ...context, error: describeError(error) });
+}
+
 /** Installs global browser error reporting once; returns a function that removes it. */
 export function installClientErrorReporting(): () => void {
   if (typeof window === 'undefined' || sendRequest) return () => undefined;
@@ -104,6 +113,7 @@ export function installClientErrorReporting(): () => void {
       return response;
     } catch (error) {
       if ((error as { name?: string } | null)?.name !== 'AbortError') {
+        if (typeof error === 'object' && error !== null) reportedFetchErrors.add(error);
         reportClientEvent('error', 'browser.api_network_error', {
           url: path, method, durationMs: Date.now() - startedAt, error: describeError(error),
         });
@@ -131,4 +141,5 @@ export function resetClientReporter(): void {
   flushTimer = null;
   queue = [];
   sendRequest = null;
+  reportedFetchErrors = new WeakSet<object>();
 }

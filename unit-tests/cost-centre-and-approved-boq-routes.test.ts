@@ -3,6 +3,7 @@ import { prisma } from '../src/lib/prisma';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { POST as createCostCentre, GET as listCostCentres } from '../src/app/api/cost-centres/route';
 import { GET as listApprovedBoqs } from '../src/app/api/procurement/approved-boqs/route';
+import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -14,7 +15,8 @@ jest.mock('../src/lib/prisma', () => ({
     costCentre: { findMany: jest.fn(), count: jest.fn(), aggregate: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
     budget: { aggregate: jest.fn(), groupBy: jest.fn() },
     project: { findFirst: jest.fn() },
-    boqRevision: { findMany: jest.fn(), count: jest.fn() },
+    boqRevision: { findMany: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
+    boqLine: { findMany: jest.fn() },
     auditLog: { create: jest.fn() },
   },
 }));
@@ -56,6 +58,8 @@ describe('cost centre and approved BOQ APIs', () => {
     auth.mockResolvedValue(ctx);
     isContext.mockReturnValue(true);
     db.boqRevision.count.mockResolvedValue(2);
+    db.boqRevision.findFirst.mockResolvedValue({ id: 'rev-1' });
+    db.boqLine.findMany.mockResolvedValue([]);
     rawQuery.mockResolvedValue([]);
     db.budget.groupBy.mockResolvedValue([]);
     writeBatch.mockReset().mockResolvedValue([{ meta: { changes: 1 }, results: [{ id: 'created' }] }, { meta: { changes: 1 } }]);
@@ -108,9 +112,12 @@ describe('cost centre and approved BOQ APIs', () => {
     expect((response as unknown as { data: unknown[] }).data).toHaveLength(100);
     expect((response as unknown as { headers: Headers }).headers.get('x-cost-centre-has-more')).toBe('true');
     expect(db.costCentre.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take: 101 }));
-    expect(db.budget.groupBy).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', costCentreId: { in: Array.from({ length: 100 }, (_, index) => `cc-${index + 1}`) } },
-    }));
+    expect(db.budget.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.budget.groupBy.mock.calls.map(([query]) => query.where.costCentreId.in.length)).toEqual([90, 10]);
+    expect(db.budget.groupBy.mock.calls[0][0].where.costCentreId.in).toEqual(
+      Array.from({ length: 90 }, (_, index) => `cc-${index + 1}`),
+    );
+    expect(db.budget.groupBy.mock.calls[1][0].where.costCentreId.in).toEqual(['cc-91', 'cc-92', 'cc-93', 'cc-94', 'cc-95', 'cc-96', 'cc-97', 'cc-98', 'cc-99', 'cc-100']);
     expect(structuredLog).toHaveBeenCalledWith('warn', 'cost_centre.lookup_truncated', expect.objectContaining({
       tenantId: 'tenant-1', projectId: 'project-1', limit: 100,
     }));
@@ -154,6 +161,20 @@ describe('cost centre and approved BOQ APIs', () => {
       by: ['costCentreId'],
       where: { tenantId: 'tenant-1', costCentreId: { in: ['cc-1', 'cc-2'] } },
     }));
+  });
+
+  it('chunks paged cost-centre budget aggregation at the safe D1 filter size', async () => {
+    db.costCentre.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => ({
+      id: `page-cc-${index + 1}`, areaSqFt: 10, projectId: 'project-1',
+    })));
+    db.costCentre.count.mockResolvedValueOnce(100);
+    db.costCentre.aggregate.mockResolvedValueOnce({ _sum: { areaSqFt: 1000 } });
+    db.budget.aggregate.mockResolvedValueOnce({ _sum: { totalAmount: 0, approvedAmount: 0, pendingAmount: 0 } });
+
+    await listCostCentres(request('http://localhost/api/cost-centres?page=1&pageSize=100'));
+
+    expect(db.budget.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.budget.groupBy.mock.calls.map(([query]) => query.where.costCentreId.in.length)).toEqual([90, 10]);
   });
 
   it('handles empty paged summaries, non-Error reads, and atomic creation conflicts', async () => {
@@ -321,6 +342,11 @@ describe('cost centre and approved BOQ APIs', () => {
       _count: { rfqs: 2 },
     }]);
     db.boqRevision.count.mockResolvedValueOnce(1);
+    rawQuery.mockResolvedValueOnce([
+      { boqRevisionId: 'rev-1', categoryId: 'category-electrical', categoryName: 'Electrical', lineCount: 2, totalQty: 3, estimatedValue: 200 },
+      { boqRevisionId: 'rev-1', categoryId: null, categoryName: null, lineCount: 1, totalQty: 0, estimatedValue: 0 },
+    ]);
+    db.boqLine.findMany.mockResolvedValueOnce(revisions[0].lines);
     await expect(listApprovedBoqs(request('http://localhost/api/procurement/approved-boqs?revisionId=rev-1&pageSize=1'))).resolves.toMatchObject({
       ok: true,
       data: {
@@ -330,15 +356,122 @@ describe('cost centre and approved BOQ APIs', () => {
             expect.objectContaining({ lineNumber: 'ITEM-1', description: 'Cable run', specification: 'Standard commercial grade', benchmarkRate: 50 }),
             expect.objectContaining({ lineNumber: 'L-1', category: 'General', uom: 'NOS', benchmarkRate: 100 }),
           ]),
+          totalLines: 3,
+          linePagination: { total: 3, pageSize: 90, hasMore: false, nextCursor: null },
         })],
       },
     });
-    expect(rawQuery).toHaveBeenCalledTimes(1);
+    expect(rawQuery).toHaveBeenCalledTimes(2);
+    expect(db.boqLine.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', boqRevisionId: 'rev-1', isDeleted: false },
+      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      take: 91,
+      select: expect.objectContaining({
+        id: true, lineNumber: true, standardDescription: true, originalDescription: true, quantity: true, aiUnitCost: true,
+      }),
+    }));
 
     db.boqRevision.findMany.mockRejectedValueOnce(new Error('boq database error'));
     await expect(listApprovedBoqs(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, status: 500 });
     db.boqRevision.findMany.mockRejectedValueOnce({});
     await expect(listApprovedBoqs(request())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, status: 500 });
+  });
+
+  it('pages approved BOQ detail lines with a bounded selected-field D1 read', async () => {
+    type PagedDetailResponse = {
+      data: {
+        approvedBoqs: Array<{
+          totalLines: number;
+          estimatedBenchmarkValue: number;
+          lines: Array<{ id: string }>;
+          linePagination: { total: number; pageSize: number; hasMore: boolean; nextCursor: string | null };
+        }>;
+      };
+    };
+    const linePage = [
+      { id: 'line-1', lineNumber: '1', itemCode: null, standardDescription: 'Cable', originalDescription: null, specification: null, categoryId: null, subcategoryId: null, uomRaw: null, quantity: 2, aiUnitCost: 10, category: null, uom: null },
+      { id: 'line-2', lineNumber: '2', itemCode: null, standardDescription: 'Tray', originalDescription: null, specification: null, categoryId: null, subcategoryId: null, uomRaw: null, quantity: 1, aiUnitCost: 20, category: null, uom: null },
+      { id: 'line-3', lineNumber: '3', itemCode: null, standardDescription: 'Pump', originalDescription: null, specification: null, categoryId: null, subcategoryId: null, uomRaw: null, quantity: 1, aiUnitCost: 30, category: null, uom: null },
+    ];
+    db.boqRevision.findMany.mockResolvedValueOnce([{
+      id: 'rev-1', boqId: 'boq-1', revisionCode: 'R1', approvedAt: null, approvedBy: null,
+      _count: { rfqs: 0 }, costCentre: null,
+      boq: { boqCode: 'BOQ-1', project: { id: 'project-1', projectCode: 'P-1', name: 'Project', city: '', state: '', location: '' } },
+    }]);
+    db.boqRevision.count.mockResolvedValueOnce(1);
+    rawQuery.mockResolvedValueOnce([
+      { boqRevisionId: 'rev-1', categoryId: null, categoryName: null, lineCount: 3, totalQty: 4, estimatedValue: 80 },
+    ]);
+    db.boqLine.findMany.mockResolvedValueOnce(linePage);
+
+    const response = await listApprovedBoqs(request('http://localhost/api/procurement/approved-boqs?revisionId=rev-1&linePageSize=2')) as unknown as PagedDetailResponse;
+    const firstPage = response.data.approvedBoqs[0];
+    expect(firstPage).toMatchObject({
+      totalLines: 3,
+      estimatedBenchmarkValue: 80,
+      linePagination: { total: 3, pageSize: 2, hasMore: true },
+    });
+    expect(firstPage.lines.map((line) => line.id)).toEqual(['line-1', 'line-2']);
+    const cursor = firstPage.linePagination.nextCursor;
+    expect(cursor).toEqual(expect.any(String));
+    expect(db.boqLine.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ take: 3 }));
+
+    db.boqLine.findMany.mockResolvedValueOnce([linePage[2]]);
+    if (!cursor) throw new Error('Expected approved BOQ line continuation cursor');
+    const next = await listApprovedBoqs(request(`http://localhost/api/procurement/approved-boqs?revisionId=rev-1&linePageSize=2&lineCursor=${encodeURIComponent(cursor)}`)) as unknown as PagedDetailResponse;
+    expect(next.data.approvedBoqs[0].lines.map((line) => line.id)).toEqual(['line-3']);
+    expect(next.data.approvedBoqs[0].linePagination).toEqual({ pageSize: 2, hasMore: false, nextCursor: null });
+    expect(rawQuery).toHaveBeenCalledTimes(1);
+    expect(db.boqRevision.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ tenantId: 'tenant-1', AND: expect.any(Array) }),
+      select: { id: true },
+    }));
+    expect(db.boqLine.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { tenantId: 'tenant-1', boqRevisionId: 'rev-1', isDeleted: false, OR: [
+        { lineNumber: { gt: '2' } }, { lineNumber: '2', id: { gt: 'line-2' } },
+      ] },
+      take: 3,
+    }));
+  });
+
+  it('handles missing and exhausted BOQ cursors, sparse line defaults, and empty revision pages', async () => {
+    const cursor = encodeBoqLineCursor({ lineNumber: '1', id: 'line-1' });
+    db.boqRevision.findFirst.mockResolvedValueOnce(null);
+    await expect(listApprovedBoqs(request(`http://localhost/api/procurement/approved-boqs?revisionId=missing&lineCursor=${cursor}`))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, status: 404,
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'rev-1' });
+    db.boqLine.findMany.mockResolvedValueOnce([]);
+    await expect(listApprovedBoqs(request(`http://localhost/api/procurement/approved-boqs?revisionId=rev-1&linePageSize=1&lineCursor=${cursor}`))).resolves.toMatchObject({
+      ok: true,
+      data: { approvedBoqs: [{ lines: [], linePagination: { pageSize: 1, hasMore: false, nextCursor: null } }] },
+    });
+
+    db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'rev-1' });
+    db.boqLine.findMany.mockResolvedValueOnce([{
+      id: 'line-fallback', lineNumber: '', itemCode: null, standardDescription: '', originalDescription: '',
+      specification: '', category: null, subcategoryId: null, uom: null, uomRaw: null, quantity: null, aiUnitCost: 0,
+    }]);
+    await expect(listApprovedBoqs(request(`http://localhost/api/procurement/approved-boqs?revisionId=rev-1&linePageSize=1&lineCursor=${cursor}`))).resolves.toMatchObject({
+      ok: true,
+      data: { approvedBoqs: [{ lines: [expect.objectContaining({
+        id: 'line-fallback', lineNumber: 'L-1', specification: 'Standard commercial grade',
+        category: 'General', uom: 'NOS', quantity: null, benchmarkRate: 100, benchmarkAmount: 0,
+      })] }] },
+    });
+
+    db.boqRevision.findMany.mockResolvedValueOnce([]);
+    db.boqRevision.count.mockResolvedValueOnce(0);
+    await expect(listApprovedBoqs(request())).resolves.toMatchObject({ ok: true, data: { approvedBoqs: [], total: 0 } });
+    expect(rawQuery).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed or unscoped approved BOQ line cursors', async () => {
+    await expect(listApprovedBoqs(request('http://localhost/api/procurement/approved-boqs?lineCursor=bad'))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+    expect(db.boqRevision.findMany).not.toHaveBeenCalled();
   });
 
   it('splits a full approved BOQ page so aggregate queries stay within D1 binding limits', async () => {

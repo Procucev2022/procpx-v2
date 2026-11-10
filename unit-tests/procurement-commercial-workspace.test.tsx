@@ -144,6 +144,33 @@ describe('ProcurementCommercialWorkspace', () => {
     expect(screen.getByText('Net 45')).toBeInTheDocument();
   });
 
+  it('renders comparison pagination and requests the next line page', () => {
+    const onComparisonPageChange = jest.fn();
+    const base = baseComparison();
+    renderWorkspace({
+      comparison: {
+        ...base,
+        lines: [base.lines[0]],
+        pagination: {
+          page: 1,
+          pageSize: 1,
+          totalItems: 2,
+          totalPages: 2,
+          hasPreviousPage: false,
+          hasNextPage: true,
+        },
+      },
+      onComparisonPageChange,
+    });
+
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {
+      value1: 1,
+      value2: 2,
+    }))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.nextPage }));
+    expect(onComparisonPageChange).toHaveBeenCalledWith(2);
+  });
+
   it('loads older negotiation history pages without duplicating the first page', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(fetchResponse({

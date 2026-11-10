@@ -7,6 +7,7 @@ import { interpolateUiString } from '@/lib/i18n';
 import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   BUDGET_AGGREGATE_PENDING_UPSERT_SQL,
+  BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL,
   BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL,
   BUDGET_CONTRIBUTION_BOQ_UPDATE_AFTER_AUDIT_SQL,
   BUDGET_CONTRIBUTION_CREATE_UNDER_APPROVAL_SQL,
@@ -18,6 +19,8 @@ import {
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import type { BudgetCategoryTotal } from '@app-types/app/api/boq/add-to-budget.types';
+import type { BudgetContributionLineAggregateRow } from '@app-types/lib/budget-contribution-lines.types';
+import { getBudgetContributionLineAggregate } from '@/lib/budget-contribution-lines';
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_CREATE');
@@ -41,21 +44,26 @@ export async function POST(req: NextRequest) {
     if (boqRevisionId) {
       revision = await prisma.boqRevision.findFirst({
         where: { id: boqRevisionId, tenantId: ctx.tenantId },
-        include: {
-          lines: { where: { isDeleted: false }, include: { category: true, subcategory: true, uom: true } },
-          boq: { include: { project: true, costCentre: true } },
+        select: {
+          id: true,
+          boqId: true,
+          revisionCode: true,
+          costCentreId: true,
+          boq: { select: { id: true, boqCode: true, projectId: true, costCentreId: true } },
         },
       });
     }
     if (!revision && boqId) {
       const boqRecord = await prisma.boq.findFirst({
         where: { id: boqId, tenantId: ctx.tenantId },
-        include: {
-          project: true,
-          costCentre: true,
+        select: {
+          id: true,
+          boqCode: true,
+          projectId: true,
+          costCentreId: true,
           revisions: {
             orderBy: { revisionNumber: 'desc' }, take: 1,
-            include: { lines: { where: { isDeleted: false }, include: { category: true, subcategory: true, uom: true } } },
+            select: { id: true, boqId: true, revisionCode: true, costCentreId: true },
           },
         },
       });
@@ -72,31 +80,26 @@ export async function POST(req: NextRequest) {
     });
     if (!costCentre) return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
 
-    const missingQtyLines = revision.lines.filter((line: { quantity?: number | null }) =>
-      line.quantity === null || line.quantity === undefined || !Number.isFinite(line.quantity) || line.quantity <= 0,
+    const lineAggregate = await getBudgetContributionLineAggregate(
+      (query) => prisma.$queryRaw<BudgetContributionLineAggregateRow[]>(query),
+      revision.id,
+      ctx.tenantId,
+      UI_STRINGS.common.general,
     );
-    if (missingQtyLines.length > 0) {
+    if (lineAggregate.missingQuantityLines > 0) {
       return apiError(interpolateUiString(
         UI_STRINGS.appApiBoqAddToBudgetRoute.lengthBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget,
-        { length: missingQtyLines.length, value2: missingQtyLines.length > 1 ? 's' : '' },
+        { length: lineAggregate.missingQuantityLines, value2: lineAggregate.missingQuantityLines > 1 ? 's' : '' },
       ), 400);
     }
-    if (revision.lines.length === 0) return apiError(UI_STRINGS.common.budgetNeedsAtLeastOneLine, 400);
+    if (lineAggregate.totalLines === 0) return apiError(UI_STRINGS.common.budgetNeedsAtLeastOneLine, 400);
+    if (lineAggregate.invalidCostLines > 0) return apiError(UI_STRINGS.common.userMessages.failedToAddBoqToBudget, 400);
 
-    let totalEstimated = 0;
-    const categoryTotals = new Map<string, BudgetCategoryTotal>();
-    for (const line of revision.lines) {
-      const rate = line.aiUnitCost || line.benchmarkRate || 100;
-      const quantity = line.quantity as number;
-      const lineCost = line.aiTotalCost || Math.round(rate * quantity * 100) / 100;
-      if (!Number.isFinite(lineCost) || lineCost < 0) return apiError(UI_STRINGS.common.userMessages.failedToAddBoqToBudget, 400);
-      totalEstimated += lineCost;
-      const categoryName = line.category?.name || UI_STRINGS.common.general;
-      const existing = categoryTotals.get(categoryName) || { amount: 0, quantity: 0, firstLineId: line.id || null };
-      existing.amount += lineCost;
-      existing.quantity += quantity;
-      categoryTotals.set(categoryName, existing);
-    }
+    const totalEstimated = lineAggregate.totalEstimated;
+    const categoryTotals = new Map<string, BudgetCategoryTotal>(lineAggregate.categories.map((category) => [
+      category.categoryName,
+      { amount: category.amount, quantity: category.quantity, firstLineId: category.firstLineId },
+    ]));
 
     const existingContribution = await prisma.budgetContribution.findFirst({
       where: { tenantId: ctx.tenantId, boqRevisionId: revision.id },
@@ -193,6 +196,18 @@ export async function POST(req: NextRequest) {
       sql: BUDGET_AGGREGATE_PENDING_UPSERT_SQL,
       values: [crypto.randomUUID(), ctx.tenantId, targetProjectId, targetCostCentreId, totalEstimated, totalEstimated,
         now, now, ctx.userId, auditId, ctx.tenantId],
+    });
+    batch.push({
+      sql: BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL,
+      values: [
+        contributionId, ctx.tenantId, revision.id, targetProjectId, targetCostCentreId,
+        auditId, ctx.tenantId, contributionId,
+        ctx.tenantId, contributionId, targetProjectId, targetCostCentreId, revision.boqId, revision.id,
+        categoryTotals.size,
+        revision.id, ctx.tenantId, revision.boqId, targetCostCentreId,
+        revision.boqId, ctx.tenantId, targetCostCentreId,
+        ctx.tenantId, targetCostCentreId, targetProjectId, totalEstimated,
+      ],
     });
 
     if (!isD1BatchWithinLimits(batch)) {

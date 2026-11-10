@@ -1,3 +1,5 @@
+import type { BoqLineCursorRecord } from '@app-types/lib/boq-line-pagination.types';
+
 export type ApprovedBoqRouteQuery = {
   page: number;
   pageSize: number;
@@ -5,6 +7,8 @@ export type ApprovedBoqRouteQuery = {
   projectId: string | null;
   revisionId: string | null;
   search: string;
+  lineCursor: BoqLineCursorRecord | null;
+  linePageSize: number;
 };
 
 export type ApprovedBoqLineAggregateRow = {
@@ -53,6 +57,14 @@ export type ApprovedBoqSummary = {
   categories: ApprovedBoqCategorySummary[];
   rfqCount: number;
   lines?: ApprovedBoqLine[];
+  linePagination?: ApprovedBoqLinePagination;
+};
+
+export type ApprovedBoqLinePagination = {
+  total?: number;
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
 };
 
 export type ApprovedBoqDetail = ApprovedBoqSummary & { lines: ApprovedBoqLine[] };

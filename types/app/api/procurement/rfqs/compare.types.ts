@@ -10,12 +10,35 @@ export type RfqCompareRateCardRow = {
   vendorName: string;
 };
 
+export type RfqCompareFallbackBoqLine = {
+  id: string;
+  lineNumber: string;
+  itemCode: string | null;
+  standardDescription: string | null;
+  originalDescription: string;
+  specification: string | null;
+  category: { name: string } | null;
+  subcategory: { name: string } | null;
+  uom: { code: string } | null;
+  costSource: string | null;
+  costDate: Date | null;
+  aiUnitCost: number | null;
+  location: string | null;
+  drawingReference: string | null;
+  brand: string | null;
+  model: string | null;
+  material: string | null;
+  grade: string | null;
+  remarks: string | null;
+};
+
 export type RfqLatestCompareQuoteRow = {
   quoteId: string;
   vendorId: string;
   quoteNumber: string;
   quoteVersion: number;
   versionCount: number;
+  quotedCount: number | bigint;
   totalQuoteAmount: number;
   submittedAt: string | Date;
   status: string;
@@ -34,6 +57,11 @@ export type RfqLatestCompareQuoteRow = {
   lineTotal: number | null;
   discountPercent: number | null;
   taxPercent: number | null;
+};
+
+export type RfqCompareVendorSummary = {
+  vendorId: string;
+  quotedCount: number;
 };
 
 export type RfqLatestCompareNegotiationRoundRow = {
@@ -82,5 +110,48 @@ export type RfqCompareNegotiationSummary = {
     status: string;
     nextResponsibleParty: string | null;
     buyerDecision: string | null;
+  } | null;
+};
+
+export type RfqCompareLine = {
+  id: string;
+  lineNumber: string | number;
+  itemCode: string | null;
+  itemDescription: string;
+  boqDescription: string | null;
+  fullBoqDescription?: string | null;
+  specification?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  location?: string | null;
+  drawingReference?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  material?: string | null;
+  grade?: string | null;
+  standard?: string | null;
+  standardReference?: string | null;
+  remarks?: string | null;
+  aiUnitCost?: number | null;
+  aiCostSource?: string | null;
+  lowestCompliantVendorId?: string | null;
+  vendorQuotes: Record<string, { quoted: boolean; rate: number; amount: number }>;
+  boqLine?: {
+    itemCode?: string | null;
+    standardDescription?: string | null;
+    originalDescription?: string | null;
+    specification?: string | null;
+    category?: { name?: string | null } | null;
+    subcategory?: { name?: string | null } | null;
+    location?: string | null;
+    drawingReference?: string | null;
+    brand?: string | null;
+    model?: string | null;
+    material?: string | null;
+    grade?: string | null;
+    standard?: string | null;
+    standardReference?: string | null;
+    remarks?: string | null;
+    costSource?: string | null;
   } | null;
 };

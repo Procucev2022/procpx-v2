@@ -4,12 +4,12 @@
 import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Plus, ClipboardCheck, FileText, ArrowRight, ExternalLink } from 'lucide-react';
+import { Plus, ClipboardCheck, FileText, ArrowRight } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import EmptyState from '@/components/ui/EmptyState';
-import { ShoppingBag, TrendingUp, CheckCircle2, Lock } from 'lucide-react';
+import { ShoppingBag, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 

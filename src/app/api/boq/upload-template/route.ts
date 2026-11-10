@@ -21,7 +21,14 @@ import {
 import type { D1BatchInputStatement, D1BatchResult } from '@app-types/lib/d1-batch.types';
 import type { TemplateBoqException, TemplateBoqLine, TemplateValidationMessage } from '@app-types/app/api/boq/upload-template/route.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import { BOQ_TEMPLATE_AUDIT_ACTION, BOQ_TEMPLATE_CREATE_NOTES, BOQ_TEMPLATE_SOURCE_TYPE } from './route.constants';
+import { loadActiveBoqReferenceCatalog } from '@/lib/boq-reference-catalog';
+import { COST_CENTRE_LOOKUP_MAX_OPTIONS } from '@/app/api/cost-centres/route.constants';
+import {
+  BOQ_TEMPLATE_AUDIT_ACTION,
+  BOQ_TEMPLATE_COST_CENTRE_LOOKUP_LIMIT_EVENT,
+  BOQ_TEMPLATE_CREATE_NOTES,
+  BOQ_TEMPLATE_SOURCE_TYPE,
+} from './route.constants';
 
 class InvalidTemplateError extends Error {}
 
@@ -194,18 +201,50 @@ export async function POST(req: NextRequest) {
     }
     if (rows.length > MAX_BOQ_BATCH_LINES) return apiError(UI_STRINGS.common.boqLineBatchLimitExceeded, 400);
 
-    const [allCostCentres, allCategories, allUoms] = await Promise.all([
-      prisma.costCentre.findMany({ where: { projectId, tenantId: ctx.tenantId } }),
-      prisma.category.findMany({ where: { tenantId: ctx.tenantId } }),
-      prisma.uomMaster.findMany({ where: { tenantId: ctx.tenantId } }),
+    const rowCode = text(rows[0]['Cost Centre Code *'] || rows[0]['Cost Centre Code'] || rows[0]['Cost Centre']).toUpperCase();
+    const [allCostCentres, referenceCatalog] = await Promise.all([
+      prisma.costCentre.findMany({
+        where: {
+          projectId, tenantId: ctx.tenantId,
+          ...(requestedCostCentreId ? { id: requestedCostCentreId } : {}),
+        },
+        select: { id: true, code: true },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        take: COST_CENTRE_LOOKUP_MAX_OPTIONS + 1,
+      }),
+      loadActiveBoqReferenceCatalog({
+        tenantId: ctx.tenantId, userId: ctx.userId, route: '/api/boq/upload-template',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+      }),
     ]);
-    const ccByCode = new Map(allCostCentres.map((centre) => [centre.code.toUpperCase(), centre]));
-    let costCentreId = requestedCostCentreId;
-    if (!costCentreId && allCostCentres.length > 0) {
-      const rowCode = text(rows[0]['Cost Centre Code *'] || rows[0]['Cost Centre Code'] || rows[0]['Cost Centre']).toUpperCase();
-      costCentreId = (rowCode && ccByCode.get(rowCode)?.id) || allCostCentres[0].id;
+    if (!referenceCatalog.ok) return apiError(referenceCatalog.message, 413);
+    const hasMoreCostCentres = allCostCentres.length > COST_CENTRE_LOOKUP_MAX_OPTIONS;
+    if (hasMoreCostCentres) {
+      await writeStructuredLog('warn', BOQ_TEMPLATE_COST_CENTRE_LOOKUP_LIMIT_EVENT, {
+        operation: 'resolve_template_cost_centre', route: '/api/boq/upload-template',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray'),
+        tenantId: ctx.tenantId, userId: ctx.userId, projectId,
+        resultCountAtLeast: allCostCentres.length, maxItems: COST_CENTRE_LOOKUP_MAX_OPTIONS,
+        status: 'truncated',
+      });
     }
-    if (requestedCostCentreId && !allCostCentres.some((centre) => centre.id === requestedCostCentreId)) {
+    const costCentreOptions = hasMoreCostCentres
+      ? allCostCentres.slice(0, COST_CENTRE_LOOKUP_MAX_OPTIONS)
+      : allCostCentres;
+    const allCategories = referenceCatalog.categories;
+    const allUoms = referenceCatalog.uoms;
+    const ccByCode = new Map(costCentreOptions.map((centre) => [centre.code.toUpperCase(), centre]));
+    let costCentreId = requestedCostCentreId;
+    if (!costCentreId && costCentreOptions.length > 0) {
+      const costCentreByCode = rowCode ? ccByCode.get(rowCode) : undefined;
+      if (rowCode && !costCentreByCode && hasMoreCostCentres) {
+        return apiError(interpolateUiString(UI_STRINGS.appApiCostCentresRoute.activeCostCentreLookupExceedsMaximumSize, {
+          maxItems: COST_CENTRE_LOOKUP_MAX_OPTIONS,
+        }), 413);
+      }
+      costCentreId = costCentreByCode?.id || costCentreOptions[0].id;
+    }
+    if (requestedCostCentreId && !costCentreOptions.some((centre) => centre.id === requestedCostCentreId)) {
       return apiError(UI_STRINGS.common.costCentreNotFoundForThisProject, 404);
     }
     const prepared = parseTemplateRows(rows, sheetName || '', allCategories, allUoms);

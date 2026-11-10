@@ -12,6 +12,7 @@ import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { MAX_D1_BATCH_STATEMENTS, NEGOTIATION_ENSURE_ACTIVE_FOR_RFQ_SQL, NEGOTIATION_OFFER_AUDIT_INSERT_SQL, NEGOTIATION_OFFER_MESSAGE_INSERT_SQL, NEGOTIATION_OFFER_PARENT_UPDATE_SQL, NEGOTIATION_OFFER_QUOTE_INSERT_SQL, NEGOTIATION_OFFER_QUOTE_LINE_INSERT_AFTER_QUOTE_SQL, NEGOTIATION_OFFER_RFQ_UPDATE_SQL, NEGOTIATION_OFFER_ROUND_INSERT_SQL, NEGOTIATION_OFFER_ROUND_UPDATE_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function POST(req: NextRequest) {
@@ -172,7 +173,6 @@ export async function POST(req: NextRequest) {
     }
 
     const roundNumber = isBuyer ? vendorBuyerOffers.length + 1 : (previousRound?.roundNumber || vendorRounds.length + 1);
-    const effectiveAmt = finalRevised || (isBuyer ? finalCounterAmount : 0) || 0;
     const savingsAmount = previousQuoteAmount > 0 && finalRevised && finalRevised > 0 ? previousQuoteAmount - finalRevised : 0;
     const savingsPercent = previousQuoteAmount > 0 && finalRevised && finalRevised > 0 ? (savingsAmount / previousQuoteAmount) * 100 : 0;
 
@@ -253,10 +253,10 @@ export async function POST(req: NextRequest) {
           || !Number.isFinite(lineTotal) || lineTotal < 0;
       });
       if (invalidLineAmounts) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
-      const rfqLines = await prisma.rfqLine.findMany({
-        where: { tenantId: ctx.tenantId, rfqId, id: { in: rfqLineIds } },
+      const rfqLines = await readByD1FilterChunks(rfqLineIds, (chunk) => prisma.rfqLine.findMany({
+        where: { tenantId: ctx.tenantId, rfqId, id: { in: chunk } },
         select: { id: true },
-      });
+      }));
       if (rfqLines.length !== rfqLineIds.length) {
         return apiError(UI_STRINGS.common.invalidRequestBody, 400);
       }

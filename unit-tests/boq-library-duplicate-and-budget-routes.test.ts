@@ -174,6 +174,14 @@ describe('BOQ duplication', () => {
       ok: true, data: { success: true, boq: { id: expect.any(String), boqCode: 'BOQ-P-1-003', title: 'SOURCE (Copy)' },
         boqId: expect.any(String), boqCode: 'BOQ-P-1-003', message: 'BOQ successfully duplicated as BOQ-P-1-003' }, status: 201,
     });
+    expect(db.boq.findFirst).toHaveBeenLastCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        revisions: expect.objectContaining({
+          take: 1,
+          include: { lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_BOQ_BATCH_LINES + 1 } },
+        }),
+      }),
+    }));
     const statements = d1Batch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
     expect(statements).toHaveLength(5);
     expect(statements[0].sql).toContain("'BOQ-' || project.\"projectCode\"");

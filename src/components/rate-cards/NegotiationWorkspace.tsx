@@ -1,8 +1,8 @@
 'use client';
 // src/components/rate-cards/NegotiationWorkspace.tsx
 // Standardized full-width item-level negotiation workspace with enterprise design standards
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Save, Send, CheckCircle2, History, Layers, Check } from 'lucide-react';
+import { useState } from 'react';
+import { RotateCcw, Save, Send, History, Layers } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import LongTextCell from '@/components/ui/LongTextCell';
@@ -24,7 +24,6 @@ export default function NegotiationWorkspace({
   onReset,
   onSaveDraft,
   onSendOffer,
-  onAcceptQuoteClick,
   onBack,
 }: NegotiationWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'offers' | 'history'>('offers');

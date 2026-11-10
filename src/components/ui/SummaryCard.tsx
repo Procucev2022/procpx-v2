@@ -2,7 +2,6 @@
 // src/components/ui/SummaryCard.tsx
 // Standardized Enterprise Reusable Summary Card & Grid Component
 // Compact 100-120px height, grouped label-amount-description layout, restrained accents
-import React from 'react';
 import type { SummaryCardProps, SummaryCardGridProps } from "@app-types/components/ui/SummaryCard.types";
 export type { SummaryCardProps, SummaryCardGridProps };
 

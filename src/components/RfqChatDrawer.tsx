@@ -5,13 +5,8 @@ import {
   X,
   Send,
   MessageSquare,
-  Clock,
-  User,
-  Shield,
-  CheckCircle2,
   AlertCircle,
   Loader2,
-  Paperclip,
 } from 'lucide-react';
 import type { RfqChatDrawerProps } from "@app-types/components/RfqChatDrawer.types";
 import type { RfqMessageCreateRequest } from '@app-types/app/api/procurement/rfq-messages.types';

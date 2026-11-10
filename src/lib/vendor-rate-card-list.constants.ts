@@ -1,0 +1,1 @@
+export const VENDOR_RATE_CARD_LIST_PAGE_SIZE = 10;

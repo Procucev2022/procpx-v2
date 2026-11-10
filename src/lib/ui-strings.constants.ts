@@ -280,6 +280,7 @@ export const UI_STRINGS = {
     costCentreNotFound: "Cost centre not found.",
   },
   appApiCostCentresRoute: {
+    activeCostCentreLookupExceedsMaximumSize: "This project has more than {{maxItems}} cost centres. Select a cost centre explicitly before importing by code.",
     costCentreCodeCodeAlreadyExistsForThisProject: "Cost Centre Code {{code}} already exists for this project.",
     costCentreCreatedCodeNameValue3Sqft: "Cost Centre created: {{code}} - {{name}} ({{value3}} sqft)",
     projectIDCostCentreCodeAndNameAreMandatory: "Project ID, Cost Centre Code, and Name are mandatory.",
@@ -631,6 +632,7 @@ export const UI_STRINGS = {
     cancellationReasonIsRequired: "Cancellation reason is required",
     cannotReleaseRFQInStatusStatus: "Cannot release RFQ in status {{status}}",
     forbiddenYouAreNotInvitedToThisRFQ: "Forbidden: you are not invited to this RFQ",
+    rfqStatusChangeRequiresWorkflowAction: "RFQ status changes must use the matching workflow action.",
   },
   appApiProcurementRfqsIdVendorsRoute: {
     atLeastOneVendorIDIsRequired: "At least one vendor ID is required",
@@ -3982,6 +3984,8 @@ export const UI_STRINGS = {
     currencyAmount: "{{currency}}{{amount}}",
     current: "Current",
     pageValue1OfValue2: "Page {{value1}} of {{value2}}",
+    nextPage: "Next Page",
+    previousPage: "Previous Page",
     loadMore: "Load more",
     indianRupeeSymbol: "₹",
     approveReleaseToProcurement: " Approve & Release to Procurement",
@@ -5737,7 +5741,6 @@ export const UI_STRINGS = {
     cat6StructuredCablingDataOutletRJ45Point: "Cat6 Structured Cabling Data Outlet (RJ45 Point)",
     commercial6A16ARawPowerSocketOutlet: "Commercial 6A/16A Raw Power Socket Outlet",
     dedicated6A16AUPSPowerSocketOutletForMenuBoard: "Dedicated 6A/16A UPS Power Socket Outlet for Menu Board",
-    drawingOCRProcessingFailedMessage: "Drawing OCR processing failed: {{message}}",
     localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings: "Local OCR is not available in Cloudflare Workers. Configure an AI Vision provider for image drawings.",
     extractAllCaPexBOQItemsFromThisDrawingRefDrawingRefNeverInventQuantitiesUseNullIfUnverified: "Extract all CaPex BOQ items from this drawing (Ref: {{drawingRef}}). Never invent quantities; use null if unverified.",
     overheadBeamStructuralSiteVerificationAnchorMounting: "Overhead Beam Structural Site Verification & Anchor Mounting",

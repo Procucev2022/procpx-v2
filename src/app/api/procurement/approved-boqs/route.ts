@@ -7,12 +7,14 @@ import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } fr
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import {
+  APPROVED_BOQ_DETAIL_LINES_PAGE_SIZE,
   APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE,
   APPROVED_BOQ_MAX_PAGE_SIZE,
   APPROVED_BOQ_MAX_SEARCH_LENGTH,
 } from './route.constants';
 import type { ApprovedBoqLineAggregateRow, ApprovedBoqRouteQuery } from '@app-types/app/api/procurement/approved-boqs.types';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { decodeBoqLineCursor, encodeBoqLineCursor } from '@/lib/boq-line-pagination';
 
 
 export async function GET(req: NextRequest) {
@@ -21,12 +23,22 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const pageWindow = getListPageWindow(searchParams);
+  const lineCursorParam = searchParams.get('lineCursor');
+  const lineCursor = lineCursorParam === null ? null : decodeBoqLineCursor(lineCursorParam);
+  if ((lineCursorParam !== null && !lineCursor) || (lineCursor && !searchParams.get('revisionId'))) {
+    return apiError(UI_STRINGS.common.invalidRequestBody, 400);
+  }
+  const requestedLinePageSize = Number(searchParams.get('linePageSize'));
   const query: ApprovedBoqRouteQuery = {
     ...pageWindow,
     pageSize: Math.min(pageWindow.pageSize, APPROVED_BOQ_MAX_PAGE_SIZE),
     projectId: searchParams.get('projectId'),
     revisionId: searchParams.get('revisionId'),
     search: (searchParams.get('search') || '').trim().slice(0, APPROVED_BOQ_MAX_SEARCH_LENGTH),
+    lineCursor,
+    linePageSize: Number.isSafeInteger(requestedLinePageSize) && requestedLinePageSize > 0
+      ? Math.min(requestedLinePageSize, APPROVED_BOQ_DETAIL_LINES_PAGE_SIZE)
+      : APPROVED_BOQ_DETAIL_LINES_PAGE_SIZE,
   };
 
   try {
@@ -62,6 +74,57 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (query.lineCursor && query.revisionId) {
+      const revision = await prisma.boqRevision.findFirst({ where, select: { id: true } });
+      if (!revision) return apiError(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs, 404);
+      const rows = await prisma.boqLine.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          boqRevisionId: revision.id,
+          isDeleted: false,
+          OR: [
+            { lineNumber: { gt: query.lineCursor.lineNumber } },
+            { lineNumber: query.lineCursor.lineNumber, id: { gt: query.lineCursor.id } },
+          ],
+        },
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+        take: query.linePageSize + 1,
+        select: {
+          id: true, lineNumber: true, itemCode: true, standardDescription: true, originalDescription: true,
+          specification: true, categoryId: true, subcategoryId: true, uomRaw: true, quantity: true, aiUnitCost: true,
+          category: { select: { name: true } }, uom: { select: { code: true } },
+        },
+      });
+      const pageLines = rows.slice(0, query.linePageSize);
+      const lineHasMore = rows.length > query.linePageSize;
+      const nextCursor = lineHasMore && pageLines.length > 0
+        ? encodeBoqLineCursor(pageLines[pageLines.length - 1])
+        : null;
+      return apiSuccess({
+        approvedBoqs: [{
+          id: revision.id,
+          lines: pageLines.map((line) => ({
+            id: line.id,
+            lineNumber: line.lineNumber || line.itemCode || 'L-1',
+            description: interpolateUiString(UI_STRINGS.common.value1, { value1: line.standardDescription || line.originalDescription }),
+            specification: line.specification || 'Standard commercial grade',
+            category: line.category?.name || 'General',
+            subcategory: line.subcategoryId || '',
+            uom: line.uom?.code || line.uomRaw || 'NOS',
+            quantity: line.quantity,
+            benchmarkRate: Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100,
+            benchmarkAmount: (line.quantity || 0) * (Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100),
+          })),
+          linePagination: { pageSize: query.linePageSize, hasMore: lineHasMore, nextCursor },
+        }],
+        total: 1,
+        page: 1,
+        pageSize: 1,
+        totalPages: 1,
+        hasMore: false,
+      });
+    }
+
     const [approvedRevisions, total] = await Promise.all([
       prisma.boqRevision.findMany({
         where,
@@ -94,15 +157,6 @@ export async function GET(req: NextRequest) {
               email: true,
             },
           },
-          ...(query.revisionId ? {
-            lines: {
-              where: { isDeleted: false },
-              include: {
-                category: { select: { id: true, name: true, code: true } },
-                uom: { select: { id: true, code: true, name: true } },
-              },
-            },
-          } : {}),
           costCentre: {
             select: {
               id: true,
@@ -115,15 +169,16 @@ export async function GET(req: NextRequest) {
       prisma.boqRevision.count({ where }),
     ]);
 
-    const revisionIdBatches = query.revisionId || approvedRevisions.length === 0
+    const revisionIdBatches = approvedRevisions.length === 0
       ? []
       : Array.from({ length: Math.ceil(approvedRevisions.length / APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE) }, (_, index) =>
         approvedRevisions.slice(
           index * APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE,
           (index + 1) * APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE,
         ).map((revision) => revision.id));
-    const lineGroups = revisionIdBatches.length === 0 ? [] : (await Promise.all(revisionIdBatches.map((revisionIds) =>
-      prisma.$queryRaw<ApprovedBoqLineAggregateRow[]>(Prisma.sql`
+    const [lineGroups, detailRows] = await Promise.all([
+      revisionIdBatches.length === 0 ? Promise.resolve([]) : Promise.all(revisionIdBatches.map((revisionIds) =>
+        prisma.$queryRaw<ApprovedBoqLineAggregateRow[]>(Prisma.sql`
         SELECT line."boqRevisionId", line."categoryId", category."name" AS "categoryName", COUNT(*) AS "lineCount",
           COALESCE(SUM(line."quantity"), 0) AS "totalQty",
           COALESCE(SUM(COALESCE(line."quantity", 0) * CASE WHEN line."aiUnitCost" > 0 THEN line."aiUnitCost" ELSE 100 END), 0) AS "estimatedValue"
@@ -135,8 +190,30 @@ export async function GET(req: NextRequest) {
           AND line."isDeleted" = false
         GROUP BY line."boqRevisionId", line."categoryId", category."name"
         ORDER BY "boqRevisionId" ASC, COALESCE("categoryId", '') ASC
-      `),
-    ))).flat();
+        `),
+      )).then((groups) => groups.flat()),
+      query.revisionId && approvedRevisions.length > 0
+        ? prisma.boqLine.findMany({
+          where: {
+            tenantId: ctx.tenantId,
+            boqRevisionId: query.revisionId,
+            isDeleted: false,
+          },
+          orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+          take: query.linePageSize + 1,
+          select: {
+            id: true, lineNumber: true, itemCode: true, standardDescription: true, originalDescription: true,
+            specification: true, categoryId: true, subcategoryId: true, uomRaw: true, quantity: true, aiUnitCost: true,
+            category: { select: { name: true } }, uom: { select: { code: true } },
+          },
+        })
+        : Promise.resolve([]),
+    ]);
+    const detailLines = detailRows.slice(0, query.linePageSize);
+    const detailHasMore = detailRows.length > query.linePageSize;
+    const detailNextCursor = detailHasMore && detailLines.length > 0
+      ? encodeBoqLineCursor(detailLines[detailLines.length - 1])
+      : null;
     const groupsByRevision = new Map<string, typeof lineGroups>();
     for (const group of lineGroups) {
       const groups = groupsByRevision.get(group.boqRevisionId) || [];
@@ -146,33 +223,19 @@ export async function GET(req: NextRequest) {
 
     // Compute summary metrics per approved revision
     const formatted = approvedRevisions.map((rev) => {
-      const detailedLines: any[] = query.revisionId ? ((rev as any).lines || []) : [];
       // Calculate benchmark value and category breakdown
       const categoriesMap: Record<string, { category: string; lineCount: number; totalQty: number; estimatedValue: number }> = {};
       let totalBenchmarkValue = 0;
 
-      const revisionLineGroups = query.revisionId ? null : (groupsByRevision.get(rev.id) || []);
-      const summaryGroups = revisionLineGroups?.map((group) => ({
+      const revisionLineGroups = groupsByRevision.get(rev.id) || [];
+      const summaryGroups = revisionLineGroups.map((group) => ({
         category: group.categoryName || 'General',
         lineCount: Number(group.lineCount || 0),
         quantity: Number(group.totalQty || 0),
         estimatedValue: Number(group.estimatedValue || 0),
-      })) || [];
+      }));
 
-      const categoryLineSummaries = query.revisionId
-        ? detailedLines.map((line) => {
-          const quantity = Number(line.quantity || 0);
-          const benchmarkRate = Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100;
-          return {
-            category: line.category?.name || 'General',
-            lineCount: 1,
-            quantity,
-            estimatedValue: quantity * benchmarkRate,
-          };
-        })
-        : summaryGroups;
-
-      for (const line of categoryLineSummaries) {
+      for (const line of summaryGroups) {
         const catName = line.category;
         totalBenchmarkValue += line.estimatedValue;
 
@@ -201,24 +264,30 @@ export async function GET(req: NextRequest) {
         approvedRevisionCode: rev.revisionCode,
         approvedAt: rev.approvedAt,
         approvedBy: rev.approvedBy?.name || rev.approvedBy?.email || 'Project Approver',
-        totalLines: query.revisionId
-          ? detailedLines.length
-          : summaryGroups.reduce((count, group) => count + group.lineCount, 0),
+        totalLines: summaryGroups.reduce((count, group) => count + group.lineCount, 0),
         estimatedBenchmarkValue: totalBenchmarkValue,
         categories: Object.values(categoriesMap),
         rfqCount: rev._count?.rfqs || 0,
-        ...(query.revisionId ? { lines: detailedLines.map((l) => ({
-          id: l.id,
-          lineNumber: l.lineNumber || l.itemCode || 'L-1',
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": l.standardDescription || l.originalDescription }),
-          specification: l.specification || 'Standard commercial grade',
-          category: l.category?.name || 'General',
-          subcategory: (l as any).subcategoryId || '',
-          uom: l.uom?.code || l.uomRaw || 'NOS',
-          quantity: l.quantity,
-          benchmarkRate: Number(l.aiUnitCost) > 0 ? Number(l.aiUnitCost) : 100,
-          benchmarkAmount: (l.quantity || 0) * (Number(l.aiUnitCost) > 0 ? Number(l.aiUnitCost) : 100),
-        })) } : {}),
+        ...(query.revisionId ? {
+          lines: detailLines.map((line) => ({
+            id: line.id,
+            lineNumber: line.lineNumber || line.itemCode || 'L-1',
+            description: interpolateUiString(UI_STRINGS.common.value1, { value1: line.standardDescription || line.originalDescription }),
+            specification: line.specification || 'Standard commercial grade',
+            category: line.category?.name || 'General',
+            subcategory: line.subcategoryId || '',
+            uom: line.uom?.code || line.uomRaw || 'NOS',
+            quantity: line.quantity,
+            benchmarkRate: Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100,
+            benchmarkAmount: (line.quantity || 0) * (Number(line.aiUnitCost) > 0 ? Number(line.aiUnitCost) : 100),
+          })),
+          linePagination: {
+            total: summaryGroups.reduce((count, group) => count + group.lineCount, 0),
+            pageSize: query.linePageSize,
+            hasMore: detailHasMore,
+            nextCursor: detailNextCursor,
+          },
+        } : {}),
       };
     });
 

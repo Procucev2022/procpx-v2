@@ -7,7 +7,7 @@ import { GET as getAuctionRfqOptions } from '../src/app/api/procurement/auctions
 import { POST as completePpo } from '../src/app/api/procurement/ppos/[id]/complete/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { MAX_PPO_COMPLETION_LINES, MAX_PPO_CREATE_LINES } from '../src/lib/d1-batch.constants';
 
 
@@ -37,7 +37,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
@@ -333,7 +333,7 @@ describe('PPO completion and actual-cost lineage', () => {
     });
     expect(db.ppo.findFirst).toHaveBeenNthCalledWith(2, {
       where: { id: 'ppo-1', tenantId: 'tenant-1' },
-      include: { lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_PPO_CREATE_LINES } },
+      include: { lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_PPO_CREATE_LINES + 1 } },
     });
   });
 
@@ -405,11 +405,80 @@ describe('PPO completion and actual-cost lineage', () => {
       where: { tenantId: 'tenant-1', ppoId: 'ppo-replay-overflow', completionRequestId: 'completion-request-1' },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: MAX_PPO_COMPLETION_LINES + 1,
     });
-    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'procurement.ppo_completion_replay_limit_exceeded', expect.objectContaining({
+    expect(logEvent).toHaveBeenCalledWith('error', 'procurement.ppo_completion_replay_limit_exceeded', expect.objectContaining({
       operation: 'replay_completion', tenantId: 'tenant-1', ppoId: 'ppo-replay-overflow',
       transactionCount: MAX_PPO_COMPLETION_LINES + 1, maximumTransactions: MAX_PPO_COMPLETION_LINES,
     }), 'next');
     expect(writeD1BatchAtomically).not.toHaveBeenCalled();
+  });
+
+  it('fails closed and logs when an existing PPO exceeds the safe completion line bound', async () => {
+    const ppoId = 'ppo-line-overflow';
+    db.ppo.findFirst.mockResolvedValueOnce({
+      id: ppoId,
+      status: 'ISSUED',
+      lines: Array.from({ length: MAX_PPO_CREATE_LINES + 1 }, (_, index) => ({ id: `line-${index + 1}` })),
+    });
+
+    await expect(completePpo(request(`http://localhost/api/ppos/${ppoId}`, {}), {
+      params: Promise.resolve({ id: ppoId }),
+    })).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCompletePpo, status: 500,
+    });
+    expect(db.ppo.findFirst).toHaveBeenCalledWith({
+      where: { id: ppoId, tenantId: 'tenant-1' },
+      include: {
+        lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_PPO_CREATE_LINES + 1 },
+        project: true,
+        rfq: { include: { pr: true, boqRevision: true } },
+      },
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'procurement.ppo_line_limit_exceeded', expect.objectContaining({
+      operation: 'complete_ppo', tenantId: 'tenant-1', userId: 'user-1', ppoId,
+      observedLineCountAtLeast: MAX_PPO_CREATE_LINES + 1, maximumLines: MAX_PPO_CREATE_LINES,
+    }), 'application');
+    expect(db.actualCostTransaction.findMany).not.toHaveBeenCalled();
+    expect(writeD1BatchAtomically).not.toHaveBeenCalled();
+  });
+
+  it('fails closed if a PPO exceeds its line bound between completion and replay reads', async () => {
+    const ppoId = 'ppo-replay-line-growth';
+    const ppo = {
+      id: ppoId, ppoNumber: 'PPO-REPLAY-GROWTH', status: 'ISSUED', projectId: 'project-1',
+      costCentreId: null, boqId: null, boqRevisionId: null, rfqId: null, vendorId: 'vendor-1',
+      lines: [{ id: 'line-1', status: 'ISSUED', uom: 'EA', orderedQuantity: 1, completedQuantity: 0, orderedUnitRate: 10, completedAmount: 0 }],
+    };
+    const lineCompletions = { lineCompletions: [{ ppoLineId: 'line-1', completedQuantity: 1 }] };
+    db.ppo.findFirst
+      .mockResolvedValueOnce(ppo)
+      .mockResolvedValueOnce({ id: ppoId, status: 'COMPLETED' })
+      .mockResolvedValueOnce(ppo)
+      .mockResolvedValueOnce({ ...ppo, lines: Array.from({ length: MAX_PPO_CREATE_LINES + 1 }, (_, index) => ({ id: `line-${index + 1}` })) });
+    db.actualCostTransaction.findMany.mockResolvedValueOnce([]).mockImplementationOnce(async () => {
+      const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ values: unknown[] }>;
+      return [{ id: 'actual-replay-growth', completionFingerprint: batch[1].values.at(-1) }];
+    }).mockImplementationOnce(async () => {
+      const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ values: unknown[] }>;
+      return [{ id: 'actual-replay-growth', completionFingerprint: batch[1].values.at(-1) }];
+    });
+
+    await expect(completePpo(request(`http://localhost/api/ppos/${ppoId}`, lineCompletions), {
+      params: Promise.resolve({ id: ppoId }),
+    })).resolves.toMatchObject({ ok: true });
+    await expect(completePpo(request(`http://localhost/api/ppos/${ppoId}`, lineCompletions), {
+      params: Promise.resolve({ id: ppoId }),
+    })).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToCompletePpo, status: 500,
+    });
+    expect(db.ppo.findFirst).toHaveBeenLastCalledWith({
+      where: { id: ppoId, tenantId: 'tenant-1' },
+      include: { lines: { orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }], take: MAX_PPO_CREATE_LINES + 1 } },
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'procurement.ppo_line_limit_exceeded', expect.objectContaining({
+      operation: 'replay_completion', tenantId: 'tenant-1', ppoId,
+      observedLineCountAtLeast: MAX_PPO_CREATE_LINES + 1, maximumLines: MAX_PPO_CREATE_LINES,
+    }), 'application');
+    expect(writeD1BatchAtomically).toHaveBeenCalledTimes(1);
   });
 
   it('rejects invalid completion envelopes, statuses, dates, and line collections', async () => {

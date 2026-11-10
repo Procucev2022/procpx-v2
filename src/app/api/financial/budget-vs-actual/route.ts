@@ -7,7 +7,13 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import type { BudgetVsActualLineSource, BudgetVsActualSummaryGroup } from '@app-types/app/api/financial/budget-vs-actual/route.types';
+import { readByD1FilterChunks } from '@/lib/d1-query';
+import type {
+  BudgetVsActualCategorySummary,
+  BudgetVsActualCostCentreSummary,
+  BudgetVsActualLineSource,
+  BudgetVsActualSummaryGroup,
+} from '@app-types/app/api/financial/budget-vs-actual/route.types';
 
 function loadBudgetVsActualSummaryGroups(input: {
   tenantId: string;
@@ -127,7 +133,7 @@ export async function GET(req: NextRequest) {
     // Detail aggregates only need to cover the requested line page. Project-wide
     // totals are calculated in SQL below so D1 does not return one aggregate row
     // per BOQ line to the Worker for every report page.
-    const budgetTxWhere: any = {
+    const budgetTxWhere: Prisma.BudgetTransactionWhereInput = {
       tenantId: ctx.tenantId,
       projectId,
       status: { in: ['APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
@@ -136,7 +142,7 @@ export async function GET(req: NextRequest) {
     if (categoryFilter) budgetTxWhere.category = categoryFilter;
 
     // 2. Committed PPO-line filters
-    const ppoLineWhere: any = {
+    const ppoLineWhere: Prisma.PpoLineWhereInput = {
       tenantId: ctx.tenantId,
       projectId,
       status: { not: 'CANCELLED' },
@@ -145,7 +151,7 @@ export async function GET(req: NextRequest) {
     if (categoryFilter) ppoLineWhere.category = categoryFilter;
 
     // 3. Actual-cost filters
-    const actualTxWhere: any = {
+    const actualTxWhere: Prisma.ActualCostTransactionWhereInput = {
       tenantId: ctx.tenantId,
       projectId,
       status: { in: ['APPROVED', 'VERIFIED'] },
@@ -154,27 +160,22 @@ export async function GET(req: NextRequest) {
     if (categoryFilter) actualTxWhere.category = categoryFilter;
 
     // 4. BOQ line filters and the bounded line-detail page
-    const boqLineWhere: any = {
+    const boqLineWhere: Prisma.BoqLineWhereInput = {
       tenantId: ctx.tenantId,
       isDeleted: false,
       revision: {
         boq: { projectId },
+        ...(costCentreId ? { costCentreId } : {}),
       },
+      ...(categoryFilter === UI_STRINGS.common.general
+        ? {
+          OR: [
+            { categoryId: null },
+            { category: { is: { name: categoryFilter } } },
+          ],
+        }
+        : categoryFilter ? { category: { is: { name: categoryFilter } } } : {}),
     };
-    if (costCentreId) {
-      boqLineWhere.revision = {
-        ...boqLineWhere.revision,
-        costCentreId,
-      };
-    }
-    if (categoryFilter === UI_STRINGS.common.general) {
-      boqLineWhere.OR = [
-        { categoryId: null },
-        { category: { is: { name: categoryFilter } } },
-      ];
-    } else if (categoryFilter) {
-      boqLineWhere.category = { is: { name: categoryFilter } };
-    }
 
     const pageLines = await prisma.boqLine.findMany({
       where: boqLineWhere,
@@ -204,24 +205,24 @@ export async function GET(req: NextRequest) {
       ? await Promise.all([
         lineCountPromise,
         summaryRowsPromise,
-        prisma.budgetTransaction.groupBy({
+        readByD1FilterChunks(pageLineIds, (chunk) => prisma.budgetTransaction.groupBy({
           by: ['boqLineId'],
-          where: { ...budgetTxWhere, boqLineId: { in: pageLineIds } },
+          where: { ...budgetTxWhere, boqLineId: { in: chunk } },
           _sum: { amount: true, quantity: true },
           _count: { _all: true },
-        }),
-        prisma.ppoLine.groupBy({
+        })),
+        readByD1FilterChunks(pageLineIds, (chunk) => prisma.ppoLine.groupBy({
           by: ['boqLineId'],
-          where: { ...ppoLineWhere, boqLineId: { in: pageLineIds } },
+          where: { ...ppoLineWhere, boqLineId: { in: chunk } },
           _sum: { orderedQuantity: true, orderedAmount: true },
           _count: { _all: true },
-        }),
-        prisma.actualCostTransaction.groupBy({
+        })),
+        readByD1FilterChunks(pageLineIds, (chunk) => prisma.actualCostTransaction.groupBy({
           by: ['boqLineId'],
-          where: { ...actualTxWhere, boqLineId: { in: pageLineIds } },
+          where: { ...actualTxWhere, boqLineId: { in: chunk } },
           _sum: { actualQuantity: true, actualAmount: true },
           _count: { _all: true },
-        }),
+        })),
       ])
       : [await lineCountPromise, await summaryRowsPromise, [], [], []];
 
@@ -338,7 +339,7 @@ export async function GET(req: NextRequest) {
     const totalVariancePercent = totalBudget > 0 ? ((totalBudget - totalActual) / totalBudget) * 100 : 0;
 
     // Cost Centre Level Aggregations
-    const costCentreMap = new Map<string, any>();
+    const costCentreMap = new Map<string, BudgetVsActualCostCentreSummary>();
     for (const cc of project.costCentres) {
       costCentreMap.set(cc.id, {
         id: cc.id,
@@ -356,8 +357,8 @@ export async function GET(req: NextRequest) {
 
     for (const row of summaryRows) {
       const ccId = row.costCentreId;
-      if (ccId && costCentreMap.has(ccId)) {
-        const item = costCentreMap.get(ccId);
+      const item = ccId ? costCentreMap.get(ccId) : undefined;
+      if (item) {
         item.budgetAmount += Number(row.budgetAmount || 0);
         item.committedAmount += Number(row.committedAmount || 0);
         item.actualAmount += Number(row.actualAmount || 0);
@@ -372,7 +373,7 @@ export async function GET(req: NextRequest) {
     const costCentresSummary = Array.from(costCentreMap.values());
 
     // Category Level Aggregations
-    const categoryMap = new Map<string, any>();
+    const categoryMap = new Map<string, BudgetVsActualCategorySummary>();
     for (const row of summaryRows) {
       const cat = row.category || UI_STRINGS.common.general;
       const existing = categoryMap.get(cat) || {
@@ -420,7 +421,7 @@ export async function GET(req: NextRequest) {
         hasMore: pageWindow.skip + lineReports.length < totalLineCount,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     await writeStructuredLog('error', 'financial.budget_vs_actual.failed', {
       operation: 'read_budget_vs_actual',
       route: '/api/financial/budget-vs-actual',

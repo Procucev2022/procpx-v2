@@ -6,7 +6,7 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { getPrLinePaginationMetadata, paginatePrLineRecords } from '@/lib/pr-line-pagination';
 import { PR_DETAIL_LINE_PAGE_SIZE } from '@/lib/pr-line-pagination.constants';
-import { PR_DETAIL_LINE_SELECT } from './route.constants';
+import { PR_DETAIL_LINE_SELECT, PR_DETAIL_RFQ_PREVIEW_LIMIT } from './route.constants';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PR_VIEW');
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
           take: PR_DETAIL_LINE_PAGE_SIZE + 1,
         },
+        _count: { select: { rfqs: true } },
         rfqs: {
           select: {
             id: true,
@@ -57,16 +58,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             status: true,
           },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: PR_DETAIL_RFQ_PREVIEW_LIMIT + 1,
         },
       },
     });
 
     if (!pr) return apiError(UI_STRINGS.common.procurementRequestNotFound, 404);
     const linePage = paginatePrLineRecords(pr.lines || []);
+    const { _count, rfqs: rfqRows, ...prDetail } = pr;
+    const rfqPreview = (rfqRows || []).slice(0, PR_DETAIL_RFQ_PREVIEW_LIMIT);
+    const rfqCount = typeof _count?.rfqs === 'number' ? _count.rfqs : (rfqRows || []).length;
     return apiSuccess({
-      ...pr,
+      ...prDetail,
       lines: linePage.lines,
       linePagination: getPrLinePaginationMetadata(linePage),
+      rfqs: rfqPreview,
+      rfqCount,
+      rfqPreviewTruncated: rfqCount > rfqPreview.length,
     });
   } catch (error) {
     await writeStructuredLog('error', 'purchase_request.detail_read_failed', {

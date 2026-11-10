@@ -1,8 +1,7 @@
 'use client';
 // src/components/rate-cards/AgreementPreviewModal.tsx
 // Authoritative Rate Card Agreement Preview Modal supporting generated templates & uploaded documents
-import React from 'react';
-import { X, FileText, Download, CheckCircle2, ShieldCheck, Printer, Calendar, Building2, User, AlertTriangle } from 'lucide-react';
+import { X, FileText, CheckCircle2, ShieldCheck, Printer, Calendar, AlertTriangle } from 'lucide-react';
 import type { AgreementDocumentData, AgreementPreviewModalProps } from "@app-types/components/rate-cards/AgreementPreviewModal.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";

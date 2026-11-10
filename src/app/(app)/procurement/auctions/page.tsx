@@ -2,9 +2,10 @@
 // app/(app)/procurement/auctions/page.tsx
 // Complete Enterprise Auction Workspace: Dashboard, KPIs, Register, and Step-Based Guided Creation
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   Gavel,
   Clock,
@@ -13,24 +14,12 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Filter,
   ArrowRight,
   ArrowLeft,
-  ChevronRight,
   Shield,
   FileText,
-  DollarSign,
-  Users,
   Calendar,
-  Layers,
-  HelpCircle,
-  Eye,
-  Trash2,
-  FileCheck,
   Check,
-  ExternalLink,
-  ChevronDown,
-  Info,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
@@ -50,7 +39,6 @@ export default function AuctionsHubPage() {
 }
 
 function AuctionsContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
 
@@ -72,7 +60,9 @@ function AuctionsContent() {
       .then((data) => {
         if (data?.user?.role) setUserRole(data.user.role);
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_auction_user_role', route: '/api/auth/session',
+      }));
   }, []);
 
   const canManage =
@@ -93,7 +83,6 @@ function AuctionsContent() {
   const [rfqOptions, setRfqOptions] = useState<any[]>([]);
   const [selectedRfqDetails, setSelectedRfqDetails] = useState<(typeof rfqOptions)[number] | null>(null);
   const [projectUsers, setProjectUsers] = useState<any[]>([]);
-  const [rfqOptionsLoading, setRfqOptionsLoading] = useState(false);
   const [rfqDetailsLoading, setRfqDetailsLoading] = useState(false);
   const [rfqListPage, setRfqListPage] = useState(1);
   const [rfqListPageSize, setRfqListPageSize] = useState(50);
@@ -137,16 +126,12 @@ function AuctionsContent() {
   // Vendors Shuttle
   const [availableVendors, setAvailableVendors] = useState<any[]>([]);
   const [invitedVendorIds, setInvitedVendorIds] = useState<string[]>([]);
-  const [vendorSearch, setVendorSearch] = useState('');
   const [nonInvitedJustification, setNonInvitedJustification] = useState('');
 
   // Items
   const [auctionItems, setAuctionItems] = useState<any[]>([]);
 
   // Documents & Terms
-  const [documents, setDocuments] = useState<any[]>([
-    { name: 'Commercial_Terms_v1.pdf', size: '245 KB', uploadedAt: new Date().toISOString() },
-  ]);
   const [termsAndConditions, setTermsAndConditions] = useState(
     '1. Bids submitted are irrevocable and legally binding for 60 calendar days.\n' +
     '2. Vendors must adhere to the configured decrement / increment minimums.\n' +
@@ -250,7 +235,6 @@ function AuctionsContent() {
   };
 
   const fetchRfqOptions = async () => {
-    setRfqOptionsLoading(true);
     try {
       const res = await fetch('/api/procurement/auctions/rfq-options');
       const data = await res.json();
@@ -268,8 +252,6 @@ function AuctionsContent() {
       setProjectUsersHasMore(data.projectUsersHasMore === true);
     } catch (err) {
       console.error(err);
-    } finally {
-      setRfqOptionsLoading(false);
     }
   };
 
@@ -408,7 +390,6 @@ function AuctionsContent() {
         invitedVendorIds,
         nonInvitedJustification,
         items: auctionItems,
-        documents,
         termsAndConditions,
         startTime: startIso,
         endTime: endIso,

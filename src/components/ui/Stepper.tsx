@@ -1,6 +1,5 @@
 'use client';
 // components/ui/Stepper.tsx - Enterprise Horizontal Stepper with Exact Five-Step Colour Coding
-import React from 'react';
 import { Check } from 'lucide-react';
 import type { StepItem, StepperProps } from "@app-types/components/ui/Stepper.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";

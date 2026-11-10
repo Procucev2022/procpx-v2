@@ -43,7 +43,7 @@ INSERT OR IGNORE INTO boqs (id, tenantId, projectId, costCentreId, boqCode, titl
 VALUES ('fx-boq-branch', 'fx-tenant-procpx', 'fx-project-branch', 'fx-cost-centre-civil', 'FX-BOQ-0001', 'TEST FIXTURE - Branch Fitout', 'Local D1 regression fixture', 'TEST FIXTURE', 'Civil and electrical sample works', 'APPROVED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'fx-user-project');
 
 INSERT OR IGNORE INTO boq_revisions (id, tenantId, boqId, costCentreId, revisionNumber, revisionCode, status, preparationStatus, budgetStatus, prStatus, sourceType, totalLines, validLines, errorLines, warningLines, createdAt, updatedAt, createdById)
-VALUES ('fx-boq-revision-1', 'fx-tenant-procpx', 'fx-boq-branch', 'fx-cost-centre-civil', 1, 'FX-BOQ-0001-R1', 'APPROVED', 'COMPLETE', 'APPROVED', 'PR_CREATED', 'MANUAL', 3, 3, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'fx-user-project');
+VALUES ('fx-boq-revision-1', 'fx-tenant-procpx', 'fx-boq-branch', 'fx-cost-centre-civil', 1, 'FX-BOQ-0001-R1', 'APPROVED', 'COMPLETE', 'APPROVED', 'PR_APPROVED', 'MANUAL', 3, 3, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'fx-user-project');
 
 INSERT OR IGNORE INTO boq_lines (id, tenantId, boqRevisionId, lineNumber, originalDescription, standardDescription, specification, categoryId, uomRaw, quantity, validationStatus, updatedAt)
 VALUES

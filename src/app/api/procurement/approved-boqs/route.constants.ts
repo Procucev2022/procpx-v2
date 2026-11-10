@@ -1,5 +1,7 @@
 import { MAX_D1_STATEMENT_BINDINGS } from '@/lib/d1-batch.constants';
+import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
 
 export const APPROVED_BOQ_MAX_PAGE_SIZE = 100;
 export const APPROVED_BOQ_MAX_SEARCH_LENGTH = 120;
 export const APPROVED_BOQ_LINE_SUMMARY_REVISION_BATCH_SIZE = MAX_D1_STATEMENT_BINDINGS - 2;
+export const APPROVED_BOQ_DETAIL_LINES_PAGE_SIZE = BOQ_LINE_DETAIL_PAGE_SIZE;

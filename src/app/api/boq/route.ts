@@ -13,6 +13,7 @@ import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import type { BoqCreateRequest } from '@app-types/app/api/boq/route.types';
 import { BOQ_CREATE_AUDIT_ACTION, BOQ_DEFAULT_PROJECT_TYPE, BOQ_DEFAULT_SECTOR, BOQ_INITIAL_REVISION_SOURCE_TYPE } from './route.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { readByD1FilterChunks } from '@/lib/d1-query';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -77,12 +78,14 @@ export async function GET(req: NextRequest) {
     ]);
 
     const revisionIds = boqs.flatMap((boq) => boq.revisions[0] ? [boq.revisions[0].id] : []);
-    const costGroups = revisionIds.length > 0 ? await prisma.boqLine.groupBy({
-      by: ['boqRevisionId'],
-      where: { tenantId: ctx.tenantId, boqRevisionId: { in: revisionIds }, isDeleted: false },
-      _count: { _all: true },
-      _sum: { aiTotalCost: true },
-    }) : [];
+    const costGroups = revisionIds.length > 0
+      ? await readByD1FilterChunks(revisionIds, (chunk) => prisma.boqLine.groupBy({
+        by: ['boqRevisionId'],
+        where: { tenantId: ctx.tenantId, boqRevisionId: { in: chunk }, isDeleted: false },
+        _count: { _all: true },
+        _sum: { aiTotalCost: true },
+      }))
+      : [];
     const estimatedValues = new Map(costGroups.map((group) => [group.boqRevisionId, Number(group._sum.aiTotalCost || 0)]));
     const lineCounts = new Map(costGroups.map((group) => [group.boqRevisionId, Number(group._count._all || 0)]));
     const formattedBoqs = boqs.map((boq) => {

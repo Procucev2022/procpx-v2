@@ -1,6 +1,7 @@
 'use client';
 // app/(app)/projects/new/page.tsx - Standardised Create Project Workspace
 import { useState, useEffect } from 'react';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
@@ -33,7 +34,9 @@ export default function NewProjectPage() {
         const role = d.data?.user?.role || d.user?.role || '';
         setCurrentUserRole(role);
       })
-      .catch(() => {});
+      .catch((error: unknown) => reportHandledClientFailure(error, {
+        operation: 'load_project_creation_role', route: '/api/auth/me',
+      }));
   }, []);
 
   const canCreate = !currentUserRole || ['SUPER_ADMIN', 'CLIENT_ADMIN', 'PROJECT_USER'].includes(currentUserRole);

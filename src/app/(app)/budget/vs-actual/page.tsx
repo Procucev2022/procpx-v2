@@ -9,24 +9,11 @@ import { useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
-import Modal from '@/components/ui/Modal';
 import {
-  TrendingUp,
-  TrendingDown,
   Layers,
   Building2,
-  Calendar,
-  IndianRupee,
   Search,
-  Filter,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
   RefreshCw,
-  GitCommit,
-  ShoppingCart,
-  FileCheck,
-  Receipt,
   Scale,
   ListOrdered,
   Landmark,
@@ -50,8 +37,6 @@ function BudgetVsActualContent() {
   const reportRequestId = useRef(0);
 
   // Drilldown Modal
-  const [selectedLine, setSelectedLine] = useState<any | null>(null);
-  const [drilldownOpen, setDrilldownOpen] = useState(false);
 
   useEffect(() => {
     fetchProjects();

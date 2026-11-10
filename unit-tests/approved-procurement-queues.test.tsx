@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import ApprovedBoqsPage from '../src/app/(app)/procurement/approved-boqs/page';
 import ApprovedPrsPage from '../src/app/(app)/procurement/approved-prs/page';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { reportHandledClientFailure } from '../src/lib/observability/client-reporter';
 
 function stripBoqLines<T extends { lines?: unknown }>(boq: T): Omit<T, 'lines'> {
   return Object.fromEntries(Object.entries(boq).filter(([key]) => key !== 'lines')) as Omit<T, 'lines'>;
@@ -18,6 +19,7 @@ jest.mock('next/link', () => ({
     require('react').createElement('a', { ...props, href }, children),
 }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }));
+jest.mock('../src/lib/observability/client-reporter', () => ({ reportHandledClientFailure: jest.fn() }));
 jest.mock('../src/components/PrDetailModal', () => ({
   __esModule: true,
   default: ({ pr, onClose }: { pr: { prNumber: string }; onClose: () => void }) => (
@@ -76,13 +78,13 @@ describe('approved BOQ and PR queues', () => {
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) })[0]);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode))).toBeInTheDocument();
     expect(await screen.findByText('Cable installation')).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?revisionId=revision-1&pageSize=1');
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?revisionId=revision-1&pageSize=1&linePageSize=90');
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.packageIntoRFQ) })).toHaveAttribute('href', '/procurement/rfqs/new?revisionId=revision-1&projectId=project-1');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.hideScope) }));
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode))).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) })[1]);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.baselineScopeInspectionProjectNameApprovedRevisionCode))).toBeInTheDocument();
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?revisionId=revision-2&pageSize=1'));
+    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith('/api/procurement/approved-boqs?revisionId=revision-2&pageSize=1&linePageSize=90'));
     cleanup();
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ approvedBoqs: [] }) });
@@ -97,6 +99,111 @@ describe('approved BOQ and PR queues', () => {
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.noApprovedBOQsFound))).toBeInTheDocument();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('loads the next approved BOQ scope line page without replacing the inspected lines', async () => {
+    const summary = {
+      id: 'revision-paged', projectId: 'project-1', projectName: 'Paged Store', projectCode: 'P-1', location: 'Pune',
+      approvedRevisionCode: 'R1', approvedAt: null, approvedBy: 'Approver', categories: [],
+      totalLines: 2, estimatedBenchmarkValue: 300, rfqCount: 0,
+    };
+    const detailPages = [
+      {
+        ...summary,
+        lines: [{ id: 'line-1', lineNumber: '1', description: 'First item', category: 'General', uom: 'EA', quantity: 1, benchmarkRate: 100, benchmarkAmount: 100 }],
+        linePagination: { pageSize: 1, hasMore: true, nextCursor: 'cursor-two' },
+      },
+      {
+        ...summary,
+        lines: [{ id: 'line-2', lineNumber: '2', description: 'Second item', category: 'General', uom: 'EA', quantity: 2, benchmarkRate: 100, benchmarkAmount: 200 }],
+        linePagination: { pageSize: 1, hasMore: false, nextCursor: null },
+      },
+    ];
+    let detailPageIndex = 0;
+    (global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input).includes('revisionId=')) {
+        const page = detailPages[Math.min(detailPageIndex, detailPages.length - 1)];
+        detailPageIndex += 1;
+        return { ok: true, json: async () => ({ approvedBoqs: [page] }) };
+      }
+      return { ok: true, json: async () => ({ approvedBoqs: [summary], total: 1, hasMore: false }) };
+    });
+
+    render(<ApprovedBoqsPage />);
+    expect(await screen.findByText('Paged Store')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) }));
+    expect(await screen.findByText('First item')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText('Second item')).toBeInTheDocument();
+    expect(screen.getByText('First item')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: UI_STRINGS.common.loadMore })).not.toBeInTheDocument();
+    expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('lineCursor=cursor-two'));
+  });
+
+  it('handles omitted BOQ lists and reports a failed scope detail request', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    const omittedList = render(<ApprovedBoqsPage />);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.noApprovedBOQsFound))).toBeInTheDocument();
+    omittedList.unmount();
+
+    const summary = {
+      id: 'revision-error', projectId: 'project-1', projectName: 'Error Store', projectCode: 'P-1', location: 'Pune',
+      approvedRevisionCode: 'R1', approvedAt: null, approvedBy: 'Approver', categories: [], totalLines: 1,
+      estimatedBenchmarkValue: 100, rfqCount: 0,
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ approvedBoqs: [summary] }) })
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    render(<ApprovedBoqsPage />);
+    expect(await screen.findByText('Error Store')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      event: 'procurement.approved_boq_scope_detail_failed', revisionId: 'revision-error',
+    }));
+  });
+
+  it('ignores a missing scope cursor and logs invalid continuation data', async () => {
+    const summary = {
+      id: 'revision-page-error', projectId: 'project-1', projectName: 'Page Error Store', projectCode: 'P-1', location: 'Pune',
+      approvedRevisionCode: 'R1', approvedAt: null, approvedBy: 'Approver', categories: [], totalLines: 2,
+      estimatedBenchmarkValue: 200, rfqCount: 0,
+    };
+    const firstPage = {
+      ...summary,
+      lines: [{ id: 'line-1', lineNumber: '1', description: 'First', category: 'General', uom: 'EA', quantity: 1, benchmarkRate: 100, benchmarkAmount: 100 }],
+      linePagination: { pageSize: 1, hasMore: true, nextCursor: null },
+    };
+    (global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => ({ approvedBoqs: String(input).includes('revisionId=') ? [firstPage] : [summary] }),
+    }));
+    const missingCursor = render(<ApprovedBoqsPage />);
+    expect(await screen.findByText('Page Error Store')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) }));
+    expect(await screen.findByText('First')).toBeInTheDocument();
+    const callsBeforeGuard = (global.fetch as jest.Mock).mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(global.fetch).toHaveBeenCalledTimes(callsBeforeGuard);
+    missingCursor.unmount();
+
+    (global.fetch as jest.Mock).mockImplementation(async (input: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => ({
+        approvedBoqs: String(input).includes('lineCursor=')
+          ? [{ ...summary, lines: null, linePagination: { pageSize: 1, hasMore: false, nextCursor: null } }]
+          : String(input).includes('revisionId=') ? [{ ...firstPage, linePagination: { pageSize: 1, hasMore: true, nextCursor: 'cursor-two' } }] : [summary],
+      }),
+    }));
+    render(<ApprovedBoqsPage />);
+    expect(await screen.findByText('Page Error Store')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementApprovedBoqsPage.inspectScope) }));
+    expect(await screen.findByText('First')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      event: 'procurement.approved_boq_scope_line_page_failed', operation: 'load_scope_lines',
+    }));
   });
 
   it('summarizes released PRs, supports both API shapes, search, refresh, and details', async () => {

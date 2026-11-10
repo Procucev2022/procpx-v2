@@ -8,6 +8,7 @@ import { GET, POST } from '../src/app/api/procurement/quotes/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { QUOTE_AUDIT_INSERT_AFTER_INSERT_SQL, QUOTE_INSERT_WITH_NEXT_VERSION_SQL, QUOTE_LINE_INSERT_SQL, RFQ_MARK_RESPONSE_OPEN_SQL, RFQ_VENDOR_SUBMITTED_UPSERT_SQL } from '../src/lib/d1-batch.constants';
 import { NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL } from '../src/lib/notification-outbox.constants';
+import { QUOTE_SUBMISSION_ALLOWED_RFQ_STATUSES } from '../src/app/api/procurement/quotes/route.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -114,7 +115,10 @@ describe('procurement quote routes', () => {
     expect(db.quote.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: 5, take: 5,
-      include: expect.objectContaining({ lines: { include: { rfqLine: true } } }),
+      include: {
+        vendor: { select: { id: true, name: true, code: true } },
+        rfq: { select: { id: true, rfqNumber: true, title: true, status: true } },
+      },
     }));
     await GET(getRequest());
     expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -145,6 +149,7 @@ describe('procurement quote routes', () => {
     expect(db.quote.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: { tenantId: 'tenant-1', rfqId: 'rfq-1' }, cursor: { id: 'quote-cursor' }, skip: 1, take: 3,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: expect.not.objectContaining({ lines: expect.anything() }),
     }));
 
     db.quote.findMany.mockResolvedValueOnce([{ id: 'quote-first' }, { id: 'quote-second' }]);
@@ -172,6 +177,9 @@ describe('procurement quote routes', () => {
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
     await expect(POST(postRequest(quoteBody()))).resolves.toBe(denied);
+    await expect(POST(postRequest([]))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, status: 400,
+    });
     await expect(POST(postRequest({ rfqId: 'rfq-1', vendorId: 'vendor-1', lines: [] }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiProcurementQuotesRoute.rFQIDVendorIDAndLinePricingAreRequired, status: 400,
     });
@@ -218,6 +226,8 @@ describe('procurement quote routes', () => {
       NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL,
     ]);
     expect(statements[0].values).toHaveLength(QUOTE_INSERT_WITH_NEXT_VERSION_SQL.split('?').length - 1);
+    expect(statements[0].values.slice(-6)).toEqual(['rfq-1', 'tenant-1', ...QUOTE_SUBMISSION_ALLOWED_RFQ_STATUSES]);
+    expect(QUOTE_INSERT_WITH_NEXT_VERSION_SQL).toContain('eligibleRfq."status" IN (?, ?, ?, ?)');
     expect(statements[0].values).toEqual(expect.arrayContaining([40, 1.8, 4, 37.8, 'Net 30', '30 days', 14, 'user-1']));
     expect(statements[1].values).toEqual([expect.any(String), 'tenant-1', expect.any(String), 'line-1', 10, 5, 10, 37.8, 'Best rate']);
     expect(statements[2].values).toEqual([expect.any(String), 'tenant-1', expect.any(String), 'line-2', 0, 0, 0, 0, null]);
@@ -227,6 +237,72 @@ describe('procurement quote routes', () => {
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'QUOTE_SUBMITTED', recordNumber: 'RFQ-001' }), { prepareOnly: true });
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ event: 'REVISED_QUOTE_RECEIVED', recordNumber: 'RFQ-001' }), { prepareOnly: true });
     expect(dispatchPrepared).toHaveBeenCalledWith(expect.any(String), expect.any(Date), expect.objectContaining({ entityId: expect.any(String) }));
+  });
+
+  it('returns a conflict when the RFQ closes while the quote batch is being written', async () => {
+    db.rfq.findFirst
+      .mockResolvedValueOnce({
+        id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'RELEASED',
+        lines: [{ id: 'line-1', quantity: 4 }],
+      })
+      .mockResolvedValueOnce({ status: 'CANCELLED' });
+    batch.mockRejectedValueOnce(new Error('FOREIGN KEY constraint failed'));
+
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+    expect(db.rfq.findFirst).toHaveBeenLastCalledWith({
+      where: { id: 'rfq-1', tenantId: 'tenant-1' }, select: { status: true },
+    });
+    expect(log).toHaveBeenCalledWith('warn', 'procurement.quote_submission_conflicted', expect.objectContaining({
+      operation: 'submit_quote', tenantId: 'tenant-1', rfqId: 'rfq-1', vendorId: 'vendor-1',
+      reason: 'rfq_status_changed_during_write', rfqStatus: 'CANCELLED',
+    }));
+    expect(log).not.toHaveBeenCalledWith('error', 'procurement.quote_submission_failed', expect.anything());
+  });
+
+  it('returns a conflict when the RFQ disappears during quote submission', async () => {
+    db.rfq.findFirst
+      .mockResolvedValueOnce({
+        id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'RELEASED',
+        lines: [{ id: 'line-1', quantity: 4 }],
+      })
+      .mockResolvedValueOnce(null);
+    batch.mockRejectedValueOnce(new Error('FOREIGN KEY constraint failed'));
+
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
+    });
+    expect(log).toHaveBeenCalledWith('warn', 'procurement.quote_submission_conflicted', expect.objectContaining({
+      reason: 'rfq_status_changed_during_write', rfqStatus: 'missing',
+    }));
+  });
+
+  it('preserves D1 errors when RFQ status recheck fails or remains eligible', async () => {
+    db.rfq.findFirst.mockResolvedValueOnce({
+      id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'RELEASED',
+      lines: [{ id: 'line-1', quantity: 4 }],
+    }).mockRejectedValueOnce(new Error('RFQ status read failed'));
+    batch.mockRejectedValueOnce(new Error('D1 is temporarily unavailable'));
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitQuote, status: 500,
+    });
+    expect(log).toHaveBeenCalledWith('error', 'procurement.quote_submission_failed', expect.objectContaining({
+      error: expect.objectContaining({ message: 'D1 is temporarily unavailable' }),
+      rfqStatusRecheckError: expect.objectContaining({ message: 'RFQ status read failed' }),
+    }));
+
+    db.rfq.findFirst.mockResolvedValueOnce({
+      id: 'rfq-1', tenantId: 'tenant-1', projectId: 'project-1', rfqNumber: 'RFQ-001', status: 'RELEASED',
+      lines: [{ id: 'line-1', quantity: 4 }],
+    }).mockResolvedValueOnce({ status: 'NEGOTIATION' });
+    batch.mockRejectedValueOnce(new Error('D1 constraint failed'));
+    await expect(POST(postRequest(quoteBody()))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitQuote, status: 500,
+    });
+    expect(log).toHaveBeenCalledWith('error', 'procurement.quote_submission_failed', expect.objectContaining({
+      error: expect.objectContaining({ message: 'D1 constraint failed' }),
+    }));
   });
 
   it('creates revised quotes without reopening an RFQ and maps malformed requests or database errors', async () => {

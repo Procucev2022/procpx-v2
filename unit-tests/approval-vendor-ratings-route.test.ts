@@ -7,7 +7,7 @@ import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '../src/l
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from '../src/lib/i18n';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -31,12 +31,13 @@ jest.mock('../src/lib/project-auth', () => ({
   isUserAuthorizedForProject: jest.fn(),
 }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
+const logHandled = logEvent as jest.Mock;
 const projectAuth = isUserAuthorizedForProject as jest.Mock;
 const projectAccessFilter = getUserProjectAccessFilter as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'approver-1', userName: 'Project Approver', role: 'PROJECT_APPROVER' };
@@ -107,6 +108,11 @@ describe('vendor rating approval queue API', () => {
       counts: { pendingCount: 1, approvedCount: 2, returnedCount: 1, totalCount: 5, totalEvaluatedValue: 2500 },
       pagination: { page: 1, pageSize: 50, hasMore: false },
     } });
+    expect(logHandled).toHaveBeenCalledWith('warn', 'vendor_rating.criteria_details_invalid', expect.objectContaining({
+      operation: 'list_vendor_rating_approvals', route: '/api/approvals/vendor-ratings',
+      tenantId: 'tenant-1', fieldName: 'criteriaDetails', invalidCount: 1,
+      sampleRatingId: 'malformed', fallback: 'empty_object',
+    }));
     expect(db.ppoVendorRating.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
       skip: 0, take: 51, orderBy: [{ ratedAt: 'desc' }, { id: 'desc' }],
       where: { tenantId: 'tenant-1', status: UI_STRINGS.common.sUBMITTED, ppo: { is: { project: { is: projectScope } } } },
@@ -146,7 +152,10 @@ describe('vendor rating approval queue API', () => {
   });
 
   it('caps vendor-rating pages and reports whether more rows are available', async () => {
-    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 101 }, (_, index) => rating({ id: `rating-${index}` })));
+    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 101 }, (_, index) => rating({
+      id: `rating-${index}`,
+      ratedBy: `user-${index}`,
+    })));
     const result = await GET(getRequest('?page=2&pageSize=1000'));
 
     expect(result).toMatchObject({
@@ -155,6 +164,8 @@ describe('vendor rating approval queue API', () => {
     });
     expect((result as unknown as { data: { ratings: unknown[] } }).data.ratings).toHaveLength(100);
     expect(db.ppoVendorRating.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 100, take: 101 }));
+    expect(db.user.findMany).toHaveBeenCalledTimes(2);
+    expect(db.user.findMany.mock.calls.map(([query]) => query.where.id.in.length)).toEqual([90, 10]);
   });
 
   it('validates approval requests, access, review state, and mandatory return or reject comments', async () => {
@@ -189,6 +200,11 @@ describe('vendor rating approval queue API', () => {
     db.ppoVendorRating.findFirst.mockResolvedValueOnce(rating({ criteriaDetails: '{bad json' }));
     db.ppoVendorRating.findMany.mockResolvedValueOnce([{ overallScore: 4 }, { overallScore: 4.5 }]);
     const result = await POST(postRequest({ ratingId: 'rating-1', action: 'ACCEPT', approverComments: '  Approved  ' }));
+    expect(logHandled).toHaveBeenCalledWith('warn', 'vendor_rating.criteria_details_invalid', expect.objectContaining({
+      operation: 'decide_vendor_rating', route: '/api/approvals/vendor-ratings',
+      tenantId: 'tenant-1', ratingId: 'rating-1', vendorId: 'vendor-1', ppoId: 'ppo-1',
+      fieldName: 'criteriaDetails', fallback: 'empty_object',
+    }));
     expect(result).toMatchObject({ ok: true, data: {
       message: interpolateUiString(UI_STRINGS.appApiApprovalsVendorRatingsRoute.assessmentApprovedPpoMessage, { ppoNumber: 'PPO-001' }),
     } });

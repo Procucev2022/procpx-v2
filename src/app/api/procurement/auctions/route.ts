@@ -18,6 +18,7 @@ import {
   MAX_AUCTION_VENDOR_INVITES,
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { countByD1FilterChunks, readByD1FilterChunks } from '@/lib/d1-query';
 
 
 export async function GET(req: NextRequest) {
@@ -367,16 +368,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isDraft) {
-      const missingQuotedVendor = await prisma.quote.findFirst({
+      const quotedVendors = await prisma.quote.groupBy({
+        by: ['vendorId'],
         where: {
           tenantId: ctx.tenantId,
           rfqId,
           status: { not: 'REJECTED' },
-          vendorId: { notIn: normalizedInvitedVendorIds },
         },
-        select: { id: true },
+        orderBy: { vendorId: 'asc' },
+        take: MAX_AUCTION_VENDOR_INVITES + 1,
       });
-      if (missingQuotedVendor && !(typeof nonInvitedJustification === 'string' && nonInvitedJustification.trim())) {
+      const invitedVendorSet = new Set(normalizedInvitedVendorIds);
+      const hasExcludedQuotedVendor = quotedVendors.length > MAX_AUCTION_VENDOR_INVITES
+        || quotedVendors.some(({ vendorId }) => !invitedVendorSet.has(vendorId));
+      if (hasExcludedQuotedVendor && !(typeof nonInvitedJustification === 'string' && nonInvitedJustification.trim())) {
         return apiError(
           UI_STRINGS.appApiProcurementAuctionsRoute.mandatoryJustificationIsRequiredWhenExcludingQuotedVendorsFromTheInvitedList,
           400
@@ -389,22 +394,23 @@ export async function POST(req: NextRequest) {
     }
 
     if (normalizedInvitedVendorIds.length > 0) {
-      const vendorCount = await prisma.vendor.count({
-        where: { tenantId: ctx.tenantId, id: { in: normalizedInvitedVendorIds } },
-      });
+      const vendorCount = await countByD1FilterChunks(normalizedInvitedVendorIds, (chunk) => prisma.vendor.count({
+        where: { tenantId: ctx.tenantId, id: { in: chunk } },
+      }));
       if (vendorCount !== normalizedInvitedVendorIds.length) {
         return apiError(UI_STRINGS.common.invalidRequestBody, 400);
       }
     }
 
+    const validatedRfqId = rfqId;
     const linkedRfqLineIds = [...new Set(normalizedItems
       .map((item) => item?.rfqLineId)
       .filter((id): id is string => Boolean(id)))];
     if (linkedRfqLineIds.length > 0) {
-      const validRfqLines = await prisma.rfqLine.findMany({
-        where: { tenantId: ctx.tenantId, rfqId, id: { in: linkedRfqLineIds } },
+      const validRfqLines = await readByD1FilterChunks(linkedRfqLineIds, (chunk) => prisma.rfqLine.findMany({
+        where: { tenantId: ctx.tenantId, rfqId: validatedRfqId, id: { in: chunk } },
         select: { id: true },
-      });
+      }));
       if (validRfqLines.length !== linkedRfqLineIds.length) {
         return apiError(UI_STRINGS.common.invalidRequestBody, 400);
       }

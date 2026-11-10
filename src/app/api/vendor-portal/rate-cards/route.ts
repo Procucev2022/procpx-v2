@@ -18,6 +18,7 @@ import { dispatchPreparedWorkflowNotification } from '@/lib/notifications';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { parseStoredJsonObject } from '@/lib/rate-card-utils';
+import { VENDOR_RATE_CARD_LIST_PAGE_SIZE } from '@/lib/vendor-rate-card-list.constants';
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
@@ -38,8 +39,8 @@ export async function GET(req: NextRequest) {
     const search = (req.nextUrl.searchParams.get('search') || '').trim().slice(0, 200);
     const requestedRateCardId = (req.nextUrl.searchParams.get('rateCardId') || '').trim().slice(0, 128);
     const page = requestedRateCardId ? 1 : window.page;
-    const pageSize = requestedRateCardId ? 1 : window.pageSize;
-    const skip = requestedRateCardId ? 0 : window.skip;
+    const pageSize = requestedRateCardId ? 1 : Math.min(window.pageSize, VENDOR_RATE_CARD_LIST_PAGE_SIZE);
+    const skip = requestedRateCardId ? 0 : (page - 1) * pageSize;
     const where = {
       tenantId: ctx.tenantId,
       vendorId,
@@ -56,13 +57,27 @@ export async function GET(req: NextRequest) {
     const [rateCards, total] = await Promise.all([
       prisma.vendorRateCard.findMany({
         where,
-        include: { items: { where: { isActive: true } } },
+        include: { items: {
+          where: { isActive: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: MAX_RATE_CARD_ITEMS + 1,
+        } },
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         skip,
         take: pageSize,
       }),
       prisma.vendorRateCard.count({ where }),
     ]);
+
+    const oversizedRateCardCount = rateCards.filter((rateCard) => rateCard.items.length > MAX_RATE_CARD_ITEMS).length;
+    if (oversizedRateCardCount > 0) {
+      await writeStructuredLog('warn', 'vendor_portal.rate_card_items_limit_exceeded', {
+        operation: 'list_vendor_rate_cards', route: '/api/vendor-portal/rate-cards',
+        requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+        actorId: ctx.userId, vendorId, oversizedRateCardCount, maxItems: MAX_RATE_CARD_ITEMS,
+      });
+      return apiError(UI_STRINGS.common.userMessages.failedToFetchRateCards, 500);
+    }
 
     const invalidStoredFields: Array<{ rateCardId: string; recordId: string; field: string }> = [];
     const formatted = rateCards.map((rc) => {
@@ -155,12 +170,25 @@ export async function POST(req: NextRequest) {
       },
       include: {
         vendor: { select: { id: true, name: true } },
-        items: { where: { isActive: true } },
+        items: {
+          where: { isActive: true },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: MAX_RATE_CARD_ITEMS + 1,
+        },
       },
     });
 
     if (!rateCard) {
       return apiError(UI_STRINGS.appApiVendorPortalRateCardsRoute.rateCardNotFoundOrAccessDenied, 404, { route: '/api/vendor-portal/rate-cards', method: 'POST' });
+    }
+
+    if (rateCard.items.length > MAX_RATE_CARD_ITEMS) {
+      await writeStructuredLog('warn', 'vendor_portal.rate_card_items_limit_exceeded', {
+        operation: 'submit_vendor_rate_card', route: '/api/vendor-portal/rate-cards',
+        requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+        actorId: ctx.userId, vendorId, rateCardId, itemCountAtLeast: rateCard.items.length, maxItems: MAX_RATE_CARD_ITEMS,
+      });
+      return apiError(UI_STRINGS.common.userMessages.failedToSubmitRateCardProposals, 500);
     }
 
     const now = new Date();

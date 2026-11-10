@@ -5,27 +5,19 @@ import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Tag,
-  CheckCircle2,
-  Clock,
   RefreshCw,
   Search,
   Calendar,
-  Layers,
-  Building2,
   ChevronDown,
   ChevronRight,
-  ShieldCheck,
-  TrendingDown,
   Send,
   Lock,
-  Check,
-  AlertCircle,
-  FileText,
 } from 'lucide-react';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { VENDOR_RATE_CARD_LIST_PAGE_SIZE } from '@/lib/vendor-rate-card-list.constants';
 import type { VendorRateCardListItem } from '@app-types/app/(app)/vendor-portal/rate-cards/page.types';
 
 
@@ -62,7 +54,7 @@ export default function VendorRateCardsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const query = new URLSearchParams({ page: String(page), pageSize: '50' });
+      const query = new URLSearchParams({ page: String(page), pageSize: String(VENDOR_RATE_CARD_LIST_PAGE_SIZE) });
       if (currentSearchTerm.current.trim()) query.set('search', currentSearchTerm.current.trim());
       if (typeof window !== 'undefined') {
         const rateCardId = new URLSearchParams(window.location.search).get('negotiate');
@@ -307,7 +299,6 @@ export default function VendorRateCardsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {filteredRateCards.map((rc) => {
             const isExpanded = !!expandedCards[rc.id];
-            const isApproved = rc.status === 'APPROVED';
 
             // Check workflow states
             const isRound1Active = rc.status === 'ROUND_1_BUYER_OFFER' || rc.status === 'SENT_TO_VENDOR';

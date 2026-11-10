@@ -13,6 +13,7 @@ import {
   NOTIFICATION_OUTBOX_INSERT_AFTER_RFQ_AUDIT_SQL,
   NOTIFICATION_OUTBOX_INSERT_AFTER_QUOTE_AUDIT_SQL,
   NOTIFICATION_OUTBOX_INSERT_AFTER_RATE_CARD_AUDIT_SQL,
+  NOTIFICATION_OUTBOX_INSPECT_STATE_SQL,
   NOTIFICATION_OUTBOX_LEASE_MS,
   NOTIFICATION_OUTBOX_MARK_DELIVERED_SQL,
   NOTIFICATION_OUTBOX_MAX_RETRY_MS,
@@ -22,8 +23,10 @@ import type {
   NotificationOutboxDatabase,
   NotificationOutboxDispatchOptions,
   NotificationOutboxDispatchResult,
+  NotificationOutboxLeaseState,
   NotificationOutboxPayload,
   NotificationOutboxRow,
+  NotificationOutboxRecoveryStatus,
   PreparedNotificationOutbox,
 } from '@app-types/lib/notification-outbox.types';
 
@@ -61,6 +64,22 @@ function getSafeError(error: unknown): string {
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,59}$/.test(error.name)) return error.name;
   if (error instanceof Error) return 'Error';
   return 'Unknown notification dispatch failure';
+}
+
+async function logOutboxFailure(message: string, context: Record<string, unknown>): Promise<void> {
+  try {
+    await writeRuntimeStructuredLog('error', message, context, 'application');
+  } catch {
+    // Optional log persistence must not prevent the outbox from recovering or processing sibling rows.
+  }
+}
+
+async function logOutboxWarning(message: string, context: Record<string, unknown>): Promise<void> {
+  try {
+    await writeRuntimeStructuredLog('warn', message, context, 'application');
+  } catch {
+    // Optional log persistence must not prevent the outbox from recovering or processing sibling rows.
+  }
 }
 
 export function prepareNotificationOutbox(
@@ -155,7 +174,7 @@ async function rescheduleFailedRow(
   lockToken: string,
   now: Date,
   error: unknown,
-): Promise<'PENDING' | 'DEAD'> {
+): Promise<NotificationOutboxRecoveryStatus> {
   const retryAt = new Date(now.getTime() + getRetryDelayMs(row.attemptCount));
   const results = await runD1BatchAtomically(database, [{
     sql: NOTIFICATION_OUTBOX_RESCHEDULE_SQL,
@@ -163,6 +182,13 @@ async function rescheduleFailedRow(
   }]);
   const status = results[0]?.results?.[0]?.status;
   if (status === 'DEAD' || status === 'PENDING') return status;
+  const stateResults = await runD1BatchAtomically(database, [{
+    sql: NOTIFICATION_OUTBOX_INSPECT_STATE_SQL,
+    values: [row.id, row.tenantId],
+  }]);
+  const state = stateResults[0]?.results?.[0] as unknown as NotificationOutboxLeaseState | undefined;
+  if (state?.status === 'DELIVERED') return 'DELIVERED';
+  if (!state || state.status !== 'PROCESSING' || state.lockToken !== lockToken) return 'OWNERSHIP_LOST';
   throw new Error();
 }
 
@@ -185,10 +211,10 @@ export async function dispatchNotificationOutbox(
     rows = (claim[0]?.results || []) as unknown as NotificationOutboxRow[];
     result.claimed = rows.length;
   } catch (error) {
-    await writeRuntimeStructuredLog('error', 'notification.outbox_claim_failed', {
+    await logOutboxFailure('notification.outbox_claim_failed', {
       operation: 'claim_notification_outbox', route: 'scheduled_worker',
       batchSize, onlyId: options.onlyId, error: getSafeError(error),
-    }, 'application');
+    });
     return result;
   }
 
@@ -229,19 +255,35 @@ export async function dispatchNotificationOutbox(
       try {
         const status = await rescheduleFailedRow(database, row, lockToken, now, error);
         if (status === 'DEAD') result.dead += 1;
-        else result.retried += 1;
+        else if (status === 'PENDING') result.retried += 1;
+        else if (status === 'DELIVERED') {
+          result.delivered += 1;
+          await logOutboxWarning('notification.outbox_delivery_acknowledgement_lost', {
+            operation: 'reconcile_notification_outbox_delivery', route: 'scheduled_worker',
+            outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
+            error: getSafeError(error),
+          });
+          continue;
+        } else {
+          await logOutboxWarning('notification.outbox_retry_ownership_lost', {
+            operation: 'reschedule_notification_outbox', route: 'scheduled_worker',
+            outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
+            error: getSafeError(error),
+          });
+          continue;
+        }
       } catch (retryError) {
-        await writeRuntimeStructuredLog('error', 'notification.outbox_retry_state_failed', {
+        await logOutboxFailure('notification.outbox_retry_state_failed', {
           operation: 'reschedule_notification_outbox', route: 'scheduled_worker',
           outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
           error: getSafeError(retryError),
-        }, 'application');
+        });
       }
-      await writeRuntimeStructuredLog('error', 'notification.outbox_dispatch_failed', {
+      await logOutboxFailure('notification.outbox_dispatch_failed', {
         operation: 'deliver_notification_outbox', route: 'scheduled_worker',
         outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
         error: getSafeError(error),
-      }, 'application');
+      });
     }
   }
 

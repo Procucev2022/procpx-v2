@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../src/app/api/procurement/vendors/[id]/ppo-ratings/route';
 import { prisma } from '../src/lib/prisma';
-import { requireAuth, isApiContext } from '../src/lib/api-utils';
+import { requireAuth, isApiContext, getListPageWindow } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { isUserAuthorizedForProject } from '../src/lib/project-auth';
-import { writeStructuredLog } from '../src/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { dispatchPreparedWorkflowNotification } from '../src/lib/notifications';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -28,17 +28,20 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn() }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../src/lib/observability/server-logger', () => ({
+  logEvent: jest.fn(), writeStructuredLog: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/notifications', () => ({ dispatchPreparedWorkflowNotification: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
+const pageWindow = getListPageWindow as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const projectAuth = isUserAuthorizedForProject as jest.Mock;
 const writeLog = writeStructuredLog as jest.Mock;
+const logHandled = logEvent as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const dispatchPrepared = dispatchPreparedWorkflowNotification as jest.Mock;
 const context = { tenantId: 'tenant-1', userId: 'user-1', userName: 'Project Reviewer', role: 'PROJECT_APPROVER' };
@@ -85,6 +88,7 @@ describe('vendor PPO ratings API', () => {
     audit.mockReset().mockResolvedValue(undefined);
     projectAuth.mockReset().mockResolvedValue(true);
     writeLog.mockReset().mockResolvedValue(undefined);
+    logHandled.mockReset();
     writeBatch.mockReset().mockImplementation(async (statements: Array<{ values: unknown[] }>) => statements.map((statement, index) => ({
       meta: { changes: 1 },
       ...(index === 0 ? { results: [{ id: statement.values[0], status: statement.values[15] }] } : {}),
@@ -103,10 +107,11 @@ describe('vendor PPO ratings API', () => {
         criteriaDetails: { deliveryComments: 'Arrived late', approvedBy: 'user-2', approvedByName: 'Approver', history: [] } }),
       rating({ id: 'rating-returned', status: 'RETURNED_FOR_CORRECTION', criteriaDetails: '{broken json' }),
       rating({ id: 'rating-empty', status: 'DRAFT', ratedBy: null, criteriaDetails: null }),
+      rating({ id: 'rating-invalid-shape', status: 'DRAFT', criteriaDetails: '[]' }),
     ]);
     db.ppoVendorRating.groupBy.mockResolvedValueOnce([
       { status: 'APPROVED', _count: { _all: 2 }, _avg: { overallScore: 3.5, qualityScore: 4, deliveryScore: 3, commercialComplianceScore: 4, responsivenessScore: 3, documentationClosureScore: 4 } },
-      { status: 'DRAFT', _count: { _all: 1 }, _avg: { overallScore: 2, qualityScore: 2, deliveryScore: 2, commercialComplianceScore: 2, responsivenessScore: 2, documentationClosureScore: 2 } },
+      { status: 'DRAFT', _count: { _all: 2 }, _avg: { overallScore: 2, qualityScore: 2, deliveryScore: 2, commercialComplianceScore: 2, responsivenessScore: 2, documentationClosureScore: 2 } },
       { status: 'RETURNED_FOR_CORRECTION', _count: { _all: 1 }, _avg: { overallScore: 2, qualityScore: 2, deliveryScore: 2, commercialComplianceScore: 2, responsivenessScore: 2, documentationClosureScore: 2 } },
     ]);
     db.ppo.groupBy.mockResolvedValueOnce([
@@ -122,16 +127,22 @@ describe('vendor PPO ratings API', () => {
         { ratedByName: 'missing-user', deliveryComments: 'Arrived late', approvedBy: 'user-2', approvedByName: 'Approver', decisionHistory: [] },
         { ratedByName: 'Reviewer', criteriaDetailsParsed: {}, qualityComments: '', returnReason: null, decisionHistory: [] },
         { ratedByName: null, criteriaDetailsParsed: {}, qualityComments: '', decisionHistory: [] },
+        { ratedByName: 'Reviewer', criteriaDetailsParsed: {}, qualityComments: '', decisionHistory: [] },
       ],
       summary: { ppoRatingsCount: 2, averageOverall: 3.5, avgQuality: 4, avgDelivery: 3, avgCommercial: 4, avgResponsiveness: 3, avgDocumentation: 4, ppoCount: 3, completedPpoCount: 2 },
       userRole: 'PROJECT_APPROVER', isProcurementUser: false,
-      pagination: { page: 1, pageSize: 50, total: 4, hasMore: false },
+      pagination: { page: 1, pageSize: 50, total: 5, hasMore: false },
     } });
+    expect(logHandled).toHaveBeenCalledWith('warn', 'vendor_rating.criteria_details_invalid', expect.objectContaining({
+      operation: 'list_vendor_ratings', route: '/api/procurement/vendors/[id]/ppo-ratings',
+      tenantId: 'tenant-1', vendorId: 'vendor-1', fieldName: 'criteriaDetails', invalidCount: 2,
+      sampleRatingId: 'rating-returned', fallback: 'empty_object',
+    }));
     expect(db.ppoVendorRating.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { vendorId: 'vendor-1', tenantId: 'tenant-1' }, skip: 0, take: 51,
       orderBy: [{ ratedAt: 'desc' }, { id: 'desc' }],
     }));
-    expect(db.user.findMany).toHaveBeenCalledWith({ where: { id: { in: ['user-1', 'missing-user'] } }, select: { id: true, name: true } });
+    expect(db.user.findMany).toHaveBeenCalledWith({ where: { tenantId: 'tenant-1', id: { in: ['user-1', 'missing-user'] } }, select: { id: true, name: true } });
 
     auth.mockResolvedValueOnce({ ...context, role: 'PROCUREMENT_USER' });
     await GET(getRequest(), params());
@@ -161,6 +172,20 @@ describe('vendor PPO ratings API', () => {
     } });
     const resultBody = result as unknown as { data: { ratings: unknown[] } };
     expect(resultBody.data.ratings).toHaveLength(50);
+  });
+
+  it('chunks user lookups for a full 100-rating page and keeps them tenant-scoped', async () => {
+    pageWindow.mockReturnValueOnce({ page: 1, pageSize: 100, skip: 0 });
+    db.ppoVendorRating.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => rating({
+      id: `rating-${index}`,
+      ratedBy: `user-${index}`,
+    })));
+
+    await GET(getRequest(), params());
+
+    expect(db.user.findMany).toHaveBeenCalledTimes(2);
+    expect(db.user.findMany.mock.calls.map(([query]) => query.where.id.in.length)).toEqual([90, 10]);
+    expect(db.user.findMany.mock.calls.every(([query]) => query.where.tenantId === 'tenant-1')).toBe(true);
   });
 
   it('rejects malformed bodies and invalid assessment actions before PPO lookup', async () => {
@@ -235,6 +260,11 @@ describe('vendor PPO ratings API', () => {
     db.ppo.findFirst.mockResolvedValueOnce({ ...ppo, status: 'COMPLETED' });
     await expect(POST(postRequest({ ppoId: 'ppo-1', comments: 'Updated notes', markPpoCompleted: false,
       qualityComments: '  Better  ' }), params())).resolves.toMatchObject({ ok: true, status: 201 });
+    expect(logHandled).toHaveBeenCalledWith('warn', 'vendor_rating.criteria_details_invalid', expect.objectContaining({
+      operation: 'submit_vendor_rating', route: '/api/procurement/vendors/[id]/ppo-ratings',
+      tenantId: 'tenant-1', vendorId: 'vendor-1', ppoId: 'ppo-1', ratingId: 'rating-returned',
+      fieldName: 'criteriaDetails', fallback: 'empty_object',
+    }));
     const update = writeBatch.mock.calls[0][0][0].values;
     expect(update[15]).toBe(UI_STRINGS.common.sUBMITTED);
     expect(update[12]).toContain('RESUBMITTED');
@@ -250,6 +280,38 @@ describe('vendor PPO ratings API', () => {
     expect(writeLog).toHaveBeenCalledWith('error', 'vendor.rating_submission_failed', expect.objectContaining({ vendorId: 'vendor-1', ppoId: null }));
     db.vendor.findFirst.mockRejectedValueOnce({});
     await expect(POST(postRequest({ ppoId: 'ppo-1', comments: 'Feedback' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitPpoRating, status: 500 });
+  });
+
+  it('preserves valid object criteria from a returned assessment', async () => {
+    db.ppoVendorRating.findFirst.mockResolvedValueOnce({
+      id: 'rating-object-criteria', status: 'RETURNED_FOR_CORRECTION',
+      criteriaDetails: { history: [{ action: 'SUBMITTED', performedBy: 'user-2' }] },
+    });
+    db.ppo.findFirst.mockResolvedValueOnce({ ...ppo, status: 'COMPLETED' });
+
+    await expect(POST(postRequest({ ppoId: 'ppo-1', comments: 'Updated assessment', markPpoCompleted: false }), params()))
+      .resolves.toMatchObject({ ok: true, status: 201 });
+
+    const update = writeBatch.mock.calls[0][0][0].values;
+    expect(update[12]).toContain('SUBMITTED');
+    expect(update[12]).toContain('RESUBMITTED');
+    expect(logHandled).not.toHaveBeenCalled();
+  });
+
+  it('logs and safely replaces valid JSON with an invalid array shape', async () => {
+    db.ppoVendorRating.findFirst.mockResolvedValueOnce({
+      id: 'rating-array-criteria', status: 'RETURNED_FOR_CORRECTION', criteriaDetails: '[]',
+    });
+    db.ppo.findFirst.mockResolvedValueOnce({ ...ppo, status: 'COMPLETED' });
+
+    await expect(POST(postRequest({ ppoId: 'ppo-1', comments: 'Updated assessment', markPpoCompleted: false }), params()))
+      .resolves.toMatchObject({ ok: true, status: 201 });
+
+    expect(logHandled).toHaveBeenCalledWith('warn', 'vendor_rating.criteria_details_invalid', expect.objectContaining({
+      operation: 'submit_vendor_rating', vendorId: 'vendor-1', ppoId: 'ppo-1',
+      ratingId: 'rating-array-criteria', fieldName: 'criteriaDetails', fallback: 'empty_object',
+    }));
+    expect(writeBatch.mock.calls[0][0][0].values[12]).toContain('RESUBMITTED');
   });
 
   it('rejects oversized assessment text and concurrent rating state changes without dispatching a notification', async () => {

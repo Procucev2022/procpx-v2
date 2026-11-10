@@ -128,6 +128,20 @@ describe('BOQ list and create API', () => {
     expect(db.boqLine.groupBy).not.toHaveBeenCalled();
   });
 
+  it('chunks line aggregation for a full 100-row register page', async () => {
+    const rows = Array.from({ length: 100 }, (_, index) => ({
+      id: `boq-${index}`,
+      revisions: [{ id: `revision-${index}` }],
+    }));
+    db.boq.findMany.mockResolvedValueOnce(rows);
+
+    await expect(GET(getRequest('?pageSize=100'))).resolves.toMatchObject({
+      ok: true, data: { data: expect.arrayContaining([expect.objectContaining({ id: 'boq-99' })]) },
+    });
+    expect(db.boqLine.groupBy).toHaveBeenCalledTimes(2);
+    expect(db.boqLine.groupBy.mock.calls.map(([query]) => query.where.boqRevisionId.in.length)).toEqual([90, 10]);
+  });
+
   it('validates required project, cost centre, title, category, and purpose fields', async () => {
     await expect(POST(postRequest({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.projectIsRequired, status: 400 });
     await expect(POST(postRequest({ ...createBody, costCentreId: '' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqRoute.costCentreIsRequired, status: 400 });

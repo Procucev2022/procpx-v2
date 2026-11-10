@@ -14,8 +14,6 @@ import {
   Filter,
   Trash2,
   ShieldAlert,
-  Layers,
-  ArrowRight,
   RefreshCw,
   FileSpreadsheet,
   Upload,
@@ -372,7 +370,7 @@ export default function StandardBoqCreationPage() {
     const categoryNamesLower = new Set(categories.map(c => c.name.toLowerCase()));
     const seenCodes = new Set<string>();
 
-    return rows.map((r, idx) => {
+    return rows.map((r) => {
       const errors: string[] = [];
       const itemCode = (r.itemCode || '').trim();
       const category = (r.category || '').trim();

@@ -3,11 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { persistVendorEvaluationAtomically } from '@/lib/vendor-evaluation-persistence';
 import { evaluateVendorProfile } from '@/lib/vendor-ai-evaluator';
-import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
 import type { EvaluateVendorAiRouteParams } from '@app-types/app/api/procurement/vendors/evaluate-ai.types';
-import { AI_VENDOR_EVALUATION_FAILED_EVENT, AI_VENDOR_EVALUATION_RECOVERED_EVENT, AI_VENDOR_EVALUATION_STATUS } from './route.constants';
+import type { VendorEvaluationInputDataIssue } from '@app-types/lib/vendor-ai-evaluator.types';
+import {
+  AI_VENDOR_EVALUATION_FAILED_EVENT,
+  AI_VENDOR_EVALUATION_INPUT_INVALID_EVENT,
+  AI_VENDOR_EVALUATION_RECOVERED_EVENT,
+  AI_VENDOR_EVALUATION_STATUS,
+} from './route.constants';
 
 export async function POST(req: NextRequest, { params }: EvaluateVendorAiRouteParams) {
   const ctx = await requireAuth('VENDOR_MANAGE');
@@ -27,6 +33,7 @@ export async function POST(req: NextRequest, { params }: EvaluateVendorAiRoutePa
     });
     if (!vendor) return apiError(UI_STRINGS.common.vendorNotFoundOrAccessDenied2, 404);
 
+    const evaluationInputIssues: VendorEvaluationInputDataIssue[] = [];
     report = evaluateVendorProfile({
       id: vendor.id,
       code: vendor.code,
@@ -55,7 +62,15 @@ export async function POST(req: NextRequest, { params }: EvaluateVendorAiRoutePa
       empanelmentStatus: vendor.empanelmentStatus,
       isBlacklisted: vendor.isBlacklisted,
       documents: vendor.documents,
-    });
+    }, { onInputDataIssue: (issue) => evaluationInputIssues.push(issue) });
+    if (evaluationInputIssues.length > 0) {
+      logEvent('warn', AI_VENDOR_EVALUATION_INPUT_INVALID_EVENT, {
+        operation: 'run_ai_vendor_evaluation', route: '/api/procurement/vendors/[id]/evaluate-ai',
+        requestId: req.headers.get('x-request-id') || null, tenantId: ctx.tenantId,
+        userId: ctx.userId, vendorId: vendor.id, invalidCount: evaluationInputIssues.length,
+        issues: evaluationInputIssues,
+      });
+    }
 
     const expectedVendorUpdatedAt = vendor.updatedAt instanceof Date ? vendor.updatedAt : new Date(String(vendor.updatedAt || ''));
     if (!Number.isFinite(expectedVendorUpdatedAt.getTime())) {
