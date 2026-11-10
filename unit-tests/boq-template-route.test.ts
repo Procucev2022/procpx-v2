@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { GET } from '../src/app/api/boq/template/route';
@@ -9,7 +8,6 @@ jest.mock('../src/lib/api-utils', () => ({ requireAuth: jest.fn(), isApiContext:
 
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
-const request = () => new NextRequest('http://localhost/api/boq/template');
 
 describe('standard BOQ spreadsheet template route', () => {
   beforeEach(() => {
@@ -22,12 +20,12 @@ describe('standard BOQ spreadsheet template route', () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);
     isContext.mockReturnValueOnce(false);
-    await expect(GET(request())).resolves.toBe(denied);
+    await expect(GET()).resolves.toBe(denied);
     expect(auth).toHaveBeenCalledWith('BOQ_VIEW');
   });
 
   it('returns the instructions, sample BOQ rows, and category/UOM reference sheets', async () => {
-    const response = await GET(request());
+    const response = await GET();
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="proCPX_Standard_BOQ_Template_v2.xlsx"');

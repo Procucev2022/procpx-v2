@@ -87,7 +87,7 @@ npx wrangler secret put GEMINI_API_KEY    # optional; enables AI vision for scan
 
 **Deploy:** `npm run cf:deploy`. On Windows the OpenNext build needs symlink permission, so turn on Developer Mode or build in WSL or CI.
 
-Legacy SQLite import/export is disabled. The Prisma SQLite provider and placeholder URL exist only to generate the D1-compatible schema; application reads and writes require D1. `npm run db:seed:test` creates idempotent local fixtures in the isolated `.wrangler/e2e-d1` store.
+Legacy SQLite import/export tooling has been removed. The Prisma SQLite provider and placeholder URL exist only to generate the D1-compatible schema; application reads and writes require D1. `npm run db:seed:test` creates idempotent local fixtures in the isolated `.wrangler/e2e-d1` store.
 
 ### GitHub Actions dev deployment
 
@@ -102,7 +102,7 @@ The workflow runs the full quality gate, verifies remote D1 integrity before and
 
 ## Local Regression Personas
 
-The ordinary local D1 schema has no seeded accounts. Run `npm run db:seed:test` to create the separate regression D1 with 14 role personas across two fixture tenants. Their password is **`Mock@1234`**. The login shortcuts use these exact fixture users and are hidden from production builds. Do not run the legacy `prisma/seed.ts` dataset against D1.
+The ordinary local D1 schema has no seeded accounts. Run `npm run db:seed:test` to create the separate regression D1 with 14 role personas across two fixture tenants. Their password is **`Mock@1234`**. The login shortcuts use these exact fixture users and are hidden from production builds.
 
 ---
 
@@ -111,8 +111,7 @@ The ordinary local D1 schema has no seeded accounts. Run `npm run db:seed:test` 
 ```
 procpx/
 ├── prisma/
-│   ├── schema.prisma       # Complete schema (Tenant, User, Project, BOQ, Lines, Masters, Audit)
-│   └── seed.ts             # Disabled legacy mock seed; use the local D1 fixture command
+│   └── schema.prisma       # Complete schema (Tenant, User, Project, BOQ, Lines, Masters, Audit)
 ├── src/
 │   ├── app/
 │   │   ├── (app)/          # Authenticated application shell

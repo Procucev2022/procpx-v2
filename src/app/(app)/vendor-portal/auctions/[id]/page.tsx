@@ -10,19 +10,13 @@ import {
   Gavel,
   Clock,
   CheckCircle2,
-  AlertTriangle,
   ArrowLeft,
   Lock,
   Shield,
-  FileText,
-  DollarSign,
-  TrendingDown,
   RefreshCw,
   Check,
-  AlertCircle,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import StatusBadge from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";

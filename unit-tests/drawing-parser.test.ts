@@ -1,19 +1,13 @@
 import zlib from 'node:zlib';
-import fs from 'fs';
-import { createWorker } from 'tesseract.js';
 import {
   extractTextFromPdf,
   parseArchitecturalScheduleText,
   parseDrawingWithAiVision,
-  parseOcrTextToDrawingItems,
   processDrawingFile,
 } from '../src/lib/drawing-parser';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
-jest.mock('tesseract.js', () => ({ createWorker: jest.fn() }));
-
-const createWorkerMock = createWorker as jest.Mock;
 
 describe('extractTextFromPdf', () => {
   it('extracts Tj strings, escaped delimiters, and TJ arrays from uncompressed streams', () => {
@@ -151,49 +145,15 @@ describe('parseArchitecturalScheduleText', () => {
   });
 });
 
-describe('parseOcrTextToDrawingItems', () => {
-  it('extracts menu boards, electrical/data points, support framing, and a site-check warning', () => {
-    const result = parseOcrTextToDrawingItems(
-      'Menu board: 2 screens front 55 inch, 940mm, UPS socket for each, cable point, support framing, beam checked on site',
-      'store-dmb.png',
-      'DMB-42',
-    );
-
-    expect(result.items.map(({ mark }) => mark)).toEqual(['DMB-01', 'E-UPS-01', 'E-PWR-01', 'IT-DATA-01', 'CIV-BOX-01', 'CIV-BEAM-01']);
-    expect(result.items[0]).toMatchObject({ quantity: 2, drawingReference: 'DMB-42', category: 'ELV / IT' });
-    expect(result.items[0].specification).toContain('55"');
-    expect(result.items[4].quantity).toBeGreaterThan(0);
-    expect(result.items[5].quantityType).toBe(UI_STRINGS.appAppBoqStudioPage.uNCERTAIN);
-    expect(result.warnings).toHaveLength(1);
-  });
-
-  it('chooses alternate screen counts and sizes and omits optional related items', () => {
-    expect(parseOcrTextToDrawingItems('menuboard menuboard panels 32 inch', 'plan.png').items[0].quantity).toBe(2);
-    expect(parseOcrTextToDrawingItems('3 screens DMB 43 inch', 'plan.png').items[0].quantity).toBe(3);
-    expect(parseOcrTextToDrawingItems('menu screen front screen front 55 inch', 'plan.png').items[0].quantity).toBe(2);
-    expect(parseOcrTextToDrawingItems('DMB screen board with 43 inch display', 'plan.png').items).toHaveLength(1);
-    expect(parseOcrTextToDrawingItems('Digital menu board 4 screens 43 inch', 'plan.png').items).toHaveLength(1);
-  });
-
-  it('parses generic schedule OCR and returns no items for unrelated text', () => {
-    const schedule = parseOcrTextToDrawingItems('Drawing No: A-15\n1. | Door | Fire rated | Lobby | NOS | 2', 'plan.png');
-    expect(schedule.items).toHaveLength(1);
-    expect(schedule.items[0].drawingReference).toBe('A-15');
-    expect(parseOcrTextToDrawingItems('ordinary text with no matching item', 'plan.png')).toEqual({ items: [], warnings: [] });
-  });
-});
-
 describe('AI drawing parser and file processing', () => {
   const originalFetch = global.fetch;
   const originalGeminiKey = process.env.GEMINI_API_KEY;
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
-  const originalNextRuntime = process.env.NEXT_RUNTIME;
 
   beforeEach(() => {
     delete process.env.GEMINI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     global.fetch = jest.fn() as unknown as typeof fetch;
-    createWorkerMock.mockReset();
   });
 
   afterEach(() => {
@@ -201,8 +161,6 @@ describe('AI drawing parser and file processing', () => {
     else process.env.GEMINI_API_KEY = originalGeminiKey;
     if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalOpenAiKey;
-    if (originalNextRuntime === undefined) delete process.env.NEXT_RUNTIME;
-    else process.env.NEXT_RUNTIME = originalNextRuntime;
     global.fetch = originalFetch;
   });
 
@@ -307,66 +265,21 @@ describe('AI drawing parser and file processing', () => {
     await expect(processDrawingFile(Buffer.from('image-data'), 'drawing.png')).resolves.toMatchObject({
       success: true, parserUsed: 'AI_GEMINI_VISION', totalDetected: 1,
     });
-    expect(createWorkerMock).not.toHaveBeenCalled();
   });
 
-  it('does not start local OCR in the edge runtime', async () => {
-    process.env.NEXT_RUNTIME = 'edge';
+  it('requires an AI Vision provider for raster image drawings', async () => {
+    for (const fileName of ['drawing.png', 'drawing.jpg', 'drawing.jpeg']) {
+      await expect(processDrawingFile(Buffer.from('image-data'), fileName))
+        .rejects.toThrow(UI_STRINGS.libDrawingParser.localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings);
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the AI Vision requirement when a configured provider returns no items', async () => {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    fetchMock().mockResolvedValueOnce(response({ candidates: [{ content: { parts: [{ text: JSON.stringify({ items: [] }) }] } }] }));
 
     await expect(processDrawingFile(Buffer.from('image-data'), 'drawing.png'))
       .rejects.toThrow(UI_STRINGS.libDrawingParser.localOCRIsNotAvailableInCloudflareWorkersConfigureAIVisionForImageDrawings);
-    expect(createWorkerMock).not.toHaveBeenCalled();
-  });
-
-  it('runs local OCR with an explicit worker path and parses DMB items', async () => {
-    const worker = {
-      recognize: jest.fn().mockResolvedValue({ data: { text: 'DMB screen board with 4 screens and 43 inch panels' } }),
-      terminate: jest.fn().mockResolvedValue(undefined),
-    };
-    createWorkerMock.mockResolvedValueOnce(worker);
-    const exists = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-
-    const result = await processDrawingFile(Buffer.from('image-data'), 'board.png', 'BOARD-1');
-
-    expect(result).toMatchObject({ success: true, parserUsed: 'LOCAL_OCR_TESSERACT', drawingReference: 'BOARD-1', totalDetected: 1 });
-    expect(createWorkerMock).toHaveBeenCalledWith('eng', 1, { workerPath: expect.stringContaining('node_modules') });
-    expect(worker.recognize).toHaveBeenCalledWith(Buffer.from('image-data'));
-    expect(worker.terminate).toHaveBeenCalledTimes(1);
-    exists.mockRestore();
-  });
-
-  it('uses the default OCR worker and the generic schedule fallback', async () => {
-    const worker = {
-      recognize: jest.fn().mockResolvedValue({ data: { text: 'Drawing No: A-51\n1. | Door | Fire rated | Lobby | NOS | 2' } }),
-      terminate: jest.fn().mockResolvedValue(undefined),
-    };
-    createWorkerMock.mockResolvedValueOnce(worker);
-    const exists = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
-
-    const result = await processDrawingFile(Buffer.from('image-data'), 'door.jpeg');
-    expect(result).toMatchObject({ success: true, parserUsed: 'LOCAL_OCR_TESSERACT', totalDetected: 1, explicitCount: 1 });
-    expect(createWorkerMock).toHaveBeenCalledWith('eng');
-    exists.mockRestore();
-  });
-
-  it.each([
-    ['', 'Local OCR engine could not detect readable'],
-    ['long text that does not describe a procurement item', "Local OCR engine recognized text in 'drawing.jpg' but could not extract structured CaPex items"],
-  ])('wraps OCR content errors', async (text, message) => {
-    createWorkerMock.mockResolvedValueOnce({
-      recognize: jest.fn().mockResolvedValue({ data: { text } }),
-      terminate: jest.fn().mockResolvedValue(undefined),
-    });
-    const exists = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
-
-    await expect(processDrawingFile(Buffer.from('image-data'), 'drawing.jpg')).rejects.toThrow(`Drawing OCR processing failed: ${message}`);
-    exists.mockRestore();
-  });
-
-  it('wraps worker startup and recognition failures with a readable message', async () => {
-    createWorkerMock.mockRejectedValueOnce(new Error('worker startup failed'));
-    const exists = jest.spyOn(fs, 'existsSync').mockReturnValue(false);
-    await expect(processDrawingFile(Buffer.from('image-data'), 'drawing.png')).rejects.toThrow('Drawing OCR processing failed: worker startup failed');
-    exists.mockRestore();
   });
 });

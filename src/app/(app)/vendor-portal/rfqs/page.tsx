@@ -8,18 +8,14 @@ import Link from 'next/link';
 import {
   FileText,
   Clock,
-  CheckCircle2,
-  AlertTriangle,
   MessageSquare,
   ArrowRight,
-  Sparkles,
   Building2,
   Calendar,
   RefreshCw,
   Search,
   ChevronLeft,
   ChevronRight,
-  HelpCircle,
   TrendingDown,
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';

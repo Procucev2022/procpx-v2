@@ -2,7 +2,7 @@
 // app/(app)/audit/page.tsx - Audit Trail Viewer
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Eye, ShieldCheck, Activity, Layers, Filter } from 'lucide-react';
+import { Eye, ShieldCheck, Activity, Filter } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
 import type { AuditLogItem } from "@app-types/app/(app)/audit/page.types";

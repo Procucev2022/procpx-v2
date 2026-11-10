@@ -5,14 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Send,
-  Building2,
-  FileSpreadsheet,
-  Calendar,
-  MapPin,
   Sparkles,
-  ArrowRight,
-  CheckCircle2,
-  Layers,
   AlertCircle,
   Search,
 } from 'lucide-react';

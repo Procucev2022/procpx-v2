@@ -9,10 +9,8 @@ import {
   AlertTriangle,
   Eye,
   CheckCircle2,
-  Clock,
-  ArrowRight,
 } from 'lucide-react';
-import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
+import AgreementPreviewModal from './AgreementPreviewModal';
 import type { Section6Props } from "@app-types/components/rate-cards/Section6ApproverView.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";

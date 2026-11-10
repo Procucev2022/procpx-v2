@@ -182,7 +182,6 @@ export async function GET(req: NextRequest) {
     ]);
 
     // 3. Fetch historical PPO lines for baseline price comparison
-    const itemDescriptions = lines.map((l) => l.itemDescription.toLowerCase());
     const historicalPpoLines = await prisma.ppoLine.findMany({
       where: {
         tenantId: ctx.tenantId,

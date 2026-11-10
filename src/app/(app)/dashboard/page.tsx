@@ -11,7 +11,6 @@ import {
   Clock,
   FileText,
   Scale,
-  Handshake,
   Award,
   Briefcase,
   Folder,
@@ -28,9 +27,7 @@ import {
   RotateCcw,
   XCircle,
   X,
-  CheckSquare,
   Layers,
-  ExternalLink,
   Sparkles,
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';

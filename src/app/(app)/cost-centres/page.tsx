@@ -8,16 +8,9 @@ import {
   Layers,
   Plus,
   Search,
-  Building2,
-  PieChart,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  ExternalLink,
   Sparkles,
   Landmark,
   X,
-  FileSpreadsheet,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';

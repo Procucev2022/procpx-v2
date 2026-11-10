@@ -21,7 +21,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
-  FileText,
 } from 'lucide-react';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';

@@ -8,22 +8,16 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Layers,
-  FileSpreadsheet,
   AlertTriangle,
   X,
   Eye,
   MessageSquare,
   HelpCircle,
-  PieChart,
-  ArrowRight,
-  TrendingUp,
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
 import { useToast } from '@/components/ui/Toast';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SummaryCardGrid, SummaryCard } from '@/components/ui/SummaryCard';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { fetchBudgetContributionDetailPage } from '@/lib/budget-contribution-detail-pagination';

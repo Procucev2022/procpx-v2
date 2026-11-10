@@ -1,11 +1,7 @@
 /* Application constants extracted from lib/observability/server-logger.ts. */
 
 import {
-  createLogRecord,
-  serializeConsoleArguments,
   type LogLevel,
-  type LogRecord,
-  type LogSource,
 } from './shared';
 
 export const RETENTION_DAYS = 30;

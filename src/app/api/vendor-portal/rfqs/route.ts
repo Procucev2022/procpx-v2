@@ -4,7 +4,6 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
-import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { VENDOR_RFQ_DEFAULT_PAGE_SIZE, VENDOR_RFQ_MAX_PAGE_NUMBER, VENDOR_RFQ_MAX_PAGE_SIZE } from './route.constants';
 
@@ -140,7 +139,6 @@ export async function GET(req: NextRequest) {
       const latestQuote = r.quotes[0] || null;
       const allRounds = (r.negotiations || []).flatMap((n) => n.rounds || []);
       const latestRound = allRounds.sort((a, b) => (b.roundNumber || 1) - (a.roundNumber || 1))[0] || null;
-      const activeNegotiation = r.negotiations?.find((n) => n.rounds && n.rounds.length > 0) || r.negotiations?.[0] || null;
       const latestPpo = r.ppos[0] || null;
       const messages = (r as any).messages || [];
 

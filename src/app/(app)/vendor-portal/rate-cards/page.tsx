@@ -5,22 +5,13 @@ import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Tag,
-  CheckCircle2,
-  Clock,
   RefreshCw,
   Search,
   Calendar,
-  Layers,
-  Building2,
   ChevronDown,
   ChevronRight,
-  ShieldCheck,
-  TrendingDown,
   Send,
   Lock,
-  Check,
-  AlertCircle,
-  FileText,
 } from 'lucide-react';
 import VendorNegotiationWorkspace from '@/components/VendorNegotiationWorkspace';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -308,7 +299,6 @@ export default function VendorRateCardsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {filteredRateCards.map((rc) => {
             const isExpanded = !!expandedCards[rc.id];
-            const isApproved = rc.status === 'APPROVED';
 
             // Check workflow states
             const isRound1Active = rc.status === 'ROUND_1_BUYER_OFFER' || rc.status === 'SENT_TO_VENDOR';

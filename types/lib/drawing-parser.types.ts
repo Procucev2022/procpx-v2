@@ -19,7 +19,7 @@ export interface ExtractedDrawingItem {
 
 export interface DrawingParseResult {
   success: boolean;
-  parserUsed: 'NATIVE_PDF_SCHEDULE' | 'AI_GEMINI_VISION' | 'AI_OPENAI_VISION' | 'LOCAL_OCR_TESSERACT';
+  parserUsed: 'NATIVE_PDF_SCHEDULE' | 'AI_GEMINI_VISION' | 'AI_OPENAI_VISION';
   providerMessage?: string;
   drawingReference?: string;
   totalDetected: number;

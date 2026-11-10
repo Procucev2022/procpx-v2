@@ -1,10 +1,9 @@
 'use client';
 // src/components/ui/PageHeader.tsx
 // Standardized Enterprise Page Header with Prominent Typography & Context-Aware Back Navigation
-import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import Breadcrumbs, { BreadcrumbItem } from './Breadcrumbs';
+import Breadcrumbs from './Breadcrumbs';
 import type { PageHeaderProps } from "@app-types/components/ui/PageHeader.types";
 export type { PageHeaderProps };
 

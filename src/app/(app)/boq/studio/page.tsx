@@ -2,43 +2,29 @@
 // src/app/(app)/boq/studio/page.tsx - Consolidated BOQ Creation, Generation, Edit, AI Cost & Review Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
-import { useState, useEffect, useRef, useTransition, useMemo, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Sparkles,
   FileSpreadsheet,
   Upload,
-  BookOpen,
   Image as ImageIcon,
   PenTool,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
-  Clock,
-  Layers,
-  Building2,
   Download,
   Send,
   Landmark,
   Plus,
   Trash2,
-  Copy,
-  Filter,
-  Check,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   TrendingUp,
   ShieldCheck,
   RefreshCw,
-  Eye,
   Info,
   Search,
-  ArrowRight,
-  ArrowLeft,
   X,
-  FileText,
-  CheckSquare,
   ExternalLink,
   FolderKanban,
 } from 'lucide-react';
@@ -123,7 +109,6 @@ export default function BoqStudioPage() {
   const [setupCategories, setSetupCategories] = useState<string[]>(['Civil & Interior', 'Electrical']);
 
   // Method 1: Upload Existing BOQ
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [uploadingMethod1, setUploadingMethod1] = useState(false);
   const fileInputMethod1Ref = useRef<HTMLInputElement | null>(null);
 
@@ -151,10 +136,6 @@ export default function BoqStudioPage() {
   const [generatingDrawingBoq, setGeneratingDrawingBoq] = useState(false);
 
   // Method 4: Manual Entry
-  const [manualRows, setManualRows] = useState<any[]>([
-    { lineNumber: '1', originalDescription: '600x600 vitrified tile', specification: 'Commercial grade matte finish', category: 'Civil & Interior', uom: 'SQFT', quantity: 2500, aiUnitCost: 125 },
-    { lineNumber: '2', originalDescription: '2.5 SQMM FRLS copper cable', specification: '1100V copper wire in PVC conduit', category: 'Electrical', uom: 'MTR', quantity: 1200, aiUnitCost: 65 },
-  ]);
   const [savingManual, setSavingManual] = useState(false);
 
   // Active Creation Method Card Selection: 1 | 2 | 3 | 4
@@ -195,7 +176,6 @@ export default function BoqStudioPage() {
   });
 
   // AI Refine & AI Cost Engine State (Sections 10 & 11)
-  const [refiningAi, setRefiningAi] = useState(false);
   const [refiningLineId, setRefiningLineId] = useState<string | null>(null);
   const [proposedRefinements, setProposedRefinements] = useState<Record<string, {
     suggestedDescription: string;
@@ -206,13 +186,6 @@ export default function BoqStudioPage() {
   const [estimatingCost, setEstimatingCost] = useState(false);
   const [validatingQuality, setValidatingQuality] = useState(false);
 
-  // Cost Summary & Unestimated Items (Section 11)
-  const [costSummary, setCostSummary] = useState<{
-    categoryBreakdown: Record<string, number>;
-    totalCost: number;
-    costPerSqFt: number | null;
-  } | null>(null);
-  const [unestimatedItems, setUnestimatedItems] = useState<any[]>([]);
   const [showDetails, setShowDetails] = useState(false);
   const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
 
@@ -531,7 +504,6 @@ export default function BoqStudioPage() {
         setLinesSearch('');
 
         // Precompute category breakdown and totals
-        computeCostSummary(lineItems, boqData);
       }
     } catch (e) {
       if (requestSequence === boqDetailsRequestSequence.current) {
@@ -611,41 +583,6 @@ export default function BoqStudioPage() {
     } finally {
       setSavingParameters(false);
     }
-  };
-
-  const computeCostSummary = (lineItems: any[], boqData: any) => {
-    if (!lineItems || lineItems.length === 0) {
-      setCostSummary(null);
-      return;
-    }
-
-    const catBreakdown: Record<string, number> = {
-      Material: 0,
-      Electrical: 0,
-      Civil: 0,
-      Interior: 0,
-      Other: 0,
-    };
-
-    let totalEst = 0;
-    for (const l of lineItems) {
-      const lineCost = l.aiTotalCost || ((l.aiUnitCost || 0) * (l.quantity || 1));
-      totalEst += lineCost;
-
-      const cName = (l.category?.name || l.category || '').toLowerCase();
-      if (cName.includes('electrical')) catBreakdown.Electrical += lineCost;
-      else if (cName.includes('civil')) catBreakdown.Civil += lineCost;
-      else if (cName.includes('interior')) catBreakdown.Interior += lineCost;
-      else if (cName.includes('material')) catBreakdown.Material += lineCost;
-      else catBreakdown.Other += lineCost;
-    }
-
-    const area = boqData?.costCentre?.areaSqFt || boqData?.project?.areaSqFt || parseFloat(setupArea.replace(/,/g, '')) || null;
-    setCostSummary({
-      categoryBreakdown: catBreakdown,
-      totalCost: Math.round(totalEst * 100) / 100,
-      costPerSqFt: area ? Math.round((totalEst / area) * 100) / 100 : null,
-    });
   };
 
   // Helper to ensure an active BOQ record exists before generating lines
@@ -1083,8 +1020,8 @@ export default function BoqStudioPage() {
           purpose: setupPurpose,
           title: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupTitle.trim() || undefined }),
           description: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupDescription.trim() || undefined }),
-          lines: manualRows,
-          action: 'REPLACE_ALL',
+          lines: [],
+          action: 'APPEND',
         }),
       });
 
@@ -1095,7 +1032,7 @@ export default function BoqStudioPage() {
 
       const data = await res.json();
       setStatusType('success');
-      setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.manualBOQBoqCodeUpdatedWithValue2Lines, { "boqCode": currentBoq.boqCode, "value2": data.totalLines || manualRows.length }));
+      setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.manualBOQBoqCodeUpdatedWithValue2Lines, { "boqCode": currentBoq.boqCode, "value2": data.totalLines ?? 0 }));
 
       await loadAllBoqs();
       await loadBoqDetails(currentBoq.id);
@@ -1334,18 +1271,6 @@ export default function BoqStudioPage() {
       if (!res.ok) throw new Error(UI_STRINGS.appAppBoqStudioPage.aICostEstimationFailed);
       const rawData = await res.json();
       const resData = rawData.data || rawData;
-
-      if (resData.categoryBreakdown) {
-        setCostSummary({
-          categoryBreakdown: resData.categoryBreakdown,
-          totalCost: resData.totalEstimatedBenchmarkValue || resData.totalCost || 0,
-          costPerSqFt: resData.costPerSqFt || null,
-        });
-      }
-
-      if (resData.unestimatedItems) {
-        setUnestimatedItems(resData.unestimatedItems);
-      }
 
       setStatusType('success');
       setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.aICostGeneratedSuccessfullyToLocaleString, { "toLocaleString": (resData.totalEstimatedBenchmarkValue || 0).toLocaleString(I18N_CONFIG.defaultLocale) }));
@@ -1671,7 +1596,6 @@ export default function BoqStudioPage() {
   }, [isEditingBoq, editableLines, lines, lineSummary, lineTotal, activeCostCentreObj, activeProjectObj, setupArea]);
 
   const pendingQuantityCount = financialSummary.missingQuantityLines;
-  const validQuantityCount = financialSummary.validQuantityLines;
   const totalRevValue = financialSummary.totalAiEstimate;
 
   // Filtered BOQs for bottom list
@@ -1712,7 +1636,6 @@ export default function BoqStudioPage() {
               setLinesSearch('');
               setEditableLines([]);
               setImportResult(null);
-              setCostSummary(null);
               setSetupTitle('');
               setSetupDescription('');
               if (typeof window !== 'undefined') {
@@ -2323,7 +2246,7 @@ export default function BoqStudioPage() {
                   setSelectedMethod(4);
                 }}
                 style={{ fontSize: 11, padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, background: '#ffffff' }}
-              >{interpolateUiString(UI_STRINGS.appAppBoqStudioPage.configureLinesCount, { count: manualRows.length })}</button>
+              >{interpolateUiString(UI_STRINGS.appAppBoqStudioPage.configureLinesCount, { count: editableLines.length })}</button>
               <button
                 type="button"
                 className="btn btn-primary"

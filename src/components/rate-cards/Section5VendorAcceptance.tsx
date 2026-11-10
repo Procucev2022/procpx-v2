@@ -1,23 +1,17 @@
 'use client';
 // src/components/rate-cards/Section5VendorAcceptance.tsx
 // Section 5: Vendor Acceptance (Vendor Portal View) — Preserving canonical sequence with optional agreement & signature verification
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   FileText,
   Eye,
   ShieldCheck,
   CheckCircle2,
-  AlertTriangle,
-  Download,
-  Building2,
-  UserCheck,
-  Calendar,
-  Lock,
 } from 'lucide-react';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
-import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
-import type { VendorAcceptanceItem, Section5Props } from "@app-types/components/rate-cards/Section5VendorAcceptance.types";
+import AgreementPreviewModal from './AgreementPreviewModal';
+import type { Section5Props } from "@app-types/components/rate-cards/Section5VendorAcceptance.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -64,7 +58,7 @@ export default function Section5VendorAcceptance({
   const [signatoryName, setSignatoryName] = useState('K. Ramakrishna');
   const [signatoryDesignation, setSignatoryDesignation] = useState('Managing Partner / Authorized Representative');
   const [authorizedConsent, setAuthorizedConsent] = useState(true);
-  const [includeSignature, setIncludeSignature] = useState(requiresSignature);
+  const [includeSignature] = useState(requiresSignature);
 
   const total = items.reduce((acc, it) => acc + it.qty * it.agreedRate, 0);
 

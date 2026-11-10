@@ -10,14 +10,12 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Sparkles,
   Info,
   Save,
   RotateCcw,
   CheckCircle2,
   FileText,
   AlertTriangle,
-  MessageSquare,
   Check,
   X,
   Users,
@@ -47,15 +45,10 @@ export type { ProcurementCommercialWorkspaceProps };
 export default function ProcurementCommercialWorkspace({
   rfq,
   comparison,
-  rateCardMatch,
   isDemoMode,
-  onRecordQuote,
-  onOpenRateCards,
-  onReleaseRfq,
   onNegotiationSubmitted,
   onComparisonPageChange,
   comparisonLoading = false,
-  actionLoading = false,
 }: ProcurementCommercialWorkspaceProps) {
   const toast = useToast();
 
@@ -678,7 +671,7 @@ export default function ProcurementCommercialWorkspace({
       return;
     }
 
-    for (const [lineId, rate] of Object.entries(lineCounterRates)) {
+    for (const [, rate] of Object.entries(lineCounterRates)) {
       if (typeof rate !== 'number' || isNaN(rate) || rate <= 0) {
         toast.error(UI_STRINGS.common.userMessages.invalidCounterofferRateEnteredRatesMustBePositiveNumbers);
         return;
