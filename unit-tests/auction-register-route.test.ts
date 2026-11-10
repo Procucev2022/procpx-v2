@@ -50,11 +50,7 @@ const auction = (overrides: Record<string, any> = {}) => ({
   scheduledEndTime: new Date('2026-10-29T11:30:00.000Z'), createdAt: new Date('2026-10-28T10:00:00.000Z'), rfqId: 'rfq-1',
   rfq: { rfqNumber: 'RFQ-1', title: 'Lighting', packageName: 'Office', project: { name: 'North', projectCode: 'N1' },
     pr: { prNumber: 'PR-1', title: 'Lights', costCentre: { name: 'Power' }, boq: { boqCode: 'BOQ-1' } } },
-  vendors: [{ id: 'av-1', vendorId: 'v-1', vendor: { name: 'Vendor One', code: 'V1' }, termsAcceptedAt: null,
-    bidsCount: 2, lastBidAmount: 400, bestBidRank: 1 }],
-  items: [{ id: 'item-1', itemCode: 'CABLE', description: 'Cable', category: 'Electrical', subcategory: 'Wire', uom: 'M',
-    quantity: '2', startPrice: 100, currentLeadingBid: 80 }],
-  bids: [{ id: 'bid-1' }],
+  _count: { vendors: 1, items: 1, bids: 12 },
   ...overrides,
 });
 
@@ -97,8 +93,7 @@ describe('auction register API', () => {
       auction(),
       auction({ id: 'auction-2', auctionType: 'REVERSE_AUCTION', status: 'CLOSED', currency: '', refreshIntervalSeconds: 0,
         startingPrice: 0, currentLowestBid: 0, currentLeadingBid: 0, minDecrement: 0, scheduledEndTime: null,
-        bids: undefined, vendors: [{ id: 'av-2', vendor: { name: 'Vendor Two', code: 'V2' }, lastBidAmount: 45, bestBidRank: 2 }],
-        items: [{ id: 'item-2', quantity: 1, startPrice: 0, currentLeadingBid: 0 }], rfq: null }),
+        _count: { vendors: 1, items: 1, bids: 0 }, rfq: null }),
     ]);
     const result = await GET(getRequest('?tab=RESULTS&rfqId=rfq-1&type=ALL&category=ALL&search=%20cable%20&page=0&limit=200'));
     expect(result).toMatchObject({ ok: true, data: {
@@ -106,19 +101,35 @@ describe('auction register API', () => {
       kpis: { total: 2, live: 2, upcoming: 2, draft: 2, completed: 2, pending: 4 },
       auctions: [
         { id: 'auction-1', currentLowestBid: null, currentLeadingBid: null, startingPrice: 500, minDecrement: 10,
-          vendors: [{ lastBidAmount: null, bestRank: null }], items: [{ quantity: 2, startPrice: 100, currentLowestBid: null }],
+          totalBids: 12, invitedVendorsCount: 1, itemsCount: 1,
           scheduledEndTime: expect.any(String), rfqNumber: 'RFQ-1', projectName: 'North', prNumber: 'PR-1' },
         { id: 'auction-2', currency: 'INR', refreshIntervalSeconds: 15, startingPrice: null, currentLowestBid: null,
           currentLeadingBid: null, minDecrement: 0, totalBids: 0, invitedVendorsCount: 1, itemsCount: 1,
-          vendors: [{ lastBidAmount: 45, bestRank: 2 }], items: [{ startPrice: null, currentLowestBid: null }],
           scheduledEndTime: expect.any(String) },
       ],
     } });
+    const auctionQuery = db.auction.findMany.mock.calls.at(-1)?.[0];
     expect(db.auction.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-1', status: { in: ['CLOSED', 'COMPLETED'] },
-        OR: expect.arrayContaining([{ auctionNumber: { contains: 'cable' } }]) }),
+        AND: expect.arrayContaining([
+          expect.objectContaining({ OR: expect.arrayContaining([
+            { inviteProjectUser: true, projectUserId: 'user-1' },
+            { inviteProjectUser: true },
+            { rfq: { project: { team: { some: { userId: 'user-1' } } } } },
+          ]) }),
+          expect.objectContaining({ OR: expect.arrayContaining([{ auctionNumber: { contains: 'cable' } }]) }),
+        ]) }),
       skip: 0, take: 100,
     }));
+    expect(auctionQuery.select._count.select).toEqual({ vendors: true, items: true, bids: true });
+    expect(auctionQuery.select).not.toHaveProperty('vendors');
+    expect(auctionQuery.select).not.toHaveProperty('items');
+    expect(auctionQuery.select).not.toHaveProperty('bids');
+    const formattedAuctions = (result as unknown as {
+      data: { auctions: Array<Record<string, unknown>> };
+    }).data.auctions;
+    expect(formattedAuctions[0]).not.toHaveProperty('vendors');
+    expect(formattedAuctions[0]).not.toHaveProperty('items');
 
     auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', userEmail: 'v@example.test', vendorId: 'v-1' });
     await GET(getRequest('?tab=LIVE'));

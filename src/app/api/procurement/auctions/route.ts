@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
     const where: any = {
       tenantId: ctx.tenantId,
     };
+    const andFilters: Array<Record<string, unknown>> = [];
 
     if (rfqId) where.rfqId = rfqId;
     if (type && type !== 'ALL') where.auctionType = type;
@@ -71,23 +72,28 @@ export async function GET(req: NextRequest) {
         });
       }
     } else if (ctx.role === 'PROJECT_USER' || ctx.role === 'PROJECT_APPROVER') {
-      where.OR = [
-        { inviteProjectUser: true, projectUserId: ctx.userId },
-        { inviteProjectUser: true },
-        { rfq: { project: { team: { some: { userId: ctx.userId } } } } },
-      ];
+      andFilters.push({
+        OR: [
+          { inviteProjectUser: true, projectUserId: ctx.userId },
+          { inviteProjectUser: true },
+          { rfq: { project: { team: { some: { userId: ctx.userId } } } } },
+        ],
+      });
     }
 
     // Text search
     if (search && search.trim()) {
       const q = search.trim();
-      where.OR = [
-        { auctionNumber: { contains: q } },
-        { title: { contains: q } },
-        { rfq: { rfqNumber: { contains: q } } },
-        { rfq: { title: { contains: q } } },
-      ];
+      andFilters.push({
+        OR: [
+          { auctionNumber: { contains: q } },
+          { title: { contains: q } },
+          { rfq: { rfqNumber: { contains: q } } },
+          { rfq: { title: { contains: q } } },
+        ],
+      });
     }
+    if (andFilters.length > 0) where.AND = andFilters;
 
     // Compute KPI card counts across all auctions for this scope
     const [totalCount, liveCount, upcomingCount, draftCount, completedCount] = await Promise.all([
@@ -127,7 +133,36 @@ export async function GET(req: NextRequest) {
 
     const auctions = await prisma.auction.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        auctionNumber: true,
+        title: true,
+        auctionCategory: true,
+        auctionType: true,
+        currency: true,
+        refreshIntervalSeconds: true,
+        scrollingText: true,
+        quantityType: true,
+        hasStartPrice: true,
+        startingPrice: true,
+        hasLeadingPrice: true,
+        currentLowestBid: true,
+        currentLeadingBid: true,
+        minDecrement: true,
+        hasMinBidReduction: true,
+        hasAutoExtension: true,
+        autoExtensionMinutes: true,
+        extensionCount: true,
+        hasBidLimit: true,
+        maxBidsPerParticipant: true,
+        inviteProjectUser: true,
+        projectUserId: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+        scheduledEndTime: true,
+        rfqId: true,
+        createdAt: true,
         rfq: {
           select: {
             id: true,
@@ -147,18 +182,12 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-        vendors: {
-          include: {
-            vendor: { select: { id: true, name: true, code: true } },
+        _count: {
+          select: {
+            vendors: true,
+            items: true,
+            bids: true,
           },
-        },
-        items: true,
-        bids: {
-          include: {
-            vendor: { select: { id: true, name: true, code: true } },
-          },
-          orderBy: { timestamp: 'desc' },
-          take: 5,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -166,7 +195,7 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    const formattedAuctions = (auctions as any[]).map((auc) => {
+    const formattedAuctions = auctions.map((auc) => {
       const isSealedAndActive = auc.auctionType === 'SEALED_BID' && auc.status !== 'CLOSED' && auc.status !== 'COMPLETED';
 
       return {
@@ -197,30 +226,9 @@ export async function GET(req: NextRequest) {
         startTime: auc.startTime.toISOString(),
         endTime: auc.endTime.toISOString(),
         scheduledEndTime: auc.scheduledEndTime?.toISOString() || auc.endTime.toISOString(),
-        totalBids: auc.bids ? auc.bids.length : 0,
-        invitedVendorsCount: auc.vendors ? auc.vendors.length : 0,
-        vendors: (auc.vendors || []).map((v: any) => ({
-          id: v.id,
-          vendorId: v.vendorId,
-          name: v.vendor?.name,
-          code: v.vendor?.code,
-          termsAcceptedAt: v.termsAcceptedAt,
-          bidCount: v.bidsCount,
-          lastBidAmount: isSealedAndActive ? null : (v.lastBidAmount ? Number(v.lastBidAmount) : null),
-          bestRank: isSealedAndActive ? null : v.bestBidRank,
-        })),
-        itemsCount: auc.items ? auc.items.length : 0,
-        items: (auc.items || []).map((i: any) => ({
-          id: i.id,
-          itemCode: i.itemCode,
-          description: i.description,
-          category: i.category,
-          subCategory: i.subcategory,
-          uom: i.uom,
-          quantity: Number(i.quantity),
-          startPrice: i.startPrice ? Number(i.startPrice) : null,
-          currentLowestBid: isSealedAndActive ? null : (i.currentLeadingBid ? Number(i.currentLeadingBid) : null),
-        })),
+        totalBids: auc._count.bids,
+        invitedVendorsCount: auc._count.vendors,
+        itemsCount: auc._count.items,
         rfqId: auc.rfqId,
         rfqNumber: auc.rfq?.rfqNumber,
         rfqTitle: auc.rfq?.title,
