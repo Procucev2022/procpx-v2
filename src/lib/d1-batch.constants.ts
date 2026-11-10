@@ -1541,11 +1541,14 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
     ))
     AND (i."ppoId" IS NULL OR EXISTS (
       SELECT 1 FROM "ppos" p WHERE p."id" = i."ppoId" AND p."tenantId" = i."tenantId" AND p."projectId" = i."projectId"
+        AND (i."vendorId" IS NULL OR p."vendorId" = i."vendorId")
     ))
     AND (i."ppoLineId" IS NULL OR EXISTS (
       SELECT 1 FROM "ppo_lines" l JOIN "ppos" p ON p."id" = l."ppoId"
       WHERE l."id" = i."ppoLineId" AND l."tenantId" = i."tenantId" AND p."projectId" = i."projectId"
         AND (i."ppoId" IS NULL OR l."ppoId" = i."ppoId")
+        AND l."vendorId" = p."vendorId"
+        AND (i."vendorId" IS NULL OR l."vendorId" = i."vendorId")
     ))
     AND (i."vendorId" IS NULL OR EXISTS (
       SELECT 1 FROM "vendors" v WHERE v."id" = i."vendorId" AND v."tenantId" = i."tenantId"

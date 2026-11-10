@@ -30,8 +30,8 @@ function createDatabase(): LocalSQLiteDatabase {
     CREATE TABLE pr_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, prId TEXT NOT NULL);
     CREATE TABLE rfqs (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL);
     CREATE TABLE rfq_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, rfqId TEXT NOT NULL);
-    CREATE TABLE ppos (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL);
-    CREATE TABLE ppo_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, ppoId TEXT NOT NULL);
+    CREATE TABLE ppos (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL, vendorId TEXT NOT NULL);
+    CREATE TABLE ppo_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, ppoId TEXT NOT NULL, vendorId TEXT NOT NULL);
     CREATE TABLE vendors (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL);
     CREATE TABLE actual_cost_transactions (
       id TEXT NOT NULL PRIMARY KEY, tenantId TEXT NOT NULL, transactionCode TEXT NOT NULL,
@@ -67,11 +67,13 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO rfqs VALUES ('rfq-other', 'other-tenant', 'other-project');
     INSERT INTO rfq_lines VALUES ('rfq-line-1', '${TENANT_ID}', 'rfq-1');
     INSERT INTO rfq_lines VALUES ('rfq-line-other', 'other-tenant', 'rfq-other');
-    INSERT INTO ppos VALUES ('ppo-1', '${TENANT_ID}', '${PROJECT_ID}');
-    INSERT INTO ppos VALUES ('ppo-other', 'other-tenant', 'other-project');
-    INSERT INTO ppo_lines VALUES ('ppo-line-1', '${TENANT_ID}', 'ppo-1');
-    INSERT INTO ppo_lines VALUES ('ppo-line-other', 'other-tenant', 'ppo-other');
+    INSERT INTO ppos VALUES ('ppo-1', '${TENANT_ID}', '${PROJECT_ID}', 'vendor-1');
+    INSERT INTO ppos VALUES ('ppo-other', 'other-tenant', 'other-project', 'vendor-other');
+    INSERT INTO ppo_lines VALUES ('ppo-line-1', '${TENANT_ID}', 'ppo-1', 'vendor-1');
+    INSERT INTO ppo_lines VALUES ('ppo-line-other', 'other-tenant', 'ppo-other', 'vendor-other');
+    INSERT INTO ppo_lines VALUES ('ppo-line-vendor-mismatch', '${TENANT_ID}', 'ppo-1', 'vendor-2');
     INSERT INTO vendors VALUES ('vendor-1', '${TENANT_ID}');
+    INSERT INTO vendors VALUES ('vendor-2', '${TENANT_ID}');
     INSERT INTO vendors VALUES ('vendor-other', 'other-tenant');
   `);
   return sqlite;
@@ -153,6 +155,21 @@ describe('actual-cost reference validation against isolated SQLite D1 semantics'
     }));
 
     expect(Number(result.changes)).toBe(0);
+    expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
+      .toEqual({ total: 0 });
+  });
+
+  it('rejects a vendor reference that conflicts with the linked PPO header or line', () => {
+    const headerMismatch = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues({ vendorId: 'vendor-2' }));
+    const lineMismatch = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues({
+      id: 'actual-cost-line-vendor-mismatch',
+      ppoId: null,
+      ppoLineId: 'ppo-line-vendor-mismatch',
+      vendorId: 'vendor-2',
+    }));
+
+    expect(Number(headerMismatch.changes)).toBe(0);
+    expect(Number(lineMismatch.changes)).toBe(0);
     expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
       .toEqual({ total: 0 });
   });
