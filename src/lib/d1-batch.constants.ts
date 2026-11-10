@@ -22,8 +22,14 @@ export const PROJECT_INSERT_IF_CODE_AVAILABLE_SQL = `
     "city", "state", "country", "areaSqFt", "costCentre", "projectOwner", "budget", "currency", "businessUnit",
     "numberOfFloors", "numberOfUnits", "startDate", "targetCompletion", "status", "createdAt", "updatedAt", "createdBy"
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?)
-  ON CONFLICT ("tenantId", "projectCode") DO NOTHING
+  ON CONFLICT DO NOTHING
   RETURNING "id", "projectCode"
+`;
+
+export const PROJECT_NORMALIZED_NAME_EXISTS_SQL = `
+  SELECT "id" FROM "projects"
+  WHERE "tenantId" = ? AND lower(trim("name")) = lower(trim(?))
+  LIMIT 1
 `;
 
 export const BOQ_INSERT_NEXT_CODE_SQL = `
@@ -1250,8 +1256,14 @@ export const VENDOR_INSERT_NEXT_CODE_SQL = `
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
   FROM next_code
   WHERE EXISTS (SELECT 1 FROM "tenants" WHERE "id" = ?)
-  ON CONFLICT ("tenantId", "code") DO NOTHING
+  ON CONFLICT DO NOTHING
   RETURNING *
+`;
+
+export const VENDOR_NORMALIZED_NAME_EXISTS_SQL = `
+  SELECT "id" FROM "vendors"
+  WHERE "tenantId" = ? AND lower(trim("name")) = lower(trim(?))
+  LIMIT 1
 `;
 
 export const VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL = `

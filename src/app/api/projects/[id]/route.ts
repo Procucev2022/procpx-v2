@@ -7,6 +7,11 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { code?: unknown; message?: unknown };
+  return value.code === 'P2002' || (typeof value.message === 'string' && /unique constraint|unique failed/i.test(value.message));
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireAuth('PROJECT_VIEW');
@@ -102,6 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const startedAt = Date.now();
   const ctx = await requireAuth('PROJECT_EDIT');
   if (!isApiContext(ctx)) return ctx;
   const { id } = await params;
@@ -128,25 +134,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       status: body.status ?? existing.status,
       updatedBy: ctx.userId,
   };
-  const updated = await runAuditedD1UpdateAtomically({
-    table: 'project',
-    id,
-    tenantId: ctx.tenantId,
-    data: updateData,
-    route: '/api/projects/[id]',
-    requestId: req.headers.get('x-request-id'),
-    audit: {
+  try {
+    const updated = await runAuditedD1UpdateAtomically({
+      table: 'project',
+      id,
       tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      projectId: id,
-      entityType: 'PROJECT',
-      entityId: id,
-      action: 'UPDATE',
-      description: interpolateUiString(UI_STRINGS.appApiProjectsIdRoute.projectProjectCodeUpdated, { "projectCode": existing.projectCode }),
-      oldValue: { status: existing.status, name: existing.name },
-      newValue: { status: updateData.status, name: updateData.name },
-    },
-  });
-
-  return apiSuccess(updated);
+      data: updateData,
+      route: '/api/projects/[id]',
+      requestId: req.headers.get('x-request-id'),
+      audit: {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        projectId: id,
+        entityType: 'PROJECT',
+        entityId: id,
+        action: 'UPDATE',
+        description: interpolateUiString(UI_STRINGS.appApiProjectsIdRoute.projectProjectCodeUpdated, { "projectCode": existing.projectCode }),
+        oldValue: { status: existing.status, name: existing.name },
+        newValue: { status: updateData.status, name: updateData.name },
+      },
+    });
+    return apiSuccess(updated);
+  } catch (error: unknown) {
+    const uniqueConflict = isUniqueConstraintError(error);
+    try {
+      await writeStructuredLog(uniqueConflict ? 'warn' : 'error', uniqueConflict ? 'project.duplicate_name_conflict' : 'project.update_failed', {
+        operation: 'update_project', route: '/api/projects/[id]',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        tenantId: ctx.tenantId, userId: ctx.userId, projectId: id, durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 400) } : { type: typeof error },
+      }, 'application');
+    } catch {
+      // Preserve the database outcome if optional log storage is unavailable.
+    }
+    if (uniqueConflict) return apiError(UI_STRINGS.appApiProjectsRoute.aProjectWithThisNameAlreadyExistsForThisTenant, 409);
+    return apiError(UI_STRINGS.appApiProjectsIdRoute.projectUpdateFailed, 500);
+  }
 }

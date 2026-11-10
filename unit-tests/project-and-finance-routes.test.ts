@@ -279,6 +279,39 @@ describe('project document, project detail, BOQ revision, rate-card message and 
       data: expect.objectContaining({ name: 'Old', description: 'Old description', areaSqFt: 10, budget: 100, status: UI_STRINGS.common.aCTIVE }),
       audit: expect.objectContaining({ action: UI_STRINGS.appAppAuditPage.uPDATE, oldValue: { status: UI_STRINGS.common.aCTIVE, name: 'Old' } }),
     }));
+
+    db.project.findFirst.mockResolvedValueOnce(existing);
+    auditedUpdate.mockRejectedValueOnce(new Error('Unique constraint failed: projects.tenantId, lower(trim(name))'));
+    await expect(updateProject(request({ name: 'Duplicate project' }), projectParams())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProjectsRoute.aProjectWithThisNameAlreadyExistsForThisTenant, status: 409,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'project.duplicate_name_conflict', expect.objectContaining({
+      operation: 'update_project', projectId: 'project-1', tenantId: 'tenant-1',
+    }), 'application');
+
+    db.project.findFirst.mockResolvedValueOnce(existing);
+    auditedUpdate.mockRejectedValueOnce(new Error('project database unavailable'));
+    await expect(updateProject(request({ name: 'Retry project' }), projectParams())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProjectsIdRoute.projectUpdateFailed, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('error', 'project.update_failed', expect.objectContaining({
+      operation: 'update_project', projectId: 'project-1',
+    }), 'application');
+
+    db.project.findFirst.mockResolvedValueOnce(existing);
+    auditedUpdate.mockRejectedValueOnce(Object.assign(new Error('project name collision'), { code: 'P2002' }));
+    await expect(updateProject(request({ name: 'Another duplicate' }), projectParams())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProjectsRoute.aProjectWithThisNameAlreadyExistsForThisTenant, status: 409,
+    });
+
+    db.project.findFirst.mockResolvedValueOnce(existing);
+    auditedUpdate.mockRejectedValueOnce(null);
+    await expect(updateProject(request({ name: 'Unknown failure' }), projectParams())).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiProjectsIdRoute.projectUpdateFailed, status: 500,
+    });
+    expect(writeStructuredLog).toHaveBeenLastCalledWith('error', 'project.update_failed', expect.objectContaining({
+      operation: 'update_project', projectId: 'project-1', error: { type: 'object' },
+    }), 'application');
     expect(audit).not.toHaveBeenCalled();
   });
 

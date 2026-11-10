@@ -6,10 +6,10 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100579/101292) |
-| branches | 93.65% (23029/24590) |
-| functions | 98.57% (1937/1965) |
-| lines | 99.29% (100579/101292) |
+| statements | 99.28% (100718/101447) |
+| branches | 93.63% (23084/24653) |
+| functions | 98.57% (1940/1968) |
+| lines | 99.28% (100718/101447) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -151,9 +151,9 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/budgets/transactions/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/transactions/route.ts` | 100.00% | 98.95% | 100.00% | 100.00% | PASS |
 | `src/app/api/cost-centres/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/cost-centres/[id]/route.ts` | 97.73% | 91.34% | 100.00% | 97.73% | PASS |
+| `src/app/api/cost-centres/[id]/route.ts` | 97.75% | 92.79% | 100.00% | 97.75% | PASS |
 | `src/app/api/cost-centres/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/cost-centres/route.ts` | 100.00% | 95.65% | 100.00% | 100.00% | PASS |
+| `src/app/api/cost-centres/route.ts` | 99.37% | 95.86% | 100.00% | 99.37% | PASS |
 | `src/app/api/dashboard/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/dashboard/route.ts` | 99.85% | 90.69% | 100.00% | 99.85% | PASS |
 | `src/app/api/financial/budget-vs-actual/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -233,15 +233,15 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/procurement/vendors/[id]/ppo-ratings/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/vendors/[id]/ppo-ratings/route.ts` | 99.78% | 92.38% | 100.00% | 99.78% | PASS |
 | `src/app/api/procurement/vendors/[id]/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/vendors/[id]/route.ts` | 100.00% | 98.82% | 100.00% | 100.00% | PASS |
+| `src/app/api/procurement/vendors/[id]/route.ts` | 99.37% | 94.62% | 100.00% | 99.37% | PASS |
 | `src/app/api/procurement/vendors/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/vendors/route.ts` | 99.77% | 92.89% | 100.00% | 99.77% | PASS |
+| `src/app/api/procurement/vendors/route.ts` | 98.16% | 92.30% | 100.00% | 98.16% | PASS |
 | `src/app/api/projects/[id]/documents/[documentId]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/projects/[id]/documents/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/projects/[id]/documents/route.ts` | 100.00% | 96.36% | 100.00% | 100.00% | PASS |
-| `src/app/api/projects/[id]/route.ts` | 92.10% | 96.55% | 100.00% | 92.10% | PASS |
+| `src/app/api/projects/[id]/route.ts` | 91.90% | 95.34% | 100.00% | 91.90% | PASS |
 | `src/app/api/projects/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/projects/route.ts` | 99.00% | 92.13% | 100.00% | 99.00% | PASS |
+| `src/app/api/projects/route.ts` | 98.19% | 91.48% | 100.00% | 98.19% | PASS |
 | `src/app/api/vendor-portal/me/route.ts` | 100.00% | 97.14% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/ppos/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/ppos/route.ts` | 100.00% | 96.66% | 100.00% | 100.00% | PASS |
