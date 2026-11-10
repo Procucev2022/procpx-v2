@@ -107,7 +107,10 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO pr_lines VALUES (
       'pr-line-alt', 'tenant-a', 'pr-valid', 'project-a', 'centre-a', 'boq-valid', 'revision-valid', 'source-line-valid'
     );
-    INSERT INTO ppos VALUES ('ppo-valid', 'tenant-a', 'project-a', 'vendor-a');
+    INSERT INTO ppos VALUES
+      ('ppo-valid', 'tenant-a', 'project-a', 'vendor-a'),
+      ('ppo-other-project', 'tenant-a', 'project-b', 'vendor-a'),
+      ('ppo-other-vendor', 'tenant-a', 'project-a', 'vendor-b');
     INSERT INTO ppo_lines VALUES (
       'ppo-line-valid', 'tenant-a', 'ppo-valid', 'vendor-a', 'project-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-valid'
     );
@@ -116,7 +119,9 @@ function createDatabase(): LocalSQLiteDatabase {
       ('actual-wrong-boq-line', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-alt', 'pr-line-valid', 'rfq-line-valid'),
       ('actual-wrong-pr-line', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-alt', 'rfq-line-valid'),
       ('actual-wrong-rfq-line', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-alt'),
-      ('actual-wrong-vendor', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-b', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-valid');
+      ('actual-wrong-vendor', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-b', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-valid'),
+      ('actual-wrong-ppo-project', 'tenant-a', 'project-a', 'ppo-other-project', NULL, 'vendor-a', NULL, NULL, NULL, NULL, NULL),
+      ('actual-wrong-ppo-vendor', 'tenant-a', 'project-a', 'ppo-other-vendor', NULL, 'vendor-a', NULL, NULL, NULL, NULL, NULL);
   `);
   return database;
 }
@@ -189,6 +194,17 @@ describe('read-only D1 data-quality report queries', () => {
       'actual-wrong-pr-line',
       'actual-wrong-rfq-line',
       'actual-wrong-vendor',
+    ]);
+  });
+
+  it('finds PPO header project and vendor mismatches when no PPO line is linked', () => {
+    const rows = database.prepare(findCheck(
+      'Actual-cost PPO references whose PPO tenant, project, vendor, or line does not match',
+    )).all();
+
+    expect(rows.filter(({ ppoLineId }) => ppoLineId === null).map(({ actualCostId }) => actualCostId).sort()).toEqual([
+      'actual-wrong-ppo-project',
+      'actual-wrong-ppo-vendor',
     ]);
   });
 });
