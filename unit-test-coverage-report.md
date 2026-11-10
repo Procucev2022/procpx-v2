@@ -6,10 +6,10 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100084/100802) |
-| branches | 93.66% (22969/24522) |
-| functions | 98.57% (1938/1966) |
-| lines | 99.28% (100084/100802) |
+| statements | 99.28% (100087/100805) |
+| branches | 93.66% (22973/24526) |
+| functions | 98.57% (1939/1967) |
+| lines | 99.28% (100087/100805) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -184,7 +184,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/app/api/procurement/auctions/[id]/route.ts` | 98.00% | 90.45% | 100.00% | 98.00% | PASS |
 | `src/app/api/procurement/auctions/[id]/terms-accept/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/auctions/rfq-options/route.ts` | 100.00% | 96.87% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/auctions/route.ts` | 91.19% | 92.11% | 100.00% | 91.19% | PASS |
+| `src/app/api/procurement/auctions/route.ts` | 91.23% | 92.24% | 100.00% | 91.23% | PASS |
 | `src/app/api/procurement/awards/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/awards/route.ts` | 100.00% | 94.30% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/negotiations/decision/route.ts` | 98.83% | 92.75% | 100.00% | 98.83% | PASS |

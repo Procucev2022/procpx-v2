@@ -95,41 +95,44 @@ export async function GET(req: NextRequest) {
     }
     if (andFilters.length > 0) where.AND = andFilters;
 
-    // Compute KPI card counts across all auctions for this scope
-    const [totalCount, liveCount, upcomingCount, draftCount, completedCount] = await Promise.all([
-      prisma.auction.count({ where }),
-      prisma.auction.count({
-        where: { ...where, status: { in: ['LIVE', 'EXTENDED'] } },
+    // One grouped read replaces separate D1 scans for each status KPI.
+    const [statusGroups, closedWithWinnerCount] = await Promise.all([
+      prisma.auction.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
       }),
-      prisma.auction.count({
-        where: { ...where, status: 'SCHEDULED' },
-      }),
-      prisma.auction.count({
-        where: { ...where, status: 'DRAFT' },
-      }),
-      prisma.auction.count({
-        where: { ...where, status: { in: ['CLOSED', 'COMPLETED'] } },
-      }),
+      ctx.role !== 'VENDOR' ? prisma.auction.count({
+        where: { ...where, status: 'CLOSED', currentWinningVendorId: { not: null } },
+      }) : Promise.resolve(0),
     ]);
-
-    const pendingCount = draftCount + (ctx.role !== 'VENDOR' ? await prisma.auction.count({
-      where: { ...where, status: 'CLOSED', currentWinningVendorId: { not: null } },
-    }) : 0);
+    const countsByStatus = new Map(statusGroups.map((group) => [group.status, group._count._all] as const));
+    const statusCount = (status: typeof statusGroups[number]['status']) => countsByStatus.get(status) || 0;
+    const totalCount = statusGroups.reduce((total, group) => total + group._count._all, 0);
+    const liveCount = statusCount('LIVE') + statusCount('EXTENDED');
+    const upcomingCount = statusCount('SCHEDULED');
+    const draftCount = statusCount('DRAFT');
+    const completedCount = statusCount('CLOSED') + statusCount('COMPLETED');
+    const pendingCount = draftCount + closedWithWinnerCount;
 
     // Apply Tab filter
+    let totalFiltered = totalCount;
     if (tab === 'LIVE') {
       where.status = { in: ['LIVE', 'EXTENDED'] };
+      totalFiltered = liveCount;
     } else if (tab === 'UPCOMING') {
       where.status = 'SCHEDULED';
+      totalFiltered = upcomingCount;
     } else if (tab === 'DRAFT') {
       where.status = 'DRAFT';
+      totalFiltered = draftCount;
     } else if (tab === 'COMPLETED') {
       where.status = { in: ['CLOSED', 'COMPLETED'] };
+      totalFiltered = completedCount;
     } else if (tab === 'RESULTS') {
       where.status = { in: ['CLOSED', 'COMPLETED'] };
+      totalFiltered = completedCount;
     }
-
-    const totalFiltered = await prisma.auction.count({ where });
 
     const auctions = await prisma.auction.findMany({
       where,

@@ -98,7 +98,9 @@ const BASELINE_SQL = `SELECT
   (SELECT count(*) FROM rfqs) rfqs, (SELECT count(*) FROM rfq_lines) rfqLines,
   (SELECT count(*) FROM quotes) quotes, (SELECT count(*) FROM quote_lines) quoteLines,
   (SELECT count(*) FROM negotiations) negotiations, (SELECT count(*) FROM award_recommendations) awards,
-  (SELECT count(*) FROM ppos) ppos, (SELECT count(*) FROM ppo_lines) ppoLines`;
+  (SELECT count(*) FROM ppos) ppos, (SELECT count(*) FROM ppo_lines) ppoLines,
+  (SELECT count(*) FROM auctions) auctions, (SELECT count(*) FROM auction_vendors) auctionVendors,
+  (SELECT count(*) FROM auction_items) auctionItems, (SELECT count(*) FROM auction_bids) auctionBids`;
 
 // ---------------------------------------------------------------- 1. role sweep
 const LIST_ENDPOINTS = [
@@ -281,6 +283,37 @@ async function workflow(s: Record<string, Session>) {
   const qLines = d1<{ c: number }>(`SELECT count(*) c FROM quote_lines ql JOIN quotes qq ON qq.id=ql.quoteId WHERE qq.rfqId=${q(rfq.id)}`)[0]?.c;
   step('quotations persisted in D1', quotes === 3 && qLines === 9, `${quotes} quotes, ${qLines} quote lines`);
 
+  // Auction register uses one grouped status query plus count-only relations.
+  const auctionStart = new Date(Date.now() + 60 * 60 * 1000);
+  const auctionEnd = new Date(auctionStart.getTime() + 60 * 60 * 1000);
+  r = await proc.post('/api/procurement/auctions', {
+    rfqId: rfq.id,
+    title: `${RUN} Auction`,
+    startTime: auctionStart.toISOString(),
+    endTime: auctionEnd.toISOString(),
+    invitedVendorIds: vendorIds.map((vendor) => vendor.vendorId),
+    items: rfqLines.map((line, index) => ({ rfqLineId: line.id, itemCode: `E2E-AUC-${index + 1}`, quantity: 1 })),
+  });
+  step('create scheduled auction for RFQ', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const auctionRow = d1<{ id: string; status: string }>(
+    `SELECT id, status FROM auctions WHERE rfqId=${q(rfq.id)} ORDER BY createdAt DESC LIMIT 1`,
+  )[0];
+  const auctionId = auctionRow?.id ?? '';
+  step('auction and related vendor/items persisted in D1', Boolean(auctionRow?.id)
+    && auctionRow.status === 'SCHEDULED'
+    && d1(`SELECT id FROM auction_vendors WHERE auctionId=${q(auctionId)}`).length === vendorIds.length
+    && d1(`SELECT id FROM auction_items WHERE auctionId=${q(auctionId)}`).length === rfqLines.length);
+  const auctionListResponse = await proc.get(`/api/procurement/auctions?tab=UPCOMING&search=${encodeURIComponent(RUN)}`);
+  const auctionList = data(auctionListResponse);
+  const listedAuction = auctionList?.auctions?.find((item: ApiJson) => item.id === auctionId);
+  step('auction register grouped totals and relation counts load from Worker D1', auctionListResponse.status === 200
+    && auctionList.total === 1
+    && listedAuction?.totalBids === 0
+    && listedAuction?.invitedVendorsCount === vendorIds.length
+    && listedAuction?.itemsCount === rfqLines.length
+    && !Object.hasOwn(listedAuction ?? {}, 'vendors')
+    && !Object.hasOwn(listedAuction ?? {}, 'items'), `HTTP ${auctionListResponse.status}; total=${auctionList.total ?? 0}`);
+
   r = await proc.get(`/api/procurement/rfqs/${rfq.id}/compare`);
   step('quote comparison loads', r.status === 200, `HTTP ${r.status}`);
 
@@ -386,7 +419,7 @@ async function workflow(s: Record<string, Session>) {
     && actualCostPage?.total === ppoLines && actualCostPage?.data?.length === ppoLines,
   `HTTP ${actualCostRead.status}; ${actualCostPage?.total ?? 0} row(s)`);
 
-  const audits = d1<{ c: number }>(`SELECT count(*) c FROM audit_logs WHERE entityId IN (${[projectId, boqRow.boqId, boqRow.revisionId, pr.id, rfq.id, ppo.id].map(q).join(',')})`)[0]?.c;
+  const audits = d1<{ c: number }>(`SELECT count(*) c FROM audit_logs WHERE entityId IN (${[projectId, boqRow.boqId, boqRow.revisionId, pr.id, rfq.id, auctionId, ppo.id].map(q).join(',')})`)[0]?.c;
   record('workflow', 'audit trail written in D1', audits > 0, `${audits} audit entries for the new records`);
 
   return { projectId, prNumber: pr.prNumber, rfqNumber: rfq.rfqNumber, ppoNumber: ppo.ppoNumber };

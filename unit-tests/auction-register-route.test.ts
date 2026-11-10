@@ -10,7 +10,7 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
-    auction: { count: jest.fn(), findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
+    auction: { count: jest.fn(), groupBy: jest.fn(), findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn() },
     vendor: { findFirst: jest.fn(), count: jest.fn() },
     rfq: { findFirst: jest.fn() },
     quote: { groupBy: jest.fn() },
@@ -60,6 +60,13 @@ describe('auction register API', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     db.auction.count.mockReset().mockResolvedValue(2);
+    db.auction.groupBy.mockReset().mockResolvedValue([
+      { status: 'LIVE', _count: { _all: 2 } },
+      { status: 'SCHEDULED', _count: { _all: 2 } },
+      { status: 'DRAFT', _count: { _all: 2 } },
+      { status: 'CLOSED', _count: { _all: 2 } },
+      { status: 'COMPLETED', _count: { _all: 2 } },
+    ]);
     db.auction.findMany.mockReset().mockResolvedValue([auction()]);
     db.auction.create.mockReset().mockResolvedValue({ id: 'auction-new' });
     db.auction.findUnique.mockReset().mockResolvedValue(null);
@@ -97,8 +104,8 @@ describe('auction register API', () => {
     ]);
     const result = await GET(getRequest('?tab=RESULTS&rfqId=rfq-1&type=ALL&category=ALL&search=%20cable%20&page=0&limit=200'));
     expect(result).toMatchObject({ ok: true, data: {
-      total: 2, page: 1, limit: 100, totalPages: 1,
-      kpis: { total: 2, live: 2, upcoming: 2, draft: 2, completed: 2, pending: 4 },
+      total: 4, page: 1, limit: 100, totalPages: 1,
+      kpis: { total: 10, live: 2, upcoming: 2, draft: 2, completed: 4, pending: 4 },
       auctions: [
         { id: 'auction-1', currentLowestBid: null, currentLeadingBid: null, startingPrice: 500, minDecrement: 10,
           totalBids: 12, invitedVendorsCount: 1, itemsCount: 1,
@@ -109,6 +116,15 @@ describe('auction register API', () => {
       ],
     } });
     const auctionQuery = db.auction.findMany.mock.calls.at(-1)?.[0];
+    expect(db.auction.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      by: ['status'],
+      where: expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-1' }),
+      _count: { _all: true },
+    }));
+    expect(db.auction.count).toHaveBeenCalledTimes(1);
+    expect(db.auction.count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: 'CLOSED', currentWinningVendorId: { not: null } }),
+    }));
     expect(db.auction.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: expect.objectContaining({ tenantId: 'tenant-1', rfqId: 'rfq-1', status: { in: ['CLOSED', 'COMPLETED'] },
         AND: expect.arrayContaining([
