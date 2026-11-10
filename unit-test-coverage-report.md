@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
+Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100064/100788) |
-| branches | 93.64% (22980/24540) |
+| statements | 99.28% (100077/100794) |
+| branches | 93.64% (22984/24543) |
 | functions | 98.57% (1938/1966) |
-| lines | 99.28% (100064/100788) |
+| lines | 99.28% (100077/100794) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -155,14 +155,16 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/cost-centres/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/cost-centres/route.ts` | 99.37% | 95.86% | 100.00% | 99.37% | PASS |
 | `src/app/api/dashboard/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/dashboard/route.ts` | 99.85% | 90.69% | 100.00% | 99.85% | PASS |
+| `src/app/api/dashboard/route.ts` | 99.85% | 90.61% | 100.00% | 99.85% | PASS |
 | `src/app/api/financial/budget-vs-actual/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/masters/categories/category-code.ts` | 98.27% | 93.10% | 100.00% | 98.27% | PASS |
 | `src/app/api/masters/categories/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/masters/categories/route.ts` | 95.07% | 90.67% | 100.00% | 95.07% | PASS |
+| `src/app/api/masters/categories/route.ts` | 96.88% | 91.39% | 100.00% | 96.88% | PASS |
 | `src/app/api/masters/uom/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/masters/uom/route.ts` | 98.52% | 94.11% | 100.00% | 98.52% | PASS |
 | `src/app/api/notifications/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/notifications/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/observability/client/rate-limit.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/observability/client/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/observability/client/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/pr/[id]/approve/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -338,7 +340,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

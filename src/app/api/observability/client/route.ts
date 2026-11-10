@@ -1,28 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LOG_LEVELS, safeRequestPath, type LogLevel } from '@/lib/observability/shared';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import { MAX_BODY_BYTES, MAX_BATCH_SIZE, RATE_LIMIT_PER_MINUTE } from "./route.constants";
+import { isClientLogRateLimited } from './rate-limit';
+import { MAX_BODY_BYTES, MAX_BATCH_SIZE } from "./route.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
 
 export const runtime = 'nodejs';
-const rateLimitBuckets = new Map<string, { startedAt: number; count: number }>();
 
 function getClientKey(request: NextRequest): string {
   return request.headers.get('x-real-ip')
     || request.headers.get('x-forwarded-for')?.split(',')[0].trim()
     || 'local-client';
-}
-
-function isRateLimited(key: string, now = Date.now()): boolean {
-  let bucket = rateLimitBuckets.get(key);
-  if (!bucket || now - bucket.startedAt >= 60_000) {
-    bucket = { startedAt: now, count: 0 };
-    rateLimitBuckets.set(key, bucket);
-  }
-  bucket.count += 1;
-  return bucket.count > RATE_LIMIT_PER_MINUTE;
 }
 
 function isLogLevel(value: unknown): value is LogLevel {
@@ -34,7 +24,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (origin && origin !== new URL(request.url).origin) {
     return NextResponse.json({ error: UI_STRINGS.appApiObservabilityClientRoute.invalidRequestOrigin }, { status: 403 });
   }
-  if (isRateLimited(getClientKey(request))) {
+  if (isClientLogRateLimited(getClientKey(request))) {
     return NextResponse.json({ error: UI_STRINGS.appApiObservabilityClientRoute.tooManyLogEvents }, { status: 429 });
   }
 
@@ -78,8 +68,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   return NextResponse.json({ accepted: logs.length }, { status: 202 });
-}
-
-export function resetClientLogRateLimits(): void {
-  rateLimitBuckets.clear();
 }

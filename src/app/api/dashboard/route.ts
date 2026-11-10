@@ -26,7 +26,7 @@ import type {
 } from '@app-types/app/api/dashboard/route.types';
 
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   const ctx = await requireAuth('PROJECT_VIEW');
   if (!isApiContext(ctx)) return ctx;
 
@@ -36,7 +36,7 @@ export async function GET(request?: Request) {
 
   // ── SUPER_ADMIN ──────────────────────────────────────────
   if (ctx.role === 'SUPER_ADMIN') {
-    const searchParams = request?.url ? new URL(request.url).searchParams : new URLSearchParams();
+    const searchParams = new URL(request.url).searchParams;
     const { page, pageSize, skip } = getListPageWindow(searchParams);
     const [tenants, users, projects, recentLogs, tenantList] = await Promise.all([
       prisma.tenant.count(),
@@ -1344,7 +1344,7 @@ export async function GET(request?: Request) {
     await writeStructuredLog('error', 'dashboard.read_failed', {
       operation: 'load_role_dashboard',
       route: '/api/dashboard',
-      requestId: request?.headers.get('x-request-id') || null,
+      requestId: request.headers.get('x-request-id') || null,
       tenantId,
       userId,
       role: ctx.role,

@@ -4,7 +4,8 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { dispatchPreparedWorkflowNotification, notifyNextResponsibleParty } from '../src/lib/notifications';
 import { GET as getStandardItems, POST as createStandardItems } from '../src/app/api/boq/standard-library/route';
-import { GET as getCategories, POST as createCategory, generateUniqueCategoryCode } from '../src/app/api/masters/categories/route';
+import { GET as getCategories, POST as createCategory } from '../src/app/api/masters/categories/route';
+import { generateUniqueCategoryCode } from '../src/app/api/masters/categories/category-code';
 import { GET as getAwards, POST as createAward, PUT as reviewAward } from '../src/app/api/procurement/awards/route';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { CATEGORY_INSERT_IF_VALID_SQL } from '../src/lib/d1-batch.constants';
@@ -380,6 +381,30 @@ describe('category master API and category code generator', () => {
     expect(db.category.findMany).toHaveBeenLastCalledWith({
       where: { tenantId: 'tenant-1', code: { startsWith: 'CIV-FT' } }, select: { code: true }, take: 10_000,
     });
+  });
+
+  it('uses a safe placeholder when a unique-key race cannot be matched to an existing category', async () => {
+    db.category.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    (writeD1BatchAtomically as jest.Mock).mockRejectedValueOnce(
+      new Error('UNIQUE constraint failed: categories.tenantId, categories.code'),
+    );
+
+    await expect(createCategory(request('http://localhost/api/masters/categories', {
+      name: 'Lighting',
+      code: 'LIGHT',
+    }))).resolves.toMatchObject({
+      ok: false,
+      status: 409,
+      error: expect.stringContaining(UI_STRINGS.appAppApprovalsVendorRatingsPage.nA),
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'masters.category_create_conflict', expect.objectContaining({
+      categoryName: 'Lighting',
+      categoryCode: 'LIGHT',
+    }));
   });
 
   it('distinguishes stale-parent and duplicate-name races after the atomic insert', async () => {

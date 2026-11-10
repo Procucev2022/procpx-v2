@@ -1,5 +1,5 @@
 import { uiStringPattern } from '@/lib/i18n';
-import { GET } from '../src/app/api/dashboard/route';
+import { GET as getDashboard } from '../src/app/api/dashboard/route';
 import { prisma } from '../src/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '../src/lib/api-utils';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
@@ -50,6 +50,7 @@ const isContext = isApiContext as unknown as jest.Mock;
 const success = apiSuccess as jest.Mock;
 const failure = apiError as jest.Mock;
 const baseContext = { tenantId: 'tenant-1', userId: 'user-1', role: 'PROJECT_USER' };
+const GET = (request: Request = new Request('http://localhost/api/dashboard')) => getDashboard(request);
 
 function rfq(id: string, status: string, extra: Record<string, any> = {}) {
   return {
