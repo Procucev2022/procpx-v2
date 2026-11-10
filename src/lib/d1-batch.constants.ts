@@ -295,7 +295,7 @@ export const RFQ_INSERT_IF_VALID_SQL = `
   )
     AND EXISTS (
       SELECT 1 FROM "boq_revisions" r JOIN "boqs" b ON b."id" = r."boqId"
-      WHERE r."id" = i."boqRevisionId" AND r."tenantId" = i."tenantId" AND b."projectId" = i."projectId"
+      WHERE r."id" = i."boqRevisionId" AND r."tenantId" = i."tenantId" AND b."tenantId" = i."tenantId" AND b."projectId" = i."projectId"
         AND (r."status" = 'APPROVED' OR r."prStatus" IN ('PR_APPROVED', 'PR_RELEASED_TO_PROCUREMENT')
           OR EXISTS (
             SELECT 1 FROM "procurement_requests" approved_pr
@@ -1518,7 +1518,8 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
     AND (i."boqLineId" IS NULL OR EXISTS (
       SELECT 1 FROM "boq_lines" l JOIN "boq_revisions" r ON r."id" = l."boqRevisionId"
       JOIN "boqs" b ON b."id" = r."boqId"
-      WHERE l."id" = i."boqLineId" AND l."tenantId" = i."tenantId" AND b."projectId" = i."projectId"
+      WHERE l."id" = i."boqLineId" AND l."tenantId" = i."tenantId" AND r."tenantId" = i."tenantId"
+        AND b."tenantId" = i."tenantId" AND b."projectId" = i."projectId"
         AND (i."boqRevisionId" IS NULL OR l."boqRevisionId" = i."boqRevisionId")
         AND (i."boqId" IS NULL OR r."boqId" = i."boqId")
     ))
@@ -1528,7 +1529,8 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
     ))
     AND (i."prLineId" IS NULL OR EXISTS (
       SELECT 1 FROM "pr_lines" l JOIN "procurement_requests" pr ON pr."id" = l."prId"
-      WHERE l."id" = i."prLineId" AND l."tenantId" = i."tenantId" AND pr."projectId" = i."projectId"
+      WHERE l."id" = i."prLineId" AND l."tenantId" = i."tenantId" AND pr."tenantId" = i."tenantId"
+        AND pr."projectId" = i."projectId" AND (l."projectId" IS NULL OR l."projectId" = i."projectId")
         AND (i."prId" IS NULL OR l."prId" = i."prId")
     ))
     AND (i."rfqId" IS NULL OR EXISTS (
@@ -1536,7 +1538,8 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
     ))
     AND (i."rfqLineId" IS NULL OR EXISTS (
       SELECT 1 FROM "rfq_lines" l JOIN "rfqs" r ON r."id" = l."rfqId"
-      WHERE l."id" = i."rfqLineId" AND l."tenantId" = i."tenantId" AND r."projectId" = i."projectId"
+      WHERE l."id" = i."rfqLineId" AND l."tenantId" = i."tenantId" AND r."tenantId" = i."tenantId"
+        AND r."projectId" = i."projectId" AND (l."projectId" IS NULL OR l."projectId" = i."projectId")
         AND (i."rfqId" IS NULL OR l."rfqId" = i."rfqId")
     ))
     AND (i."ppoId" IS NULL OR EXISTS (
@@ -1545,7 +1548,8 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
     ))
     AND (i."ppoLineId" IS NULL OR EXISTS (
       SELECT 1 FROM "ppo_lines" l JOIN "ppos" p ON p."id" = l."ppoId"
-      WHERE l."id" = i."ppoLineId" AND l."tenantId" = i."tenantId" AND p."projectId" = i."projectId"
+      WHERE l."id" = i."ppoLineId" AND l."tenantId" = i."tenantId" AND p."tenantId" = i."tenantId"
+        AND p."projectId" = i."projectId"
         AND (i."ppoId" IS NULL OR l."ppoId" = i."ppoId")
         AND l."projectId" = p."projectId"
         AND (i."boqId" IS NULL OR l."boqId" = i."boqId")
