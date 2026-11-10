@@ -1,4 +1,6 @@
 import {
+  compareD1IntegrityBaseline,
+  compareRowCounts,
   expectedColumnsByTable,
   expectedIndexNamesFromMigrations,
   findMissingColumns,
@@ -46,5 +48,31 @@ describe('D1 schema integrity helpers', () => {
     )).toEqual({ pending: ['0002_b.sql', '0003_c.sql'], unknownApplied: ['0002_renamed.sql'] });
     expect(migrationStatus(['0001_a.sql'], [])).toEqual({ pending: ['0001_a.sql'], unknownApplied: [] });
     expect(migrationStatus(['0001_a.sql'], ['0001_a.sql'])).toEqual({ pending: [], unknownApplied: [] });
+  });
+
+  it('compares before and after row counts without hiding decreases or additions', () => {
+    expect(compareRowCounts(
+      { projects: 3, vendors: 2, legacy_table: 1 },
+      { projects: 4, vendors: 1, new_table: 0 },
+    )).toEqual({
+      removedTables: ['legacy_table'],
+      addedTables: ['new_table'],
+      decreases: [{ tableName: 'vendors', baselineRowCount: 2, currentRowCount: 1 }],
+      increases: [{ tableName: 'projects', baselineRowCount: 3, currentRowCount: 4 }],
+    });
+  });
+
+  it('rejects a baseline from a different configured D1 target', () => {
+    expect(() => compareD1IntegrityBaseline({
+      format: 'procpx-d1-integrity-baseline-v1',
+      target: { accountId: 'account-a', databaseId: 'database-a', databaseName: 'procpx-dev' },
+      rowCounts: { projects: 1 },
+    }, {
+      accountId: 'account-b', databaseId: 'database-a', databaseName: 'procpx-dev',
+    }, { projects: 1 })).toThrow('baseline target does not match the current accountId');
+  });
+
+  it('rejects invalid baseline row counts', () => {
+    expect(() => compareRowCounts({ projects: -1 }, { projects: 0 })).toThrow('invalid table name or row count');
   });
 });

@@ -43,13 +43,17 @@ jobs:
         run: npm run check:quality
 
       - name: Verify remote D1 integrity before migration
-        run: npm run db:integrity:remote -- --allow-pending-migrations
+        env:
+          D1_INTEGRITY_BASELINE_PATH: ${{ runner.temp }}/procpx-d1-baseline-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: npm run db:integrity:remote -- --allow-pending-migrations --baseline-out "$D1_INTEGRITY_BASELINE_PATH"
 
       - name: Apply reviewed D1 migrations
         run: npm run db:d1:migrate:remote
 
       - name: Verify remote D1 integrity
-        run: npm run db:integrity:remote
+        env:
+          D1_INTEGRITY_BASELINE_PATH: ${{ runner.temp }}/procpx-d1-baseline-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: npm run db:integrity:remote -- --compare-baseline "$D1_INTEGRITY_BASELINE_PATH"
 
       - name: Deploy OpenNext application
         run: npm run cf:deploy
