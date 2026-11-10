@@ -953,7 +953,8 @@ export const CATEGORY_INSERT_IF_VALID_SQL = `
     SELECT 1 FROM "categories" WHERE "id" = ? AND "tenantId" = ? AND "isActive" = 1
   ))
     AND NOT EXISTS (
-      SELECT 1 FROM "categories" WHERE "tenantId" = ? AND "name" = ? AND "parentId" IS ?
+      SELECT 1 FROM "categories"
+      WHERE "tenantId" = ? AND lower(trim("name")) = lower(trim(?)) AND "parentId" IS ?
     )
 `;
 
