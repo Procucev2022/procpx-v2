@@ -4,6 +4,7 @@ export const MAX_D1_BATCH_BINDINGS = 4_500;
 export const MAX_D1_BINDING_BYTES = 1_800_000;
 export const D1_BATCH_SLOW_LOG_THRESHOLD_MS = 1_000;
 export const MAX_RFQ_VENDOR_INVITE_COUNT = 500;
+export const MAX_RFQ_WORKFLOW_LINES = 500;
 export const MAX_RATE_CARD_ITEMS = 200;
 export const MAX_PPO_COMPLETION_LINES = 90;
 export const MAX_PPO_CREATE_LINES = 140;

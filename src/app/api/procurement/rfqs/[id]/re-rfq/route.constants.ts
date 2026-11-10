@@ -1,4 +1,6 @@
-export const MAX_RERFQ_LINES = 500;
+import { MAX_RFQ_WORKFLOW_LINES } from '@/lib/d1-batch.constants';
+
+export const MAX_RERFQ_LINES = MAX_RFQ_WORKFLOW_LINES;
 export const MAX_RERFQ_VENDORS = 500;
 export const MAX_RERFQ_VENDOR_ID_LENGTH = 128;
 export const MAX_RERFQ_REASON_LENGTH = 1_000;

@@ -6,10 +6,10 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100541/101254) |
-| branches | 93.65% (23025/24586) |
+| statements | 99.29% (100564/101277) |
+| branches | 93.65% (23030/24591) |
 | functions | 98.57% (1937/1965) |
-| lines | 99.29% (100541/101254) |
+| lines | 99.29% (100564/101277) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -246,7 +246,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/app/api/vendor-portal/ppos/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/ppos/route.ts` | 100.00% | 96.66% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/rate-cards/route.ts` | 98.80% | 91.71% | 100.00% | 98.80% | PASS |
-| `src/app/api/vendor-portal/rfqs/[id]/route.ts` | 99.78% | 94.77% | 100.00% | 99.78% | PASS |
+| `src/app/api/vendor-portal/rfqs/[id]/route.ts` | 99.79% | 94.92% | 100.00% | 99.79% | PASS |
 | `src/app/api/vendor-portal/rfqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/rfqs/route.ts` | 100.00% | 98.31% | 100.00% | 100.00% | PASS |
 | `src/app/global-error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -338,7 +338,7 @@ Files included: **355**. Files meeting all four 90% thresholds: **355/355**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.53% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

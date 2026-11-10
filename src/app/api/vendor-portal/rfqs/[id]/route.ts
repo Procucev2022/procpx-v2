@@ -23,6 +23,7 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import { getNegotiationHistoryPageMetadata, paginateNegotiationHistory } from '@/lib/negotiation-history';
 import { NEGOTIATION_HISTORY_PAGE_SIZE } from '@/lib/negotiation-history.constants';
+import { MAX_RFQ_WORKFLOW_LINES } from '@/lib/d1-batch.constants';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import type { NegotiationQuoteLineSnapshot } from '@app-types/app/api/vendor-portal-rfqs.types';
 
@@ -67,6 +68,7 @@ export async function GET(
         },
         lines: {
           orderBy: { lineNumber: 'asc' },
+          take: MAX_RFQ_WORKFLOW_LINES + 1,
         },
         invitedVendors: {
           where: { vendorId },
@@ -75,7 +77,7 @@ export async function GET(
           where: { vendorId },
           orderBy: [{ quoteVersion: 'desc' }, { id: 'desc' }],
           take: 1,
-          include: { lines: true },
+          include: { lines: { take: MAX_RFQ_WORKFLOW_LINES + 1 } },
         },
         negotiations: {
           take: 1,
@@ -93,6 +95,24 @@ export async function GET(
 
     if (!rfq) {
       return apiError(UI_STRINGS.common.rFQNotFoundOrAccessDenied, 404, { route: '/api/vendor-portal/rfqs/[id]', method: 'GET' });
+    }
+
+    const rfqLineCount = rfq.lines.length;
+    const quoteLineCount = rfq.quotes?.[0]?.lines.length || 0;
+    if (rfqLineCount > MAX_RFQ_WORKFLOW_LINES || quoteLineCount > MAX_RFQ_WORKFLOW_LINES) {
+      await writeStructuredLog('warn', 'vendor_portal.rfq_detail_line_limit_exceeded', {
+        operation: 'read_vendor_rfq_detail',
+        route: '/api/vendor-portal/rfqs/[id]',
+        requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        vendorId,
+        rfqId,
+        rfqLineCount,
+        quoteLineCount,
+        maximumLineCount: MAX_RFQ_WORKFLOW_LINES,
+      }, 'application');
+      return apiError(UI_STRINGS.common.userMessages.failedToFetchRfqDetail, 500);
     }
 
     const roundRecords = rfq.negotiations.flatMap((negotiation) => negotiation.rounds || []);
