@@ -1,6 +1,7 @@
 // lib/prisma.ts - Singleton D1-backed Prisma client. SQLite is schema dialect only.
 // Every client logs failed and slow queries.
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import { PrismaClient as WorkerPrismaClient } from '@prisma/client-worker';
 import { usesD1Database } from './runtime';
 import { withD1Compat } from './d1-compat';
 import { withQueryLogging } from './observability/query-logging';
@@ -26,7 +27,8 @@ function createD1Client(): PrismaClient {
   const { PrismaD1 } = require('@prisma/adapter-d1') as typeof import('@prisma/adapter-d1');
   const { env } = getCloudflareContext() as unknown as { env?: { DB?: ConstructorParameters<typeof PrismaD1>[0] } };
   if (!env?.DB) throw new Error(D1_BINDING_REQUIRED_MESSAGE);
-  return withQueryLogging(withD1Compat(new PrismaClient({ adapter: new PrismaD1(env.DB), log })));
+  const workerClient = new WorkerPrismaClient({ adapter: new PrismaD1(env.DB), log });
+  return withQueryLogging(withD1Compat(workerClient as unknown as PrismaClient)) as unknown as PrismaClient;
 }
 
 // The D1 binding is only readable inside a request, so the client

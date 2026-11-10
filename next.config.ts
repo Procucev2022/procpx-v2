@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Prisma ships its own query engine; keep it out of the Next.js bundle.
-  serverExternalPackages: ["@prisma/client", ".prisma/client"],
+  // Prisma Client is generated for Workerd and imported from the bundled
+  // `generated/prisma` output by the Cloudflare runtime.
 };
 
 // Initialize local Wrangler bindings for `next dev`; remote D1 access is reserved

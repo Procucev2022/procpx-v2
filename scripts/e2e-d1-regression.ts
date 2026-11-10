@@ -338,6 +338,54 @@ async function workflow(s: Record<string, Session>) {
   r = await proc.post('/api/procurement/ppos', { rfqId: rfq.id, awardRecommendationId: award.id, targetVendorId: l1.vendorId, justification: `${RUN} duplicate` });
   record('workflow', 'duplicate PPO for same vendor is blocked', r.status === 409, `HTTP ${r.status}`);
 
+  r = await l1Session.post(`/api/procurement/ppos/${ppo.id}/vendor-accept`, { acceptedBy: `${RUN} test signatory` });
+  step('vendor accepts the issued PPO', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const acceptedPpoStatus = d1<{ status: string; vendorStatus: string }>(
+    `SELECT status, vendorStatus FROM ppos WHERE id=${q(ppo.id)}`,
+  )[0];
+  step('vendor acceptance persisted in D1', acceptedPpoStatus?.status === 'CONFIRMED' && acceptedPpoStatus.vendorStatus === 'ACCEPTED_BY_VENDOR',
+    `${acceptedPpoStatus?.status}/${acceptedPpoStatus?.vendorStatus}`);
+
+  const completionBody = {
+    idempotencyKey: `E2E-COMP-${stamp}`,
+    completionDate: new Date().toISOString(),
+    completionReference: `${RUN} goods receipt`,
+    remarks: `${RUN} receipt verified`,
+  };
+  r = await proc.post(`/api/procurement/ppos/${ppo.id}/complete`, completionBody);
+  step('complete PPO and create actual costs', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const completion = d1<{ status: string }>(`SELECT status FROM ppos WHERE id=${q(ppo.id)}`)[0];
+  const completedPpoLines = d1<{ id: string; orderedQuantity: number; completedQuantity: number; status: string }>(
+    `SELECT id, orderedQuantity, completedQuantity, status FROM ppo_lines WHERE ppoId=${q(ppo.id)} ORDER BY lineNumber, id`,
+  );
+  const actualCosts = d1<{ projectId: string; ppoLineId: string; vendorId: string; source: string; status: string; actualQuantity: number; actualAmount: number; completionRequestId: string }>(
+    `SELECT projectId, ppoLineId, vendorId, source, status, actualQuantity, actualAmount, completionRequestId FROM actual_cost_transactions WHERE ppoId=${q(ppo.id)} ORDER BY ppoLineId`,
+  );
+  step('PPO lines and completion status persisted', completion?.status === 'COMPLETED'
+    && completedPpoLines.length === ppoLines
+    && completedPpoLines.every((line) => line.status === 'COMPLETED' && line.completedQuantity === line.orderedQuantity),
+  `${completion?.status}; ${completedPpoLines.filter((line) => line.status === 'COMPLETED').length}/${ppoLines} lines`);
+  step('actual costs reconcile to PPO line, vendor, and idempotency key', actualCosts.length === ppoLines
+    && actualCosts.every((cost) => cost.projectId === projectId && cost.ppoLineId && cost.vendorId === l1.vendorId
+      && cost.source === 'PPO_COMPLETION' && cost.status === 'APPROVED'
+      && cost.completionRequestId === completionBody.idempotencyKey
+      && cost.actualQuantity > 0 && cost.actualAmount >= 0), `${actualCosts.length} actual-cost rows`);
+
+  r = await proc.post(`/api/procurement/ppos/${ppo.id}/complete`, completionBody);
+  step('completion retry returns the existing result', r.status < 300
+    && d1<{ c: number }>(`SELECT count(*) c FROM actual_cost_transactions WHERE ppoId=${q(ppo.id)}`)[0]?.c === ppoLines,
+  `HTTP ${r.status}; no duplicate actual-cost rows`);
+  r = await proc.post(`/api/procurement/ppos/${ppo.id}/complete`, { ...completionBody, remarks: `${RUN} conflicting retry` });
+  record('workflow', 'completion key rejects a changed retry payload', r.status === 409, `HTTP ${r.status}`);
+
+  const actualCostRead = await proc.get(`/api/actual-costs?ppoId=${ppo.id}&pageSize=25`);
+  // The actual-cost register returns { data, total, ... } directly; the generic
+  // data() helper unwraps `data` for other endpoint response shapes.
+  const actualCostPage = actualCostRead.json;
+  step('actual-cost register reload shows completed PPO costs', actualCostRead.status === 200
+    && actualCostPage?.total === ppoLines && actualCostPage?.data?.length === ppoLines,
+  `HTTP ${actualCostRead.status}; ${actualCostPage?.total ?? 0} row(s)`);
+
   const audits = d1<{ c: number }>(`SELECT count(*) c FROM audit_logs WHERE entityId IN (${[projectId, boqRow.boqId, boqRow.revisionId, pr.id, rfq.id, ppo.id].map(q).join(',')})`)[0]?.c;
   record('workflow', 'audit trail written in D1', audits > 0, `${audits} audit entries for the new records`);
 

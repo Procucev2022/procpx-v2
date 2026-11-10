@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@prisma/client-worker": ["./generated/prisma/client"],
       "@/*": ["./src/*"],
       "@app-types/*": ["./types/*"]
     }
