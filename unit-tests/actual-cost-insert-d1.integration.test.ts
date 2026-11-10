@@ -51,10 +51,13 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO cost_centres VALUES ('cc-1', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO cost_centres VALUES ('cc-other', 'other-tenant', 'other-project');
     INSERT INTO boqs VALUES ('boq-1', '${TENANT_ID}', '${PROJECT_ID}');
+    INSERT INTO boqs VALUES ('boq-2', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO boqs VALUES ('boq-other', 'other-tenant', 'other-project');
     INSERT INTO boq_revisions VALUES ('revision-1', '${TENANT_ID}', 'boq-1');
+    INSERT INTO boq_revisions VALUES ('revision-2', '${TENANT_ID}', 'boq-2');
     INSERT INTO boq_revisions VALUES ('revision-other', 'other-tenant', 'boq-other');
     INSERT INTO boq_lines VALUES ('boq-line-1', '${TENANT_ID}', 'revision-1');
+    INSERT INTO boq_lines VALUES ('boq-line-2', '${TENANT_ID}', 'revision-2');
     INSERT INTO boq_lines VALUES ('boq-line-other', 'other-tenant', 'revision-other');
     INSERT INTO procurement_requests VALUES ('pr-1', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO procurement_requests VALUES ('pr-other', 'other-tenant', 'other-project');
@@ -136,6 +139,18 @@ describe('actual-cost reference validation against isolated SQLite D1 semantics'
     ['vendorId', 'vendor-other'],
   ])('rejects a linked %s from another tenant or project', (field, id) => {
     const result = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues({ [field]: id }));
+
+    expect(Number(result.changes)).toBe(0);
+    expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
+      .toEqual({ total: 0 });
+  });
+
+  it('rejects a BOQ line whose parent differs from the supplied BOQ when revision ID is omitted', () => {
+    const result = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues({
+      boqId: 'boq-1',
+      boqRevisionId: null,
+      boqLineId: 'boq-line-2',
+    }));
 
     expect(Number(result.changes)).toBe(0);
     expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())

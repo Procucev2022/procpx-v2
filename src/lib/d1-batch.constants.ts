@@ -1520,6 +1520,7 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
       JOIN "boqs" b ON b."id" = r."boqId"
       WHERE l."id" = i."boqLineId" AND l."tenantId" = i."tenantId" AND b."projectId" = i."projectId"
         AND (i."boqRevisionId" IS NULL OR l."boqRevisionId" = i."boqRevisionId")
+        AND (i."boqId" IS NULL OR r."boqId" = i."boqId")
     ))
     AND (i."prId" IS NULL OR EXISTS (
       SELECT 1 FROM "procurement_requests" pr
