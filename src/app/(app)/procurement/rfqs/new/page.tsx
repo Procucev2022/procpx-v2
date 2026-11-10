@@ -3,6 +3,8 @@
 // Exact Approved Five-Step Enterprise RFQ Creation Workflow
 import { useEffect, useState, useMemo, useRef } from 'react';
 import type { ApprovedBoqDetail, ApprovedBoqListResponse, ApprovedBoqSummary } from '@app-types/app/api/procurement/approved-boqs.types';
+import type { RfqBaseline } from '@app-types/app/(app)/procurement/rfqs/new-page.types';
+import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/ui/PageHeader';
@@ -62,12 +64,13 @@ export default function NewRfqPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [approvedBoqs, setApprovedBoqs] = useState<any[]>([]);
-  const [selectedBoq, setSelectedBoq] = useState<any>(null);
+  const [selectedBoq, setSelectedBoq] = useState<RfqBaseline | null>(null);
   const [selectedBoqLoading, setSelectedBoqLoading] = useState(false);
   const selectedBoqRequestVersionRef = useRef(0);
   const [approvedBoqPage, setApprovedBoqPage] = useState(1);
   const [hasMoreApprovedBoqs, setHasMoreApprovedBoqs] = useState(false);
   const [loadingMoreApprovedBoqs, setLoadingMoreApprovedBoqs] = useState(false);
+  const [loadingMoreBoqLines, setLoadingMoreBoqLines] = useState(false);
   const [vendors, setVendors] = useState<any[]>([]);
   const [rateCards, setRateCards] = useState<any[]>([]);
 
@@ -176,7 +179,11 @@ export default function NewRfqPage() {
 
   const fetchApprovedBoqDetails = async (boq: ApprovedBoqSummary): Promise<ApprovedBoqDetail> => {
     if (Array.isArray(boq.lines)) return boq as ApprovedBoqDetail;
-    const query = new URLSearchParams({ revisionId: boq.id, pageSize: '1' });
+    const query = new URLSearchParams({
+      revisionId: boq.id,
+      pageSize: '1',
+      linePageSize: String(BOQ_LINE_DETAIL_PAGE_SIZE),
+    });
     const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
     if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
     const data = await res.json() as ApprovedBoqListResponse;
@@ -261,6 +268,7 @@ export default function NewRfqPage() {
         // Build synthetic BOQ structure inherited strictly from Approved PR
         const prBoq = {
           id: foundPr.boqRevision?.id || foundPr.boqRevisionId || 'pr-rev',
+          boqId: foundPr.boq?.id || foundPr.boqId || '',
           prId: foundPr.id,
           prNumber: foundPr.prNumber,
           boqCode: foundPr.boq?.boqCode || foundPr.boqCode || (foundPr.project?.projectCode ? `BOQ-${foundPr.project.projectCode}` : 'BOQ-R1'),
@@ -274,13 +282,21 @@ export default function NewRfqPage() {
           approvedAt: foundPr.releasedAt || foundPr.projectApprovedAt,
           approvedBy: foundPr.releasedBy || foundPr.projectApprovedBy || 'Project Approver',
           totalLines: foundPr.lines.length,
+          estimatedBenchmarkValue: totalBenchmark,
           totalBenchmarkAmount: totalBenchmark,
-          categories: Array.from(new Set(foundPr.lines.map((l: any) => l.category || 'General'))).map((cat) => ({
+          rfqCount: foundPr.rfqs?.length || 0,
+          categories: Array.from(new Set<string>(foundPr.lines.map((l: any) => l.category || 'General'))).map((cat) => ({
             category: cat,
-            lineCount: foundPr.lines.filter((l: any) => (l.category || 'General') === cat).length,
-            benchmarkSubtotal: foundPr.lines
-              .filter((l: any) => (l.category || 'General') === cat)
-              .reduce((acc: number, l: any) => acc + (l.estimatedValue || ((l.quantity || 0) * (l.estimatedRate || 0))), 0),
+            ...(() => {
+              const categoryLines = foundPr.lines.filter((l: any) => (l.category || 'General') === cat);
+              const categoryValue = categoryLines.reduce((acc: number, l: any) => acc + (l.estimatedValue || ((l.quantity || 0) * (l.estimatedRate || 0))), 0);
+              return {
+                lineCount: categoryLines.length,
+                totalQty: categoryLines.reduce((acc: number, l: any) => acc + (l.quantity || 0), 0),
+                estimatedValue: categoryValue,
+                benchmarkSubtotal: categoryValue,
+              };
+            })(),
           })),
           lines: foundPr.lines.map((l: any, idx: number) => ({
             id: l.id,
@@ -290,7 +306,7 @@ export default function NewRfqPage() {
             description: l.itemDescription,
             specification: l.specification || 'Standard specification',
             category: l.category || 'General',
-            uom: l.uom,
+            uom: l.uom || 'NOS',
             quantity: l.quantity,
             benchmarkRate: l.estimatedRate || 0,
             benchmarkAmount: l.estimatedValue || l.quantity * (l.estimatedRate || 0),
@@ -318,7 +334,11 @@ export default function NewRfqPage() {
         try {
           activeBoq = await fetchApprovedBoqDetails(activeBoqSummary);
         } catch (error) {
-          setErrorMsg(error instanceof Error ? error.message : UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+          reportHandledClientFailure(error, {
+            event: 'procurement.approved_boq_detail_load_failed', operation: 'load_initial_detail_lines',
+            route: '/procurement/rfqs/new', revisionId: activeBoqSummary.id,
+          });
+          setErrorMsg(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
           return;
         } finally {
           setSelectedBoqLoading(false);
@@ -361,10 +381,14 @@ export default function NewRfqPage() {
       const detailedBoq = await fetchApprovedBoqDetails(boq);
       if (requestVersion !== selectedBoqRequestVersionRef.current) return;
       setSelectedBoq(detailedBoq);
-      setSelectedLineIds(detailedBoq.lines.map((line: any) => line.id));
+      setSelectedLineIds(detailedBoq.lines.map((line) => line.id));
     } catch (error) {
       if (requestVersion === selectedBoqRequestVersionRef.current) {
-        setErrorMsg(error instanceof Error ? error.message : UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+        reportHandledClientFailure(error, {
+          event: 'procurement.approved_boq_selection_detail_load_failed', operation: 'load_selected_revision_details',
+          route: '/procurement/rfqs/new', revisionId: boq.id,
+        });
+        setErrorMsg(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
       }
     } finally {
       if (requestVersion === selectedBoqRequestVersionRef.current) setSelectedBoqLoading(false);
@@ -389,6 +413,58 @@ export default function NewRfqPage() {
     }
   };
 
+  const loadMoreApprovedBoqLines = async () => {
+    if (loadingMoreBoqLines || !selectedBoq?.linePagination?.hasMore || !selectedBoq.linePagination.nextCursor) return;
+    const revisionId = selectedBoq.id;
+    const requestVersion = selectedBoqRequestVersionRef.current;
+    const shouldSelectAdditionalLines = selectedBoq.lines.every((line) => selectedLineIds.includes(line.id));
+    const query = new URLSearchParams({
+      revisionId,
+      pageSize: '1',
+      linePageSize: String(BOQ_LINE_DETAIL_PAGE_SIZE),
+      lineCursor: selectedBoq.linePagination.nextCursor,
+    });
+    setLoadingMoreBoqLines(true);
+    try {
+      const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      const data = await res.json() as ApprovedBoqListResponse;
+      const nextPage = data.approvedBoqs?.find((item) => item.id === revisionId);
+      const nextLines = nextPage?.lines;
+      const nextPagination = nextPage?.linePagination;
+      if (!nextPage || !Array.isArray(nextLines) || !nextPagination) {
+        throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      }
+      if (requestVersion !== selectedBoqRequestVersionRef.current) return;
+      setSelectedBoq((current) => {
+        if (current?.id !== revisionId || !current.linePagination) return current;
+        return {
+          ...current,
+          lines: [...current.lines, ...nextLines],
+          linePagination: {
+            total: nextPagination.total ?? current.linePagination.total ?? current.totalLines,
+            pageSize: nextPagination.pageSize,
+            hasMore: nextPagination.hasMore,
+            nextCursor: nextPagination.nextCursor,
+          },
+        };
+      });
+      if (shouldSelectAdditionalLines) {
+        setSelectedLineIds((current) => Array.from(new Set([...current, ...nextLines.map((line) => line.id)])));
+      }
+    } catch (error) {
+      if (requestVersion === selectedBoqRequestVersionRef.current) {
+        reportHandledClientFailure(error, {
+          event: 'procurement.approved_boq_detail_page_failed', operation: 'load_detail_lines',
+          route: '/procurement/rfqs/new', revisionId,
+        });
+        setErrorMsg(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      }
+    } finally {
+      if (requestVersion === selectedBoqRequestVersionRef.current) setLoadingMoreBoqLines(false);
+    }
+  };
+
   // Filter scoped lines based on scope mode & line selection
   const scopedLines = useMemo(() => {
     if (!selectedBoq) return [];
@@ -400,13 +476,36 @@ export default function NewRfqPage() {
     });
   }, [selectedBoq, scopeType, selectedCategory, selectedLineIds]);
 
+  const scopedLineCount = useMemo(() => {
+    if (!selectedBoq) return 0;
+    if (scopeType === 'ENTIRE_BOQ') return selectedBoq.totalLines ?? selectedBoq.lines.length;
+    if (scopeType === 'CATEGORY') {
+      return selectedBoq.categories.find((category) => category.category === selectedCategory)?.lineCount || 0;
+    }
+    return selectedLineIds.length;
+  }, [selectedBoq, scopeType, selectedCategory, selectedLineIds]);
+
   const scopedBenchmarkValue = useMemo(() => {
+    if (selectedBoq && scopeType === 'ENTIRE_BOQ') {
+      return selectedBoq.estimatedBenchmarkValue ?? selectedBoq.totalBenchmarkAmount ?? 0;
+    }
+    if (selectedBoq && scopeType === 'CATEGORY') {
+      const category = selectedBoq.categories.find((item) => item.category === selectedCategory);
+      if (category) return category.estimatedValue ?? category.benchmarkSubtotal ?? 0;
+    }
     return scopedLines.reduce((acc: number, l: any) => acc + (l.benchmarkAmount || 0), 0);
-  }, [scopedLines]);
+  }, [selectedBoq, scopeType, selectedCategory, scopedLines]);
 
   const totalQuantitySum = useMemo(() => {
+    if (selectedBoq && scopeType === 'ENTIRE_BOQ' && selectedBoq.categories.some((item) => item.totalQty !== undefined)) {
+      return selectedBoq.categories.reduce((total: number, item) => total + (item.totalQty || 0), 0);
+    }
+    if (selectedBoq && scopeType === 'CATEGORY') {
+      const category = selectedBoq.categories.find((item) => item.category === selectedCategory);
+      if (category?.totalQty !== undefined) return category.totalQty;
+    }
     return scopedLines.reduce((acc: number, l: any) => acc + (l.quantity || 0), 0);
-  }, [scopedLines]);
+  }, [selectedBoq, scopeType, selectedCategory, scopedLines]);
 
   const toggleLineSelect = (lineId: string) => {
     setSelectedLineIds((prev) =>
@@ -449,7 +548,7 @@ export default function NewRfqPage() {
     }
 
     if (targetStep >= 3) {
-      if (scopedLines.length === 0) {
+      if (scopedLineCount === 0) {
         setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.step2AtLeastOneBoqLineItemMustBeIncludedInRfqScope);
         return;
       }
@@ -487,7 +586,7 @@ export default function NewRfqPage() {
       setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.selectApprovedBoqBaselineInStep1);
       return;
     }
-    if (scopedLines.length === 0) {
+    if (scopedLineCount === 0) {
       setErrorMsg(UI_STRINGS.appAppProcurementRfqsNewPage.atLeastOneBoqLineMustBeIncludedInRfqScopeInStep2);
       return;
     }
@@ -514,7 +613,7 @@ export default function NewRfqPage() {
         packageName: rfqDetails.packageName || 'Commercial Package',
         scopeOfWork: rfqDetails.scopeOfWork,
         packageType: scopeType,
-        selectedLineIds: scopedLines.map((l: any) => l.id),
+        selectedLineIds: scopeType === 'SELECTED_LINES' ? selectedLineIds : [],
         categoryName: scopeType === 'CATEGORY' ? selectedCategory : undefined,
         submissionDeadline: rfqDetails.submissionDeadline,
         clarificationDeadline: rfqDetails.clarificationDeadline,
@@ -1038,7 +1137,7 @@ export default function NewRfqPage() {
                     fontWeight: 600,
                   }}
                   onClick={() => setScopeType('ENTIRE_BOQ')}
-                >{UI_STRINGS.appAppProcurementRfqsNewPage.entireApprovedBOQ}{selectedBoq?.lines.length}{UI_STRINGS.appAppProcurementRfqsNewPage.lines}</button>
+                >{UI_STRINGS.appAppProcurementRfqsNewPage.entireApprovedBOQ}{selectedBoq?.totalLines ?? selectedBoq?.lines.length}{UI_STRINGS.appAppProcurementRfqsNewPage.lines}</button>
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -1050,7 +1149,7 @@ export default function NewRfqPage() {
                   }}
                   onClick={() => {
                     setScopeType('CATEGORY');
-                    if (selectedBoq?.categories?.length > 0 && !selectedCategory) {
+                    if (selectedBoq && selectedBoq.categories.length > 0 && !selectedCategory) {
                       setSelectedCategory(selectedBoq.categories[0].category);
                     }
                   }}
@@ -1084,7 +1183,7 @@ export default function NewRfqPage() {
               <div>
                 <span style={{ fontSize: 11, color: '#0f766e', fontWeight: 600, textTransform: 'uppercase' }}>{UI_STRINGS.appAppProcurementRfqsNewPage.scopedItems}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginLeft: 6 }}>
-                  {scopedLines.length}{UI_STRINGS.common.copy3ml01c}{selectedBoq?.lines.length}
+                  {scopedLineCount}{UI_STRINGS.common.copy3ml01c}{selectedBoq?.totalLines ?? selectedBoq?.lines.length}
                 </span>
               </div>
               <div style={{ width: 1, height: 16, backgroundColor: '#99f6e4' }} />
@@ -1148,12 +1247,16 @@ export default function NewRfqPage() {
                     <th style={{ width: 44, textAlign: 'center' }}>
                       <input
                         type="checkbox"
-                        checked={selectedBoq?.lines.length > 0 && selectedLineIds.length === selectedBoq?.lines.length}
+                        checked={Boolean(selectedBoq && selectedBoq.lines.length > 0 && selectedBoq.lines.every((line) => selectedLineIds.includes(line.id)))}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedLineIds(selectedBoq?.lines.map((l: any) => l.id) || []);
+                            setSelectedLineIds((current) => Array.from(new Set([
+                              ...current,
+                              ...(selectedBoq?.lines.map((line) => line.id) || []),
+                            ])));
                           } else {
-                            setSelectedLineIds([]);
+                            const loadedLineIds = new Set(selectedBoq?.lines.map((line) => line.id) || []);
+                            setSelectedLineIds((current) => current.filter((lineId) => !loadedLineIds.has(lineId)));
                           }
                         }}
                       />
@@ -1273,6 +1376,18 @@ export default function NewRfqPage() {
                 </tbody>
               </table>
             </div>
+            {selectedBoq?.linePagination?.hasMore && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={loadMoreApprovedBoqLines}
+                  disabled={loadingMoreBoqLines}
+                >
+                  {loadingMoreBoqLines ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                </button>
+              </div>
+            )}
           </Card>
         </div>
       )}
@@ -2041,7 +2156,7 @@ export default function NewRfqPage() {
           >
             <div className="kpi-card" style={{ borderLeft: `4px solid ${STEP_THEMES[5].primary}` }}>
               <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.scopedBOQLines}</div>
-              <div className="kpi-value">{scopedLines.length}{UI_STRINGS.common.items}</div>
+              <div className="kpi-value">{scopedLineCount}{UI_STRINGS.common.items}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.totalQuantity}</div>
@@ -2146,9 +2261,9 @@ export default function NewRfqPage() {
                       </td>
                     </tr>
                   ))}
-                  {scopedLines.length > 5 && (
+                  {scopedLineCount > Math.min(scopedLines.length, 5) && (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', color: '#64748b', fontSize: 12, padding: '8px 0' }}>{UI_STRINGS.common.copycrz1ka}{scopedLines.length - 5}{UI_STRINGS.appAppProcurementRfqsNewPage.moreItemsIncludedInPackage}</td>
+                      <td colSpan={7} style={{ textAlign: 'center', color: '#64748b', fontSize: 12, padding: '8px 0' }}>{UI_STRINGS.common.copycrz1ka}{scopedLineCount - Math.min(scopedLines.length, 5)}{UI_STRINGS.appAppProcurementRfqsNewPage.moreItemsIncludedInPackage}</td>
                     </tr>
                   )}
                 </tbody>
@@ -2259,7 +2374,7 @@ export default function NewRfqPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.baselineBOQVerifiedImmutable}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.sourcingScopeDefined}{scopedLines.length}{UI_STRINGS.appAppProcurementRfqsNewPage.lineItems}</div>
+                <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.sourcingScopeDefined}{scopedLineCount}{UI_STRINGS.appAppProcurementRfqsNewPage.lineItems}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <CheckCircle2 size={16} color="#16a34a" />{UI_STRINGS.appAppProcurementRfqsNewPage.commercialTermsTimelinesValidated}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2302,7 +2417,7 @@ export default function NewRfqPage() {
               type="button"
               className="btn btn-primary"
               onClick={() => handleStepNavigation(step + 1)}
-              disabled={step === 2 && scopedLines.length === 0}
+              disabled={step === 2 && scopedLineCount === 0}
               style={{
                 backgroundColor: activeTheme.primary,
                 borderColor: activeTheme.primary,
@@ -2374,7 +2489,7 @@ export default function NewRfqPage() {
           </div>
           <ul style={{ paddingLeft: 20, margin: 0, fontSize: 13, color: '#64748b' }}>
             <li>{UI_STRINGS.appAppProcurementRfqsNewPage.baselineBenchmarkBudget}{scopedBenchmarkValue.toLocaleString()}</li>
-            <li>{UI_STRINGS.appAppProcurementRfqsNewPage.packageLineItems}{scopedLines.length}{UI_STRINGS.common.items}</li>
+            <li>{UI_STRINGS.appAppProcurementRfqsNewPage.packageLineItems}{scopedLineCount}{UI_STRINGS.common.items}</li>
             <li>{UI_STRINGS.appAppProcurementRfqsNewPage.submissionDeadline}{rfqDetails.submissionDeadline}</li>
             <li>{UI_STRINGS.appAppProcurementRfqsNewPage.commercialValidity}{rfqDetails.commercialValidityDays}{UI_STRINGS.common.days}</li>
           </ul>

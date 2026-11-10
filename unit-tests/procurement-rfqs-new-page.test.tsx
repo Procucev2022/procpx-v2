@@ -75,12 +75,18 @@ function configureFetch(overrides: Record<string, unknown> = {}) {
   const detailOkSequence = Array.isArray(overrides.boqDetailsOkSequence)
     ? [...overrides.boqDetailsOkSequence]
     : [];
+  const detailBoqSequence = Array.isArray(overrides.boqDetailsSequence)
+    ? [...overrides.boqDetailsSequence]
+    : [];
   mockFetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.startsWith('/api/procurement/approved-boqs')) {
       if (url.includes('revisionId=')) {
         const detailOk = detailOkSequence.length > 0 ? detailOkSequence.shift() !== false : overrides.boqDetailsOk !== false;
-        return response(overrides.boqDetails ?? { approvedBoqs: defaultBoqs }, detailOk);
+        const detailResponse = detailBoqSequence.length > 0
+          ? detailBoqSequence.shift()
+          : overrides.boqDetails ?? { approvedBoqs: defaultBoqs };
+        return response(detailResponse, detailOk);
       }
       if (url.includes('page=')) return response(overrides.moreBoqs ?? { approvedBoqs: [], page: 2, hasMore: false }, overrides.moreBoqsOk !== false);
       return response(overrides.boqs ?? { approvedBoqs: defaultBoqSummaries });
@@ -131,7 +137,7 @@ describe('new procurement RFQ workflow', () => {
     expect(screen.getByText('North Plant')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'rev-2' } });
     expect(screen.getByText('South Plant')).toBeInTheDocument();
-    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/approved-boqs?revisionId=rev-2&pageSize=1'));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/procurement/approved-boqs?revisionId=rev-2&pageSize=1&linePageSize=90'));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
 
     continueTo(2);
@@ -257,6 +263,111 @@ describe('new procurement RFQ workflow', () => {
     expect(JSON.parse((post?.[1] as RequestInit).body as string)).toEqual(expect.objectContaining({
       projectId: 'project-rev-2', boqRevisionId: 'rev-2', packageType: 'SELECTED_LINES', selectedLineIds: expect.any(Array),
       vendorIds: ['v-2'], action: 'RELEASE_RFQ', technicalRequirements: 'IS certified only', priceBasis: 'Variable with Material Index escalation',
+    }));
+  });
+
+  it('loads approved BOQ lines in cursor pages and keeps full revision summaries', async () => {
+    const revision = defaultBoqs[0];
+    const firstDetailPage = {
+      ...revision,
+      lines: revision.lines.slice(0, 2),
+      linePagination: { pageSize: 2, hasMore: true, nextCursor: 'cursor-page-two' },
+    };
+    const secondDetailPage = {
+      ...revision,
+      lines: revision.lines.slice(2),
+      linePagination: { pageSize: 2, hasMore: false, nextCursor: null },
+    };
+    configureFetch({ boqDetailsSequence: [
+      { approvedBoqs: [firstDetailPage] },
+      { approvedBoqs: [secondDetailPage] },
+    ] });
+
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    expect(screen.getByText('Copper cable')).toBeInTheDocument();
+    expect(screen.queryByText('Pump set')).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.scopedItems)).parentElement).toHaveTextContent('3 / 3');
+
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText('Pump set')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenLastCalledWith(expect.stringContaining('lineCursor=cursor-page-two'));
+    expect(screen.queryByRole('button', { name: UI_STRINGS.common.loadMore })).not.toBeInTheDocument();
+  });
+
+  it('preserves BOQ scope summaries and ignores a continuation request without a cursor', async () => {
+    const revision = {
+      ...defaultBoqs[0],
+      estimatedBenchmarkValue: 35000,
+      categories: [
+        { category: 'Electrical', lineCount: 2, totalQty: 15, estimatedValue: 30000 },
+        { category: 'Mechanical', lineCount: 1, totalQty: 1, estimatedValue: 5000 },
+      ],
+    };
+    const firstPage = {
+      ...revision,
+      totalLines: undefined,
+      lines: revision.lines.slice(0, 1),
+      linePagination: { pageSize: 1, hasMore: true, nextCursor: null },
+    };
+    configureFetch({
+      boqs: { approvedBoqs: [stripBoqLines(revision)] },
+      boqDetailsSequence: [{ approvedBoqs: [firstPage] }],
+    });
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.scopedItems)).parentElement).toHaveTextContent('1 / 1');
+    const benchmarkSummary = screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.benchmarkBudget)).parentElement?.textContent || '';
+    expect(benchmarkSummary.replace(/\D/g, '')).toContain('35000');
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.selectIndividualLines, '', false) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.scopedItems)).parentElement).toHaveTextContent('1 / 1');
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.deselectAll) }));
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.scopedItems)).parentElement).toHaveTextContent('0 / 1');
+
+    const callsBeforeGuard = mockFetch.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(mockFetch).toHaveBeenCalledTimes(callsBeforeGuard);
+  });
+
+  it('reports failed and malformed approved BOQ continuation pages', async () => {
+    const revision = defaultBoqs[0];
+    const firstPage = {
+      ...revision,
+      lines: revision.lines.slice(0, 1),
+      linePagination: { pageSize: 1, hasMore: true, nextCursor: 'cursor-page-two' },
+    };
+    configureFetch({
+      boqs: { approvedBoqs: [stripBoqLines(revision)] },
+      boqDetailsSequence: [{ approvedBoqs: [firstPage] }],
+      boqDetailsOkSequence: [true, false],
+    });
+    const failedRequest = renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      event: 'procurement.approved_boq_detail_page_failed', operation: 'load_detail_lines', revisionId: revision.id,
+    }));
+    failedRequest.unmount();
+
+    configureFetch({
+      boqs: { approvedBoqs: [stripBoqLines(revision)] },
+      boqDetailsSequence: [
+        { approvedBoqs: [firstPage] },
+        { approvedBoqs: [{ ...revision, lines: null, linePagination: { pageSize: 1, hasMore: false, nextCursor: null } }] },
+      ],
+    });
+    renderPage();
+    await screen.findByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsNewPage.baselineVerificationSummary));
+    continueTo(2);
+    fireEvent.click(screen.getByRole('button', { name: UI_STRINGS.common.loadMore }));
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs))).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      event: 'procurement.approved_boq_detail_page_failed', operation: 'load_detail_lines', revisionId: revision.id,
     }));
   });
 

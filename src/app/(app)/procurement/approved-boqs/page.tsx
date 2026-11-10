@@ -9,6 +9,8 @@ import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
+import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import type { ApprovedBoqListResponse, ApprovedBoqSummary } from '@app-types/app/api/procurement/approved-boqs.types';
 
 
@@ -18,7 +20,9 @@ export default function ApprovedBoqsPage() {
   const [search, setSearch] = useState('');
   const [selectedBoq, setSelectedBoq] = useState<ApprovedBoqSummary | null>(null);
   const [scopeLoading, setScopeLoading] = useState(false);
+  const [loadingMoreScopeLines, setLoadingMoreScopeLines] = useState(false);
   const [scopeLoadFailed, setScopeLoadFailed] = useState(false);
+  const [scopeLinesLoadFailed, setScopeLinesLoadFailed] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -61,6 +65,7 @@ export default function ApprovedBoqsPage() {
       setSelectedBoq(null);
       setScopeLoading(false);
       setScopeLoadFailed(false);
+      setScopeLinesLoadFailed(false);
       return;
     }
 
@@ -68,18 +73,78 @@ export default function ApprovedBoqsPage() {
     setSelectedBoq(boq);
     setScopeLoading(true);
     setScopeLoadFailed(false);
+    setScopeLinesLoadFailed(false);
     try {
-      const query = new URLSearchParams({ revisionId: boq.id, pageSize: '1' });
+      const query = new URLSearchParams({
+        revisionId: boq.id,
+        pageSize: '1',
+        linePageSize: String(BOQ_LINE_DETAIL_PAGE_SIZE),
+      });
       const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
       if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
       const data = await res.json() as ApprovedBoqListResponse;
       const detailedBoq = data.approvedBoqs?.find((item) => item.id === boq.id);
       if (!detailedBoq || !Array.isArray(detailedBoq.lines)) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
       if (requestVersion === scopeRequestVersionRef.current) setSelectedBoq(detailedBoq);
-    } catch {
-      if (requestVersion === scopeRequestVersionRef.current) setScopeLoadFailed(true);
+    } catch (error) {
+      if (requestVersion === scopeRequestVersionRef.current) {
+        setScopeLoadFailed(true);
+        reportHandledClientFailure(error, {
+          event: 'procurement.approved_boq_scope_detail_failed', operation: 'load_scope_details',
+          route: '/procurement/approved-boqs', revisionId: boq.id,
+        });
+      }
     } finally {
       if (requestVersion === scopeRequestVersionRef.current) setScopeLoading(false);
+    }
+  };
+
+  const loadMoreScopeLines = async () => {
+    if (loadingMoreScopeLines || !selectedBoq?.linePagination?.hasMore || !selectedBoq.linePagination.nextCursor) return;
+    const revisionId = selectedBoq.id;
+    const requestVersion = scopeRequestVersionRef.current;
+    const query = new URLSearchParams({
+      revisionId,
+      pageSize: '1',
+      linePageSize: String(BOQ_LINE_DETAIL_PAGE_SIZE),
+      lineCursor: selectedBoq.linePagination.nextCursor,
+    });
+    setLoadingMoreScopeLines(true);
+    try {
+      const res = await fetch(`/api/procurement/approved-boqs?${query.toString()}`);
+      if (!res.ok) throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      const data = await res.json() as ApprovedBoqListResponse;
+      const nextPage = data.approvedBoqs?.find((item) => item.id === revisionId);
+      const nextLines = nextPage?.lines;
+      const nextPagination = nextPage?.linePagination;
+      if (!nextPage || !Array.isArray(nextLines) || !nextPagination) {
+        throw new Error(UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs);
+      }
+      if (requestVersion !== scopeRequestVersionRef.current) return;
+      setSelectedBoq((current) => {
+        if (current?.id !== revisionId || !current.linePagination) return current;
+        return {
+          ...current,
+          lines: [...(current.lines || []), ...nextLines],
+          linePagination: {
+            total: nextPagination.total ?? current.linePagination.total ?? current.totalLines,
+            pageSize: nextPagination.pageSize,
+            hasMore: nextPagination.hasMore,
+            nextCursor: nextPagination.nextCursor,
+          },
+        };
+      });
+      setScopeLinesLoadFailed(false);
+    } catch (error) {
+      if (requestVersion === scopeRequestVersionRef.current) {
+        setScopeLinesLoadFailed(true);
+        reportHandledClientFailure(error, {
+          event: 'procurement.approved_boq_scope_line_page_failed', operation: 'load_scope_lines',
+          route: '/procurement/approved-boqs', revisionId,
+        });
+      }
+    } finally {
+      if (requestVersion === scopeRequestVersionRef.current) setLoadingMoreScopeLines(false);
     }
   };
 
@@ -294,6 +359,23 @@ export default function ApprovedBoqsPage() {
                   ))}
                 </tbody>
               </table>
+              {selectedBoq.linePagination?.hasMore && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={loadMoreScopeLines}
+                    disabled={loadingMoreScopeLines}
+                  >
+                    {loadingMoreScopeLines ? UI_STRINGS.common.loading : UI_STRINGS.common.loadMore}
+                  </button>
+                </div>
+              )}
+              {scopeLinesLoadFailed && (
+                <div role="alert" style={{ padding: 12, color: '#b91c1c' }}>
+                  {UI_STRINGS.common.userMessages.failedToFetchApprovedBoqs}
+                </div>
+              )}
             </div>
             )}
           </Card>
