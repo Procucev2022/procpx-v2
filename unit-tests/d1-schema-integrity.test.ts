@@ -3,6 +3,7 @@ import {
   expectedIndexNamesFromMigrations,
   findMissingColumns,
   findMissingIndexes,
+  migrationStatus,
 } from '../scripts/d1-schema-integrity.cjs';
 
 describe('D1 schema integrity helpers', () => {
@@ -36,5 +37,14 @@ describe('D1 schema integrity helpers', () => {
       new Map([['items', new Set(['id', 'tenantId'])]]),
     )).toEqual([{ tableName: 'items', columnName: 'code' }]);
     expect(findMissingIndexes(new Set(['tenant_code_key', 'lookup_idx']), new Set(['lookup_idx']))).toEqual(['tenant_code_key']);
+  });
+
+  it('reports pending migrations in order and applied names that are no longer tracked', () => {
+    expect(migrationStatus(
+      ['0002_b.sql', '0001_a.sql', '0003_c.sql'],
+      ['0001_a.sql', '0002_renamed.sql'],
+    )).toEqual({ pending: ['0002_b.sql', '0003_c.sql'], unknownApplied: ['0002_renamed.sql'] });
+    expect(migrationStatus(['0001_a.sql'], [])).toEqual({ pending: ['0001_a.sql'], unknownApplied: [] });
+    expect(migrationStatus(['0001_a.sql'], ['0001_a.sql'])).toEqual({ pending: [], unknownApplied: [] });
   });
 });

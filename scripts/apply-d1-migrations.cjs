@@ -13,6 +13,11 @@ const migrationsPath = path.join(root, MIGRATIONS_DIRECTORY);
 const wranglerCli = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const mode = process.argv.includes('--remote') ? '--remote' : '--local';
 const configPath = path.join(root, 'wrangler.jsonc');
+// Optional isolated local store (for example a dry-run copy); never combined with --remote.
+const persistIndex = process.argv.indexOf('--persist-to');
+const persistArgs = mode === '--local' && persistIndex > -1 && process.argv[persistIndex + 1]
+  ? ['--persist-to', path.resolve(process.argv[persistIndex + 1])]
+  : [];
 
 function fail(message) {
   process.stderr.write(`D1 migration check failed: ${message}\n`);
@@ -69,7 +74,7 @@ if (mode === '--remote') {
 }
 
 process.stdout.write(`Applying unapplied D1 migrations to the ${mode === '--local' ? 'local' : 'remote'} database.\n`);
-const args = [wranglerCli, 'd1', 'migrations', 'apply', DATABASE_NAME, mode, '--config', configPath];
+const args = [wranglerCli, 'd1', 'migrations', 'apply', DATABASE_NAME, mode, '--config', configPath, ...persistArgs];
 if (mode === '--remote') {
   for (const filename of ['.env', '.env.local']) {
     const envFile = path.join(root, filename);

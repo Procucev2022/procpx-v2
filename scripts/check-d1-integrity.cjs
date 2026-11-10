@@ -13,13 +13,21 @@ const {
   expectedIndexNamesFromMigrations,
   findMissingColumns,
   findMissingIndexes,
+  migrationStatus,
 } = require('./d1-schema-integrity.cjs');
 const { Prisma } = require('@prisma/client');
 
 const root = path.resolve(__dirname, '..');
 const wranglerCli = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const mode = process.argv.includes('--remote') ? '--remote' : '--local';
+// Pre-migration runs record a read-only baseline instead of requiring the not-yet-applied schema.
+const allowPendingMigrations = process.argv.includes('--allow-pending-migrations');
 const configPath = path.join(root, 'wrangler.jsonc');
+// Optional isolated local store (for example a dry-run copy); never combined with --remote.
+const persistIndex = process.argv.indexOf('--persist-to');
+const persistArgs = mode === '--local' && persistIndex > -1 && process.argv[persistIndex + 1]
+  ? ['--persist-to', path.resolve(process.argv[persistIndex + 1])]
+  : [];
 const inventorySql = "SELECT name AS tableName FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'd1_migrations' AND substr(name, 1, 4) <> '_cf_' ORDER BY name";
 const indexInventorySql = "SELECT name AS indexName FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%' ORDER BY name";
 
@@ -62,6 +70,7 @@ function execute(sql) {
     sql,
     '--config',
     configPath,
+    ...persistArgs,
     ...((mode === '--remote' ? ['.env', '.env.local'] : [])
       .filter((filename) => fs.existsSync(path.join(root, filename)))
       .flatMap((filename) => ['--env-file', path.join(root, filename)])),
@@ -98,7 +107,42 @@ if (mode === '--remote') {
   }
 }
 
+const migrationFilenames = fs.readdirSync(path.join(root, MIGRATIONS_DIRECTORY))
+  .filter((filename) => filename.endsWith('.sql'))
+  .sort();
+const migrationTablePresent = collectRows(
+  execute("SELECT COUNT(*) AS present FROM sqlite_master WHERE type = 'table' AND name = 'd1_migrations'"),
+  (row) => Object.prototype.hasOwnProperty.call(row, 'present'),
+).some((row) => Number(row.present) > 0);
+const appliedMigrationNames = migrationTablePresent
+  ? collectRows(execute('SELECT name AS migrationName FROM d1_migrations ORDER BY id'), (row) => typeof row.migrationName === 'string')
+    .map((row) => row.migrationName)
+  : [];
+const { pending: pendingMigrations, unknownApplied } = migrationStatus(migrationFilenames, appliedMigrationNames);
+if (unknownApplied.length > 0) {
+  // Renamed migration files leave their old names in d1_migrations; the schema checks below still verify the result.
+  process.stderr.write(`D1 integrity warning: applied migrations not tracked in ${MIGRATIONS_DIRECTORY}/ (renamed or removed files): ${unknownApplied.join(', ')}
+`);
+}
+if (pendingMigrations.length > 0 && !allowPendingMigrations) {
+  fail(`${pendingMigrations.length} reviewed migration(s) are not applied yet: ${pendingMigrations.join(', ')}. Apply them with ${mode === '--remote' ? 'npm run db:d1:migrate:remote' : 'npm run db:migrate:safe'} before running the strict check.`);
+}
+
 const inventory = execute(inventorySql);
+if (pendingMigrations.length > 0) {
+  // Baseline mode: count existing rows so the post-migration check can be compared against it.
+  const existingTables = collectRows(inventory, (row) => typeof row.tableName === 'string').map((row) => row.tableName);
+  const baselineCounts = existingTables.length === 0 ? {} : collectRows(execute(`SELECT ${existingTables
+    .map((tableName) => `(SELECT COUNT(*) FROM "${tableName.replace(/"/g, '""')}") AS "${tableName.replace(/"/g, '""')}"`)
+    .join(', ')}`), (row) => existingTables.every((tableName) => Number.isFinite(Number(row[tableName]))))[0];
+  if (existingTables.length > 0 && !baselineCounts) fail('D1 did not return row counts for the existing tables');
+  const baselineRows = existingTables.map((tableName) => ({ tableName, rowCount: Number(baselineCounts[tableName]) }));
+  const baselineTotal = baselineRows.reduce((total, row) => total + row.rowCount, 0);
+  process.stdout.write(`D1 ${mode === '--local' ? 'local' : 'remote'} pre-migration baseline: ${appliedMigrationNames.length} migration(s) applied, ${pendingMigrations.length} pending (${pendingMigrations.join(', ')}), ${existingTables.length} tables, ${baselineTotal} records. Strict schema checks run after migrations.
+`);
+  console.table(baselineRows);
+  process.exit(0);
+}
 const tables = collectRows(inventory, (row) => typeof row.tableName === 'string')
   .map((row) => row.tableName);
 const expectedTables = new Set(EXPECTED_D1_TABLE_NAMES);
@@ -109,9 +153,7 @@ if (missingTables.length > 0 || unexpectedTables.length > 0) {
   fail(`Prisma and D1 table inventory differs; missing in D1: ${missingTables.join(', ') || 'none'}; unexpected in D1: ${unexpectedTables.join(', ') || 'none'}`);
 }
 
-const migrationFiles = fs.readdirSync(path.join(root, MIGRATIONS_DIRECTORY))
-  .filter((filename) => filename.endsWith('.sql'))
-  .sort()
+const migrationFiles = migrationFilenames
   .map((filename) => ({
     filename,
     sql: fs.readFileSync(path.join(root, MIGRATIONS_DIRECTORY, filename), 'utf8'),

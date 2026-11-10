@@ -197,7 +197,7 @@ describe('procurement PPO performance register', () => {
     postResponse = apiReply({});
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.submitForProjectApproval) }));
     await waitFor(() => expect(toastSuccess).toHaveBeenLastCalledWith('Assessment submitted for Project Approval for PPO-001!'));
-    const submitPayload = JSON.parse(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').pop()![1].body as string);
+    const submitPayload = JSON.parse(fetchMock.mock.calls.filter(([url, init]) => String(url) !== '/api/observability/client' && init?.method === 'POST').pop()![1].body as string);
     expect(submitPayload).toMatchObject({ action: 'SUBMIT', qualityComments: 'Materials passed inspection' });
   });
 
