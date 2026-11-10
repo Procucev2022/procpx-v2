@@ -3,22 +3,16 @@
 // Standardized Enterprise Finalised Rate Card Details View
 // Provides read-only view of persisted commercial terms, agreed rates, negotiation history & sign-off timeline
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Download,
   FileText,
   CheckCircle2,
   History,
   ShieldCheck,
-  Calendar,
-  MapPin,
-  Building2,
-  Tag,
   Clock,
   User,
   Check,
-  AlertCircle,
-  FileSpreadsheet,
 } from 'lucide-react';
 import LongTextCell from '@/components/ui/LongTextCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';

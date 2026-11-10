@@ -4,10 +4,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import {
-  ArrowLeft,
-  FileText,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -16,10 +13,7 @@ import {
   Send,
   RefreshCw,
   Sparkles,
-  Layers,
   History,
-  Building2,
-  Info,
 } from 'lucide-react';
 import RfqChatDrawer from '@/components/RfqChatDrawer';
 import { useToast } from '@/components/ui/Toast';
@@ -253,7 +247,6 @@ export default function VendorRfqWorkspacePage() {
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSubmitQuotation }));
       }
 
-      const resData = await res.json();
       try {
         localStorage.removeItem(draftStorageKey);
         setDraftSavedAt(null);

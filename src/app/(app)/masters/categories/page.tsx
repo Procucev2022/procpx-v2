@@ -1,7 +1,6 @@
 'use client';
 // src/app/(app)/masters/categories/page.tsx - Category Creation & Master Taxonomy
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import {
   Boxes,
   Plus,
@@ -9,11 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  Layers,
-  ChevronRight,
-  FolderTree,
   ShieldAlert,
-  Sparkles,
   RefreshCw,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';

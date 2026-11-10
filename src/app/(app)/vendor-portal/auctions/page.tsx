@@ -6,16 +6,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Gavel,
-  Clock,
-  CheckCircle2,
-  Calendar,
-  Layers,
-  ArrowRight,
   RefreshCw,
   Search,
-  Lock,
-  Building2,
-  FileText,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';

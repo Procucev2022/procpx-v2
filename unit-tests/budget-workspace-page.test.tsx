@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -367,6 +368,18 @@ describe('project budget workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetPage.loadMoreCategories) }));
     expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.appAppBudgetPage.failedToLoadCategoryBudgetData);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical))).toBeInTheDocument();
+  });
+
+  it('derives cost per sqft from the total budget before any approval and labels a single pending contribution', async () => {
+    budgetByProject = { ...budgetByProject, p1: { ...mainBudget, costCentres: [{
+      id: 'cc1', code: 'CC-01', name: 'Civil Works', areaSqFt: 400, totalBudget: 8000, approvedBudget: 0, pendingBudget: 8000, actual: 0,
+      categories: [], contributions: [{ id: 'contrib-9', status: 'PENDING_PROJECT_APPROVAL', totalEstimatedValue: 8000 }],
+    }] } };
+    render(<ProjectBudgetPage />);
+    expect(await screen.findByText('1 Budget Contribution Under Approval for Civil Works')).toBeInTheDocument();
+    const costPerSqftCard = screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.costPerSqft)).closest('article');
+    // 8000 total budget / 400 sqft = 20 per sqft while nothing is approved yet.
+    expect(costPerSqftCard?.textContent).toContain((20).toLocaleString(I18N_CONFIG.defaultLocale));
   });
 
   it('handles projects with no cost centres and reports rejected budget summary reads', async () => {

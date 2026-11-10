@@ -3,14 +3,12 @@
 // Professional B2B Live Auction Room: Real-time countdown, rolling extensions, bid stream, and buyer controls
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { DEFAULT_LIST_PAGE_SIZE } from '@/lib/api-utils.constants';
-import { useEffect, useState, use, useMemo, useRef } from 'react';
+import { useEffect, useState, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Gavel,
   Clock,
-  CheckCircle2,
-  AlertTriangle,
   ArrowLeft,
   Pause,
   Play,
@@ -18,17 +16,10 @@ import {
   Shield,
   Award,
   Users,
-  FileText,
-  DollarSign,
-  TrendingDown,
   RefreshCw,
   Lock,
-  Layers,
-  ChevronRight,
-  Info,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import StatusBadge from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -47,7 +38,6 @@ export default function LiveAuctionRoomPage({
 
   const [auction, setAuction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [serverTime, setServerTime] = useState<Date>(new Date());
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(0);
   const [isObserver, setIsObserver] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -144,9 +134,6 @@ export default function LiveAuctionRoomPage({
           }
           return current;
         });
-      }
-      if (data.serverTime) {
-        setServerTime(new Date(data.serverTime));
       }
     } catch (err: any) {
       if (generation === requestGeneration.current && requestedId === id

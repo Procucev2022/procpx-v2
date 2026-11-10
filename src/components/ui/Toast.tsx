@@ -8,7 +8,6 @@ import {
   Info,
   X,
   ArrowRight,
-  ExternalLink,
 } from 'lucide-react';
 import type { ToastType, ToastOptions, ToastInput, ToastItem, ToastContextType } from "@app-types/components/ui/Toast.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";

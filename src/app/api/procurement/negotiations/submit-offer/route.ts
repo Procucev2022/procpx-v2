@@ -173,7 +173,6 @@ export async function POST(req: NextRequest) {
     }
 
     const roundNumber = isBuyer ? vendorBuyerOffers.length + 1 : (previousRound?.roundNumber || vendorRounds.length + 1);
-    const effectiveAmt = finalRevised || (isBuyer ? finalCounterAmount : 0) || 0;
     const savingsAmount = previousQuoteAmount > 0 && finalRevised && finalRevised > 0 ? previousQuoteAmount - finalRevised : 0;
     const savingsPercent = previousQuoteAmount > 0 && finalRevised && finalRevised > 0 ? (savingsAmount / previousQuoteAmount) * 100 : 0;
 

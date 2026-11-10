@@ -3,18 +3,10 @@
 // Standardized Category Manager action workspace for accepting vendor quotes with optional agreement preparation
 import React, { useState } from 'react';
 import {
-  ArrowLeft,
   Check,
-  AlertCircle,
-  FileText,
-  Calendar,
-  Building2,
   FileCheck,
   Upload,
   Eye,
-  ShieldCheck,
-  FileSpreadsheet,
-  CheckCircle2,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
@@ -34,7 +26,6 @@ export default function BuyerAcceptanceWorkspace({
   vendorCode = 'VND-0006',
   category = 'Interior Works',
   round = 'Round 2 of 4',
-  vendorQuoteTotal = 469750,
   receivedDate = '20 Oct 2026',
   items = [
     {

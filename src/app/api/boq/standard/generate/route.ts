@@ -22,30 +22,6 @@ import {
   BOQ_STANDARD_GENERATE_UPDATE_EMPTY_REVISION_SQL,
 } from './route.constants';
 
-type ExistingBoq = {
-  id: string;
-  tenantId: string;
-  projectId: string;
-  costCentreId: string | null;
-  boqCode: string;
-  title: string | null;
-  description: string | null;
-  purpose: string | null;
-  category: string | null;
-  scope: string | null;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-  revisions: Array<{
-    id: string;
-    revisionCode: string;
-    revisionNumber: number;
-    status: string;
-    totalLines: number;
-    updatedAt: Date;
-  }>;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

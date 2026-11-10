@@ -8,9 +8,6 @@ import {
   MessageSquare,
   HelpCircle,
   Clock,
-  User,
-  Shield,
-  CheckCircle2,
   AlertCircle,
   Loader2,
 } from 'lucide-react';

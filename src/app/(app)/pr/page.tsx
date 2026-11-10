@@ -9,13 +9,9 @@ import {
   Search,
   CheckCircle2,
   Clock,
-  AlertTriangle,
   FileSpreadsheet,
   MessageSquare,
   RotateCcw,
-  Layers,
-  ArrowUpRight,
-  TrendingUp,
 } from 'lucide-react';
 import ApprovalChatDrawer from '@/components/ApprovalChatDrawer';
 import { useToast } from '@/components/ui/Toast';

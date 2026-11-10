@@ -13,10 +13,6 @@ import {
   Mail,
   MapPin,
   Globe,
-  FileText,
-  Layers,
-  Award,
-  Check,
   Briefcase,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';

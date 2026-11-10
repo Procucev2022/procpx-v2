@@ -102,7 +102,10 @@ describe('BOQ studio page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cREATEMANUALBOQ) }));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/boq/manual', expect.objectContaining({ method: 'POST' })));
-    expect(await screen.findByText(/Manual BOQ BOQ-1 updated with 2 lines/)).toBeInTheDocument();
+    const manualRequest = mockFetch.mock.calls.find(([url]) => url === '/api/boq/manual');
+    // Creating a manual BOQ must never write placeholder lines or replace existing ones.
+    expect(JSON.parse(String((manualRequest?.[1] as RequestInit).body))).toMatchObject({ lines: [], action: 'APPEND' });
+    expect(await screen.findByText(/Manual BOQ BOQ-1 updated with 0 lines/)).toBeInTheDocument();
     expect((await screen.findAllByText('North Store BOQ')).length).toBeGreaterThan(0);
     expect(screen.getByText('Vitrified tiles')).toBeInTheDocument();
 
@@ -807,8 +810,9 @@ describe('BOQ studio page', () => {
     render(<BoqStudioPage />);
     expect(await screen.findByRole('heading', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.bOQCreationStudio) })).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.copy1slme3c)), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.eGCivilInteriorKundanahalliProject)), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cREATEMANUALBOQ) }));
-    expect(await screen.findByText(/Manual BOQ BOQ-EDGE updated with 2 lines/)).toBeInTheDocument();
+    expect(await screen.findByText(/Manual BOQ BOQ-EDGE updated with 0 lines/)).toBeInTheDocument();
     const createRequest = mockFetch.mock.calls.find(([url, init]) => url === '/api/boq' && (init as RequestInit)?.method === 'POST');
     expect(JSON.parse(String(createRequest?.[1]?.body))).toEqual(expect.objectContaining({ projectId: 'project-edge', areaSqFt: 10000 }));
 

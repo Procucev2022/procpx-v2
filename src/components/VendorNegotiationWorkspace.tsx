@@ -15,14 +15,7 @@ import {
   Send,
   Save,
   RotateCcw,
-  TrendingDown,
-  Info,
-  Layers,
-  ChevronRight,
   ShieldCheck,
-  Check,
-  X,
-  FileText,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { VendorNegotiationWorkspaceProps } from "@app-types/components/VendorNegotiationWorkspace.types";
@@ -224,11 +217,6 @@ export default function VendorNegotiationWorkspace({
   );
 
   // Active buyer counteroffer awaiting vendor response
-  const hasActiveBuyerCounter = Boolean(
-    latestRound &&
-    (latestRound.counterOfferAmount || Object.keys(latestRound.buyerRateMap || {}).length > 0) &&
-    (!latestRound.revisedQuoteAmount || latestRound.status === 'ROUND_ACTIVE' || latestRound.nextResponsibleParty === 'VENDOR')
-  );
 
   // Initialize editable rates
   useEffect(() => {

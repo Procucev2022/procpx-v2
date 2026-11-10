@@ -9,7 +9,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PageHeader from '@/components/ui/PageHeader';
 import Stepper, { StepItem } from '@/components/ui/Stepper';
-import ContextBanner from '@/components/ui/ContextBanner';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
@@ -22,9 +21,6 @@ import {
   Save,
   Pencil,
   Paperclip,
-  Building,
-  MapPin,
-  ClipboardCheck,
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
@@ -34,14 +30,8 @@ import {
   Check,
   X,
   ShieldCheck,
-  FileText,
-  Calendar,
   Lock,
-  Clock,
   Plus,
-  Info,
-  Receipt,
-  ExternalLink,
 } from 'lucide-react';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import { useToast } from '@/components/ui/Toast';

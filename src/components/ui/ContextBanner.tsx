@@ -1,5 +1,5 @@
 'use client';
-import type { ContextItem, ContextBannerProps } from "@app-types/components/ui/ContextBanner.types";
+import type { ContextBannerProps } from "@app-types/components/ui/ContextBanner.types";
 
 
 export default function ContextBanner({ items }: ContextBannerProps) {

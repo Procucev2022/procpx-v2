@@ -10,13 +10,11 @@ import {
   Lock,
   ArrowRight,
   Shield,
-  HelpCircle,
   X,
   KeyRound,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import type { Persona } from "@app-types/app/login/page.types";
 import { BUYER_PERSONAS, TEST_FIXTURE_PASSWORD, VENDOR_PERSONAS, TENANT_B_PERSONAS } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 

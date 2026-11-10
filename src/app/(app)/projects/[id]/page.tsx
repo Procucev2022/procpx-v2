@@ -15,7 +15,6 @@ import {
   FileText,
   Folder,
   Activity,
-  Layers,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -27,7 +26,6 @@ import type { ProjectDetailState, ProjectDocumentListItem } from '@app-types/app
 
 function QualityScore({ score }: { score?: number | null }) {
   if (score == null) return <span className="text-muted">{UI_STRINGS.common.copy4s9bsz}</span>;
-  const cls = score >= 80 ? 'high' : score >= 50 ? 'medium' : 'low';
   const color = score >= 80 ? '#059669' : score >= 50 ? '#d97706' : '#dc2626';
   return (
     <div className="quality-score">

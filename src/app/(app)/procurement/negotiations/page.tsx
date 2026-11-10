@@ -4,7 +4,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Handshake, Clock, CheckCircle2, TrendingDown } from 'lucide-react';
+import { Handshake, Clock, CheckCircle2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';

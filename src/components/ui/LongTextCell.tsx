@@ -2,7 +2,7 @@
 // src/components/ui/LongTextCell.tsx
 // Standardized Enterprise Reusable Long-Text Preview & Detail Inspection Component
 import React, { useState } from 'react';
-import { Eye, Copy, Check, FileText } from 'lucide-react';
+import { Copy, Check, FileText } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import type { LongTextCellProps } from "@app-types/components/ui/LongTextCell.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";

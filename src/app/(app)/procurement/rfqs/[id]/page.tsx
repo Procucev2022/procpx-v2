@@ -6,39 +6,25 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
-import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
-import SpecificationCell from '@/components/ui/SpecificationCell';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import {
   Send,
-  RotateCcw,
   Award,
   FileCheck,
-  ArrowLeft,
   CheckCircle2,
   AlertTriangle,
   FileText,
-  Scale,
   MessageSquare,
-  Building2,
-  Receipt,
   Users,
-  Check,
-  Sparkles,
-  Clock,
-  ExternalLink,
   Plus,
-  Percent,
   ShieldAlert,
-  Info,
   Calendar,
   Layers,
   ArrowRight,
-  TrendingDown,
   Tag,
   Eye,
   FileSpreadsheet,
@@ -164,7 +150,7 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [quoteLineRates, setQuoteLineRates] = useState<Record<string, number>>({});
   const [quoteCommercialTerms, setQuoteCommercialTerms] = useState('Payment net 30 days, FOB site delivery');
   const [quoteDeliveryDays, setQuoteDeliveryDays] = useState('30');
-  const [quoteValidityDays, setQuoteValidityDays] = useState('60');
+  const [quoteValidityDays] = useState('60');
 
   // 4. Award Recommendation Modal
   const [showAwardModal, setShowAwardModal] = useState(false);
@@ -900,15 +886,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   // Derived calculations
-  const benchmark = rfq.estimatedBenchmarkValue || 0;
   const l1VendorInfo = rankedVendors[0];
-  const l2VendorInfo = rankedVendors[1];
-  const l3VendorInfo = rankedVendors[2];
   const l1VendorId = l1VendorInfo?.vendorId;
 
-  const lowestQuote = l1VendorInfo?.totalQuoteAmount || 0;
-  const savings = benchmark && lowestQuote ? benchmark - lowestQuote : 0;
-  const savingsPercent = benchmark && lowestQuote ? Math.round((savings / benchmark) * 1000) / 10 : 0;
 
   const hasApprovedAward = rfq.awards?.some((a: any) => a.status === 'APPROVED');
   const hasPpo = rfq.ppos?.length > 0;

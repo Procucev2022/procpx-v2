@@ -5,23 +5,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 import Link from 'next/link';
 import {
-  Tag,
   CheckCircle2,
   XCircle,
   Clock,
-  FileText,
-  Building2,
   MessageSquare,
-  AlertTriangle,
   RotateCcw,
-  Check,
   Send,
   Eye,
-  Layers,
   Scale,
-  Sparkles,
-  History,
-  ShieldCheck,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Card from '@/components/ui/Card';
@@ -442,13 +433,13 @@ export default function RateCardApprovalsPage() {
           category="Interior Works"
           vendorAcceptanceDate="24 Oct 2026"
           projectApproved={userRole === 'FINANCE_APPROVER'}
-          onApproveProject={(comments) => {
+          onApproveProject={() => {
             setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.level1ProjectApprovalCompletedRoutedToLevel2FinanceApprover, type: 'success' });
           }}
-          onApproveFinance={(comments) => {
+          onApproveFinance={() => {
             setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.level2FinanceApprovalCompletedRateCardRC20260006IsNowActive, type: 'success' });
           }}
-          onReject={(comments) => {
+          onReject={() => {
             setMsg({ text: UI_STRINGS.appAppApprovalsRateCardsPage.rateCardRejectedWithRemarks, type: 'error' });
           }}
         />

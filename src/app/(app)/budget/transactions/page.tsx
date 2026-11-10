@@ -6,18 +6,13 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   History,
-  Building2,
   RefreshCw,
   Search,
   RotateCcw,
   CheckCircle2,
-  Clock,
   Landmark,
   Scale,
   X,
-  AlertCircle,
-  FileSpreadsheet,
-  Filter,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
