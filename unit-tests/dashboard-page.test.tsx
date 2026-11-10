@@ -615,7 +615,7 @@ describe('role-aware dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Revert","toLocaleString":"for Correction"})) }));
     const revertInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.specificReasonsAndCorrectionInstructionsForProjectUserMandatory));
     fireEvent.submit(revertInput.closest('form')!);
-    expect(mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    expect(mockFetch.mock.calls.filter(([url, init]) => String(url) !== '/api/observability/client' && init?.method === 'POST')).toHaveLength(0);
     fireEvent.change(revertInput, { target: { value: 'Fix quantities' } });
     mockFetch.mockImplementation((_url: string, init?: RequestInit) => init?.method === 'POST' ? Promise.resolve(reply({}, false, 500)) : Promise.resolve(reply(dashboardData)));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRevertForCorrection) }));
@@ -626,7 +626,7 @@ describe('role-aware dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Reject","toLocaleString":"BOQ"})) }));
     const rejectInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.reasonForRejectionMandatory));
     fireEvent.submit(rejectInput.closest('form')!);
-    expect(mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    expect(mockFetch.mock.calls.filter(([url, init]) => String(url) !== '/api/observability/client' && init?.method === 'POST')).toHaveLength(1);
     fireEvent.change(rejectInput, { target: { value: 'Reject incomplete package' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.confirmRejection) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.rejectionFailed))).toBeInTheDocument();

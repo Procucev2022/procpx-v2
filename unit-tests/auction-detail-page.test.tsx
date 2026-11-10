@@ -153,7 +153,7 @@ describe('live auction room', () => {
     bidReply = reply({ extended: false, message: 'Bid accepted without item' });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAuctionsIdPage.submitValidatedBid) }));
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith({ title: UI_STRINGS.common.userMessages.bidAccepted, message: 'Bid accepted without item' }));
-    const secondBid = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').at(-1)?.[1];
+    const secondBid = mockFetch.mock.calls.filter(([url, init]) => String(url) !== '/api/observability/client' && init?.method === 'POST').at(-1)?.[1];
     expect(JSON.parse(secondBid.body)).toEqual({ vendorId: 'v1', bidAmount: 105000, auctionItemId: null });
 
     expect(await screen.findByRole('heading', { name: 'Cable Reverse Auction' })).toBeInTheDocument();

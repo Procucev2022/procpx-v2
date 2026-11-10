@@ -110,7 +110,7 @@ describe('category taxonomy page', () => {
         : Promise.resolve(response({ data: categories })));
     submitModal();
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/masters/categories', expect.objectContaining({ method: 'POST' })));
-    const create = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').pop();
+    const create = mockFetch.mock.calls.filter(([url, init]) => url === '/api/masters/categories' && init?.method === 'POST').pop();
     expect(JSON.parse(create![1].body)).toEqual({ name: 'Plumbing', code: 'PLM01', parentId: null });
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.categoryTrimmedNameCreatedSuccessfullyAndSyncedToBOQStudio))).toBeInTheDocument();
 
@@ -170,7 +170,7 @@ describe('category taxonomy page', () => {
         : Promise.resolve(response({ data: categories })));
     submitModal();
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/masters/categories', expect.objectContaining({ method: 'POST' })));
-    const create = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').pop();
+    const create = mockFetch.mock.calls.filter(([url, init]) => url === '/api/masters/categories' && init?.method === 'POST').pop();
     expect(JSON.parse(create![1].body)).toEqual({ name: 'Wiring', code: null, parentId: 'cat-civil' });
 
     fireEvent.click(within(screen.getByText('Civil').closest('tr')!).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.subcategory) }));
