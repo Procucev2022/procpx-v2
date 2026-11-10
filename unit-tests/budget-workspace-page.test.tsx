@@ -1,5 +1,6 @@
 /** @jest-environment jsdom */
 import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
+import { I18N_CONFIG } from '@/lib/i18n.constants';
 
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -376,7 +377,9 @@ describe('project budget workspace', () => {
     }] } };
     render(<ProjectBudgetPage />);
     expect(await screen.findByText('1 Budget Contribution Under Approval for Civil Works')).toBeInTheDocument();
-    expect(screen.getByText(/₹ 20$/)).toBeInTheDocument();
+    const costPerSqftCard = screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.costPerSqft)).closest('article');
+    // 8000 total budget / 400 sqft = 20 per sqft while nothing is approved yet.
+    expect(costPerSqftCard?.textContent).toContain((20).toLocaleString(I18N_CONFIG.defaultLocale));
   });
 
   it('handles projects with no cost centres and reports rejected budget summary reads', async () => {
