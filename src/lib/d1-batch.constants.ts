@@ -1547,6 +1547,12 @@ export const ACTUAL_COST_INSERT_IF_VALID_SQL = `
       SELECT 1 FROM "ppo_lines" l JOIN "ppos" p ON p."id" = l."ppoId"
       WHERE l."id" = i."ppoLineId" AND l."tenantId" = i."tenantId" AND p."projectId" = i."projectId"
         AND (i."ppoId" IS NULL OR l."ppoId" = i."ppoId")
+        AND l."projectId" = p."projectId"
+        AND (i."boqId" IS NULL OR l."boqId" = i."boqId")
+        AND (i."boqRevisionId" IS NULL OR l."boqRevisionId" = i."boqRevisionId")
+        AND (i."boqLineId" IS NULL OR l."boqLineId" = i."boqLineId")
+        AND (i."prLineId" IS NULL OR l."prLineId" = i."prLineId")
+        AND (i."rfqLineId" IS NULL OR l."rfqLineId" = i."rfqLineId")
         AND l."vendorId" = p."vendorId"
         AND (i."vendorId" IS NULL OR l."vendorId" = i."vendorId")
     ))

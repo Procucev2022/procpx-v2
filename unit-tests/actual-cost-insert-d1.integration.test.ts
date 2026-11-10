@@ -31,7 +31,10 @@ function createDatabase(): LocalSQLiteDatabase {
     CREATE TABLE rfqs (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL);
     CREATE TABLE rfq_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, rfqId TEXT NOT NULL);
     CREATE TABLE ppos (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL, vendorId TEXT NOT NULL);
-    CREATE TABLE ppo_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, ppoId TEXT NOT NULL, vendorId TEXT NOT NULL);
+    CREATE TABLE ppo_lines (
+      id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, ppoId TEXT NOT NULL, vendorId TEXT NOT NULL,
+      projectId TEXT NOT NULL, boqId TEXT, boqRevisionId TEXT, boqLineId TEXT, prLineId TEXT, rfqLineId TEXT
+    );
     CREATE TABLE vendors (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL);
     CREATE TABLE actual_cost_transactions (
       id TEXT NOT NULL PRIMARY KEY, tenantId TEXT NOT NULL, transactionCode TEXT NOT NULL,
@@ -60,18 +63,22 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO boq_lines VALUES ('boq-line-2', '${TENANT_ID}', 'revision-2');
     INSERT INTO boq_lines VALUES ('boq-line-other', 'other-tenant', 'revision-other');
     INSERT INTO procurement_requests VALUES ('pr-1', '${TENANT_ID}', '${PROJECT_ID}');
+    INSERT INTO procurement_requests VALUES ('pr-2', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO procurement_requests VALUES ('pr-other', 'other-tenant', 'other-project');
     INSERT INTO pr_lines VALUES ('pr-line-1', '${TENANT_ID}', 'pr-1');
+    INSERT INTO pr_lines VALUES ('pr-line-2', '${TENANT_ID}', 'pr-2');
     INSERT INTO pr_lines VALUES ('pr-line-other', 'other-tenant', 'pr-other');
     INSERT INTO rfqs VALUES ('rfq-1', '${TENANT_ID}', '${PROJECT_ID}');
+    INSERT INTO rfqs VALUES ('rfq-2', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO rfqs VALUES ('rfq-other', 'other-tenant', 'other-project');
     INSERT INTO rfq_lines VALUES ('rfq-line-1', '${TENANT_ID}', 'rfq-1');
+    INSERT INTO rfq_lines VALUES ('rfq-line-2', '${TENANT_ID}', 'rfq-2');
     INSERT INTO rfq_lines VALUES ('rfq-line-other', 'other-tenant', 'rfq-other');
     INSERT INTO ppos VALUES ('ppo-1', '${TENANT_ID}', '${PROJECT_ID}', 'vendor-1');
     INSERT INTO ppos VALUES ('ppo-other', 'other-tenant', 'other-project', 'vendor-other');
-    INSERT INTO ppo_lines VALUES ('ppo-line-1', '${TENANT_ID}', 'ppo-1', 'vendor-1');
-    INSERT INTO ppo_lines VALUES ('ppo-line-other', 'other-tenant', 'ppo-other', 'vendor-other');
-    INSERT INTO ppo_lines VALUES ('ppo-line-vendor-mismatch', '${TENANT_ID}', 'ppo-1', 'vendor-2');
+    INSERT INTO ppo_lines VALUES ('ppo-line-1', '${TENANT_ID}', 'ppo-1', 'vendor-1', '${PROJECT_ID}', 'boq-1', 'revision-1', 'boq-line-1', 'pr-line-1', 'rfq-line-1');
+    INSERT INTO ppo_lines VALUES ('ppo-line-other', 'other-tenant', 'ppo-other', 'vendor-other', 'other-project', 'boq-other', 'revision-other', 'boq-line-other', 'pr-line-other', 'rfq-line-other');
+    INSERT INTO ppo_lines VALUES ('ppo-line-vendor-mismatch', '${TENANT_ID}', 'ppo-1', 'vendor-2', '${PROJECT_ID}', 'boq-1', 'revision-1', 'boq-line-1', 'pr-line-1', 'rfq-line-1');
     INSERT INTO vendors VALUES ('vendor-1', '${TENANT_ID}');
     INSERT INTO vendors VALUES ('vendor-2', '${TENANT_ID}');
     INSERT INTO vendors VALUES ('vendor-other', 'other-tenant');
@@ -170,6 +177,18 @@ describe('actual-cost reference validation against isolated SQLite D1 semantics'
 
     expect(Number(headerMismatch.changes)).toBe(0);
     expect(Number(lineMismatch.changes)).toBe(0);
+    expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
+      .toEqual({ total: 0 });
+  });
+
+  it.each([
+    ['BOQ', { boqId: 'boq-2', boqRevisionId: 'revision-2', boqLineId: 'boq-line-2' }],
+    ['PR', { prId: 'pr-2', prLineId: 'pr-line-2' }],
+    ['RFQ', { rfqId: 'rfq-2', rfqLineId: 'rfq-line-2' }],
+  ])('rejects %s line references that differ from the linked PPO line', (_source, overrides) => {
+    const result = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues(overrides));
+
+    expect(Number(result.changes)).toBe(0);
     expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
       .toEqual({ total: 0 });
   });
