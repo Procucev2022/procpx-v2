@@ -169,7 +169,7 @@ describe('vendor management workspace', () => {
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.eGCivilWorksInteriorFitOutsMEPFurnitureEtc)), { target: { value: 'HVAC installation and servicing' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeOnboardingRegister) }));
     await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.vendorOnboardingCompletedSuccessfully, 'VN-NEW', UI_STRINGS.common.userMessages.onboarded));
-    const completed = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse((init as RequestInit).body as string));
+    const completed = mockFetch.mock.calls.filter(([url, init]) => String(url) !== '/api/observability/client' && init?.method === 'POST').map(([, init]) => JSON.parse((init as RequestInit).body as string));
     expect(completed.at(-1)).toMatchObject({ name: 'New Vendor', isDraft: false, id: 'vendor-new', phone: '+91 80000 11111', address: '12 Market Road, Hyderabad', capabilities: 'HVAC installation and servicing' });
   });
 
@@ -219,7 +219,7 @@ describe('vendor management workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementVendorsPage.completeOnboardingRegister) }));
 
     await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.userMessages.vendorOnboardingCompletedSuccessfully, 'VN-NEW', UI_STRINGS.common.userMessages.onboarded));
-    const submitted = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([, init]) => JSON.parse((init as RequestInit).body as string)).at(-1);
+    const submitted = mockFetch.mock.calls.filter(([url, init]) => String(url) !== '/api/observability/client' && init?.method === 'POST').map(([, init]) => JSON.parse((init as RequestInit).body as string)).at(-1);
     expect(submitted).toMatchObject({
       name: 'Full Profile Vendor', vendorType: 'PROCUCEV_VENDOR', contactPerson: 'Riley Contact', email: 'riley@example.test',
       phone: '+44 7700900111', alternatePhone: '+1 202 555 0100', category: 'Electrical & Automation', operatingLocation: 'Pune, Maharashtra',

@@ -49,9 +49,21 @@ function findMissingIndexes(expectedIndexes, actualIndexes) {
   return [...expectedIndexes].filter((indexName) => !actualIndexes.has(indexName)).sort();
 }
 
+// Compares tracked migration files with the names Wrangler recorded in d1_migrations.
+function migrationStatus(migrationFilenames, appliedNames) {
+  const tracked = [...migrationFilenames].sort();
+  const applied = new Set(appliedNames);
+  const trackedSet = new Set(tracked);
+  return {
+    pending: tracked.filter((filename) => !applied.has(filename)),
+    unknownApplied: [...applied].filter((name) => !trackedSet.has(name)).sort(),
+  };
+}
+
 module.exports = {
   expectedColumnsByTable,
   expectedIndexNamesFromMigrations,
   findMissingColumns,
   findMissingIndexes,
+  migrationStatus,
 };

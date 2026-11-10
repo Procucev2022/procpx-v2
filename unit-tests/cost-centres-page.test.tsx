@@ -223,7 +223,7 @@ describe('cost centres page', () => {
           : Promise.resolve(apiResponse({ data: projects })));
     fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.saveCostCentre) }).closest('form')!);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/cost-centres', expect.objectContaining({ method: 'POST' })));
-    const createCall = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').pop();
+    const createCall = mockFetch.mock.calls.filter(([url, init]) => url === '/api/cost-centres' && init?.method === 'POST').pop();
     expect(JSON.parse(createCall![1].body)).toMatchObject({
       projectId: 'project-2', code: 'CC-007', name: 'Signage', areaSqFt: 8_500,
       location: 'West Wing', floorZone: 'Level 1', description: 'Store entrance works',
@@ -241,7 +241,7 @@ describe('cost centres page', () => {
           ? Promise.resolve(apiResponse(centres))
           : Promise.resolve(apiResponse(projects)));
     fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.saveCostCentre) }).closest('form')!);
-    const secondCreate = mockFetch.mock.calls.filter(([, init]) => init?.method === 'POST').pop();
+    const secondCreate = mockFetch.mock.calls.filter(([url, init]) => url === '/api/cost-centres' && init?.method === 'POST').pop();
     await waitFor(() => expect(secondCreate).toBeDefined());
     expect(JSON.parse(secondCreate![1].body)).toMatchObject({ code: 'CC-008', name: 'Facade', areaSqFt: null, location: '' });
   });

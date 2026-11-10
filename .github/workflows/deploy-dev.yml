@@ -43,7 +43,7 @@ jobs:
         run: npm run check:quality
 
       - name: Verify remote D1 integrity before migration
-        run: npm run db:integrity:remote
+        run: npm run db:integrity:remote -- --allow-pending-migrations
 
       - name: Apply reviewed D1 migrations
         run: npm run db:d1:migrate:remote
