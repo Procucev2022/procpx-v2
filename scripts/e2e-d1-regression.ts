@@ -99,6 +99,10 @@ const BASELINE_SQL = `SELECT
   (SELECT count(*) FROM quotes) quotes, (SELECT count(*) FROM quote_lines) quoteLines,
   (SELECT count(*) FROM negotiations) negotiations, (SELECT count(*) FROM award_recommendations) awards,
   (SELECT count(*) FROM ppos) ppos, (SELECT count(*) FROM ppo_lines) ppoLines,
+  (SELECT count(*) FROM ppos WHERE sourcingType='DIRECT_RATE_CARD') directPpos,
+  (SELECT count(*) FROM vendor_rate_cards) rateCards,
+  (SELECT count(*) FROM vendor_rate_card_items) rateCardItems,
+  (SELECT count(*) FROM rate_card_approvals) rateCardApprovals,
   (SELECT count(*) FROM auctions) auctions, (SELECT count(*) FROM auction_vendors) auctionVendors,
   (SELECT count(*) FROM auction_items) auctionItems, (SELECT count(*) FROM auction_bids) auctionBids`;
 
@@ -178,6 +182,7 @@ async function securityChecks(s: Record<string, Session>) {
 async function workflow(s: Record<string, Session>) {
   const pu = s['project.user@test.procpx.local'];
   const pa = s['project.approver@test.procpx.local'];
+  const finance = s['finance.user@test.procpx.local'];
   const proc = s['procurement.user@test.procpx.local'];
   const cm = s['category.manager@test.procpx.local'] || s['client.admin@test.procpx.local'];
   const stamp = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -250,6 +255,139 @@ async function workflow(s: Record<string, Session>) {
   const approvedList = JSON.stringify(r.json ?? '');
   step('approved PR available for RFQ creation', approvedList.includes(pr.id) || approvedList.includes(pr.prNumber), `HTTP ${r.status}`);
 
+  const vendorLogins = ['vendor.one@test.procpx.local', 'vendor.two@test.procpx.local', 'vendor.three@test.procpx.local'];
+  const vendorIds = d1<{ vendorId: string; email: string }>(`SELECT vendorId, email FROM users WHERE email IN (${vendorLogins.map(q).join(',')})`);
+  step('three isolated vendor fixtures are available', vendorIds.length === 3, `${vendorIds.length} vendor accounts`);
+
+  // Separate, freshly created PR for the direct rate-card PPO lifecycle.
+  const directItemDescription = `${RUN} Rate Card Direct Item`;
+  r = await pu.post('/api/boq/manual', {
+    projectId, costCentreId: ccIds[1], title: `${RUN} Direct PPO BOQ`, purpose: 'BUDGET',
+    lines: [{ lineNumber: '1', description: directItemDescription, specification: `${RUN} direct procurement`, uom: 'EA', quantity: 3, category: 'Electrical' }],
+  });
+  step('create separate BOQ for direct rate-card procurement', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const directBoq = d1<{ boqId: string; revisionId: string; status: string }>(
+    `SELECT b.id boqId, r.id revisionId, r.status FROM boqs b JOIN boq_revisions r ON r.boqId=b.id WHERE b.title=${q(`${RUN} Direct PPO BOQ`)} ORDER BY r.revisionNumber DESC LIMIT 1`,
+  )[0];
+  step('direct procurement BOQ persisted', Boolean(directBoq?.revisionId));
+  await pu.post(`/api/boq/${directBoq.revisionId}/validate`);
+  r = await pu.post(`/api/boq/${directBoq.revisionId}/submit`);
+  step('submit direct procurement BOQ', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/boq/${directBoq.revisionId}/approve`, { remarks: `${RUN} direct procurement BOQ approved` });
+  step('approve direct procurement BOQ', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pu.post('/api/boq/create-pr', {
+    boqRevisionId: directBoq.revisionId, boqId: directBoq.boqId, costCentreId: ccIds[1], projectId,
+    title: `${RUN} Direct Rate Card PR`,
+  });
+  step('create separate PR for direct rate-card procurement', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const directPr = d1<{ id: string; prNumber: string; status: string }>(
+    `SELECT id, prNumber, status FROM procurement_requests WHERE title=${q(`${RUN} Direct Rate Card PR`)} LIMIT 1`,
+  )[0];
+  step('direct procurement PR and its line persist', Boolean(directPr?.id)
+    && d1(`SELECT id FROM pr_lines WHERE prId=${q(directPr.id)}`).length === 1, `${directPr?.prNumber} status=${directPr?.status}`);
+  if (directPr.status === 'PR_DRAFT') {
+    r = await pu.post(`/api/pr/${directPr.id}/submit`);
+    step('submit direct procurement PR', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  }
+  r = await pa.post(`/api/pr/${directPr.id}/approve`, { remarks: `${RUN} direct procurement PR approved` });
+  step('approve direct procurement PR', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/pr/${directPr.id}/release-to-procurement`);
+  step('release direct procurement PR', r.status < 300, r.status < 300 ? '' : errorOf(r));
+
+  // Exercise the correction loop before approving and using this rate card.
+  const vendorId = vendorIds[0].vendorId;
+  r = await cm.post('/api/procurement/rate-cards', {
+    vendorId, title: `${RUN} Direct Procurement Rate Card v1`, category: 'Electrical', status: 'DRAFT',
+    validFrom: new Date(Date.now() - 86_400_000).toISOString(),
+    validTo: new Date(Date.now() + 90 * 86_400_000).toISOString(), terms: `${RUN} commercial terms`,
+    items: [{ description: directItemDescription, specification: `${RUN} direct procurement`, category: 'Electrical', uom: 'EA', rate: 125, proposedRate: 130, minQuantity: 1 }],
+  });
+  step('create draft rate card', r.status === 201, r.status < 300 ? '' : errorOf(r));
+  const rateCard = data(r)?.rateCard ?? data(r);
+  const rateCardId: string = rateCard.id;
+  const rateCardItemId: string = rateCard.items?.[0]?.id;
+  step('rate card and line item persisted in D1', Boolean(rateCardId && rateCardItemId)
+    && d1(`SELECT id FROM vendor_rate_cards WHERE id=${q(rateCardId)} AND tenantId=${q(rateCard.tenantId)}`).length === 1
+    && d1(`SELECT id FROM vendor_rate_card_items WHERE id=${q(rateCardItemId)} AND rateCardId=${q(rateCardId)}`).length === 1);
+  r = await cm.post(`/api/procurement/rate-cards/${rateCardId}/submit`, { remarks: `${RUN} submit v1` });
+  step('submit rate card for project approval', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/procurement/rate-cards/${rateCardId}/revert`, { reason: `${RUN} revise rate before approval` });
+  step('return rate card for correction', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  step('correction status and reason persist', d1<{ status: string; revertReason: string | null }>(
+    `SELECT status, revertReason FROM vendor_rate_cards WHERE id=${q(rateCardId)}`,
+  )[0]?.status === 'RETURNED_FOR_CORRECTION');
+  r = await cm.put(`/api/procurement/rate-cards/${rateCardId}`, {
+    title: `${RUN} Direct Procurement Rate Card v2`, version: 2,
+    items: [{ id: rateCardItemId, description: directItemDescription, specification: `${RUN} direct procurement`, category: 'Electrical', uom: 'EA', rate: 110, proposedRate: 110, minQuantity: 1 }],
+  });
+  step('revise returned rate card item and version', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  step('revision data persists in D1', d1<{ version: number }>(
+    `SELECT version FROM vendor_rate_cards WHERE id=${q(rateCardId)}`,
+  )[0]?.version === 2 && Number(d1<{ rate: number }>(
+    `SELECT rate FROM vendor_rate_card_items WHERE id=${q(rateCardItemId)} AND rateCardId=${q(rateCardId)}`,
+  )[0]?.rate) === 110);
+  r = await cm.post(`/api/procurement/rate-cards/${rateCardId}/submit`, { remarks: `${RUN} resubmit v2` });
+  step('resubmit revised rate card', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/procurement/rate-cards/${rateCardId}/approve`, { remarks: `${RUN} project approval` });
+  step('approve rate card at project level', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await finance.post(`/api/procurement/rate-cards/${rateCardId}/approve`, { remarks: `${RUN} finance approval` });
+  step('approve rate card at finance level', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const approvedRateCard = d1<{ status: string; approvalLevel: string; version: number }>(
+    `SELECT status, approvalLevel, version FROM vendor_rate_cards WHERE id=${q(rateCardId)}`,
+  )[0];
+  const approvalHistory = d1<{ c: number }>(`SELECT count(*) c FROM rate_card_approvals WHERE rateCardId=${q(rateCardId)}`)[0]?.c;
+  step('approval and correction history persist', approvedRateCard?.status === 'APPROVED'
+    && approvedRateCard.approvalLevel === 'COMPLETED' && approvedRateCard.version === 2 && approvalHistory === 5,
+  `${approvedRateCard?.status}/${approvedRateCard?.approvalLevel}, ${approvalHistory} history rows`);
+
+  r = await cm.post('/api/procurement/rate-cards', {
+    vendorId, title: `${RUN} Rejected Rate Card`, category: 'Electrical', status: 'DRAFT',
+    validFrom: new Date(Date.now() - 86_400_000).toISOString(),
+    validTo: new Date(Date.now() + 90 * 86_400_000).toISOString(), terms: `${RUN} rejection test terms`,
+    items: [{ description: directItemDescription, specification: `${RUN} direct procurement`, category: 'Electrical', uom: 'EA', rate: 140, proposedRate: 145, minQuantity: 1 }],
+  });
+  step('create separate rate card for rejection path', r.status === 201, r.status < 300 ? '' : errorOf(r));
+  const rejectedRateCard = data(r)?.rateCard ?? data(r);
+  const rejectedRateCardId: string = rejectedRateCard.id;
+  step('rejection test card persists in D1', Boolean(rejectedRateCardId)
+    && d1(`SELECT id FROM vendor_rate_cards WHERE id=${q(rejectedRateCardId)}`).length === 1);
+  r = await cm.post(`/api/procurement/rate-cards/${rejectedRateCardId}/submit`, { remarks: `${RUN} submit rejection case` });
+  step('submit rejection test card', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  r = await pa.post(`/api/procurement/rate-cards/${rejectedRateCardId}/reject`, { reason: `${RUN} reject for commercial non-compliance` });
+  step('reject pending rate card with reason', r.status < 300, r.status < 300 ? '' : errorOf(r));
+  const rejectedState = d1<{ status: string; rejectionReason: string | null }>(
+    `SELECT status, rejectionReason FROM vendor_rate_cards WHERE id=${q(rejectedRateCardId)}`,
+  )[0];
+  const rejectionHistory = d1<{ c: number }>(`SELECT count(*) c FROM rate_card_approvals WHERE rateCardId=${q(rejectedRateCardId)}`)[0]?.c;
+  step('rejection status, reason, and review history persist', rejectedState?.status === 'REJECTED'
+    && rejectedState.rejectionReason === `${RUN} reject for commercial non-compliance` && rejectionHistory === 2,
+  `${rejectedState?.status}; ${rejectionHistory} history rows`);
+
+  r = await proc.get(`/api/procurement/rate-cards/match?prId=${encodeURIComponent(directPr.id)}`);
+  const matchResult = data(r);
+  const directMatch = matchResult?.matchedRateCards?.find((card: ApiJson) => card.rateCardId === rateCardId);
+  step('approved rate card matches the separate procurement request', r.status === 200
+    && directMatch?.directPpoEligible === true && directMatch?.coveragePercent === 100,
+  `HTTP ${r.status}; eligible=${matchResult?.eligibleCount ?? 0}`);
+  r = await proc.post('/api/procurement/rate-cards/direct-ppo', {
+    rateCardId, prId: directPr.id, deliveryTerms: `${RUN} delivery`, paymentTerms: 'Net 30',
+  });
+  step('create direct PPO from approved rate card', r.status === 201, r.status < 300 ? '' : errorOf(r));
+  const directPpo = d1<{ id: string; status: string; sourcingType: string; rateCardId: string; prId: string; totalValue: number }>(
+    `SELECT id, status, sourcingType, rateCardId, prId, totalValue FROM ppos WHERE rateCardId=${q(rateCardId)} AND prId=${q(directPr.id)} ORDER BY createdAt DESC LIMIT 1`,
+  )[0];
+  const directPpoLine = d1<{ orderedUnitRate: number; orderedQuantity: number; orderedAmount: number }>(
+    `SELECT orderedUnitRate, orderedQuantity, orderedAmount FROM ppo_lines WHERE ppoId=${q(directPpo?.id ?? '')}`,
+  )[0];
+  step('direct PPO, vendor/rate-card link, and calculated line persist', directPpo?.status === 'ISSUED'
+    && directPpo.sourcingType === 'DIRECT_RATE_CARD' && directPpo.rateCardId === rateCardId && directPpo.prId === directPr.id
+    && Number(directPpoLine?.orderedUnitRate) === 110 && Number(directPpoLine?.orderedQuantity) === 3
+    && Number(directPpoLine?.orderedAmount) === 330, `PPO=${directPpo?.id}; amount=${directPpo?.totalValue}`);
+  r = await proc.post('/api/procurement/rate-cards/direct-ppo', { rateCardId, prId: directPr.id });
+  step('direct PPO replay is blocked without duplicate records', r.status === 409
+    && d1(`SELECT id FROM ppos WHERE rateCardId=${q(rateCardId)} AND prId=${q(directPr.id)}`).length === 1,
+  `HTTP ${r.status}`);
+
   // RFQ
   const deadline = new Date(Date.now() + 7 * 864e5).toISOString();
   r = await proc.post('/api/procurement/rfqs', { projectId, prId: pr.id, title: `${RUN} RFQ`, scopeOfWork: 'E2E D1 regression scope', submissionDeadline: deadline });
@@ -259,8 +397,6 @@ async function workflow(s: Record<string, Session>) {
   step('RFQ and lines persisted in D1', !!rfq && rfqLines.length === 3, `${rfq?.rfqNumber} status=${rfq?.status} lines=${rfqLines.length}`);
 
   // Invite 3 vendors with one atomic D1 batch.
-  const vendorLogins = ['vendor.one@test.procpx.local', 'vendor.two@test.procpx.local', 'vendor.three@test.procpx.local'];
-  const vendorIds = d1<{ vendorId: string; email: string }>(`SELECT vendorId, email FROM users WHERE email IN (${vendorLogins.map(q).join(',')})`);
   r = await proc.post(`/api/procurement/rfqs/${rfq.id}/vendors`, { vendorIds: vendorIds.map((v) => v.vendorId) });
   step('invite 3 vendors (transaction)', r.status < 300, r.status < 300 ? '' : errorOf(r));
   step('vendor invitations persisted in D1', d1(`SELECT id FROM rfq_vendors WHERE rfqId=${q(rfq.id)}`).length === 3);
