@@ -13,6 +13,7 @@ import { RFQ_MESSAGE_CURSOR_SEPARATOR, RFQ_MESSAGE_MAX_PAGE_SIZE, RFQ_MESSAGE_PA
 import type { RfqMessageCursor, RfqMessagesRouteContext } from '@app-types/app/api/procurement/rfq-messages.types';
 
 
+import { READ_ONLY_ROLES } from '@/lib/permissions.constants';
 export async function GET(
   req: NextRequest,
   { params }: RfqMessagesRouteContext
@@ -119,6 +120,7 @@ export async function POST(
 ) {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
+  if (READ_ONLY_ROLES.includes(ctx.role)) return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/rfqs/[id]/messages', method: 'POST' });
 
   const { id: rfqId } = await params;
   const startedAt = Date.now();

@@ -15,6 +15,7 @@ import { prepareNotificationOutbox } from '@/lib/notification-outbox';
 import { readByD1FilterChunks } from '@/lib/d1-query';
 import { MAX_D1_QUERY_DUPLICATED_FILTER_VALUES } from '@/lib/d1-query.constants';
 
+import { READ_ONLY_ROLES } from '@/lib/permissions.constants';
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
@@ -152,6 +153,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BOQ_VIEW');
   if (!isApiContext(ctx)) return ctx;
+  if (READ_ONLY_ROLES.includes(ctx.role)) return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/approvals/messages', method: 'POST' });
   const startedAt = Date.now();
   let prId: string | undefined;
   let contributionId: string | undefined;
