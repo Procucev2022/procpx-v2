@@ -19,6 +19,8 @@ import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLo
 export default function CreatePrPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState('');
   const [costCentres, setCostCentres] = useState<CostCentreLookupOption[]>([]);
   const [costCentreSearch, setCostCentreSearch] = useState('');
   const [costCentrePage, setCostCentrePage] = useState(1);
@@ -84,14 +86,17 @@ export default function CreatePrPage() {
     void (async () => {
       try {
         const res = await fetch('/api/projects');
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(String(res.status));
         const pData = await res.json();
         const list = pData.data || pData || [];
         if (!active) return;
         setProjects(list);
         if (list.length > 0) setSelectedProjectId(list[0].id);
       } catch (error) {
+        if (active) setProjectsError(UI_STRINGS.appAppPrNewPage.failedToLoadProjects);
         console.error(error);
+      } finally {
+        if (active) setProjectsLoading(false);
       }
     })();
     return () => { active = false; };
@@ -197,9 +202,10 @@ export default function CreatePrPage() {
                 className="form-control"
                 value={selectedProjectId}
                 onChange={e => setSelectedProjectId(e.target.value)}
+                disabled={projectsLoading || Boolean(projectsError)}
                 required
               >
-                <option value="">{UI_STRINGS.appAppPrNewPage.selectProject}</option>
+                <option value="">{projectsError || (projectsLoading ? UI_STRINGS.appAppPrNewPage.loadingProjects : UI_STRINGS.appAppPrNewPage.selectProject)}</option>
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>
                     {p.projectCode}{UI_STRINGS.common.copyq9aflv}{p.name}

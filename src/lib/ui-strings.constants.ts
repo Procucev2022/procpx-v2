@@ -2075,6 +2075,8 @@ export const UI_STRINGS = {
     youCanEditInvalidFieldsDirectlyBelowToFixErrorsBeforeSaving: "💡 You can edit invalid fields directly below to fix errors before saving.",
   },
   appAppPrNewPage: {
+    loadingProjects: "Loading projects...",
+    failedToLoadProjects: "Projects could not be loaded. Refresh the page to try again.",
     bOQBaseline: "BOQ Baseline",
     bOQSpecificationSource: "BOQ Specification Source",
     createProcurementRequest: "Create Procurement Request",
