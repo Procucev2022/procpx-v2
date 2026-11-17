@@ -731,6 +731,8 @@ model Auction {
 
   @@unique([tenantId, auctionNumber])
   @@index([rfqId], map: "auctions_rfqId_idx")
+  @@index([status, endTime], map: "auctions_status_endTime_idx")
+  @@index([status, startTime], map: "auctions_status_startTime_idx")
   @@map("auctions")
 }
 
