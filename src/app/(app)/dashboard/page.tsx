@@ -209,7 +209,7 @@ export default function DashboardPage() {
         const err = await res.json();
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.approvalFailed }));
       }
-      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully, approverSelectedPr?.prNumber || prId, UI_STRINGS.common.userMessages.releasedToCategoryManager);
+      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully, approverSelectedPr?.prNumber || prId, UI_STRINGS.common.userMessages.releasedToProcurement);
       setApproverStatusMessage(UI_STRINGS.common.bOQApprovedSuccessfully);
       setApproverReviewModalOpen(false);
       loadDashboard();
@@ -569,7 +569,7 @@ export default function DashboardPage() {
                             style={{ height: 28, padding: '0 10px', fontSize: 11, background: '#047857', borderColor: '#047857' }}
                             onClick={() => handleApproverApprove(pr.id)}
                             disabled={approverProcessing}
-                            title={UI_STRINGS.common.approveBOQAndReleaseToCategoryManager}
+                            title={UI_STRINGS.common.approveBOQAndReleaseToProcurement}
                           >
                             <CheckCircle2 size={12} />{UI_STRINGS.common.approve}</button>
                           <button

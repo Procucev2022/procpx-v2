@@ -29,6 +29,7 @@ import {
   Eye,
   FileSpreadsheet,
   Gavel,
+  Lock,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
@@ -43,6 +44,8 @@ import ProcurementCommercialWorkspace from '@/components/ProcurementCommercialWo
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { RateCardMatchResponse } from '@app-types/app/(app)/procurement/rfqs/[id]/page.types';
+import { hasPermission, type UserRole } from '@/lib/permissions';
+import { RFQ_RATE_LOCK_REQUIRED_STATUSES } from './page.constants';
 
 
 function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
@@ -151,6 +154,11 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const [quoteCommercialTerms, setQuoteCommercialTerms] = useState('Payment net 30 days, FOB site delivery');
   const [quoteDeliveryDays, setQuoteDeliveryDays] = useState('30');
   const [quoteValidityDays] = useState('60');
+
+  // Final rate lock (required after negotiation before an award can be recommended)
+  const [showLockRatesModal, setShowLockRatesModal] = useState(false);
+  const [lockVendorId, setLockVendorId] = useState('');
+  const [lockRemarks, setLockRemarks] = useState('');
 
   // 4. Award Recommendation Modal
   const [showAwardModal, setShowAwardModal] = useState(false);
@@ -577,6 +585,43 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
+  // Final Rate Lock — moves a negotiated RFQ to FINAL_RATE_LOCKED so an award can be recommended.
+  // The server freezes the vendor's latest submitted quotation as the final commercial value.
+  const handleLockRates = async (vendorName: string) => {
+    if (!lockVendorId) {
+      toast.error({ title: UI_STRINGS.appAppProcurementRfqsIdPage.validationError, message: UI_STRINGS.appAppProcurementRfqsIdPage.pleaseSelectAVendor });
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/procurement/rfqs/${id}/lock-rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorId: lockVendorId, remarks: lockRemarks.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.appAppProcurementRfqsIdPage.rateLockFailed);
+      setShowLockRatesModal(false);
+      setAwardVendorId(lockVendorId);
+      toast.success(
+        UI_STRINGS.appAppProcurementRfqsIdPage.finalRatesLocked,
+        rfq.rfqNumber,
+        interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.finalRatesLockedMessage, { vendorName }),
+      );
+      fetchRfq();
+      fetchComparison();
+    } catch (err: unknown) {
+      toast.error({
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.rateLockFailed,
+        message: (err as Error).message,
+        recordNumber: rfq?.rfqNumber,
+        vendorName,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Award Approval Review (Approve or Reject)
   const handleAwardApprovalReview = async () => {
     if (!rfq.awards?.length) return;
@@ -889,6 +934,17 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const l1VendorInfo = rankedVendors[0];
   const l1VendorId = l1VendorInfo?.vendorId;
 
+
+  const rateLockRequired = RFQ_RATE_LOCK_REQUIRED_STATUSES.includes(rfq.status) && !rfq.awards?.length;
+  const canLockRates = hasPermission(currentUserRole as UserRole, 'FINAL_RATE_LOCK');
+  // The selector only lists ranked vendors, so a chosen vendor is always found here.
+  const lockVendor = rankedVendors.find((v) => v.vendorId === lockVendorId);
+  const lockVendorLatestValue = lockVendor?.totalQuoteAmount || 0;
+  const openLockRatesModal = () => {
+    setLockVendorId(awardVendorId || l1VendorId || '');
+    setLockRemarks('');
+    setShowLockRatesModal(true);
+  };
 
   const hasApprovedAward = rfq.awards?.some((a: any) => a.status === 'APPROVED');
   const hasPpo = rfq.ppos?.length > 0;
@@ -1617,17 +1673,36 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
             title={UI_STRINGS.appAppProcurementRfqsIdPage.commercialAwardRecommendation}
             subtitle={UI_STRINGS.appAppProcurementRfqsIdPage.documentedRecommendationForProjectAndFinancialSanction}
             action={
-              !rfq.awards?.length && (
+              !rfq.awards?.length && (rateLockRequired ? (
+                canLockRates && (
+                  <button
+                    type="button"
+                    onClick={openLockRatesModal}
+                    className="btn btn-primary btn-sm"
+                  >
+                    <Lock size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRates}</button>
+                )
+              ) : (
                 <button
                   type="button"
                   onClick={() => setShowAwardModal(true)}
                   className="btn btn-primary btn-sm"
                 >
                   <Award size={14} style={{ marginRight: 6 }} />{UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation}</button>
-              )
+              ))
             }
           >
-            {!rfq.awards?.length ? (
+            {rateLockRequired ? (
+              <EmptyState
+                icon={<Lock size={36} color="#94a3b8" strokeWidth={1.5} />}
+                title={UI_STRINGS.appAppProcurementRfqsIdPage.rateLockRequiredTitle}
+                description={canLockRates
+                  ? UI_STRINGS.appAppProcurementRfqsIdPage.rateLockRequiredDescription
+                  : UI_STRINGS.appAppProcurementRfqsIdPage.rateLockRequiredNoPermission}
+                actionText={canLockRates ? UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRates : undefined}
+                onAction={canLockRates ? openLockRatesModal : undefined}
+              />
+            ) : !rfq.awards?.length ? (
               <EmptyState
                 icon={<Award size={36} color="#94a3b8" strokeWidth={1.5} />}
                 title={UI_STRINGS.appAppProcurementRfqsIdPage.noAwardRecommendationCreated}
@@ -1909,7 +1984,74 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* ============================================================ */}
+      {/* MODAL: LOCK FINAL NEGOTIATED RATES                           */}
+      {/* ============================================================ */}
+      {showLockRatesModal && (
+        <Modal
+          isOpen={showLockRatesModal}
+          onClose={() => setShowLockRatesModal(false)}
+          title={UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle}
+          maxWidth="max-w-lg"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>{UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalDescription}</p>
+            <div>
+              <label className="label" htmlFor="lock-rates-vendor">{UI_STRINGS.appAppProcurementRfqsIdPage.lockRatesVendorLabel}</label>
+              <select
+                id="lock-rates-vendor"
+                value={lockVendorId}
+                onChange={(e) => setLockVendorId(e.target.value)}
+                className="input"
+              >
+                {rankedVendors.map((v) => (
+                  <option key={v.vendorId} value={v.vendorId}>
+                    {interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.lockRatesVendorOption, {
+                      rankLabel: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.lRank, { rank: v.rank }),
+                      vendorName: v.vendorName,
+                      amount: Number(v.totalQuoteAmount || 0).toLocaleString(I18N_CONFIG.defaultLocale),
+                    })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="label">{UI_STRINGS.appAppProcurementRfqsIdPage.lockRatesFinalValueLabel}</span>
+              <div data-testid="lock-rates-final-value" style={{ fontSize: 18, fontWeight: 700, color: '#059669' }}>
+                {new Intl.NumberFormat(I18N_CONFIG.defaultLocale, { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(lockVendorLatestValue)}
+              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="lock-rates-remarks">{UI_STRINGS.appAppProcurementRfqsIdPage.lockRatesRemarksLabel}</label>
+              <textarea
+                id="lock-rates-remarks"
+                rows={3}
+                maxLength={1000}
+                placeholder={UI_STRINGS.appAppProcurementRfqsIdPage.lockRatesRemarksPlaceholder}
+                value={lockRemarks}
+                onChange={(e) => setLockRemarks(e.target.value)}
+                className="input"
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowLockRatesModal(false)}
+                className="btn btn-secondary"
+              >{UI_STRINGS.common.cancel}</button>
+              <button
+                type="button"
+                onClick={() => handleLockRates(lockVendor?.vendorName)}
+                disabled={actionLoading}
+                className="btn btn-primary"
+              >
+                {actionLoading ? UI_STRINGS.appAppProcurementRfqsIdPage.lockingRates : UI_STRINGS.appAppProcurementRfqsIdPage.confirmLockRates}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
+      {/* ============================================================ */}
       {/* MODAL 4: AWARD RECOMMENDATION (L1 vs Non-L1 Exception)       */}
       {/* ============================================================ */}
       {showAwardModal && (

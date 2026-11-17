@@ -280,7 +280,7 @@ describe('BOQ and PR approval workspace', () => {
     approveResult = { ok: true, body: {} };
     fireEvent.click(within(screen.getByRole('row', { name: /PR-001/ })).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementAwardsPage.approve) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.bOQApprovedSuccessfully))).toBeInTheDocument();
-    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'pr-1', UI_STRINGS.common.userMessages.releasedToCategoryManager);
+    expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'pr-1', UI_STRINGS.common.userMessages.releasedToProcurement);
     const status = screen.getByText(uiStringPattern(UI_STRINGS.common.bOQApprovedSuccessfully)).parentElement?.parentElement as HTMLElement;
     fireEvent.click(within(status).getByRole('button'));
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.bOQApprovedSuccessfully))).not.toBeInTheDocument();
@@ -288,7 +288,7 @@ describe('BOQ and PR approval workspace', () => {
     await screen.findByRole('row', { name: /PR-001/ });
     fireEvent.click(within(screen.getByRole('row', { name: /PR-001/ })).getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Review","toLocaleString":"BOQ"})) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Approve","toLocaleString":"& Release to Procurement"})) }));
-    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'PR-001', UI_STRINGS.common.userMessages.releasedToCategoryManager));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'PR-001', UI_STRINGS.common.userMessages.releasedToProcurement));
   });
 
   it('validates and submits revert requests, covering API error and success paths', async () => {

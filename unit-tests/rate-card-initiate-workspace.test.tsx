@@ -43,14 +43,47 @@ async function uploadFile(file: File) {
   expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.excelRateCardImportPreview, "", false))).toBeInTheDocument();
 }
 
+const VENDOR_CRAFTLINE = { id: 'vendor-craftline', name: 'CraftLine Interior', code: 'VND-0003' };
+const VENDOR_ZENITH = { id: 'vendor-zenith', name: 'Zenith Electrical', code: 'VND-0004' };
+const VENDOR_BLACKLISTED = { id: 'vendor-blocked', name: 'Blocked Vendor', code: 'VND-0099', isBlacklisted: true };
+const CATEGORY_CIVIL = { id: 'cat-civil', name: 'Civil & Interior', parentId: null };
+const CATEGORY_ELECTRICAL = { id: 'cat-electrical', name: 'Electrical', parentId: null };
+const SUBCATEGORY_FLOORING = { id: 'cat-flooring', name: 'Flooring', parentId: 'cat-civil' };
+const VENDOR_WITHOUT_ID = { name: 'Unsaved Vendor', code: 'VND-NEW' };
+const CATEGORY_WITHOUT_NAME = { id: 'cat-unnamed', parentId: null };
+
+const vendorLabel = (vendor: { name: string; code: string }) =>
+  interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.vendorOptionLabel, vendor);
+
+const originalFetch = global.fetch;
+const mockFetch = jest.fn();
+const reply = (body: unknown) => ({ ok: true, json: async () => body });
+function mockMasters(vendors: unknown = { vendors: [VENDOR_CRAFTLINE, VENDOR_ZENITH, VENDOR_BLACKLISTED, VENDOR_WITHOUT_ID] },
+  categories: unknown = [CATEGORY_CIVIL, CATEGORY_ELECTRICAL, SUBCATEGORY_FLOORING, CATEGORY_WITHOUT_NAME]) {
+  mockFetch.mockImplementation(async (url: string) => (url.startsWith('/api/procurement/vendors') ? reply(vendors) : reply(categories)));
+}
+
+async function chooseVendorAndCategory(vendor = VENDOR_CRAFTLINE, category = CATEGORY_CIVIL.name) {
+  const vendorSelect = screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.contractingVendor) });
+  await screen.findByRole('option', { name: vendorLabel(vendor) });
+  fireEvent.change(vendorSelect, { target: { value: vendor.id } });
+  fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.category2) }), { target: { value: category } });
+}
+
 describe('rate card initiation workspace', () => {
   const onBack = jest.fn();
   const onSubmit = jest.fn();
+
+  afterAll(() => { global.fetch = originalFetch; });
 
   beforeEach(() => {
     localStorage.clear();
     onBack.mockReset();
     onSubmit.mockReset();
+    mockFetch.mockReset();
+    mockMasters();
+    global.fetch = mockFetch as typeof fetch;
+    (reportHandledClientFailure as jest.Mock).mockClear();
     (XLSX.read as jest.Mock).mockReset().mockReturnValue({ SheetNames: ['Rate_Lines'], Sheets: { Rate_Lines: {} } });
     (XLSX.utils.sheet_to_json as jest.Mock).mockReset().mockReturnValue([]);
     (XLSX.writeFile as jest.Mock).mockReset();
@@ -70,8 +103,7 @@ describe('rate card initiation workspace', () => {
 
     expect(screen.getByDisplayValue('Recovered card')).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627)), { target: { value: 'Recovered card' } });
-    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'BuildRight Solutions (VND-0007)' } });
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'Electrical' } });
+    await chooseVendorAndCategory(VENDOR_ZENITH, CATEGORY_ELECTRICAL.name);
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailTurnkeyFitouts)), { target: { value: 'Retail' } });
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGAllIndiaOrRegionalHubs)), { target: { value: 'West' } });
     const dates = document.querySelectorAll('input[type="date"]');
@@ -133,7 +165,10 @@ describe('rate card initiation workspace', () => {
     const initiate = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor, "", false) });
     expect(initiate).toBeEnabled();
     fireEvent.click(initiate);
-    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Recovered card', status: 'ROUND_1_BUYER_OFFER' }));
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({
+      title: 'Recovered card', status: 'ROUND_1_BUYER_OFFER',
+      vendorId: VENDOR_ZENITH.id, vendor: vendorLabel(VENDOR_ZENITH), category: CATEGORY_ELECTRICAL.name,
+    }));
   });
 
   it('validates required details and line rules before enabling initiation', async () => {
@@ -151,13 +186,96 @@ describe('rate card initiation workspace', () => {
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.step2RateLines, "", false))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.previousBasicDetails) }));
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.eGRetailStoreInteriorWorksFY202627)), { target: { value: 'Valid rate card' } });
+    await chooseVendorAndCategory();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToRateLines, "", false) }));
     const first = screen.getByRole('row', { name: /INT-001/ });
     fireEvent.change(within(first).getAllByRole('spinbutton')[1], { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.continueToReviewInitiate) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.validationPassedReadyToInitiate))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.initiateRateCardSendToVendor, "", false) }));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Valid rate card', status: 'ROUND_1_BUYER_OFFER' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Valid rate card', status: 'ROUND_1_BUYER_OFFER', vendorId: VENDOR_CRAFTLINE.id, category: CATEGORY_CIVIL.name,
+    }));
+  });
+
+  it('lists only the tenant vendors and top-level master categories loaded from the server', async () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    expect(screen.getByRole('option', { name: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.loadingVendors })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: vendorLabel(VENDOR_CRAFTLINE) })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: vendorLabel(VENDOR_ZENITH) })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: vendorLabel(VENDOR_BLACKLISTED) })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: CATEGORY_CIVIL.name })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: SUBCATEGORY_FLOORING.name })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.selectVendor })).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledWith('/api/procurement/vendors?status=ACTIVE&pageSize=100');
+    expect(mockFetch).toHaveBeenCalledWith('/api/masters/categories');
+
+    const vendorSelect = screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.contractingVendor) });
+    fireEvent.change(vendorSelect, { target: { value: VENDOR_ZENITH.id } });
+    expect(vendorSelect).toHaveValue(VENDOR_ZENITH.id);
+    fireEvent.change(vendorSelect, { target: { value: '' } });
+    expect(vendorSelect).toHaveValue('');
+  });
+
+  it('defaults the validity window to one year from today', () => {
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    const [from, until] = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    const start = new Date();
+    const end = new Date(start);
+    end.setFullYear(end.getFullYear() + 1);
+    end.setDate(end.getDate() - 1);
+    expect(from.value).toBe(start.toISOString().split('T')[0]);
+    expect(until.value).toBe(end.toISOString().split('T')[0]);
+  });
+
+  it('keeps a restored vendor and category that are no longer in the master lists', async () => {
+    localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({
+      form: { title: 'Old draft', vendor: 'Retired Vendor (VND-0042)', vendorId: 'vendor-retired', category: 'Retired Category', subcategory: '', location: '', effectiveFrom: '2026-01-01', validUntil: '2026-12-31', scope: '', commercialTerms: '' },
+      items: [],
+    }));
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    await screen.findByRole('option', { name: vendorLabel(VENDOR_CRAFTLINE) });
+    expect(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.contractingVendor) })).toHaveValue('vendor-retired');
+    expect(screen.getByRole('option', { name: 'Retired Vendor (VND-0042)' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.category2) })).toHaveValue('Retired Category');
+  });
+
+  it('shows the vendor id for a restored vendor without a stored label', async () => {
+    localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({
+      form: { title: 'Id only', vendor: '', vendorId: 'vendor-id-only', category: '', subcategory: '', location: '', effectiveFrom: '', validUntil: '', scope: '', commercialTerms: '' },
+      items: [],
+    }));
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    expect(await screen.findByRole('option', { name: 'vendor-id-only' })).toBeInTheDocument();
+  });
+
+  it('falls back to empty lists for unexpected master responses', async () => {
+    mockMasters({ vendors: 'not-a-list' }, { error: 'unavailable' });
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    expect(await screen.findByRole('option', { name: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.selectVendor })).toBeInTheDocument();
+    expect(screen.getAllByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.contractingVendor) })[0].querySelectorAll('option')).toHaveLength(1);
+  });
+
+  it('reports a failed master load and still lets the user continue', async () => {
+    mockFetch.mockRejectedValue(new Error('network down'));
+    render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    expect(await screen.findByRole('option', { name: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.selectVendor })).toBeInTheDocument();
+    expect(reportHandledClientFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ operation: 'load_rate_card_vendor_and_category_masters', fallback: 'keep_selected_vendor_and_category' }),
+    );
+  });
+
+  it('ignores master responses that arrive after the workspace closes', async () => {
+    let releaseVendors: (value: unknown) => void = () => undefined;
+    mockFetch.mockImplementation((url: string) => (url.startsWith('/api/procurement/vendors')
+      ? new Promise((resolve) => { releaseVendors = resolve; })
+      : Promise.resolve(reply([CATEGORY_CIVIL]))));
+    const { unmount } = render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
+    unmount();
+    releaseVendors(reply({ vendors: [VENDOR_CRAFTLINE] }));
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('option', { name: vendorLabel(VENDOR_CRAFTLINE) })).not.toBeInTheDocument();
   });
 
   it('previews workbook changes, flags invalid and missing rows, and applies valid updates', async () => {

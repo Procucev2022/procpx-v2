@@ -8,13 +8,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import PposDeskPage from '../src/app/(app)/procurement/ppos/page';
 
 const toastSuccess = jest.fn();
+const toastError = jest.fn();
 const originalFetch = global.fetch;
 const fetchMock = jest.fn();
 let responseData: any;
 let postResponse: any;
 
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, ...props }: any) => <a {...props}>{children}</a> }));
-jest.mock('../src/components/ui/Toast', () => ({ useToast: () => ({ success: toastSuccess, error: jest.fn() }) }));
+jest.mock('../src/components/ui/Toast', () => ({ useToast: () => ({ success: toastSuccess, error: toastError }) }));
 jest.mock('../src/components/ui/PageHeader', () => ({ __esModule: true, default: ({ title, description, actions }: any) => <header><h1>{title}</h1><p>{description}</p>{actions}</header> }));
 jest.mock('../src/components/ui/Card', () => ({ __esModule: true, default: ({ title, subtitle, children }: any) => <section><h2>{title}</h2><p>{subtitle}</p>{children}</section> }));
 jest.mock('../src/components/ui/SummaryCard', () => ({
@@ -260,5 +261,83 @@ describe('procurement PPO performance register', () => {
     expect(await screen.findByText('network offline')).toBeInTheDocument();
     expect(consoleSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'network offline' }));
     consoleSpy.mockRestore();
+  });
+
+  describe('PPO completion', () => {
+    const recordCompletion = uiStringPattern(UI_STRINGS.appAppProcurementPposPage.recordCompletion);
+    const rowOf = (ppoNumber: string) => screen.getByText(ppoNumber).closest('tr')!;
+    const completionCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/complete'));
+
+    beforeEach(() => {
+      window.confirm = jest.fn(() => true);
+      responseData = { ppos: allOrders, currentUserRole: 'PROCUREMENT_USER', isProcurementUser: true };
+      setApi();
+    });
+
+    it('offers completion only on issued, confirmed, and partially completed orders for permitted roles', async () => {
+      render(<PposDeskPage />);
+      await screen.findByText('PPO-001');
+      expect(within(rowOf('PPO-001')).getByRole('button', { name: recordCompletion })).toBeInTheDocument();
+      expect(within(rowOf('PPO-002')).getByRole('button', { name: recordCompletion })).toBeInTheDocument();
+      expect(within(rowOf('PPO-004')).getByRole('button', { name: recordCompletion })).toBeInTheDocument();
+      expect(within(rowOf('PPO-003')).queryByRole('button', { name: recordCompletion })).not.toBeInTheDocument();
+      expect(within(rowOf('PPO-005')).queryByRole('button', { name: recordCompletion })).not.toBeInTheDocument();
+    });
+
+    it('hides completion from project users, who cannot post actual cost', async () => {
+      responseData = { ppos: allOrders, currentUserRole: 'PROJECT_USER', isProcurementUser: false };
+      setApi();
+      render(<PposDeskPage />);
+      await screen.findByText('PPO-001');
+      expect(screen.queryByRole('button', { name: recordCompletion })).not.toBeInTheDocument();
+    });
+
+    it('posts a full completion with a stable idempotency key and refreshes the register', async () => {
+      render(<PposDeskPage />);
+      await screen.findByText('PPO-001');
+      const listCallsBefore = fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/procurement/ppos?')).length;
+      fireEvent.click(within(rowOf('PPO-001')).getByRole('button', { name: recordCompletion }));
+
+      expect(window.confirm).toHaveBeenCalledWith(interpolateUiString(UI_STRINGS.appAppProcurementPposPage.confirmRecordCompletion, { ppoNumber: 'PPO-001' }));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith(
+        UI_STRINGS.appAppProcurementPposPage.completionRecorded,
+        'PPO-001',
+        interpolateUiString(UI_STRINGS.appAppProcurementPposPage.completionRecordedMessage, { ppoNumber: 'PPO-001' }),
+      ));
+      const [url, init] = completionCalls()[0];
+      expect(url).toBe('/api/procurement/ppos/001/complete');
+      expect(init).toMatchObject({ method: 'POST', body: '{}' });
+      expect((init as RequestInit).headers).toMatchObject({ 'Idempotency-Key': 'ppo-full-completion-001' });
+      await waitFor(() => expect(fetchMock.mock.calls.filter(([u]) => String(u).startsWith('/api/procurement/ppos?')).length).toBe(listCallsBefore + 1));
+    });
+
+    it('does nothing when the user cancels the confirmation', async () => {
+      window.confirm = jest.fn(() => false);
+      render(<PposDeskPage />);
+      await screen.findByText('PPO-001');
+      fireEvent.click(within(rowOf('PPO-001')).getByRole('button', { name: recordCompletion }));
+      expect(completionCalls()).toHaveLength(0);
+    });
+
+    it('shows the server reason, or a catalog fallback, when completion fails', async () => {
+      render(<PposDeskPage />);
+      await screen.findByText('PPO-001');
+      postResponse = apiReply({ error: 'Completion cannot be recorded in the current status.' }, false);
+      fireEvent.click(within(rowOf('PPO-001')).getByRole('button', { name: recordCompletion }));
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith(expect.objectContaining({
+        title: UI_STRINGS.appAppProcurementPposPage.completionFailed,
+        message: 'Completion cannot be recorded in the current status.',
+        recordNumber: 'PPO-001',
+      })));
+      await waitFor(() => expect(within(rowOf('PPO-001')).getByRole('button', { name: recordCompletion })).toBeEnabled());
+
+      postResponse = apiReply({}, false);
+      fireEvent.click(within(rowOf('PPO-001')).getByRole('button', { name: recordCompletion }));
+      expect(within(rowOf('PPO-001')).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementPposPage.recordingCompletion) })).toBeDisabled();
+      await waitFor(() => expect(toastError).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: UI_STRINGS.appAppProcurementPposPage.completionFailed,
+      })));
+      expect(toastSuccess).not.toHaveBeenCalled();
+    });
   });
 });

@@ -730,6 +730,144 @@ describe('RFQ detail lifecycle page', () => {
     expect(within(ppoDialog).getByText(uiStringPattern(UI_STRINGS.common.totalOrderValue, "", false)).parentElement).toHaveTextContent(uiStringPattern(UI_STRINGS.appAppBudgetPage.copyepw9f3));
   });
 
+  describe('final rate lock after negotiation', () => {
+    const RFQ_ID = 'rfq-negotiating';
+    const VENDOR_L1 = { vendorId: 'vendor-l1', vendorName: 'CraftLine Interior', rank: 1, totalQuoteAmount: 330872 };
+    const VENDOR_L2 = { vendorId: 'vendor-l2', vendorName: 'Ramakrishna Interiors', rank: 2, totalQuoteAmount: 337952 };
+    const VENDOR_UNPRICED = { vendorId: 'vendor-unpriced', vendorName: 'Unpriced Vendor', rank: 3 };
+    const negotiatingRfq = (status = 'NEGOTIATION', vendors = [VENDOR_L1, VENDOR_L2]) => ({
+      id: RFQ_ID, rfqNumber: 'RFQ-NEG-1', title: 'Negotiated package', status,
+      lines: [], invitedVendors: vendors.map((v) => ({ vendorId: v.vendorId, vendor: { name: v.vendorName } })),
+      quotes: vendors.map((v) => ({ id: `quote-${v.vendorId}`, vendorId: v.vendorId, quoteVersion: 2, totalQuoteAmount: v.totalQuoteAmount, vendor: { name: v.vendorName } })),
+      negotiations: [], awards: [], ppos: [],
+    });
+    const lockTitle = uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rateLockRequiredTitle);
+    const lockButton = uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRates);
+    const prepareAward = uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.prepareAwardRecommendation);
+    const reply = (body: unknown, ok = true) => ({ ok, json: async () => body });
+
+    function routeRfq(role: string, options: {
+      comparisonVendors?: unknown[]; lockResponse?: () => Promise<unknown>; rfqAfterLock?: unknown; initialRfq?: unknown;
+    } = {}) {
+      let locked = false;
+      mockSearchParams.mockReturnValue(paramsFor('tab=awarding'));
+      mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url === '/api/auth/session') return reply({ user: { role } });
+        if (url === `/api/procurement/rfqs/${RFQ_ID}/lock-rates` && init?.method === 'POST') {
+          const response = await (options.lockResponse?.() ?? Promise.resolve(reply({ success: true })));
+          if ((response as { ok: boolean }).ok) locked = true;
+          return response;
+        }
+        if (url === `/api/procurement/rfqs/${RFQ_ID}` || url === `/api/procurement/rfqs/${RFQ_ID}?includeNegotiationHistory=true`) {
+          return reply({ rfq: locked ? options.rfqAfterLock : (options.initialRfq ?? negotiatingRfq()) });
+        }
+        if (url.startsWith(`/api/procurement/rfqs/${RFQ_ID}/compare`)) {
+          return reply({ vendors: options.comparisonVendors ?? [VENDOR_L1, VENDOR_L2], lines: [], summary: { lowestVendorId: VENDOR_L1.vendorId } });
+        }
+        if (url === `/api/procurement/rate-cards/match?rfqId=${RFQ_ID}&page=1`) return reply({ matchedRateCards: [] });
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+    }
+
+    it('lets a procurement user lock the negotiated rates and then prepare the award', async () => {
+      let releaseLock: (value: unknown) => void = () => undefined;
+      routeRfq('PROCUREMENT_USER', {
+        comparisonVendors: [VENDOR_L1, VENDOR_L2, VENDOR_UNPRICED],
+        lockResponse: () => new Promise((resolve) => { releaseLock = resolve; }),
+        rfqAfterLock: negotiatingRfq('FINAL_RATE_LOCKED'),
+      });
+      renderRfq(RFQ_ID);
+
+      expect(await screen.findByText(lockTitle)).toBeInTheDocument();
+      expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rateLockRequiredDescription))).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: prepareAward })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getAllByRole('button', { name: lockButton })[0]);
+      const dialog = await screen.findByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle });
+      const vendorSelect = within(dialog).getByRole('combobox');
+      await waitFor(() => expect(vendorSelect).toHaveValue(VENDOR_L1.vendorId));
+      const finalValue = within(dialog).getByTestId('lock-rates-final-value');
+      const inr = (amount: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(amount);
+      expect(finalValue).toHaveTextContent(inr(VENDOR_L1.totalQuoteAmount));
+      expect(within(dialog).getByRole('option', { name: uiStringPattern(interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.lockRatesVendorOption, {
+        rankLabel: interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.lRank, { rank: 3 }), vendorName: VENDOR_UNPRICED.vendorName, amount: '0',
+      })) })).toBeInTheDocument();
+
+      fireEvent.change(vendorSelect, { target: { value: VENDOR_L2.vendorId } });
+      expect(finalValue).toHaveTextContent(inr(VENDOR_L2.totalQuoteAmount));
+      fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '  Agreed after round 1  ' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmLockRates) }));
+      expect(await within(dialog).findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.lockingRates) })).toBeDisabled();
+
+      const lockCall = mockFetch.mock.calls.find(([url]) => url === `/api/procurement/rfqs/${RFQ_ID}/lock-rates`)!;
+      expect(JSON.parse(lockCall[1].body)).toEqual({ vendorId: VENDOR_L2.vendorId, remarks: 'Agreed after round 1' });
+      await act(async () => { releaseLock(reply({ success: true })); });
+
+      await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(
+        UI_STRINGS.appAppProcurementRfqsIdPage.finalRatesLocked,
+        'RFQ-NEG-1',
+        interpolateUiString(UI_STRINGS.appAppProcurementRfqsIdPage.finalRatesLockedMessage, { vendorName: VENDOR_L2.vendorName }),
+      ));
+      expect((await screen.findAllByRole('button', { name: prepareAward })).length).toBeGreaterThan(0);
+      expect(screen.queryByText(lockTitle)).not.toBeInTheDocument();
+    });
+
+    it('reports server reasons, catalog fallbacks, and network failures without closing the dialog', async () => {
+      const responses = [
+        () => Promise.resolve(reply({ error: 'Workflow record changed. Refresh and retry.' }, false)),
+        () => Promise.resolve(reply({}, false)),
+        () => Promise.reject(new Error('network offline')),
+      ];
+      routeRfq('PROCUREMENT_USER', { lockResponse: () => responses.shift()!() });
+      renderRfq(RFQ_ID);
+      expect(await screen.findByText(lockTitle)).toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole('button', { name: lockButton })[1]);
+      const dialog = await screen.findByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle });
+      const confirm = () => fireEvent.click(within(dialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmLockRates) }));
+
+      for (const message of ['Workflow record changed. Refresh and retry.', UI_STRINGS.appAppProcurementRfqsIdPage.rateLockFailed, 'network offline']) {
+        await waitFor(() => expect(within(dialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmLockRates) })).toBeEnabled());
+        confirm();
+        await waitFor(() => expect(mockToast.error).toHaveBeenLastCalledWith(expect.objectContaining({
+          title: UI_STRINGS.appAppProcurementRfqsIdPage.rateLockFailed, message, recordNumber: 'RFQ-NEG-1', vendorName: VENDOR_L1.vendorName,
+        })));
+      }
+      expect(screen.getByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle })).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+      expect(screen.queryByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle })).not.toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole('button', { name: lockButton })[0]);
+      const reopened = await screen.findByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle });
+      fireEvent.click(within(reopened).getAllByRole('button')[0]); // the mocked Modal's own close control
+      expect(screen.queryByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle })).not.toBeInTheDocument();
+    });
+
+    it('explains the rate lock to roles that cannot lock rates', async () => {
+      routeRfq('CATEGORY_MANAGER');
+      renderRfq(RFQ_ID);
+      expect(await screen.findByText(lockTitle)).toBeInTheDocument();
+      expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.rateLockRequiredNoPermission))).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: lockButton })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: prepareAward })).not.toBeInTheDocument();
+    });
+
+    it('requires a vendor before locking when no quotations are ranked', async () => {
+      routeRfq('PROCUREMENT_USER', { comparisonVendors: [], initialRfq: { ...negotiatingRfq('RESPONSE_CLOSED', []), quotes: [] } });
+      renderRfq(RFQ_ID);
+      expect(await screen.findByText(lockTitle)).toBeInTheDocument();
+      fireEvent.click(screen.getAllByRole('button', { name: lockButton })[0]);
+      const dialog = await screen.findByRole('dialog', { name: UI_STRINGS.appAppProcurementRfqsIdPage.lockFinalRatesModalTitle });
+      expect(within(dialog).getByTestId('lock-rates-final-value')).toHaveTextContent(
+        new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(0),
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProcurementRfqsIdPage.confirmLockRates) }));
+      expect(mockToast.error).toHaveBeenCalledWith({
+        title: UI_STRINGS.appAppProcurementRfqsIdPage.validationError,
+        message: UI_STRINGS.appAppProcurementRfqsIdPage.pleaseSelectAVendor,
+      });
+      expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/lock-rates'))).toBe(false);
+    });
+  });
+
   it('releases a draft RFQ through the server action', async () => {
     const draft = {
       id: 'rfq-draft', rfqNumber: 'RFQ-DRAFT-1', title: 'Draft package', status: 'DRAFT',

@@ -122,6 +122,9 @@ export async function GET(req: NextRequest) {
           onboardingStatus: true,
           qualificationStatus: true,
           qualificationScore: true,
+          // Needed by RFQ vendor selection ("Select All Compliant") and rate-card vendor pickers.
+          complianceStatus: true,
+          isBlacklisted: true,
           gstin: true,
           operatingLocation: true,
           updatedAt: true,
