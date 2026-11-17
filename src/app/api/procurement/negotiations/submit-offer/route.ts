@@ -371,7 +371,7 @@ export async function POST(req: NextRequest) {
 
     batch.push({
       sql: NEGOTIATION_OFFER_PARENT_UPDATE_SQL,
-      values: [Math.max(negotiation?.currentRound || 1, roundNumber), finalRevised || finalCounterAmount || previousQuoteAmount, createdAt, ctx.tenantId, rfqId],
+      values: [Math.max(negotiation?.currentRound || 1, roundNumber), createdAt, ctx.tenantId, rfqId],
     });
     batch.push({ sql: NEGOTIATION_OFFER_RFQ_UPDATE_SQL, values: [createdAt, rfqId, ctx.tenantId] });
     batch.push({

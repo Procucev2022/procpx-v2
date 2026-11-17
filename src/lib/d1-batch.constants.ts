@@ -818,9 +818,24 @@ export const NEGOTIATION_OFFER_QUOTE_LINE_INSERT_AFTER_QUOTE_SQL = `
   WHERE changes() = 1
 `;
 
+// Best quote is the lowest revised offer that each vendor currently stands behind, meaning the revised amount on that
+// vendor's latest round that has one. A raised offer replaces the vendor's earlier figure, and buyer counteroffers
+// (which carry no revised amount) leave it unchanged. The subquery reads rows written earlier in the same batch, so
+// each writer must insert or update its round before running this statement.
+export const NEGOTIATION_LOWEST_CURRENT_OFFER_SQL = `(
+  SELECT MIN(offer."revisedQuoteAmount") FROM "negotiation_rounds" offer
+  WHERE offer."tenantId" = "negotiations"."tenantId" AND offer."negotiationId" = "negotiations"."id"
+    AND offer."revisedQuoteAmount" IS NOT NULL
+    AND offer."roundNumber" = (
+      SELECT MAX(latest."roundNumber") FROM "negotiation_rounds" latest
+      WHERE latest."tenantId" = offer."tenantId" AND latest."negotiationId" = offer."negotiationId"
+        AND latest."vendorId" = offer."vendorId" AND latest."revisedQuoteAmount" IS NOT NULL
+    )
+)`;
+
 export const NEGOTIATION_OFFER_PARENT_UPDATE_SQL = `
   UPDATE "negotiations"
-  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ?, "updatedAt" = ?
+  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ${NEGOTIATION_LOWEST_CURRENT_OFFER_SQL}, "updatedAt" = ?
   WHERE "tenantId" = ? AND "rfqId" = ? AND "status" = 'ACTIVE' AND changes() = 1
 `;
 
@@ -1196,7 +1211,7 @@ export const NEGOTIATION_INSERT_IF_ABSENT_SQL = `
 
 export const NEGOTIATION_UPDATE_AFTER_ROUND_SQL = `
   UPDATE "negotiations"
-  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ?, "updatedAt" = ?
+  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ${NEGOTIATION_LOWEST_CURRENT_OFFER_SQL}, "updatedAt" = ?
   WHERE "id" = ? AND "tenantId" = ?
 `;
 
@@ -1919,7 +1934,7 @@ export const NEGOTIATION_ROUND_MARK_REVISED_SQL = `
 `;
 
 export const NEGOTIATION_BEST_QUOTE_UPDATE_SQL = `
-  UPDATE "negotiations" SET "bestQuoteAmount" = ?, "updatedAt" = ?
+  UPDATE "negotiations" SET "bestQuoteAmount" = ${NEGOTIATION_LOWEST_CURRENT_OFFER_SQL}, "updatedAt" = ?
   WHERE "id" = ? AND "tenantId" = ?
 `;
 

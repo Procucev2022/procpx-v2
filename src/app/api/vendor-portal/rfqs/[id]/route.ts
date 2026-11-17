@@ -433,7 +433,7 @@ export async function POST(
         },
         {
           sql: NEGOTIATION_BEST_QUOTE_UPDATE_SQL,
-          values: [totalQuoteAmount, now.toISOString(), activeNeg.id, ctx.tenantId],
+          values: [now.toISOString(), activeNeg.id, ctx.tenantId],
         },
         {
           sql: RFQ_MESSAGE_INSERT_SQL,
