@@ -2,6 +2,7 @@
 // app/(app)/procurement/auctions/[id]/page.tsx
 // Professional B2B Live Auction Room: Real-time countdown, rolling extensions, bid stream, and buyer controls
 import { I18N_CONFIG } from '@/lib/i18n.constants';
+import AuctionCountdown from '@/components/AuctionCountdown';
 import { DEFAULT_LIST_PAGE_SIZE } from '@/lib/api-utils.constants';
 import { useEffect, useState, use, useRef } from 'react';
 import Link from 'next/link';
@@ -39,7 +40,6 @@ export default function LiveAuctionRoomPage({
 
   const [auction, setAuction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRemainingSeconds, setTimeRemainingSeconds] = useState<number>(0);
   const [isObserver, setIsObserver] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [bidHistory, setBidHistory] = useState<AuctionBidHistoryState>({
@@ -78,22 +78,6 @@ export default function LiveAuctionRoomPage({
     }, intervalSecs * 1000);
     return () => clearInterval(timer);
   }, [id, auction?.refreshIntervalSeconds]);
-
-  // Local countdown tick (synced with server end time)
-  useEffect(() => {
-    if (!auction?.endTime) return;
-    const target = new Date(auction.scheduledEndTime || auction.endTime).getTime();
-
-    const tick = () => {
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((target - now) / 1000));
-      setTimeRemainingSeconds(diff);
-    };
-
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [auction?.endTime, auction?.scheduledEndTime]);
 
   const fetchAuction = async (
     silent = false,
@@ -228,14 +212,6 @@ export default function LiveAuctionRoomPage({
     }
   };
 
-  const formatCountdown = (totalSeconds: number) => {
-    if (totalSeconds <= 0) return '00:00:00';
-    const hrs = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
-
   if (loading || Boolean(auction && auction.id !== id)) {
     return (
       <div className="container" style={{ padding: '80px 32px', textAlign: 'center', color: '#64748b' }}>
@@ -362,9 +338,12 @@ export default function LiveAuctionRoomPage({
             </span>
           </div>
 
-          <div style={{ fontSize: 36, fontWeight: 900, fontFamily: 'monospace', color: timeRemainingSeconds < 300 && isLive ? '#fca5a5' : '#ffffff' }}>
-            {isClosed ? UI_STRINGS.common.cONCLUDED : formatCountdown(timeRemainingSeconds)}
-          </div>
+          <AuctionCountdown
+            targetTime={auction?.endTime ? new Date(auction.scheduledEndTime || auction.endTime).getTime() : null}
+            isLive={isLive}
+            isClosed={isClosed}
+            closedLabel={UI_STRINGS.common.cONCLUDED}
+          />
 
           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{UI_STRINGS.common.scheduledEnd}<strong>{formatIST(auction.scheduledEndTime || auction.endTime)}</strong>
           </div>
