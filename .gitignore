@@ -26,6 +26,7 @@ node_modules/
 
 # generated application builds
 /dist/
+/generated/prisma/
 /.output/
 /.turbo/
 /.swc/

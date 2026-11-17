@@ -10,6 +10,13 @@ export const COST_CENTRE_INSERT_IF_PROJECT_EXISTS_SQL = `
   WHERE EXISTS (
     SELECT 1 FROM "projects" WHERE "id" = ? AND "tenantId" = ?
   )
+  ON CONFLICT DO NOTHING
   RETURNING "id", "tenantId", "projectId", "code", "name", "description", "areaSqFt",
     "location", "floorZone", "status", "createdAt", "updatedAt", "createdBy"
+`;
+
+export const COST_CENTRE_NORMALIZED_NAME_EXISTS_SQL = `
+  SELECT "id" FROM "cost_centres"
+  WHERE "tenantId" = ? AND "projectId" = ? AND lower(trim("name")) = lower(trim(?))
+  LIMIT 1
 `;

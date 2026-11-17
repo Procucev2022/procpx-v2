@@ -299,6 +299,15 @@ describe('vendor profile, cost centre, and RFQ vendor routes', () => {
     db.auditLog.findFirst.mockResolvedValueOnce(null);
     await expect(updateCostCentre(request({ name: 'New' }), idParams('cc-1'))).resolves.toEqual({ ok: false, error: 'Failed to update cost centre.', status: 500 });
     expect(writeLog).toHaveBeenCalledWith('error', 'cost_centre.update_failed', expect.objectContaining({ costCentreId: 'cc-1' }));
+
+    db.costCentre.findFirst.mockResolvedValueOnce(existing);
+    writeBatch.mockRejectedValueOnce(new Error('UNIQUE constraint failed: cost_centres_project_normalized_name_unique_idx'));
+    await expect(updateCostCentre(request({ name: 'Duplicate centre' }), idParams('cc-1'))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiCostCentresRoute.costCentreCodeOrNameAlreadyExistsForThisProject,
+      status: 409,
+    });
+    expect(writeLog).toHaveBeenCalledWith('warn', 'cost_centre.duplicate_name_conflict', expect.objectContaining({ costCentreId: 'cc-1' }));
   });
 
   it('validates RFQ vendor invitations and delegates persisted status to the D1 batch', async () => {

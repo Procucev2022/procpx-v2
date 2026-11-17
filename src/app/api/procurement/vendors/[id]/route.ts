@@ -10,6 +10,11 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import { VENDOR_PROFILE_AUDIT_INSERT_AFTER_UPDATE_SQL, VENDOR_PROFILE_UPDATE_SQL } from './route.constants';
 
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { code?: unknown; message?: unknown };
+  return value.code === 'P2002' || (typeof value.message === 'string' && /unique constraint|unique failed/i.test(value.message));
+}
 
 function toStoredText(value: unknown, fallback: string | null): string | null {
   if (value === undefined) return fallback;
@@ -249,6 +254,21 @@ export async function PUT(
 
     return apiSuccess({ vendor: updated, message: UI_STRINGS.appApiProcurementVendorsIdRoute.vendorProfileUpdatedSuccessfully });
   } catch (error: unknown) {
+    const uniqueConflict = isUniqueConstraintError(error);
+    if (uniqueConflict) {
+      try {
+        await writeStructuredLog('warn', 'vendor.duplicate_name_conflict', {
+          operation: 'update_vendor_profile', route: '/api/procurement/vendors/[id]',
+          requestId: req.headers?.get('x-request-id') || null,
+          tenantId: ctx.tenantId, userId: ctx.userId, role: ctx.role, vendorId: id,
+          durationMs: Date.now() - startedAt,
+          error: error instanceof Error ? { name: error.name, message: error.message.slice(0, 300) } : { type: typeof error },
+        });
+      } catch {
+        // Preserve the conflict response if optional log storage is unavailable.
+      }
+      return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameAlreadyExistsForThisTenant, 409);
+    }
     if (originalUpdatedAt) {
       try {
         const latest = await prisma.vendor.findFirst({

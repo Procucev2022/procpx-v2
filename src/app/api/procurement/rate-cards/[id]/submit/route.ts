@@ -7,6 +7,7 @@ import { interpolateUiString } from "@/lib/i18n";
 import { writeRateCardTransitionAtomically } from '@/lib/d1-batch';
 import { RATE_CARD_SUBMIT_UPDATE_SQL } from '@/lib/d1-batch.constants';
 import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '@/lib/rate-card-approval-history.constants';
+import { logEvent } from '@/lib/observability/server-logger';
 
 
 export async function POST(
@@ -17,6 +18,7 @@ export async function POST(
   if (!isApiContext(ctx)) return ctx;
 
   const { id } = await params;
+  const startedAt = Date.now();
 
   try {
     const rateCard = await prisma.vendorRateCard.findFirst({
@@ -80,8 +82,14 @@ export async function POST(
     };
 
     return apiSuccess({ rateCard: updated, message: UI_STRINGS.appApiProcurementRateCardsIdSubmitRoute.rateCardSubmittedForProjectApproval });
-  } catch (error: any) {
-    console.error('Error submitting rate card:', error);
-    return apiError(interpolateUiString(UI_STRINGS.common.value1, { "value1": error.message || UI_STRINGS.common.userMessages.failedToSubmitRateCard }), 500, { route: '/api/procurement/rate-cards/[id]/submit', method: 'POST', error: error });
+  } catch (error: unknown) {
+    logEvent('error', 'rate_card.submission_failed', {
+      operation: 'submit_rate_card', route: '/api/procurement/rate-cards/[id]/submit', method: 'POST',
+      requestId: req.headers.get('x-request-id') || undefined, tenantId: ctx.tenantId,
+      userId: ctx.userId, role: ctx.role, rateCardId: id, httpStatus: 500,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? { name: error.name } : { type: typeof error },
+    });
+    return apiError(UI_STRINGS.common.userMessages.failedToSubmitRateCard, 500, { route: '/api/procurement/rate-cards/[id]/submit', method: 'POST' });
   }
 }

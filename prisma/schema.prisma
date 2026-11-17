@@ -3,6 +3,14 @@
 
 generator client {
   provider = "prisma-client-js"
+  engineType = "client"
+}
+
+generator workerClient {
+  provider   = "prisma-client"
+  output     = "../generated/prisma"
+  engineType = "client"
+  runtime    = "workerd"
 }
 
 datasource db {

@@ -8,7 +8,11 @@ import { GET as listActualCosts, POST as createActualCost } from '../src/app/api
 import { GET as listProjects, POST as createProject } from '../src/app/api/projects/route';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
-import { PROJECT_INSERT_IF_CODE_AVAILABLE_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '../src/lib/d1-batch.constants';
+import {
+  PROJECT_INSERT_IF_CODE_AVAILABLE_SQL,
+  PROJECT_NORMALIZED_NAME_EXISTS_SQL,
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+} from '../src/lib/d1-batch.constants';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -288,9 +292,11 @@ describe('project listing and creation', () => {
       orderBy: { projectCode: 'desc' }, select: { projectCode: true },
     });
     const statements = batchWrite.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
     expect(statements[0].sql).toBe(PROJECT_INSERT_IF_CODE_AVAILABLE_SQL);
     expect(statements[1].sql).toBe(AUDIT_LOG_INSERT_AFTER_CHANGE_SQL);
+    expect(statements[2].sql).toBe(PROJECT_NORMALIZED_NAME_EXISTS_SQL);
+    expect(statements[2].values).toEqual(['tenant-1', 'Retail Store']);
     expect(statements[0].values).toEqual(expect.arrayContaining(['CPX-P-000008', 'Retail Store', 'Pune', 'MH', 1200.5, 50000]));
     expect(statements[1].values).toEqual(expect.arrayContaining(['PROJECT', 'CREATE']));
     expect(statements[1].values[5]).toBe(statements[0].values[0]);
@@ -319,6 +325,26 @@ describe('project listing and creation', () => {
       .mockResolvedValueOnce([{ results: [], meta: { changes: 0 } }, { meta: { changes: 0 } }])
       .mockResolvedValueOnce([{ results: [], meta: { changes: 0 } }, { meta: { changes: 0 } }]);
     await expect(createProject(request('http://localhost/api/projects', { name: 'Conflict', sector: 'RETAIL', projectType: 'STORE' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiProjectsRoute.aProjectWithThisProjectCodeAlreadyExistsPleaseRetry, status: 409 });
+  });
+
+  it('returns a normalized-name conflict when the atomic project insert finds an existing tenant project', async () => {
+    db.project.findFirst.mockResolvedValueOnce(null);
+    batchWrite.mockResolvedValueOnce([
+      { results: [], meta: { changes: 0 } },
+      { meta: { changes: 0 } },
+      { results: [{ id: 'existing-project' }], meta: { changes: 0 } },
+    ]);
+
+    await expect(createProject(request('http://localhost/api/projects', {
+      name: ' project ', sector: 'RETAIL', projectType: 'STORE',
+    }))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiProjectsRoute.aProjectWithThisNameAlreadyExistsForThisTenant,
+      status: 409,
+    });
+    expect(writeStructuredLog).toHaveBeenCalledWith('warn', 'project.duplicate_name_conflict', expect.objectContaining({
+      operation: 'create_project', duplicateProjectId: 'existing-project', tenantId: 'tenant-1',
+    }), 'application');
   });
 
   it('handles malformed optional project values and unexpected errors', async () => {

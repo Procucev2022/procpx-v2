@@ -7,7 +7,11 @@ import { interpolateUiString } from "@/lib/i18n";
 import { PROJECT_CODE_MAX_SEQUENCE, PROJECT_CODE_PATTERN, PROJECT_CODE_PREFIX, PROJECT_SEARCH_MAX_LENGTH } from './route.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
-import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, PROJECT_INSERT_IF_CODE_AVAILABLE_SQL } from '@/lib/d1-batch.constants';
+import {
+  AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  PROJECT_INSERT_IF_CODE_AVAILABLE_SQL,
+  PROJECT_NORMALIZED_NAME_EXISTS_SQL,
+} from '@/lib/d1-batch.constants';
 
 
 // Generate next project code strictly matching CPX-P-XXXXXX format
@@ -183,9 +187,26 @@ export async function POST(req: NextRequest) {
           values: [auditId, ctx.tenantId, ctx.userId, project.id, 'PROJECT', project.id, 'CREATE', description, null,
             JSON.stringify({ projectCode, name, sector, projectType }), null, null, createdAt.toISOString()],
         },
+        {
+          sql: PROJECT_NORMALIZED_NAME_EXISTS_SQL,
+          values: [ctx.tenantId, project.name],
+        },
       ]);
       const inserted = results[0]?.results?.[0] as { id?: string; projectCode?: string } | undefined;
       if (inserted?.id === projectId && inserted.projectCode === projectCode) return apiSuccess(project, 201);
+      const duplicateName = results[2]?.results?.[0] as { id?: string } | undefined;
+      if (duplicateName?.id) {
+        try {
+          await writeStructuredLog('warn', 'project.duplicate_name_conflict', {
+            operation: 'create_project', route: '/api/projects',
+            requestId: req.headers.get('x-request-id') || req.headers.get('cf-ray') || undefined,
+            tenantId: ctx.tenantId, userId: ctx.userId, duplicateProjectId: duplicateName.id,
+          }, 'application');
+        } catch {
+          // Keep the conflict response stable if optional log storage is unavailable.
+        }
+        return apiError(UI_STRINGS.appApiProjectsRoute.aProjectWithThisNameAlreadyExistsForThisTenant, 409);
+      }
     }
     return apiError(UI_STRINGS.appApiProjectsRoute.aProjectWithThisProjectCodeAlreadyExistsPleaseRetry, 409);
   } catch (error: unknown) {

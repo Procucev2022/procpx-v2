@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { POST, resetClientLogRateLimits } from '../src/app/api/observability/client/route';
+import { POST } from '../src/app/api/observability/client/route';
+import { isClientLogRateLimited, resetClientLogRateLimits } from '../src/app/api/observability/client/rate-limit';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -66,5 +67,11 @@ describe('client observability endpoint', () => {
       expect((await POST(request(body, { 'x-real-ip': '198.51.100.4' }))).status).toBe(202);
     }
     expect((await POST(request(body, { 'x-real-ip': '198.51.100.4' }))).status).toBe(429);
+  });
+
+  it('resets a client bucket after the fixed window expires', () => {
+    expect(isClientLogRateLimited('client-1', 1_000)).toBe(false);
+    expect(isClientLogRateLimited('client-1', 60_999)).toBe(false);
+    expect(isClientLogRateLimited('client-1', 61_000)).toBe(false);
   });
 });
