@@ -2,7 +2,7 @@
 import { uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RfqChatDrawer from '../src/components/RfqChatDrawer';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -100,6 +100,76 @@ describe('RFQ clarification drawer', () => {
     fetchMock.mockResolvedValueOnce(response({}, false));
     render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-error" rfqNumber="RFQ-ERROR" />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToLoadMessageHistory))).toBeInTheDocument();
+  });
+
+  it('does not show a late reply from the previous RFQ after the drawer moves to another RFQ', async () => {
+    let finishFirstThread!: (value: unknown) => void;
+    fetchMock
+      .mockReturnValueOnce(new Promise(resolve => { finishFirstThread = resolve; }))
+      .mockResolvedValueOnce(response({ messages: [
+        { id: 'second-rfq', senderName: 'Buyer', senderRole: 'BUYER', message: 'Reply on the second RFQ', isVendorSent: false, createdAt: '2026-10-28T11:20:00Z' },
+      ] }));
+    const { rerender } = render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-first" rfqNumber="RFQ-FIRST" />);
+    rerender(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-second" rfqNumber="RFQ-SECOND" />);
+
+    expect(await screen.findByText('Reply on the second RFQ')).toBeInTheDocument();
+
+    await act(async () => {
+      finishFirstThread(response({ messages: [
+        { id: 'first-rfq', senderName: 'Buyer', senderRole: 'BUYER', message: 'Reply on the first RFQ', isVendorSent: false, createdAt: '2026-10-28T10:00:00Z' },
+      ] }));
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+    expect(screen.queryByText('Reply on the first RFQ')).not.toBeInTheDocument();
+    expect(screen.getByText('Reply on the second RFQ')).toBeInTheDocument();
+  });
+
+  it('discards a failed reply for the previous RFQ that settles after the drawer moves on', async () => {
+    let rejectFirstThread!: (error: Error) => void;
+    fetchMock
+      .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectFirstThread = reject; }))
+      .mockResolvedValueOnce(response({ messages: [
+        { id: 'current-rfq', senderName: 'Buyer', senderRole: 'BUYER', message: 'Current RFQ reply', isVendorSent: false, createdAt: '2026-10-28T12:00:00Z' },
+      ] }));
+    const { rerender } = render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-c" rfqNumber="RFQ-C" />);
+    rerender(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-d" rfqNumber="RFQ-D" />);
+
+    expect(await screen.findByText('Current RFQ reply')).toBeInTheDocument();
+
+    await act(async () => { rejectFirstThread(new Error('Previous RFQ failed')); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+    expect(screen.queryByText('Previous RFQ failed')).not.toBeInTheDocument();
+    expect(screen.getByText('Current RFQ reply')).toBeInTheDocument();
+  });
+
+  it('does not append an older page that was requested for the previous RFQ', async () => {
+    let finishOlderPage!: (value: unknown) => void;
+    fetchMock
+      .mockResolvedValueOnce(response({ messages: [
+        { id: 'newest-a', senderName: 'Buyer', senderRole: 'BUYER', message: 'Newest on RFQ A', isVendorSent: false, createdAt: '2026-10-28T11:00:00Z' },
+      ], hasMore: true, nextCursor: 'cursor-a' }))
+      .mockReturnValueOnce(new Promise(resolve => { finishOlderPage = resolve; }))
+      .mockResolvedValueOnce(response({ messages: [
+        { id: 'newest-b', senderName: 'Buyer', senderRole: 'BUYER', message: 'Newest on RFQ B', isVendorSent: false, createdAt: '2026-10-28T13:00:00Z' },
+      ], hasMore: false, nextCursor: null }));
+    const { rerender } = render(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-a" rfqNumber="RFQ-A" />);
+
+    expect(await screen.findByText('Newest on RFQ A')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
+    rerender(<RfqChatDrawer isOpen onClose={onClose} rfqId="rfq-b" rfqNumber="RFQ-B" />);
+    expect(await screen.findByText('Newest on RFQ B')).toBeInTheDocument();
+
+    await act(async () => {
+      finishOlderPage(response({ messages: [
+        { id: 'older-a', senderName: 'Buyer', senderRole: 'BUYER', message: 'Older on RFQ A', isVendorSent: false, createdAt: '2026-10-28T10:00:00Z' },
+      ], hasMore: false, nextCursor: null }));
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+    expect(screen.queryByText('Older on RFQ A')).not.toBeInTheDocument();
+    expect(screen.getByText('Newest on RFQ B')).toBeInTheDocument();
   });
 
   it('shows API and network errors while loading history', async () => {

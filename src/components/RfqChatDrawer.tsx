@@ -38,10 +38,14 @@ export default function RfqChatDrawer({
   const messageListRef = useRef<HTMLDivElement>(null);
   const shouldScrollToEndRef = useRef(true);
   const pendingScrollAdjustmentRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  // Identifies the thread that is on screen. Replies that were requested for an earlier RFQ or vendor are discarded.
+  const messageRequestSequence = useRef(0);
 
   useEffect(() => {
+    // Replies requested before this point belong to the previous RFQ or vendor thread.
+    messageRequestSequence.current += 1;
     if (isOpen && rfqId) {
-      loadMessages();
+      loadMessages({ startThread: true });
     }
   }, [isOpen, rfqId, vendorId]);
 
@@ -57,7 +61,16 @@ export default function RfqChatDrawer({
     }
   }, [messages]);
 
-  const loadMessages = async () => {
+  const loadMessages = async (options: { startThread?: boolean } = {}) => {
+    const sequence = ++messageRequestSequence.current;
+    const isCurrentRequest = () => sequence === messageRequestSequence.current;
+    if (options.startThread) {
+      // The new thread starts empty, so nothing from the previous RFQ or vendor stays on screen.
+      setMessages([]);
+      setHasMoreMessages(false);
+      setNextMessageCursor(null);
+      setLoadingOlderMessages(false);
+    }
     setLoading(true);
     setError('');
     try {
@@ -65,36 +78,44 @@ export default function RfqChatDrawer({
       if (vendorId) query.set('vendorId', vendorId);
       const param = query.size > 0 ? `?${query.toString()}` : '';
       const res = await fetch(`/api/procurement/rfqs/${rfqId}/messages${param}`);
+      if (!isCurrentRequest()) return;
       if (res.ok) {
         const data = await res.json();
+        if (!isCurrentRequest()) return;
         shouldScrollToEndRef.current = true;
         setHasMoreMessages(Boolean(data.hasMore ?? data.data?.hasMore));
         setNextMessageCursor(data.nextCursor ?? data.data?.nextCursor ?? null);
         setMessages(data.messages || data.data?.messages || []);
       } else {
         const err = await res.json();
+        if (!isCurrentRequest()) return;
         setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory }));
       }
     } catch (e: any) {
+      if (!isCurrentRequest()) return;
       setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoading(false);
     }
   };
 
   const loadOlderMessages = async () => {
     if (!nextMessageCursor || loadingOlderMessages) return;
+    const thread = messageRequestSequence.current;
+    const isSameThread = () => thread === messageRequestSequence.current;
     setLoadingOlderMessages(true);
     setError('');
     try {
       const query = new URLSearchParams({ cursor: nextMessageCursor });
       if (vendorId) query.set('vendorId', vendorId);
       const res = await fetch(`/api/procurement/rfqs/${rfqId}/messages?${query.toString()}`);
+      if (!isSameThread()) return;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory);
       }
       const data = await res.json();
+      if (!isSameThread()) return;
       const olderMessages = data.messages || data.data?.messages || [];
       const list = messageListRef.current;
       pendingScrollAdjustmentRef.current = list ? { scrollHeight: list.scrollHeight, scrollTop: list.scrollTop } : null;
@@ -103,6 +124,7 @@ export default function RfqChatDrawer({
       setHasMoreMessages(Boolean(data.hasMore ?? data.data?.hasMore));
       setNextMessageCursor(data.nextCursor ?? data.data?.nextCursor ?? null);
     } catch (e: any) {
+      if (!isSameThread()) return;
       setError(interpolateUiString(UI_STRINGS.common.value1, { value1: e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
     } finally {
       setLoadingOlderMessages(false);
