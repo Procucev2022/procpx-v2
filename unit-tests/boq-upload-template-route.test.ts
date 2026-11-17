@@ -188,8 +188,8 @@ describe('fixed template BOQ upload API', () => {
     expect(db.boq.create).not.toHaveBeenCalled();
     expect(db.boqLine.create).not.toHaveBeenCalled();
     expect(db.auditLog.create).not.toHaveBeenCalled();
-    expect(storeUpload).toHaveBeenCalledWith(['tenant-1', 'project-1'], expect.stringContaining('vendor-template.xlsx'), expect.any(Buffer));
-    expect(batch[1].values[13]).toEqual(expect.stringMatching(/^uploads\/tenant-1\/project-1\/\d+_vendor-template\.xlsx$/));
+    expect(storeUpload).toHaveBeenCalledWith(['tenant-1', 'project-1'], expect.stringMatching(/^[0-9a-f-]{36}\.xlsx$/), expect.any(Buffer));
+    expect(batch[1].values[13]).toEqual(expect.stringMatching(/^uploads\/tenant-1\/project-1\/[0-9a-f-]{36}\.xlsx$/));
   });
 
   it('replaces a draft BOQ revision and uses a selected cost centre', async () => {
@@ -284,6 +284,6 @@ describe('fixed template BOQ upload API', () => {
     writeBatch.mockRejectedValueOnce(new Error('D1 batch failed'));
     const result = await POST(makeRequest([validRow()], { projectId: 'project-1' }, 'vendor-template.xlsx'));
     expect(result).toMatchObject({ ok: false, status: 500 });
-    expect(removeUpload).toHaveBeenCalledWith(expect.stringContaining('vendor-template.xlsx'), ['tenant-1', 'project-1']);
+    expect(removeUpload).toHaveBeenCalledWith(expect.stringMatching(/^uploads\/tenant-1\/project-1\/[0-9a-f-]{36}\.xlsx$/), ['tenant-1', 'project-1']);
   });
 });

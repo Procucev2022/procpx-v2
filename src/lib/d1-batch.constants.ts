@@ -1724,7 +1724,9 @@ export const VENDOR_PERFORMANCE_SCORE_UPDATE_AFTER_AUDIT_SQL = `
 
 export const PPO_MARK_COMPLETED_AFTER_AUDIT_SQL = `
   UPDATE "ppos" SET "status" = 'COMPLETED', "completedAt" = ?, "updatedAt" = ?
-  WHERE "id" = ? AND "tenantId" = ? AND "status" NOT IN ('COMPLETED', 'CANCELLED') AND EXISTS (
+  WHERE "id" = ? AND "tenantId" = ? AND "status" NOT IN ('COMPLETED', 'CANCELLED')
+    AND NOT EXISTS (SELECT 1 FROM "ppo_lines" WHERE "ppoId" = "ppos"."id" AND "tenantId" = "ppos"."tenantId" AND "status" NOT IN ('COMPLETED', 'CANCELLED'))
+    AND EXISTS (
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
 `;
