@@ -6,10 +6,10 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100691/101410) |
-| branches | 93.65% (23157/24725) |
+| statements | 99.29% (100699/101418) |
+| branches | 93.66% (23165/24733) |
 | functions | 98.59% (1959/1987) |
-| lines | 99.29% (100691/101410) |
+| lines | 99.29% (100699/101418) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -47,7 +47,7 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 | `src/app/(app)/masters/categories/page.tsx` | 100.00% | 96.77% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/standard-boq/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/standard-boq/page.tsx` | 99.31% | 94.64% | 97.87% | 99.31% | PASS |
-| `src/app/(app)/pr/new/page.tsx` | 100.00% | 94.31% | 91.66% | 100.00% | PASS |
+| `src/app/(app)/pr/new/page.tsx` | 100.00% | 94.79% | 91.66% | 100.00% | PASS |
 | `src/app/(app)/pr/page.tsx` | 100.00% | 97.59% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/approved-boqs/page.tsx` | 100.00% | 93.58% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/approved-prs/page.tsx` | 100.00% | 95.71% | 100.00% | 100.00% | PASS |
