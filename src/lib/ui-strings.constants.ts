@@ -1,6 +1,7 @@
 /* Central English UI copy. Add translated catalogs with the same key shape when locales are introduced. */
 export const UI_STRINGS = {
   appApiActualCostsRoute: {
+    ppoLinkedActualCostsMustUseCompletionWorkflow: "Actual costs linked to a PPO line must be recorded through the PPO completion workflow.",
     actualCostTransactionTransactionCodeRecordedForCategoryAmountToLocaleStringViaSource: "Actual cost transaction {{transactionCode}} recorded for {{category}} (Amount: ₹{{toLocaleString}}) via {{source}}",
     actualCostCodeConflictRetryTheRequest: "An actual cost code conflict occurred. Please retry the request.",
     actualCostDatesMustBeValid: "Actual cost dates must be valid.",

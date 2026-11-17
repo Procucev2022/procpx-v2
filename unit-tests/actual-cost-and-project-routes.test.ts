@@ -130,7 +130,7 @@ describe('actual cost API', () => {
       actualDate: '2025-03-02T00:00:00.000Z', source: 'GRN', status: 'APPROVED', completionReference: 'GRN-4', externalReference: 'EXT-1',
       erpDocumentNumber: 'ERP-1', erpDate: '2025-03-01T00:00:00.000Z', documents: [{ name: 'invoice.pdf' }], remarks: 'Received',
       boqId: 'boq-1', boqRevisionId: 'rev-1', boqLineId: 'boq-line-1', prId: 'pr-1', prLineId: 'pr-line-1', rfqId: 'rfq-1', rfqLineId: 'rfq-line-1',
-      ppoId: 'ppo-1', ppoLineId: 'ppo-line-1', vendorId: 'vendor-1',
+      ppoId: 'ppo-1', vendorId: 'vendor-1',
     }));
     expect(response).toMatchObject({ ok: true, status: 201, data: expect.objectContaining({ transactionCode: 'ACT-2025-000004' }) });
     const statements = batchWrite.mock.calls[0][0];
@@ -138,7 +138,7 @@ describe('actual cost API', () => {
     expect(statements[0].sql).toMatch(/FROM\s+input i/);
     expect(statements[0].sql).toContain('"tenantId" = i."tenantId"');
     expect(statements[0].values).toEqual(expect.arrayContaining([
-      'tenant-1', 'ACT-2025-000004', 'p1', 'cc1', 'boq-1', 'rev-1', 'boq-line-1', 'pr-1', 'pr-line-1', 'rfq-1', 'rfq-line-1', 'ppo-1', 'ppo-line-1', 'vendor-1',
+      'tenant-1', 'ACT-2025-000004', 'p1', 'cc1', 'boq-1', 'rev-1', 'boq-line-1', 'pr-1', 'pr-line-1', 'rfq-1', 'rfq-line-1', 'ppo-1', 'vendor-1',
     ]));
     expect(statements[0].values).toEqual(expect.arrayContaining([
       expect.any(String), 'Electrical', 'Wiring', 2, 5, 10, 1.5, 11.5,
@@ -150,6 +150,14 @@ describe('actual cost API', () => {
       actualQuantity: 2, actualUnitRate: 5, actualAmount: 10, taxAmount: 1.5, totalActualAmount: 11.5, actualDate: new Date('2025-03-02T00:00:00.000Z'),
       erpDate: new Date('2025-03-01T00:00:00.000Z'), documents: JSON.stringify([{ name: 'invoice.pdf' }]), createdBy: 'Test User',
     }));
+  });
+
+  it('rejects manual actual costs linked to a PPO line so the completion cap cannot be bypassed', async () => {
+    await expect(createActualCost(request('http://localhost/api/actual-costs', {
+      projectId: 'p1', category: 'Civil', actualQuantity: 1, actualUnitRate: 2, source: 'GRN', ppoLineId: 'ppo-line-1',
+    }))).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiActualCostsRoute.ppoLinkedActualCostsMustUseCompletionWorkflow, status: 400,
+    });
   });
 
   it('accepts explicit amount and optional defaults, rejects invalid references and hides database errors', async () => {
