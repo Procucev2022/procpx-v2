@@ -1,7 +1,7 @@
 'use client';
 // src/app/(app)/pr/page.tsx - Procurement Requests (My PRs) Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Send,
@@ -42,7 +42,11 @@ export default function MyPrsPage() {
     void loadPrs(1, false);
   }, [statusFilter, search]);
 
+  const prRequestSequence = useRef(0);
+  const submittingPrIds = useRef<Set<string>>(new Set());
+
   const loadPrs = async (requestedPage = 1, append = false) => {
+    const sequence = ++prRequestSequence.current;
     if (append) setLoadingMore(true);
     else setLoading(true);
     try {
@@ -50,6 +54,7 @@ export default function MyPrsPage() {
       if (statusFilter) params.set('status', statusFilter);
       if (search.trim()) params.set('search', search.trim());
       const res = await fetch(`/api/pr?${params.toString()}`);
+      if (sequence !== prRequestSequence.current) return;
       if (res.ok) {
         const payload = await res.json();
         const data = Array.isArray(payload) ? payload : payload.data;
@@ -69,12 +74,14 @@ export default function MyPrsPage() {
     } catch (e) {
       console.error(e);
     } finally {
-      if (append) setLoadingMore(false);
-      else setLoading(false);
+      if (sequence === prRequestSequence.current && append) setLoadingMore(false);
+      else if (sequence === prRequestSequence.current) setLoading(false);
     }
   };
 
   const handleSubmit = async (prId: string) => {
+    if (submittingPrIds.current.has(prId)) return;
+    submittingPrIds.current.add(prId);
     try {
       const res = await fetch(`/api/pr/${prId}/submit`, { method: 'POST' });
       if (!res.ok) {
@@ -87,6 +94,8 @@ export default function MyPrsPage() {
     } catch (err: any) {
       toast.error(err.message || UI_STRINGS.common.userMessages.errorSubmittingPr);
       setStatusMessage(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": err.message }));
+    } finally {
+      submittingPrIds.current.delete(prId);
     }
   };
 

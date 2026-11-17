@@ -151,3 +151,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'PPO_VIEW',
   ],
 };
+
+/** Roles that may read but never write messages, comments, or other workflow content. */
+export const READ_ONLY_ROLES: readonly string[] = ['VIEWER'];

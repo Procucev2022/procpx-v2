@@ -169,7 +169,7 @@ describe('negotiation offer submission API', () => {
     expect(writeBatch).not.toHaveBeenCalled();
   });
 
-  it('uses zero-value buyer fallbacks and a previous round when it belongs to another vendor', async () => {
+  it('uses zero-value buyer fallbacks and never copies another vendor deadline or target price', async () => {
     auth.mockResolvedValueOnce({ ...buyerContext, userName: '' });
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'NEGOTIATION', quotes: [] }));
     db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ currentRound: 0, rounds: [{
@@ -181,13 +181,28 @@ describe('negotiation offer submission API', () => {
     const statements = writeBatch.mock.calls[0][0];
     expect(statements[1].sql).toBe(NEGOTIATION_OFFER_ROUND_INSERT_SQL);
     expect(statements[1].values).toEqual(expect.arrayContaining([
-      1, new Date('2026-12-01').toISOString(), 750, 0, 0, 'Buyer commercial counteroffer dispatched',
+      1, 0, 0, 'Buyer commercial counteroffer dispatched',
     ]));
+    expect(statements[1].values[6]).toBeNull();
+    expect(statements[1].values[7]).toBeNull();
     expect(statements[4].values[4]).toBe(UI_STRINGS.common.categoryManager);
     expect(statements[4].values[6]).toEqual(expect.stringContaining(UI_STRINGS.appAppProcurementVendorsIdPage.copy15km32b));
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ details: expect.objectContaining({ amount: undefined }) }), { prepareOnly: true });
   });
 
+  it('carries the vendor own round deadline and target price into its next offer', async () => {
+    auth.mockResolvedValueOnce(vendorContext);
+    db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'NEGOTIATION', quotes: [] }));
+    db.negotiation.findFirst.mockResolvedValueOnce(negotiation({ rounds: [{
+      vendorId: 'vendor-1', roundNumber: 2, counterOfferAmount: 700, revisedQuoteAmount: 680,
+      nextResponsibleParty: 'BUYER', deadline: new Date('2026-12-20'), targetPrice: 650, lineItemsJson: null,
+      status: 'REVISED_SUBMITTED', createdAt: new Date('2026-11-01'),
+    }] }));
+    db.quote.findMany.mockResolvedValueOnce([]);
+    await expect(POST(request({ rfqId: 'rfq-1', revisedQuoteAmount: 690, lineItems: [] })))
+      .resolves.toMatchObject({ ok: true });
+    expect(JSON.stringify(writeBatch.mock.calls[0][0])).toContain(new Date('2026-12-20').toISOString());
+  });
   it('creates a revised vendor quote without a matching previous round and tolerates no line details', async () => {
     auth.mockResolvedValueOnce(vendorContext);
     db.rfq.findFirst.mockResolvedValueOnce(rfq({ status: 'NEGOTIATION', quotes: [] }));
@@ -211,15 +226,16 @@ describe('negotiation offer submission API', () => {
       NEGOTIATION_OFFER_MESSAGE_INSERT_SQL,
       NEGOTIATION_OFFER_AUDIT_INSERT_SQL,
     ]);
-    expect(firstBatch[1].values).toEqual(expect.arrayContaining([
-      4, new Date('2026-12-10').toISOString(), 600, 0, 600, 'REVISED_SUBMITTED',
-    ]));
+    // The other bidder's round (round 4, its deadline and target price) must not be copied into this vendor's round.
+    expect(firstBatch[1].values).not.toContain(4);
+    expect(firstBatch[1].values).not.toContain(new Date('2026-12-10').toISOString());
+    expect(firstBatch[1].values).toEqual(expect.arrayContaining([1, 'REVISED_SUBMITTED']));
     expect(firstBatch[2].values[4]).toBe('RFQ-001');
     expect(firstBatch[2].values.slice(11, 16)).toEqual([
       600 / 1.18, 600 - (600 / 1.18), 600, expect.any(String), 'Acme',
     ]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-      event: 'REVISED_QUOTE_RECEIVED', details: expect.objectContaining({ amount: 600, roundNumber: 4, isFinalOffer: false }),
+      event: 'REVISED_QUOTE_RECEIVED', details: expect.objectContaining({ amount: 600, roundNumber: 1, isFinalOffer: false }),
     }), { prepareOnly: true });
 
     auth.mockResolvedValueOnce(vendorContext);

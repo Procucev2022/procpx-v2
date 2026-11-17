@@ -818,9 +818,24 @@ export const NEGOTIATION_OFFER_QUOTE_LINE_INSERT_AFTER_QUOTE_SQL = `
   WHERE changes() = 1
 `;
 
+// Best quote is the lowest revised offer that each vendor currently stands behind, meaning the revised amount on that
+// vendor's latest round that has one. A raised offer replaces the vendor's earlier figure, and buyer counteroffers
+// (which carry no revised amount) leave it unchanged. The subquery reads rows written earlier in the same batch, so
+// each writer must insert or update its round before running this statement.
+export const NEGOTIATION_LOWEST_CURRENT_OFFER_SQL = `(
+  SELECT MIN(offer."revisedQuoteAmount") FROM "negotiation_rounds" offer
+  WHERE offer."tenantId" = "negotiations"."tenantId" AND offer."negotiationId" = "negotiations"."id"
+    AND offer."revisedQuoteAmount" IS NOT NULL
+    AND offer."roundNumber" = (
+      SELECT MAX(latest."roundNumber") FROM "negotiation_rounds" latest
+      WHERE latest."tenantId" = offer."tenantId" AND latest."negotiationId" = offer."negotiationId"
+        AND latest."vendorId" = offer."vendorId" AND latest."revisedQuoteAmount" IS NOT NULL
+    )
+)`;
+
 export const NEGOTIATION_OFFER_PARENT_UPDATE_SQL = `
   UPDATE "negotiations"
-  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ?, "updatedAt" = ?
+  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ${NEGOTIATION_LOWEST_CURRENT_OFFER_SQL}, "updatedAt" = ?
   WHERE "tenantId" = ? AND "rfqId" = ? AND "status" = 'ACTIVE' AND changes() = 1
 `;
 
@@ -1010,16 +1025,18 @@ export const BUDGET_AGGREGATE_FINANCE_APPROVE_UPSERT_SQL = `
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
   ON CONFLICT ("tenantId", "costCentreId") DO UPDATE SET
-    "totalAmount" = "budgets"."totalAmount" + excluded."totalAmount",
     "approvedAmount" = "budgets"."approvedAmount" + excluded."approvedAmount",
     "pendingAmount" = MAX(0, "budgets"."pendingAmount" - ?),
     "status" = 'APPROVED', "updatedAt" = excluded."updatedAt"
   WHERE "budgets"."projectId" = excluded."projectId"
 `;
 
+// Budget invariant: totalAmount = approvedAmount + pendingAmount. Finance approval moves value from pending to approved,
+// so it must not change totalAmount. Rejection removes the pending value from both totals.
 export const BUDGET_AGGREGATE_PENDING_DECREMENT_SQL = `
   UPDATE "budgets"
-  SET "pendingAmount" = MAX(0, "pendingAmount" - ?), "updatedAt" = ?
+  SET "pendingAmount" = MAX(0, "pendingAmount" - ?),
+      "totalAmount" = MAX(0, "totalAmount" - ?), "updatedAt" = ?
   WHERE "tenantId" = ? AND "projectId" = ? AND "costCentreId" = ? AND EXISTS (
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
@@ -1085,6 +1102,7 @@ export const BUDGET_AGGREGATE_PENDING_UPSERT_SQL = `
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
   ON CONFLICT ("tenantId", "costCentreId") DO UPDATE SET
+    "totalAmount" = "budgets"."totalAmount" + excluded."totalAmount",
     "pendingAmount" = "budgets"."pendingAmount" + excluded."pendingAmount",
     "status" = 'UNDER_APPROVAL', "updatedAt" = excluded."updatedAt"
   WHERE "budgets"."projectId" = excluded."projectId"
@@ -1193,7 +1211,7 @@ export const NEGOTIATION_INSERT_IF_ABSENT_SQL = `
 
 export const NEGOTIATION_UPDATE_AFTER_ROUND_SQL = `
   UPDATE "negotiations"
-  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ?, "updatedAt" = ?
+  SET "currentRound" = MAX("currentRound", ?), "bestQuoteAmount" = ${NEGOTIATION_LOWEST_CURRENT_OFFER_SQL}, "updatedAt" = ?
   WHERE "id" = ? AND "tenantId" = ?
 `;
 
@@ -1476,7 +1494,7 @@ export const AUCTION_ITEM_UPDATE_AFTER_CHANGE_SQL = `
 export const AUCTION_VENDOR_UPDATE_AFTER_BID_SQL = `
   UPDATE "auction_vendors"
   SET "bidsCount" = ?, "lastBidAmount" = ?, "lastBidAt" = ?,
-      "bestBidAmount" = ?, "bestBidRank" = 1
+      "bestBidAmount" = ?
   WHERE "id" = ? AND "tenantId" = ? AND "auctionId" = ? AND "vendorId" = ?
     AND "bidsCount" IS ? AND changes() = 1
 `;
@@ -1724,7 +1742,9 @@ export const VENDOR_PERFORMANCE_SCORE_UPDATE_AFTER_AUDIT_SQL = `
 
 export const PPO_MARK_COMPLETED_AFTER_AUDIT_SQL = `
   UPDATE "ppos" SET "status" = 'COMPLETED', "completedAt" = ?, "updatedAt" = ?
-  WHERE "id" = ? AND "tenantId" = ? AND "status" NOT IN ('COMPLETED', 'CANCELLED') AND EXISTS (
+  WHERE "id" = ? AND "tenantId" = ? AND "status" NOT IN ('COMPLETED', 'CANCELLED')
+    AND NOT EXISTS (SELECT 1 FROM "ppo_lines" WHERE "ppoId" = "ppos"."id" AND "tenantId" = "ppos"."tenantId" AND "status" NOT IN ('COMPLETED', 'CANCELLED'))
+    AND EXISTS (
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
 `;
@@ -1914,7 +1934,7 @@ export const NEGOTIATION_ROUND_MARK_REVISED_SQL = `
 `;
 
 export const NEGOTIATION_BEST_QUOTE_UPDATE_SQL = `
-  UPDATE "negotiations" SET "bestQuoteAmount" = ?, "updatedAt" = ?
+  UPDATE "negotiations" SET "bestQuoteAmount" = ${NEGOTIATION_LOWEST_CURRENT_OFFER_SQL}, "updatedAt" = ?
   WHERE "id" = ? AND "tenantId" = ?
 `;
 

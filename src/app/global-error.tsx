@@ -5,11 +5,11 @@ import ErrorFallback from '@/components/observability/ErrorFallback';
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import type { ErrorBoundaryProps } from '@app-types/components/observability/ErrorFallback.types';
 
-export default function GlobalError({ error, retry }: ErrorBoundaryProps) {
+export default function GlobalError({ error, reset }: ErrorBoundaryProps) {
   return (
     <html lang={I18N_CONFIG.defaultLocale}>
       <body>
-        <ErrorFallback error={error} retry={retry} boundary="global" />
+        <ErrorFallback error={error} retry={reset} boundary="global" />
       </body>
     </html>
   );

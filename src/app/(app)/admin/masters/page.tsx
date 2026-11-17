@@ -8,6 +8,13 @@ import { Plus } from 'lucide-react';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
+/** Reads a list endpoint and treats any non-OK response as a failure, so the page can show an error instead of stalling. */
+function readMasterList(url: string) {
+  return fetch(url).then((response) => {
+    if (!response.ok) throw new Error(String(response.status));
+    return response.json();
+  });
+}
 export default function MastersPage() {
   const [activeTab, setActiveTab] = useState<'uom' | 'categories'>('uom');
   const [uoms, setUoms] = useState<any[]>([]);
@@ -22,9 +29,12 @@ export default function MastersPage() {
   function loadData() {
     setLoading(true);
     Promise.all([
-      fetch('/api/masters/uom').then(r => r.json()),
-      fetch('/api/masters/categories').then(r => r.json()),
-    ]).then(([u, c]) => { setUoms(u || []); setCategories(c || []); setLoading(false); });
+      readMasterList('/api/masters/uom'),
+      readMasterList('/api/masters/categories'),
+    ])
+      .then(([u, c]) => { setUoms(Array.isArray(u) ? u : []); setCategories(Array.isArray(c) ? c : []); })
+      .catch(() => setMsg({ isError: true, text: UI_STRINGS.appAppAdminMastersPage.failedToLoadMasterData }))
+      .finally(() => setLoading(false));
   }
   useEffect(() => { loadData(); }, []);
 

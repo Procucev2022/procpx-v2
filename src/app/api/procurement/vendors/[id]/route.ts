@@ -157,10 +157,7 @@ export async function PUT(
     const existing = await prisma.vendor.findFirst({
       where: {
         id,
-        OR: [
-          { tenantId: ctx.tenantId },
-          { vendorType: 'PROCUCEV_VENDOR' },
-        ],
+        tenantId: ctx.tenantId,
       },
     });
 
@@ -199,7 +196,7 @@ export async function PUT(
     const updateData = {
       name: name ? name.trim() : existing.name,
       contactPerson: contactPerson !== undefined ? contactPerson : existing.contactPerson,
-      email: email ? email.trim() : existing.email,
+      email: isInternalManager && email ? email.trim() : existing.email,
       phone: phone !== undefined ? phone : existing.phone,
       categories: toStoredText(categories, existing.categories),
       operatingLocation: operatingLocation !== undefined ? operatingLocation : existing.operatingLocation,
@@ -218,7 +215,7 @@ export async function PUT(
       clientReferences: toStoredText(clientReferences, existing.clientReferences),
       certifications: toStoredText(certifications, existing.certifications),
       documents: toStoredText(documents, existing.documents),
-      status: status || existing.status,
+      status: isInternalManager ? (status || existing.status) : existing.status,
       updatedAt,
     };
     const description = interpolateUiString(UI_STRINGS.appApiProcurementVendorsIdRoute.vendorProfileNameCodeUpdated, {
@@ -272,7 +269,7 @@ export async function PUT(
     if (originalUpdatedAt) {
       try {
         const latest = await prisma.vendor.findFirst({
-          where: { id, OR: [{ tenantId: ctx.tenantId }, { vendorType: 'PROCUCEV_VENDOR' }] },
+          where: { id, tenantId: ctx.tenantId },
           select: { updatedAt: true },
         });
         if (latest && new Date(latest.updatedAt).getTime() !== originalUpdatedAt.getTime()) {

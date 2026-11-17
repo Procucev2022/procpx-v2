@@ -1,6 +1,6 @@
 'use client';
 // app/(app)/admin/users/page.tsx - User Management & RBAC Permissions
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { ROLES, PERMISSIONS_MATRIX } from "./page.constants";
@@ -19,14 +19,35 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ email: '', name: '', role: 'PROJECT_USER', password: '' });
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [success, setSuccess] = useState('');
   const pageSize = 20;
 
+  // Only the newest list request may update the table. An earlier search that resolves late is discarded.
+  const latestLoadRequest = useRef(0);
+
   function load() {
+    const requestId = latestLoadRequest.current + 1;
+    latestLoadRequest.current = requestId;
     setLoading(true);
     fetch(`/api/admin/users?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}`)
-      .then(r => r.json())
-      .then(d => { setUsers(d.data || []); setTotal(d.total || 0); setLoading(false); });
+      .then(async (response) => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body) throw new Error(String(response.status));
+        return body;
+      })
+      .then((body) => {
+        if (requestId !== latestLoadRequest.current) return;
+        setUsers(body.data || []);
+        setTotal(body.total || 0);
+        setLoadError('');
+      })
+      .catch(() => {
+        if (requestId === latestLoadRequest.current) setLoadError(UI_STRINGS.appAppAdminUsersPage.failedToLoadUsers);
+      })
+      .finally(() => {
+        if (requestId === latestLoadRequest.current) setLoading(false);
+      });
   }
 
   useEffect(() => { load(); }, [page, search]);
@@ -133,6 +154,10 @@ export default function UsersPage() {
 
           {loading ? (
             <div className="loading-overlay"><div className="spinner" />{UI_STRINGS.appAppAdminUsersPage.loadingUsers}</div>
+          ) : loadError ? (
+            <div className="alert alert-error mb-4" role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} />{loadError}
+            </div>
           ) : users.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">

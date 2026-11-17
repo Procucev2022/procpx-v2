@@ -60,46 +60,16 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
     }
   }
 
-  // 2. Check next-auth session
+  // 2. Check next-auth session. A failed lookup is a server fault; reporting it as a logout hides the outage.
   let session: Session | null = null;
   try {
     session = await auth();
-  } catch {
-    // outside Next.js request context
+  } catch (error) {
+    logEvent('error', 'auth.session_lookup_failed', { operation: 'resolve_session', error });
+    return NextResponse.json({ error: UI_STRINGS.libApiUtils.sessionUnavailable }, { status: 503 });
   }
 
   if (!session?.user) {
-    if (process.env.NODE_ENV !== 'production') {
-      try {
-        const { headers } = await import('next/headers');
-        const headerList = await headers();
-        const testUserId = headerList.get('x-test-user-id');
-        const testTenantId = headerList.get('x-test-tenant-id');
-        if (testUserId || testTenantId) {
-          const { prisma } = await import('./prisma');
-          const user = await prisma.user.findFirst({
-            where: testUserId ? { id: testUserId } : { tenantId: testTenantId! },
-            include: { tenant: true },
-          });
-          if (user) {
-            if (permission && !hasPermission(user.role as UserRole, permission)) {
-              return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
-            }
-            return {
-              userId: user.id,
-              tenantId: user.tenantId,
-              tenantName: user.tenant?.name || 'Default Tenant',
-              role: user.role as UserRole,
-              userName: user.name || user.email || 'User',
-              userEmail: user.email || undefined,
-              vendorId: user.vendorId,
-            };
-          }
-        }
-      } catch {
-        // ignore when called outside next headers context
-      }
-    }
     return NextResponse.json({ error: UI_STRINGS.libApiUtils.unauthenticated }, { status: 401 });
   }
   const user = session.user as unknown as AuthenticatedSessionUser;

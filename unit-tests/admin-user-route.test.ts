@@ -108,27 +108,27 @@ describe('admin user update route', () => {
     await expect(create({ email: ' ' })).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersRoute.emailIsRequired, status: 400 });
     await expect(create({ email: 'ada@example.test', name: ' ' })).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersRoute.nameIsRequired, status: 400 });
     await expect(create({ email: 'ada@example.test', name: 'Ada' })).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiAdminUsersRoute.roleIsRequired, status: 400 });
-    await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'BUYER', password: 'short' })).resolves.toEqual({
+    await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'PROCUREMENT_USER', password: 'short' })).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters, status: 400,
     });
-    await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'BUYER' })).resolves.toEqual({
+    await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'PROCUREMENT_USER' })).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters, status: 400,
     });
 
     userDb.findFirst.mockResolvedValueOnce({ id: 'existing' });
-    await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'BUYER', password: 'long-password' })).resolves.toEqual({
+    await expect(create({ email: 'ada@example.test', name: 'Ada', role: 'PROCUREMENT_USER', password: 'long-password' })).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists, status: 400,
     });
 
     userDb.findFirst.mockResolvedValueOnce(null);
     userDb.create.mockResolvedValue({ id: 'new-user', email: 'ada@example.test' });
-    await expect(create({ email: ' ADA@EXAMPLE.TEST ', name: ' Ada Lovelace ', role: 'BUYER', password: 'long-password' })).resolves.toEqual({
+    await expect(create({ email: ' ADA@EXAMPLE.TEST ', name: ' Ada Lovelace ', role: 'PROCUREMENT_USER', password: 'long-password' })).resolves.toEqual({
       ok: true, data: { id: 'new-user', email: 'ada@example.test' }, status: 201,
     });
     expect(passwordHash).toHaveBeenCalledWith('long-password', PASSWORD_HASH_ROUNDS);
     expect(userDb.create).toHaveBeenCalledWith({
       data: {
-        tenantId: 'tenant-1', email: 'ada@example.test', name: 'Ada Lovelace', role: 'BUYER',
+        tenantId: 'tenant-1', email: 'ada@example.test', name: 'Ada Lovelace', role: 'PROCUREMENT_USER',
         passwordHash: 'hashed-secret', status: UI_STRINGS.common.aCTIVE, createdBy: 'editor-1',
       },
       select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
@@ -148,8 +148,8 @@ describe('admin user update route', () => {
   });
 
   it('trims supplied names, preserves nullish fields and audits the change', async () => {
-    userDb.findFirst.mockResolvedValue({ id: 'user-1', email: 'member@example.test', name: 'Old name', role: 'BUYER', status: 'ACTIVE' });
-    const updated = { id: 'user-1', email: 'member@example.test', name: 'New name', role: 'BUYER', status: 'ACTIVE', updatedAt: new Date('2026-01-01') };
+    userDb.findFirst.mockResolvedValue({ id: 'user-1', email: 'member@example.test', name: 'Old name', role: 'PROCUREMENT_USER', status: 'ACTIVE' });
+    const updated = { id: 'user-1', email: 'member@example.test', name: 'New name', role: 'PROCUREMENT_USER', status: 'ACTIVE', updatedAt: new Date('2026-01-01') };
     auditedUpdate.mockResolvedValue(updated);
 
     await expect(PUT(makeRequest({ name: ' New name ', role: null, status: undefined }), params)).resolves.toEqual({
@@ -157,24 +157,24 @@ describe('admin user update route', () => {
     });
     expect(auditedUpdate).toHaveBeenCalledWith(expect.objectContaining({
       table: 'user', id: 'user-1', tenantId: 'tenant-1',
-      data: { name: 'New name', role: 'BUYER', status: UI_STRINGS.common.aCTIVE, updatedBy: 'editor-1' },
+      data: { name: 'New name', role: 'PROCUREMENT_USER', status: UI_STRINGS.common.aCTIVE, updatedBy: 'editor-1' },
       route: '/api/admin/users/[id]',
       audit: expect.objectContaining({
         tenantId: 'tenant-1', userId: 'editor-1', entityType: UI_STRINGS.appAppAuditPage.uSER, entityId: 'user-1', action: UI_STRINGS.appAppAuditPage.uPDATE,
-      description: 'User member@example.test updated (Role: BUYER, Status: ACTIVE)',
-      oldValue: { role: 'BUYER', status: UI_STRINGS.common.aCTIVE }, newValue: { role: 'BUYER', status: UI_STRINGS.common.aCTIVE },
+      description: 'User member@example.test updated (Role: PROCUREMENT_USER, Status: ACTIVE)',
+      oldValue: { role: 'PROCUREMENT_USER', status: UI_STRINGS.common.aCTIVE }, newValue: { role: 'PROCUREMENT_USER', status: UI_STRINGS.common.aCTIVE },
       }),
     }));
     expect(audit).not.toHaveBeenCalled();
   });
 
   it('keeps prior user values when fields are nullish and applies supplied role and status', async () => {
-    userDb.findFirst.mockResolvedValue({ id: 'user-1', email: 'member@example.test', name: 'Prior', role: 'BUYER', status: 'ACTIVE' });
-    userDb.update.mockResolvedValue({ id: 'user-1', name: 'Prior', role: 'MANAGER', status: 'INACTIVE' });
-    await PUT(makeRequest({ name: null, role: 'MANAGER', status: 'INACTIVE' }), params);
+    userDb.findFirst.mockResolvedValue({ id: 'user-1', email: 'member@example.test', name: 'Prior', role: 'PROCUREMENT_USER', status: 'ACTIVE' });
+    userDb.update.mockResolvedValue({ id: 'user-1', name: 'Prior', role: 'PROCUREMENT_USER', status: 'INACTIVE' });
+    await PUT(makeRequest({ name: null, role: 'PROCUREMENT_USER', status: 'INACTIVE' }), params);
     expect(auditedUpdate).toHaveBeenCalledWith(expect.objectContaining({
       table: 'user', id: 'user-1', tenantId: 'tenant-1', route: '/api/admin/users/[id]',
-      data: { name: 'Prior', role: 'MANAGER', status: 'INACTIVE', updatedBy: 'editor-1' },
+      data: { name: 'Prior', role: 'PROCUREMENT_USER', status: 'INACTIVE', updatedBy: 'editor-1' },
       audit: expect.objectContaining({ entityType: 'USER', entityId: 'user-1' }),
     }));
   });

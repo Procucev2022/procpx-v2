@@ -231,28 +231,14 @@ describe('basic API routes', () => {
     }));
   });
 
-  it('resolves the test-user header, session, and unauthorized auth-me paths', async () => {
+  it('answers auth-me only from the session and ignores identity headers', async () => {
     const user = { id: 'user-1', name: 'Ada', email: 'ada@example.test', role: 'ADMIN', tenantId: 'tenant-1', tenant: { name: 'Tenant One' } };
     prismaMock.user.findUnique.mockResolvedValue(user);
-    await expect(getMe(request('/api/auth/me', { headers: { 'x-test-user-id': 'user-1' } }))).resolves.toEqual({
-      ok: true,
-      data: { user: { id: 'user-1', name: 'Ada', email: 'ada@example.test', role: 'ADMIN', tenantId: 'tenant-1', tenantName: 'Tenant One' } },
-      status: 200,
-    });
-    expect(authMock).not.toHaveBeenCalled();
-
-    prismaMock.user.findUnique.mockResolvedValue({ ...user, tenant: null });
-    await expect(getMe(request('/api/auth/me', { headers: { 'x-test-user-id': 'user-2' } }))).resolves.toEqual({
-      ok: true,
-      data: { user: { id: 'user-1', name: 'Ada', email: 'ada@example.test', role: 'ADMIN', tenantId: 'tenant-1', tenantName: undefined } },
-      status: 200,
-    });
-
-    prismaMock.user.findUnique.mockResolvedValue(null);
     authMock.mockResolvedValue(null);
-    await expect(getMe(request('/api/auth/me', { headers: { 'x-test-user-id': 'missing' } }))).resolves.toEqual({
+    await expect(getMe(request('/api/auth/me', { headers: { 'x-test-user-id': 'user-1' } }))).resolves.toEqual({
       ok: false, error: UI_STRINGS.appApiAuthMeRoute.unauthorized, status: 401,
     });
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     authMock.mockResolvedValue({ user: { id: 'session-user', email: 'session@example.test' } });
     await expect(getMe(request('/api/auth/me'))).resolves.toEqual({
       ok: true, data: { user: { id: 'session-user', email: 'session@example.test' } }, status: 200,

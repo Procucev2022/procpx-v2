@@ -42,9 +42,13 @@ export default function ApprovalChatDrawer({
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const skipNextAutoScrollRef = useRef(false);
+  const messageRequestSequence = useRef(0);
 
   useEffect(() => {
+    // Replies still in flight belong to the previous thread. Invalidate them before the current thread loads.
+    messageRequestSequence.current += 1;
     if (isOpen && entityId) {
+      setMessages([]);
       loadMessages();
       setIsEnquiry(initialEnquiryMode);
     }
@@ -64,6 +68,8 @@ export default function ApprovalChatDrawer({
     cursor?: { id: string; timestamp: string },
     prepend = false,
   ) => {
+    const sequence = ++messageRequestSequence.current;
+    const isCurrentRequest = () => sequence === messageRequestSequence.current;
     if (prepend) setLoadingOlder(true);
     else setLoading(true);
     setError('');
@@ -73,21 +79,27 @@ export default function ApprovalChatDrawer({
         ? `&beforeId=${encodeURIComponent(cursor.id)}&beforeTimestamp=${encodeURIComponent(cursor.timestamp)}`
         : '';
       const res = await fetch(`/api/approvals/messages?${param}${cursorParams}`);
+      if (!isCurrentRequest()) return;
       if (res.ok) {
         const data = await res.json();
+        if (!isCurrentRequest()) return;
         const pageMessages = data.messages || [];
         setMessages((current) => prepend ? [...pageMessages, ...current] : pageMessages);
         setHasOlderMessages(Boolean(data.hasMore));
         setOlderMessagesCursor(data.nextCursor || null);
       } else {
         const err = await res.json();
+        if (!isCurrentRequest()) return;
         setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadMessageHistory }));
       }
     } catch (e: any) {
+      if (!isCurrentRequest()) return;
       setError(interpolateUiString(UI_STRINGS.common.value1, { "value1": e.message || UI_STRINGS.common.userMessages.networkErrorFetchingMessages }));
     } finally {
-      if (prepend) setLoadingOlder(false);
-      else setLoading(false);
+      if (isCurrentRequest()) {
+        if (prepend) setLoadingOlder(false);
+        else setLoading(false);
+      }
     }
   };
 

@@ -1,4 +1,6 @@
 /** @jest-environment jsdom */
+jest.mock('../src/lib/observability/client-reporter', () => ({ reportClientEvent: jest.fn(), describeError: jest.fn() }));
+import { reportClientEvent } from '../src/lib/observability/client-reporter';
 import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
@@ -183,7 +185,7 @@ describe('purchase request detail modal', () => {
     const loadMore = await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) });
     fireEvent.click(loadMore);
     expect(await screen.findByRole('alert')).toHaveTextContent(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
-    expect(consoleError).toHaveBeenCalledWith(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId: 'pr-page-error' }));
+    expect(reportClientEvent).toHaveBeenCalledWith('error', 'purchase_request.lines_page_fetch_failed', { prId: 'pr-page-error' });
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
     await waitFor(() => expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument());

@@ -496,7 +496,7 @@ export async function POST(req: NextRequest) {
         },
         {
           sql: NEGOTIATION_UPDATE_AFTER_ROUND_SQL,
-          values: [Math.max(Number(currentNegotiation.currentRound) || 0, roundNumber), finalRevised || previousQuoteAmount, now.toISOString(), currentNegotiation.id, currentTenantId],
+          values: [Math.max(Number(currentNegotiation.currentRound) || 0, roundNumber), now.toISOString(), currentNegotiation.id, currentTenantId],
         },
       );
       if (currentRfq.status !== 'NEGOTIATION') {

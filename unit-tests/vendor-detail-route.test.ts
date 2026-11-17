@@ -139,7 +139,7 @@ describe('vendor detail route', () => {
       clientReferences: 'Client A', certifications: ['ISO'], documents: { certificate: 'doc-1' }, status: '',
     }), params());
     expect(updatedResult).toMatchObject({ ok: true, data: { message: 'Vendor profile updated successfully.' } });
-    expect(db.vendor.findFirst).toHaveBeenCalledWith({ where: { id: 'vendor-1', OR: [{ tenantId: 'tenant-1' }, { vendorType: 'PROCUCEV_VENDOR' }] } });
+    expect(db.vendor.findFirst).toHaveBeenCalledWith({ where: { id: 'vendor-1', tenantId: 'tenant-1' } });
     const [updateStatement, auditStatement] = writeBatch.mock.calls[0][0];
     expect(updateStatement.sql).toBe(VENDOR_PROFILE_UPDATE_SQL);
     expect(updateStatement.values).toEqual([

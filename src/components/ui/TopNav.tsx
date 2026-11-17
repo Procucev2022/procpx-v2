@@ -1,6 +1,6 @@
 'use client';
 // components/ui/TopNav.tsx - Professional Enterprise Top Navigation
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import {
@@ -17,6 +17,7 @@ import type { TopNavProps } from "@app-types/components/ui/TopNav.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { NOTIFICATION_POLL_INTERVAL_MS } from "./TopNav.constants";
+import { reportClientEvent } from '@/lib/observability/client-reporter';
 
 
 
@@ -43,33 +44,45 @@ export default function TopNav({ user }: TopNavProps) {
     };
   }, []);
 
+  const notificationRequestSequence = useRef(0);
   const fetchNotifications = async () => {
+    const sequence = ++notificationRequestSequence.current;
     try {
       const res = await fetch('/api/notifications?limit=10');
+      if (sequence !== notificationRequestSequence.current) return;
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications || []);
         setUnreadCount(data.unreadCount || 0);
+      } else {
+        reportClientEvent('error', 'notification.list_fetch_failed', { status: res.status });
       }
     } catch {
-      // silently ignore
+      if (sequence === notificationRequestSequence.current) {
+        reportClientEvent('error', 'notification.list_fetch_failed', { reason: 'network_error' });
+      }
     }
   };
 
   const handleMarkAllRead = async () => {
     try {
-      await fetch('/api/notifications', {
+      const res = await fetch('/api/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markAllAsRead: true }),
       });
+      if (!res.ok) {
+        reportClientEvent('error', 'notification.mark_all_read_failed', { status: res.status });
+        return;
+      }
+      // A poll started before this write must not put the old unread count back.
+      notificationRequestSequence.current += 1;
       setUnreadCount(0);
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch {
-      // silently ignore
+      reportClientEvent('error', 'notification.mark_all_read_failed', { reason: 'network_error' });
     }
   };
-
   const initials =
     user.name
       ?.split(' ')

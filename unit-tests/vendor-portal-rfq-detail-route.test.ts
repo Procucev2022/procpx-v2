@@ -375,7 +375,7 @@ describe('vendor portal RFQ detail and quote API', () => {
       ]), expect.any(String), 'round-1', 'tenant-1',
     ]));
     expect(statements.find(({ sql }) => sql === NEGOTIATION_BEST_QUOTE_UPDATE_SQL)?.values).toEqual([
-      expect.any(Number), expect.any(String), 'neg-1', 'tenant-1',
+      expect.any(String), 'neg-1', 'tenant-1',
     ]);
     expect(statements.find(({ sql }) => sql === RFQ_MESSAGE_INSERT_SQL)?.values).toEqual(expect.arrayContaining([
       'tenant-1', 'rfq-1', 'user-1', 'Vendor Rep', 'VENDOR', expect.stringContaining('Quote v2'), null, true, 'vendor-1',

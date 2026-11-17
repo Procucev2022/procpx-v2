@@ -28,7 +28,6 @@ export const VENDOR_EVALUATION_INSERT_AFTER_UPDATE_SQL = `
   FROM payload
   JOIN "vendors" vendor ON vendor."id" = json_extract(payload."data", '$.vendorId')
   WHERE vendor."tenantId" = json_extract(payload."data", '$.tenantId')
-    OR vendor."vendorType" = 'PROCUCEV_VENDOR'
 `;
 
 export const VENDOR_EVALUATION_AUDIT_INSERT_SQL = `

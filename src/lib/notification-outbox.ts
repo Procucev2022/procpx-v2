@@ -18,6 +18,9 @@ import {
   NOTIFICATION_OUTBOX_MARK_DELIVERED_SQL,
   NOTIFICATION_OUTBOX_MAX_RETRY_MS,
   NOTIFICATION_OUTBOX_RESCHEDULE_SQL,
+  NOTIFICATION_OUTBOX_DELIVERY_NO_ROWS_REASON,
+  NOTIFICATION_OUTBOX_PAYLOAD_INVALID_REASON,
+  NOTIFICATION_OUTBOX_REASON_CODE_PATTERN,
 } from './notification-outbox.constants';
 import type {
   NotificationOutboxDatabase,
@@ -61,6 +64,8 @@ function getRetryDelayMs(attemptCount: number): number {
 }
 
 function getSafeError(error: unknown): string {
+  // Reason codes thrown by this module (for example notification_payload_invalid) are safe to log verbatim.
+  if (error instanceof Error && NOTIFICATION_OUTBOX_REASON_CODE_PATTERN.test(error.message)) return error.message;
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,59}$/.test(error.name)) return error.name;
   if (error instanceof Error) return 'Error';
   return 'Unknown notification dispatch failure';
@@ -88,7 +93,7 @@ export function prepareNotificationOutbox(
   auditLogId?: string,
 ): PreparedNotificationOutbox {
   if (!isNotificationPayload(payload, payload.tenantId)) {
-    throw new Error();
+    throw new Error(NOTIFICATION_OUTBOX_PAYLOAD_INVALID_REASON);
   }
   const id = crypto.randomUUID();
   const statement = auditLogId
@@ -222,7 +227,7 @@ export async function dispatchNotificationOutbox(
     try {
       const payload: unknown = JSON.parse(row.payload);
       if (!isNotificationPayload(payload, row.tenantId)) {
-        throw new Error();
+        throw new Error(NOTIFICATION_OUTBOX_PAYLOAD_INVALID_REASON);
       }
       const deliveredAt = now;
       const deliveryStatement = payload.vendorId
@@ -248,12 +253,14 @@ export async function dispatchNotificationOutbox(
         },
       ]);
       if (Number(delivery[1]?.meta?.changes || 0) !== 1) {
-        throw new Error();
+        throw new Error(NOTIFICATION_OUTBOX_DELIVERY_NO_ROWS_REASON);
       }
       result.delivered += 1;
     } catch (error) {
+      let rescheduledAs: string | undefined;
       try {
         const status = await rescheduleFailedRow(database, row, lockToken, now, error);
+        rescheduledAs = status;
         if (status === 'DEAD') result.dead += 1;
         else if (status === 'PENDING') result.retried += 1;
         else if (status === 'DELIVERED') {
@@ -279,11 +286,19 @@ export async function dispatchNotificationOutbox(
           error: getSafeError(retryError),
         });
       }
-      await logOutboxFailure('notification.outbox_dispatch_failed', {
+      // Dead letters, scheduled retries, and unexpected failures are different operational states; keep them searchable apart.
+      const failureContext = {
         operation: 'deliver_notification_outbox', route: 'scheduled_worker',
         outboxId: row.id, tenantId: row.tenantId, attemptCount: row.attemptCount,
         error: getSafeError(error),
-      });
+      };
+      if (rescheduledAs === 'DEAD') {
+        await logOutboxFailure('notification.outbox_dead_lettered', failureContext);
+      } else if (rescheduledAs === 'PENDING') {
+        await logOutboxWarning('notification.outbox_retry_scheduled', failureContext);
+      } else {
+        await logOutboxFailure('notification.outbox_dispatch_failed', failureContext);
+      }
     }
   }
 

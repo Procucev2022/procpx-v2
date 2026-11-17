@@ -245,6 +245,28 @@ describe('procurement PPO collection API', () => {
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToFetchPpos, status: 500 });
   });
 
+  it('scopes vendor PPO lists to the vendor and keeps buyer rating details out of the response', async () => {
+    permission.mockImplementation((_role: string, key: string) => key === 'PPO_VIEW');
+    auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: 'vendor-1' });
+    isContext.mockReturnValueOnce(true);
+    projectAccessFilter.mockResolvedValueOnce(null);
+    db.ppo.findMany.mockResolvedValueOnce([{ id: 'own', vendorRating: { status: 'APPROVED', criteriaDetails: '{}' } }]);
+    db.ppo.count.mockResolvedValueOnce(1);
+    db.ppo.aggregate.mockResolvedValueOnce({ _sum: { totalValue: 10 } });
+    db.ppoVendorRating.groupBy.mockResolvedValueOnce([]);
+
+    const result = await GET(getRequest());
+
+    expect(db.ppo.count).toHaveBeenCalledWith({ where: expect.objectContaining({ vendorId: 'vendor-1' }) });
+    expect(db.ppo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ vendorId: 'vendor-1' }) }));
+    expect(db.ppoVendorRating.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ vendorId: 'vendor-1' }) }));
+    expect(JSON.stringify(result)).not.toContain('"vendorRating":{');
+
+    auth.mockResolvedValueOnce({ ...context, role: 'VENDOR', vendorId: null });
+    isContext.mockReturnValueOnce(true);
+    await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.forbiddenInsufficientPermissions, status: 403 });
+  });
+
   it('validates PPO creation inputs, RFQ and award references, quote selection, and L2 justification', async () => {
     const denied = { status: 401 };
     auth.mockResolvedValueOnce(denied);

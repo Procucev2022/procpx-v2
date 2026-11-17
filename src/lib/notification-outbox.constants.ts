@@ -118,3 +118,11 @@ export const NOTIFICATION_OUTBOX_INSPECT_STATE_SQL = `
   WHERE "id" = ? AND "tenantId" = ?
   LIMIT 1
 `;
+
+/** Reason codes thrown inside the dispatcher. They are logged verbatim so a failed row explains itself. */
+export const NOTIFICATION_OUTBOX_PAYLOAD_INVALID_REASON = 'notification_payload_invalid';
+export const NOTIFICATION_OUTBOX_DELIVERY_NO_ROWS_REASON = 'notification_delivery_no_rows';
+export const NOTIFICATION_OUTBOX_REASON_CODE_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
+
+/** A cron tick claims up to this many batches while the previous batch was full, so bursts drain within one minute. */
+export const NOTIFICATION_OUTBOX_MAX_ROUNDS_PER_TICK = 5;

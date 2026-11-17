@@ -138,7 +138,7 @@ describe('read-only D1 data-quality report queries', () => {
   });
 
   it('keeps every report check read-only', () => {
-    expect(CHECKS.length).toBe(26);
+    expect(CHECKS.length).toBe(27);
     expect(CHECKS.every(([, sql]) => /^\s*SELECT\b/i.test(sql))).toBe(true);
   });
 

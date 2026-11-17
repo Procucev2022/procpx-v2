@@ -5,6 +5,7 @@ import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils
 import { runAuditedD1UpdateAtomically } from '@/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { findUserAdminPolicyViolation, getUserAdminPolicyResponse } from '@/lib/admin-user-policy';
 
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = await req.json();
   const { name, role, status } = body;
+
+  const policyViolation = findUserAdminPolicyViolation({
+    actorRole: ctx.role,
+    actorUserId: ctx.userId,
+    target: { id: existing.id, role: existing.role, status: existing.status },
+    nextRole: role ?? undefined,
+    nextStatus: status ?? undefined,
+  });
+  if (policyViolation) {
+    const policyResponse = getUserAdminPolicyResponse(policyViolation);
+    return apiError(policyResponse.message, policyResponse.status, { route: '/api/admin/users/[id]', method: 'PUT', event: 'admin.user_policy_rejected' });
+  }
 
   const updated = await runAuditedD1UpdateAtomically({
     table: 'user',

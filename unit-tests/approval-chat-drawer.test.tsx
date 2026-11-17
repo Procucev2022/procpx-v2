@@ -2,7 +2,7 @@
 import { uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ApprovalChatDrawer from '../src/components/ApprovalChatDrawer';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -87,6 +87,29 @@ describe('approval communication drawer', () => {
     const renderedMessages = screen.getAllByText(/(?:Older|Newer) message/);
     expect(renderedMessages.map((message) => message.textContent)).toEqual(['Older message', 'Newer message']);
     expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
+  });
+
+  it('does not show a late reply from the previous approval after the drawer moves to another one', async () => {
+    let finishFirstThread!: (value: unknown) => void;
+    fetchMock
+      .mockReturnValueOnce(new Promise(resolve => { finishFirstThread = resolve; }))
+      .mockResolvedValueOnce(response({ messages: [
+        { id: 'second-thread', senderName: 'Buyer', senderRole: 'BUYER', type: 'MESSAGE', content: 'Message for the second approval', timestamp: '2026-10-29T11:00:00Z' },
+      ] }));
+    const view = render(<ApprovalChatDrawer isOpen onClose={onClose} entityType="PR" entityId="pr-first" entityCode="PR-FIRST" />);
+    view.rerender(<ApprovalChatDrawer isOpen onClose={onClose} entityType="PR" entityId="pr-second" entityCode="PR-SECOND" />);
+
+    expect(await screen.findByText('Message for the second approval')).toBeInTheDocument();
+
+    await act(async () => {
+      finishFirstThread(response({ messages: [
+        { id: 'first-thread', senderName: 'Buyer', senderRole: 'BUYER', type: 'MESSAGE', content: 'Message for the first approval', timestamp: '2026-10-29T10:00:00Z' },
+      ] }));
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+
+    expect(screen.queryByText('Message for the first approval')).not.toBeInTheDocument();
+    expect(screen.getByText('Message for the second approval')).toBeInTheDocument();
   });
 
   it('reports API and network errors while loading, including default messages', async () => {

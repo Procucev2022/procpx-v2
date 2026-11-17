@@ -43,6 +43,7 @@ const dbUser = {
   vendor: null,
 };
 
+import { AUTH_TIMING_DUMMY_HASH } from '../src/lib/auth.constants';
 describe('NextAuth credentials provider', () => {
   const originalNodeEnv = process.env.NODE_ENV;
 
@@ -66,7 +67,7 @@ describe('NextAuth credentials provider', () => {
     expect(signIn).toBeDefined();
     expect(signOut).toBeDefined();
     expect(authOptions.trustHost).toBe(true);
-    expect(authOptions.session).toEqual({ strategy: 'jwt' });
+    expect(authOptions.session).toEqual({ strategy: 'jwt', maxAge: 12 * 60 * 60 });
     expect(authOptions.pages).toEqual({ signIn: UI_STRINGS.libAuth.login, error: UI_STRINGS.libAuth.login });
   });
 
@@ -114,15 +115,17 @@ describe('NextAuth credentials provider', () => {
     });
   });
 
-  it('rejects an incorrect password without changing login history', async () => {
+  it('rejects an incorrect password, records the failed attempt, and leaves login history alone', async () => {
     userModel.findMany.mockResolvedValue([dbUser]);
     compare.mockResolvedValue(false);
 
     await expect(authorize({ email: 'user@example.test', password: 'wrong' })).resolves.toBeNull();
-    expect(userModel.update).not.toHaveBeenCalled();
+    expect(userModel.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { failedLoginCount: 1, lockedUntil: null } });
+    expect(userModel.update.mock.calls[0][0].data).not.toHaveProperty('lastLoginAt');
   });
 
   it('fails closed when the same active email belongs to multiple tenants', async () => {
+    userModel.update.mockClear();
     userModel.findMany.mockResolvedValue([
       dbUser,
       { ...dbUser, id: 'user-2', tenantId: 'tenant-2', tenant: { name: 'Tenant Two', slug: 'tenant-two' } },
@@ -130,7 +133,9 @@ describe('NextAuth credentials provider', () => {
 
     await expect(authorize({ email: 'user@example.test', password: 'secret' })).resolves.toBeNull();
     expect(userModel.findMany).toHaveBeenCalledTimes(1);
-    expect(compare).not.toHaveBeenCalled();
+    // Only the timing placeholder is compared, never a real account password hash.
+    expect(compare).toHaveBeenCalledTimes(1);
+    expect(compare).toHaveBeenCalledWith('secret', AUTH_TIMING_DUMMY_HASH);
     expect(userModel.update).not.toHaveBeenCalled();
   });
 
@@ -270,7 +275,7 @@ describe('NextAuth secret', () => {
   it('prefers NEXTAUTH_SECRET, then AUTH_SECRET, then the development default', () => {
     expect(secretFor({ NEXTAUTH_SECRET: 'nextauth-secret', AUTH_SECRET: 'auth-secret' })).toBe('nextauth-secret');
     expect(secretFor({ AUTH_SECRET: 'auth-secret' })).toBe('auth-secret');
-    expect(secretFor({})).toBe('procpx-super-secret-key-change-in-production-2024');
+    expect(secretFor({})).toBe('procpx-local-development-only-secret-do-not-deploy');
   });
 });
 
@@ -285,7 +290,7 @@ describe('NextAuth callbacks', () => {
       },
     })).resolves.toEqual({
       subject: 'token-subject', id: 'user-1', role: UI_STRINGS.common.vENDOR, tenantId: 'tenant-1',
-      tenantName: 'Tenant One', tenantSlug: 'tenant-one', vendorId: 'vendor-1',
+      tenantName: 'Tenant One', tenantSlug: 'tenant-one', vendorId: 'vendor-1', checkedAt: expect.any(Number),
     });
   });
 

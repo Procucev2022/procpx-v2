@@ -5,7 +5,7 @@ export const VENDOR_PROFILE_UPDATE_SQL = `
       "gstin" = ?, "pan" = ?, "website" = ?, "address" = ?, "experienceYears" = ?,
       "turnoverCrores" = ?, "capabilities" = ?, "serviceCoverage" = ?, "clientReferences" = ?,
       "certifications" = ?, "documents" = ?, "status" = ?, "updatedAt" = ?
-  WHERE "id" = ? AND ("tenantId" = ? OR "vendorType" = 'PROCUCEV_VENDOR')
+  WHERE "id" = ? AND "tenantId" = ?
     AND "updatedAt" = ?
   RETURNING *
 `;

@@ -6,6 +6,8 @@ import { deleteUpload, saveUpload } from '@/lib/storage';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { BOQ_TEMPLATE_UPLOAD_EXTENSIONS } from '@/lib/boq-upload.constants';
+import path from 'node:path';
 import {
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
   BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
@@ -289,7 +291,11 @@ export async function POST(req: NextRequest) {
     const qualityScore = Math.max(0, Math.round(((prepared.validCount + prepared.warningCount * 0.5) / prepared.lines.length) * 100));
 
     // Upload only after validation, so malformed/oversized workbooks do not leave storage artifacts.
-    uploadedPath = await saveUpload([ctx.tenantId, projectId], `${Date.now()}_${file.name}`, buffer);
+    const uploadExtension = path.extname(file.name).toLowerCase();
+    if (!BOQ_TEMPLATE_UPLOAD_EXTENSIONS.includes(uploadExtension)) {
+      return apiError(UI_STRINGS.appApiBoqUploadRoute.bOQUploadFailedOnlyXlsxXlsAndCsvFilesAreSupported, 400);
+    }
+    uploadedPath = await saveUpload([ctx.tenantId, projectId], `${crypto.randomUUID()}${uploadExtension}`, buffer);
     const auditId = crypto.randomUUID();
     const newRevisionId = currentRevision ? String(currentRevision.id) : crypto.randomUUID();
     revisionId = newRevisionId;

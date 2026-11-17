@@ -1,6 +1,7 @@
 /* Central English UI copy. Add translated catalogs with the same key shape when locales are introduced. */
 export const UI_STRINGS = {
   appApiActualCostsRoute: {
+    ppoLinkedActualCostsMustUseCompletionWorkflow: "Actual costs linked to a PPO line must be recorded through the PPO completion workflow.",
     actualCostTransactionTransactionCodeRecordedForCategoryAmountToLocaleStringViaSource: "Actual cost transaction {{transactionCode}} recorded for {{category}} (Amount: ₹{{toLocaleString}}) via {{source}}",
     actualCostCodeConflictRetryTheRequest: "An actual cost code conflict occurred. Please retry the request.",
     actualCostDatesMustBeValid: "Actual cost dates must be valid.",
@@ -772,6 +773,7 @@ export const UI_STRINGS = {
     rEVISEDQUOTERECORDEDVendorSubmittedQuoteVNextVersionToLocaleStringRespondingToRoundRoundNumber: "[REVISED QUOTE RECORDED] Vendor submitted Quote v{{nextVersion}} (₹ {{toLocaleString}}) responding to Round {{roundNumber}}.",
   },
   appAppAdminMastersPage: {
+    failedToLoadMasterData: "Master data could not be loaded. Refresh the page to try again.",
     addUOM: " Add UOM",
     addCategory: "Add Category",
     addUOM2: "Add UOM",
@@ -793,6 +795,7 @@ export const UI_STRINGS = {
     topLevelCategory: "— Top Level Category —",
   },
   appAppAdminUsersPage: {
+    failedToLoadUsers: "Users could not be loaded. Refresh the page to try again.",
     inviteUser: " Invite User",
     loadingUsers: " Loading users...",
     rBACPermissionMappingMatrix: " RBAC Permission Mapping Matrix",
@@ -3968,6 +3971,7 @@ export const UI_STRINGS = {
     zenithRetailSystems: "Zenith Retail Systems",
   },
   common: {
+    loadingPageContent: "Loading page content",
     additionalCategoryCount: "+{{count}} more categories",
     untitledItemFallback: "Untitled Item",
     failedToFetchCategories: "Failed to fetch categories.",
@@ -5722,7 +5726,15 @@ export const UI_STRINGS = {
     eGOrderAcknowledgedProductionScheduledAsPerTimeline: "e.g. Order acknowledged; production scheduled as per timeline.",
     categoryItemCountBOQLines: "{{category}} ({{itemCount}} BOQ lines)",
   },
+  libAdminUserPolicy: {
+    unknownRole: "Choose a valid user role.",
+    unknownStatus: "Choose a valid account status.",
+    platformAdminAssignmentForbidden: "Only a super administrator can assign the super administrator role.",
+    platformAdminAccountProtected: "Only a super administrator can change a super administrator account.",
+    ownRoleOrStatusChangeForbidden: "You cannot change your own role or account status.",
+  },
   libApiUtils: {
+    sessionUnavailable: "We could not verify your session right now. Please try again in a moment.",
     unauthenticated: "Unauthenticated",
   },
   libAuth: {
@@ -5803,6 +5815,11 @@ export const UI_STRINGS = {
     premiumAcrylicEmulsionPainting: "Premium Acrylic Emulsion Painting",
     receptionCounterWallPanellingBespoke: "Reception Counter & Wall Panelling (Bespoke)",
     vitrifiedFloorTiling600x600mm: "Vitrified Floor Tiling (600x600mm)",
+  },
+  appNotFound: {
+    title: "Page not found",
+    description: "The page you asked for does not exist or has moved.",
+    backToDashboard: "Back to dashboard",
   },
   appErrorBoundary: {
     title: "Something went wrong",

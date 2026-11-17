@@ -102,3 +102,6 @@ scratch/
 
 # local screenshots and previews
 /scripts/*.png
+
+# generated Prisma client output (the workerClient generator writes here on every `prisma generate`)
+/generated/

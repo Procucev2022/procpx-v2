@@ -199,6 +199,10 @@ export async function POST(req: NextRequest) {
     if (typeof sourceValue !== 'string' || !ACTUAL_COST_SOURCES.includes(sourceValue as (typeof ACTUAL_COST_SOURCES)[number])) {
       return apiError(UI_STRINGS.appApiActualCostsRoute.actualCostSourceIsNotSupported, 400);
     }
+    // A PPO line carries a completion counter. Only the completion workflow may move it, so manual entries cannot bypass the cap.
+    if (optionalText(body.ppoLineId)) {
+      return apiError(UI_STRINGS.appApiActualCostsRoute.ppoLinkedActualCostsMustUseCompletionWorkflow, 400);
+    }
     if (sourceValue === 'PO_COMPLETION' || sourceValue === 'PPO_COMPLETION') {
       return apiError(UI_STRINGS.appApiActualCostsRoute.completionActualCostsMustUseTheCompletionWorkflow, 400);
     }

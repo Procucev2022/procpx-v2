@@ -738,7 +738,8 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     });
     batch = (writeD1BatchAtomically as jest.Mock).mock.calls[(writeD1BatchAtomically as jest.Mock).mock.calls.length - 1][0];
     expect(batch[2].values).toEqual(expect.arrayContaining(['FINANCE', 'APPROVED', 'Capex financial budget allocation validated and sanctioned.']));
-    expect(batch[5].sql).toContain('"totalAmount" = "budgets"."totalAmount" + excluded."totalAmount"');
+    expect(batch[5].sql).toContain('"approvedAmount" = "budgets"."approvedAmount" + excluded."approvedAmount"');
+    expect(batch[5].sql).not.toContain('"totalAmount" = "budgets"."totalAmount" + excluded."totalAmount"');
     expect(batch[5].values).toEqual(expect.arrayContaining([700, 850]));
 
     db.budgetContribution.findFirst.mockResolvedValueOnce({ ...contribution, status: 'PENDING_FINANCE_APPROVAL' });

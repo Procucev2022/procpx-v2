@@ -34,10 +34,15 @@ function normalizeValue(value: unknown, seen: WeakSet<object>, key?: string, dep
   if (depth >= 6) return '[MaxDepth]';
 
   if (value instanceof Error) {
+    // Next.js digests, D1/Prisma codes, and wrapped causes are the fields that correlate a failure across logs.
+    const details = value as Error & { digest?: unknown; code?: unknown; cause?: unknown };
     return {
       name: value.name,
       message: redactText(value.message),
       ...(value.stack ? { stack: redactText(value.stack) } : {}),
+      ...(typeof details.digest === 'string' ? { digest: details.digest } : {}),
+      ...(details.code !== undefined ? { code: normalizeValue(details.code, seen, 'code', depth + 1) } : {}),
+      ...(details.cause !== undefined ? { cause: normalizeValue(details.cause, seen, undefined, depth + 1) } : {}),
     };
   }
   if (value instanceof Date) return value.toISOString();
