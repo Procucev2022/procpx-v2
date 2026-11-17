@@ -8,6 +8,7 @@ import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { VENDOR_RFQ_DEFAULT_PAGE_SIZE, VENDOR_RFQ_MAX_PAGE_NUMBER, VENDOR_RFQ_MAX_PAGE_SIZE } from './route.constants';
 
 
+import { toVendorRfqView } from '@/lib/vendor-rfq-view';
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth();
   if (!isApiContext(ctx)) return ctx;
@@ -245,7 +246,7 @@ export async function GET(req: NextRequest) {
       }
 
       return {
-        ...r,
+        ...toVendorRfqView(r),
         lineCount: r._count?.lines || 0,
         rfqReceivedDate,
         clientTenant: r.tenant?.name || 'Enterprise Client',

@@ -28,6 +28,7 @@ import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import type { NegotiationQuoteLineSnapshot } from '@app-types/app/api/vendor-portal-rfqs.types';
 
 
+import { toVendorRfqView } from '@/lib/vendor-rfq-view';
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -124,7 +125,7 @@ export async function GET(
     }));
 
     return apiSuccess({
-      rfq: { ...rfq, negotiations: pageNegotiations },
+      rfq: toVendorRfqView({ ...rfq, negotiations: pageNegotiations }),
       negotiationHistory: getNegotiationHistoryPageMetadata(historyPage),
     });
   } catch (error: unknown) {
