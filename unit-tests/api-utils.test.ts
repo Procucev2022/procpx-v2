@@ -163,26 +163,12 @@ describe('requireAuth', () => {
     });
   });
 
-  it('uses development test headers to load and authorize a user', async () => {
+  it('ignores development identity headers and requires a session', async () => {
     headersMock.mockResolvedValue({ get: (name: string) => name === 'x-test-user-id' ? 'header-user' : null });
-    await expect(requireAuth()).resolves.toMatchObject({ userId: 'user-1', role: 'SUPER_ADMIN' });
-    expect(userModel.findFirst).toHaveBeenCalledWith({
-      where: { id: 'header-user' }, include: { tenant: true },
-    });
-
-    userModel.findFirst.mockResolvedValueOnce({ ...dbUser, name: '', email: '', tenant: {} });
-    await expect(requireAuth()).resolves.toMatchObject({ tenantName: 'Default Tenant', userName: 'User' });
-
-    userModel.findFirst.mockResolvedValueOnce({ ...dbUser, role: 'VIEWER' });
-    await expect(responseJson(await requireAuth('PROJECT_CREATE'))).resolves.toEqual({
-      status: 403, body: { error: UI_STRINGS.common.forbiddenInsufficientPermissions },
-    });
-
-    headersMock.mockResolvedValueOnce({ get: (name: string) => name === 'x-test-tenant-id' ? 'header-tenant' : null });
-    userModel.findFirst.mockResolvedValueOnce(null);
     await expect(responseJson(await requireAuth())).resolves.toEqual({
       status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
     });
+    expect(userModel.findFirst).not.toHaveBeenCalled();
   });
 
   it('uses the session user and resolves a vendor link when needed', async () => {

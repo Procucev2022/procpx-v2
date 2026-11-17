@@ -5,6 +5,7 @@ import { requireAuth, isApiContext, apiError, apiSuccess, getListPageWindow } fr
 import { hashPassword } from '@/lib/password';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { findUserAdminPolicyViolation, getUserAdminPolicyResponse } from '@/lib/admin-user-policy';
 
 
 export async function GET(req: NextRequest) {
@@ -55,15 +56,21 @@ export async function POST(req: NextRequest) {
   if (!email?.trim()) return apiError(UI_STRINGS.appApiAdminUsersRoute.emailIsRequired);
   if (!name?.trim()) return apiError(UI_STRINGS.appApiAdminUsersRoute.nameIsRequired);
   if (!role) return apiError(UI_STRINGS.appApiAdminUsersRoute.roleIsRequired);
+  const policyViolation = findUserAdminPolicyViolation({ actorRole: ctx.role, actorUserId: ctx.userId, nextRole: role });
+  if (policyViolation) {
+    const policyResponse = getUserAdminPolicyResponse(policyViolation);
+    return apiError(policyResponse.message, policyResponse.status, { route: '/api/admin/users', method: 'POST', event: 'admin.user_policy_rejected' });
+  }
   if (!password || password.length < 8) return apiError(UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters);
 
-  const existing = await prisma.user.findFirst({ where: { tenantId: ctx.tenantId, email: email.trim() } });
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await prisma.user.findFirst({ where: { tenantId: ctx.tenantId, email: normalizedEmail } });
   if (existing) return apiError(UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists);
 
   const user = await prisma.user.create({
     data: {
       tenantId: ctx.tenantId,
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       name: name.trim(),
       role,
       passwordHash: await hashPassword(password),

@@ -71,8 +71,14 @@ export async function GET(req: NextRequest) {
     };
     if (rfqId) where.rfqId = rfqId;
     if (projectId) where.projectId = projectId;
+    // Vendors see only their own purchase orders; the buyer's internal ratings are never returned to them.
+    if (ctx.role === 'VENDOR') {
+      if (!ctx.vendorId) return apiError(UI_STRINGS.common.forbiddenInsufficientPermissions, 403, { route: '/api/procurement/ppos', method: 'GET' });
+      where.vendorId = ctx.vendorId;
+    }
 
     const ratingWhere: Record<string, unknown> = { tenantId: ctx.tenantId };
+    if (ctx.role === 'VENDOR') ratingWhere.vendorId = ctx.vendorId;
     if (projectId) ratingWhere.ppo = { projectId };
     if (projectAccessFilter) ratingWhere.ppo = { is: { project: { is: projectAccessFilter }, ...(projectId ? { projectId } : {}) } };
 
@@ -120,6 +126,7 @@ export async function GET(req: NextRequest) {
     const ratingParseFailures: string[] = [];
     const pposWithParsedRatings = ppos.map((ppo) => {
       let rating = ppo.vendorRating;
+      if (ctx.role === 'VENDOR') rating = null;
       if (rating && isProcurementUser && rating.status !== 'APPROVED') rating = null;
       let parsedCriteria: Record<string, unknown> = {};
       if (rating?.criteriaDetails !== null && rating?.criteriaDetails !== undefined) {

@@ -5717,6 +5717,13 @@ export const UI_STRINGS = {
     eGOrderAcknowledgedProductionScheduledAsPerTimeline: "e.g. Order acknowledged; production scheduled as per timeline.",
     categoryItemCountBOQLines: "{{category}} ({{itemCount}} BOQ lines)",
   },
+  libAdminUserPolicy: {
+    unknownRole: "Choose a valid user role.",
+    unknownStatus: "Choose a valid account status.",
+    platformAdminAssignmentForbidden: "Only a super administrator can assign the super administrator role.",
+    platformAdminAccountProtected: "Only a super administrator can change a super administrator account.",
+    ownRoleOrStatusChangeForbidden: "You cannot change your own role or account status.",
+  },
   libApiUtils: {
     unauthenticated: "Unauthenticated",
   },

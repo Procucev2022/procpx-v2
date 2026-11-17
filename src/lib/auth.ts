@@ -3,6 +3,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from './password';
 import { AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from './auth.constants';
+import { resolveAuthSecret } from './auth-secret';
 import { logEvent } from './observability/server-logger';
 import { prisma } from './prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -144,5 +145,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: UI_STRINGS.libAuth.login,
   },
   session: { strategy: 'jwt' },
-  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'procpx-super-secret-key-change-in-production-2024',
+  secret: resolveAuthSecret(),
 });

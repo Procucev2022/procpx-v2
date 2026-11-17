@@ -270,7 +270,7 @@ describe('NextAuth secret', () => {
   it('prefers NEXTAUTH_SECRET, then AUTH_SECRET, then the development default', () => {
     expect(secretFor({ NEXTAUTH_SECRET: 'nextauth-secret', AUTH_SECRET: 'auth-secret' })).toBe('nextauth-secret');
     expect(secretFor({ AUTH_SECRET: 'auth-secret' })).toBe('auth-secret');
-    expect(secretFor({})).toBe('procpx-super-secret-key-change-in-production-2024');
+    expect(secretFor({})).toBe('procpx-local-development-only-secret-do-not-deploy');
   });
 });
 
