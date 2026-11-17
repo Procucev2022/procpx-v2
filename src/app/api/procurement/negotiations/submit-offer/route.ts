@@ -132,12 +132,14 @@ export async function POST(req: NextRequest) {
     const latestQuote = rfq.quotes[0];
     const previousQuoteAmount = latestQuote ? latestQuote.totalQuoteAmount : 0;
     const negotiationRounds = negotiation?.rounds || [];
-    const previousRound = negotiationRounds.find((r) => r.vendorId === vendorId) || negotiationRounds[0];
+    // A vendor's offer builds only on that vendor's own round. Using another bidder's round would copy its counter-offer and deadline.
+    const ownRound = negotiationRounds.find((r) => r.vendorId === vendorId);
+    const previousRound = ownRound || negotiationRounds[0];
     const isBuyer = ctx.role !== 'VENDOR';
 
     const finalCounterAmount = isBuyer
       ? (counterOfferAmount !== undefined && counterOfferAmount !== null ? Number(counterOfferAmount) : Number(revisedQuoteAmount))
-      : (previousRound?.counterOfferAmount || null);
+      : (ownRound?.counterOfferAmount || null);
     const finalRevised = isBuyer ? null : Number(revisedQuoteAmount);
     if ((isBuyer && (!Number.isFinite(finalCounterAmount) || Number(finalCounterAmount) < 0))
       || (!isBuyer && (finalRevised === null || !Number.isFinite(finalRevised) || finalRevised < 0))) {
@@ -172,7 +174,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const roundNumber = isBuyer ? vendorBuyerOffers.length + 1 : (previousRound?.roundNumber || vendorRounds.length + 1);
+    const roundNumber = isBuyer ? vendorBuyerOffers.length + 1 : (ownRound?.roundNumber || vendorRounds.length + 1);
     const savingsAmount = previousQuoteAmount > 0 && finalRevised && finalRevised > 0 ? previousQuoteAmount - finalRevised : 0;
     const savingsPercent = previousQuoteAmount > 0 && finalRevised && finalRevised > 0 ? (savingsAmount / previousQuoteAmount) * 100 : 0;
 
@@ -287,8 +289,8 @@ export async function POST(req: NextRequest) {
       negotiationId: negotiation?.id,
       vendorId,
       roundNumber,
-      deadline: deadline ? new Date(deadline) : previousRound?.deadline || null,
-      targetPrice: previousRound?.targetPrice || null,
+      deadline: deadline ? new Date(deadline) : ownRound?.deadline || null,
+      targetPrice: ownRound?.targetPrice || null,
       previousQuoteAmount,
       counterOfferAmount: finalCounterAmount,
       revisedQuoteAmount: finalRevised,
