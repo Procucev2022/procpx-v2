@@ -15,6 +15,7 @@ import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import AgreementPreviewModal, { AgreementDocumentData } from './AgreementPreviewModal';
 import type { BuyerAcceptanceItem, AgreementPreparationMode, BuyerAcceptanceWorkspaceProps } from "@app-types/components/rate-cards/BuyerAcceptanceWorkspace.types";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { SHOW_SAMPLE_AGREEMENT_ATTACHMENT } from "./BuyerAcceptanceWorkspace.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
 export type { BuyerAcceptanceItem, AgreementPreparationMode };
@@ -447,7 +448,7 @@ export default function BuyerAcceptanceWorkspace({
                       className="hidden"
                     />
                   </label>
-                  {!uploadedFile && (
+                  {SHOW_SAMPLE_AGREEMENT_ATTACHMENT && !uploadedFile && (
                     <button
                       type="button"
                       onClick={handleAttachMockSample}
