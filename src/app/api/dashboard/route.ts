@@ -45,7 +45,10 @@ export async function GET(request: Request) {
       prisma.auditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 10,
-        include: { user: { select: { name: true, email: true } }, tenant: { select: { name: true, slug: true } } },
+        select: {
+          id: true, createdAt: true, entityType: true, action: true, description: true,
+          user: { select: { name: true, email: true } }, tenant: { select: { name: true, slug: true } },
+        },
       }),
       prisma.tenant.findMany({
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
