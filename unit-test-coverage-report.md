@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
+Files included: **373**. Files meeting all four 90% thresholds: **373/373**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100608/101327) |
-| branches | 93.66% (23144/24709) |
+| statements | 99.29% (100659/101378) |
+| branches | 93.65% (23149/24717) |
 | functions | 98.59% (1958/1986) |
-| lines | 99.29% (100608/101327) |
+| lines | 99.29% (100659/101378) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -51,7 +51,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/app/(app)/pr/page.tsx` | 100.00% | 97.59% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/approved-boqs/page.tsx` | 100.00% | 93.58% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/approved-prs/page.tsx` | 100.00% | 95.71% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/procurement/auctions/[id]/page.tsx` | 99.66% | 92.55% | 100.00% | 99.66% | PASS |
+| `src/app/(app)/procurement/auctions/[id]/page.tsx` | 99.65% | 92.00% | 100.00% | 99.65% | PASS |
 | `src/app/(app)/procurement/auctions/page.tsx` | 99.61% | 91.86% | 100.00% | 99.61% | PASS |
 | `src/app/(app)/procurement/awards/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/negotiations/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -77,7 +77,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/app/(app)/vendor-portal/ppos/page.tsx` | 99.43% | 90.78% | 100.00% | 99.43% | PASS |
 | `src/app/(app)/vendor-portal/profile/page.tsx` | 100.00% | 98.33% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/vendor-portal/rate-cards/page.tsx` | 100.00% | 94.95% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/vendor-portal/rfqs/[id]/page.tsx` | 99.43% | 94.89% | 100.00% | 99.43% | PASS |
+| `src/app/(app)/vendor-portal/rfqs/[id]/page.tsx` | 99.43% | 93.72% | 100.00% | 99.43% | PASS |
 | `src/app/(app)/vendor-portal/rfqs/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/vendor-portal/rfqs/page.tsx` | 99.70% | 98.30% | 100.00% | 99.70% | PASS |
 | `src/app/api/actual-costs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -262,6 +262,8 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/app/not-found.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ApprovalChatDrawer.tsx` | 100.00% | 97.22% | 100.00% | 100.00% | PASS |
+| `src/components/AuctionCountdown.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/AuctionCountdown.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/observability/ErrorFallback.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/PrDetailModal.tsx` | 99.77% | 94.90% | 100.00% | 99.77% | PASS |
 | `src/components/ProcurementCommercialWorkspace.tsx` | 98.80% | 90.35% | 97.56% | 98.80% | PASS |
@@ -293,7 +295,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/components/ui/SummaryCard.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/Toast.tsx` | 100.00% | 97.67% | 100.00% | 100.00% | PASS |
 | `src/components/ui/TopNav.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/ui/TopNav.tsx` | 99.39% | 96.55% | 100.00% | 99.39% | PASS |
+| `src/components/ui/TopNav.tsx` | 99.40% | 96.55% | 100.00% | 99.40% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.06% | 92.85% | 98.96% | PASS |
@@ -337,7 +339,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/lib/d1-query.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-query.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/drawing-parser.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/drawing-parser.ts` | 99.25% | 93.10% | 100.00% | 99.25% | PASS |
+| `src/lib/drawing-parser.ts` | 99.26% | 93.10% | 100.00% | 99.26% | PASS |
 | `src/lib/i18n.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/i18n.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/negotiation-history.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
