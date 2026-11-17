@@ -2,7 +2,7 @@
 import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import UsersPage from '../src/app/(app)/admin/users/page';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -138,5 +138,42 @@ describe('admin users page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.activate) }));
     await waitFor(() => expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppAdminUsersPage.userEmailIsNowNewStatus))).toBeInTheDocument());
     expect(fetchMock).toHaveBeenLastCalledWith('/api/admin/users?page=1&pageSize=20&search=');
+  });
+
+  it('shows a load error in place of the empty list when the users request fails', async () => {
+    fetchMock.mockResolvedValueOnce(response({ error: 'Database offline' }, false));
+
+    render(<UsersPage />);
+
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAdminUsersPage.failedToLoadUsers))).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppAdminUsersPage.noUsersFound))).not.toBeInTheDocument();
+  });
+
+  it('shows the load error when the users response body is not JSON', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: jest.fn().mockRejectedValue(new SyntaxError('Unexpected token <')) });
+
+    render(<UsersPage />);
+
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAdminUsersPage.failedToLoadUsers))).toBeInTheDocument();
+  });
+
+  it('keeps the newest search result when an earlier list response arrives late', async () => {
+    const searchResult = { ...users[0], id: 'user-search', name: 'Search Result User', email: 'search@example.test' };
+    let resolveInitialLoad!: (value: unknown) => void;
+    let resolveSearchLoad!: (value: unknown) => void;
+    fetchMock
+      .mockReturnValueOnce(new Promise((resolve) => { resolveInitialLoad = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSearchLoad = resolve; }));
+
+    render(<UsersPage />);
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppAdminUsersPage.searchByNameOrEmail)), { target: { value: 'search' } });
+
+    await act(async () => { resolveSearchLoad(response({ data: [searchResult], total: 1 })); });
+    expect(await screen.findByText('Search Result User')).toBeInTheDocument();
+
+    await act(async () => { resolveInitialLoad(response({ data: [users[0]], total: 1 })); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(screen.getByText('Search Result User')).toBeInTheDocument();
+    expect(screen.queryByText('Alice Admin')).not.toBeInTheDocument();
   });
 });

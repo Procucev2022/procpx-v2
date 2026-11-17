@@ -795,6 +795,7 @@ export const UI_STRINGS = {
     topLevelCategory: "— Top Level Category —",
   },
   appAppAdminUsersPage: {
+    failedToLoadUsers: "Users could not be loaded. Refresh the page to try again.",
     inviteUser: " Invite User",
     loadingUsers: " Loading users...",
     rBACPermissionMappingMatrix: " RBAC Permission Mapping Matrix",
