@@ -1010,16 +1010,18 @@ export const BUDGET_AGGREGATE_FINANCE_APPROVE_UPSERT_SQL = `
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
   ON CONFLICT ("tenantId", "costCentreId") DO UPDATE SET
-    "totalAmount" = "budgets"."totalAmount" + excluded."totalAmount",
     "approvedAmount" = "budgets"."approvedAmount" + excluded."approvedAmount",
     "pendingAmount" = MAX(0, "budgets"."pendingAmount" - ?),
     "status" = 'APPROVED', "updatedAt" = excluded."updatedAt"
   WHERE "budgets"."projectId" = excluded."projectId"
 `;
 
+// Budget invariant: totalAmount = approvedAmount + pendingAmount. Finance approval moves value from pending to approved,
+// so it must not change totalAmount. Rejection removes the pending value from both totals.
 export const BUDGET_AGGREGATE_PENDING_DECREMENT_SQL = `
   UPDATE "budgets"
-  SET "pendingAmount" = MAX(0, "pendingAmount" - ?), "updatedAt" = ?
+  SET "pendingAmount" = MAX(0, "pendingAmount" - ?),
+      "totalAmount" = MAX(0, "totalAmount" - ?), "updatedAt" = ?
   WHERE "tenantId" = ? AND "projectId" = ? AND "costCentreId" = ? AND EXISTS (
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
@@ -1085,6 +1087,7 @@ export const BUDGET_AGGREGATE_PENDING_UPSERT_SQL = `
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
   ON CONFLICT ("tenantId", "costCentreId") DO UPDATE SET
+    "totalAmount" = "budgets"."totalAmount" + excluded."totalAmount",
     "pendingAmount" = "budgets"."pendingAmount" + excluded."pendingAmount",
     "status" = 'UNDER_APPROVAL', "updatedAt" = excluded."updatedAt"
   WHERE "budgets"."projectId" = excluded."projectId"

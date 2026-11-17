@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
       { sql: BUDGET_REVISION_UPDATE_AFTER_AUDIT_SQL, values: ['BUDGET_REJECTED', now, contribution.boqRevisionId, ctx.tenantId, auditId, ctx.tenantId] },
       {
         sql: BUDGET_AGGREGATE_PENDING_DECREMENT_SQL,
-        values: [contribution.totalEstimatedValue, now, ctx.tenantId, contribution.projectId, contribution.costCentreId, auditId, ctx.tenantId],
+        values: [contribution.totalEstimatedValue, contribution.totalEstimatedValue, now, ctx.tenantId, contribution.projectId,
+          contribution.costCentreId, auditId, ctx.tenantId],
       },
     ]);
     if (Number(results[0]?.meta?.changes || 0) !== 1) {
