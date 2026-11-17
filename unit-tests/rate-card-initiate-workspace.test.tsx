@@ -294,6 +294,10 @@ describe('rate card initiation workspace', () => {
     });
     render(<InitiateRateCardWorkspace onBack={onBack} onSubmit={onSubmit} />);
     expect(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.retailStoreInteriorWorksFY202627))).toBeInTheDocument();
+    // Defaults are not written on mount, so the first save follows the user's first edit.
+    fireEvent.change(screen.getByDisplayValue(uiStringPattern(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.retailStoreInteriorWorksFY202627)), {
+      target: { value: 'Edited retail fitout title' },
+    });
     await openRateLines();
     expect(screen.getByText('5 items')).toBeInTheDocument();
     expect(reportHandledClientFailure).toHaveBeenCalledWith(

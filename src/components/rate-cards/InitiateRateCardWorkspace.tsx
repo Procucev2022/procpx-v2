@@ -56,6 +56,9 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
 
   // Single Authoritative Draft State for Rate Lines
   const [items, setItems] = useState<RateLineItem[]>(INITIAL_RATE_LINES);
+  // Draft persistence waits until the saved draft has been applied, so the defaults never overwrite it.
+  const initialFormState = useRef(form);
+  const draftWriteState = useRef<'pending' | 'ready'>('pending');
 
   // Excel File Input & Upload Preview State
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -109,6 +112,12 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
   }, []);
 
   useEffect(() => {
+    if (draftWriteState.current === 'pending') {
+      // Until a saved draft is restored, the state still holds the defaults. Writing them now would erase the draft,
+      // and React Strict Mode runs this effect twice on mount.
+      if (form === initialFormState.current && items === INITIAL_RATE_LINES) return;
+      draftWriteState.current = 'ready';
+    }
     try {
       localStorage.setItem('procpx_rate_card_initiate_draft', JSON.stringify({ form, items }));
     } catch (error: unknown) {
