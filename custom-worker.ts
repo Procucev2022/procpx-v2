@@ -4,6 +4,10 @@
 // @ts-ignore
 import { default as openNextHandler } from './.open-next/worker.js';
 import { dispatchNotificationOutbox } from './src/lib/notification-outbox';
+import {
+  MAX_NOTIFICATION_OUTBOX_BATCH_SIZE,
+  NOTIFICATION_OUTBOX_MAX_ROUNDS_PER_TICK,
+} from './src/lib/notification-outbox.constants';
 import { transitionScheduledAuctions } from './src/lib/auction-lifecycle';
 import { writeRuntimeStructuredLog } from './src/lib/observability/runtime-logger';
 import type { NotificationOutboxDatabase } from './types/lib/notification-outbox.types';
@@ -29,10 +33,32 @@ async function logScheduledEvent(level: 'error' | 'info', event: string, context
   }
 }
 
+/**
+ * Drains due notifications within one cron tick. A full batch means more rows are probably waiting, so the
+ * dispatcher claims again, up to a fixed number of rounds. Totals are logged once per tick that did any work.
+ */
+async function dispatchNotificationOutboxRounds(database: NotificationOutboxDatabase, event: ScheduledEvent): Promise<void> {
+  const total = { claimed: 0, delivered: 0, retried: 0, dead: 0 };
+  for (let round = 0; round < NOTIFICATION_OUTBOX_MAX_ROUNDS_PER_TICK; round += 1) {
+    const result = await dispatchNotificationOutbox(database);
+    total.claimed += result.claimed;
+    total.delivered += result.delivered;
+    total.retried += result.retried;
+    total.dead += result.dead;
+    if (result.claimed < MAX_NOTIFICATION_OUTBOX_BATCH_SIZE) break;
+  }
+  if (total.claimed > 0) {
+    await logScheduledEvent('info', 'notification.outbox_dispatch_summary', {
+      operation: 'dispatch_notification_outbox', route: 'scheduled_worker',
+      cron: event.cron, scheduledTime: event.scheduledTime, ...total,
+    });
+  }
+}
+
 const worker = {
   fetch: openNextHandler.fetch,
   scheduled(event: ScheduledEvent, env: WorkerEnvironment, context: WorkerExecutionContext) {
-    const notificationDispatch = dispatchNotificationOutbox(env.DB).catch((error: unknown) => logScheduledEvent(
+    const notificationDispatch = dispatchNotificationOutboxRounds(env.DB, event).catch((error: unknown) => logScheduledEvent(
       'error', 'notification.outbox_scheduled_dispatch_failed', {
         operation: 'scheduled_notification_dispatch', route: 'scheduled_worker',
         cron: event.cron, scheduledTime: event.scheduledTime,

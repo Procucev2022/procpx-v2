@@ -286,7 +286,7 @@ describe('notification outbox dispatch', () => {
       sql: NOTIFICATION_OUTBOX_RESCHEDULE_SQL,
       values: [8, new Date(now.getTime() + 8000), 'Error', now, 'outbox-1', expect.any(String)],
     });
-    expect(log).toHaveBeenCalledWith('error', 'notification.outbox_dispatch_failed', expect.objectContaining({
+    expect(log).toHaveBeenCalledWith('warn', 'notification.outbox_retry_scheduled', expect.objectContaining({
       outboxId: 'outbox-1', tenantId: 'tenant-1', attemptCount: 4, error: 'Error',
     }), 'application', undefined);
     expect(JSON.stringify(log.mock.calls)).not.toContain('user@example.com');
@@ -308,7 +308,7 @@ describe('notification outbox dispatch', () => {
       values: ['outbox-1', 'tenant-1'],
     });
     expect(log).toHaveBeenCalledWith('warn', 'notification.outbox_retry_ownership_lost', expect.objectContaining({
-      outboxId: 'outbox-1', error: 'Error',
+      outboxId: 'outbox-1', error: 'notification_delivery_no_rows',
     }), 'application', undefined);
   });
 

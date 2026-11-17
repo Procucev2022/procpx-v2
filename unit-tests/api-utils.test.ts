@@ -159,7 +159,7 @@ describe('requireAuth', () => {
 
     authMock.mockRejectedValueOnce(new Error('no request context'));
     await expect(responseJson(await requireAuth())).resolves.toEqual({
-      status: 401, body: { error: UI_STRINGS.libApiUtils.unauthenticated },
+      status: 503, body: { error: UI_STRINGS.libApiUtils.sessionUnavailable },
     });
   });
 

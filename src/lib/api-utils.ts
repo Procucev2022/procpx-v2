@@ -60,12 +60,13 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
     }
   }
 
-  // 2. Check next-auth session
+  // 2. Check next-auth session. A failed lookup is a server fault; reporting it as a logout hides the outage.
   let session: Session | null = null;
   try {
     session = await auth();
-  } catch {
-    // outside Next.js request context
+  } catch (error) {
+    logEvent('error', 'auth.session_lookup_failed', { operation: 'resolve_session', error });
+    return NextResponse.json({ error: UI_STRINGS.libApiUtils.sessionUnavailable }, { status: 503 });
   }
 
   if (!session?.user) {

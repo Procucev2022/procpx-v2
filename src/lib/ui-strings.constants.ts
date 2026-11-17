@@ -3963,6 +3963,7 @@ export const UI_STRINGS = {
     zenithRetailSystems: "Zenith Retail Systems",
   },
   common: {
+    loadingPageContent: "Loading page content",
     additionalCategoryCount: "+{{count}} more categories",
     untitledItemFallback: "Untitled Item",
     failedToFetchCategories: "Failed to fetch categories.",
@@ -5725,6 +5726,7 @@ export const UI_STRINGS = {
     ownRoleOrStatusChangeForbidden: "You cannot change your own role or account status.",
   },
   libApiUtils: {
+    sessionUnavailable: "We could not verify your session right now. Please try again in a moment.",
     unauthenticated: "Unauthenticated",
   },
   libAuth: {
@@ -5805,6 +5807,11 @@ export const UI_STRINGS = {
     premiumAcrylicEmulsionPainting: "Premium Acrylic Emulsion Painting",
     receptionCounterWallPanellingBespoke: "Reception Counter & Wall Panelling (Bespoke)",
     vitrifiedFloorTiling600x600mm: "Vitrified Floor Tiling (600x600mm)",
+  },
+  appNotFound: {
+    title: "Page not found",
+    description: "The page you asked for does not exist or has moved.",
+    backToDashboard: "Back to dashboard",
   },
   appErrorBoundary: {
     title: "Something went wrong",
