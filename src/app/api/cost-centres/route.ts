@@ -5,7 +5,12 @@ import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } fr
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
-import { COST_CENTRE_INSERT_IF_PROJECT_EXISTS_SQL, COST_CENTRE_LOOKUP_MAX_OPTIONS, COST_CENTRE_SEARCH_MAX_LENGTH } from './route.constants';
+import {
+  COST_CENTRE_INSERT_IF_PROJECT_EXISTS_SQL,
+  COST_CENTRE_LOOKUP_MAX_OPTIONS,
+  COST_CENTRE_NORMALIZED_NAME_EXISTS_SQL,
+  COST_CENTRE_SEARCH_MAX_LENGTH,
+} from './route.constants';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '@/lib/d1-batch.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
 import type { Prisma } from '@prisma/client';
@@ -254,10 +259,28 @@ export async function POST(req: NextRequest) {
           'COST_CENTRE_CREATED', descriptionText, null, JSON.stringify(costCentre), null, null, now,
         ],
       },
+      {
+        sql: COST_CENTRE_NORMALIZED_NAME_EXISTS_SQL,
+        values: [ctx.tenantId, normalizedProjectId, normalizedName],
+      },
     ]);
     const inserted = Number(results[0]?.meta?.changes || 0) === 1;
     const audited = Number(results[1]?.meta?.changes || 0) === 1;
     if (!inserted || !audited) {
+      const duplicateName = results[2]?.results?.[0] as { id?: string } | undefined;
+      if (duplicateName?.id) {
+        try {
+          await writeStructuredLog('warn', 'cost_centre.duplicate_name_conflict', {
+            operation: 'create_cost_centre', route: '/api/cost-centres',
+            requestId: req.headers.get('x-request-id') || null,
+            tenantId: ctx.tenantId, userId: ctx.userId, projectId: normalizedProjectId,
+            duplicateCostCentreId: duplicateName.id,
+          });
+        } catch {
+          // Keep the conflict response stable if optional log storage is unavailable.
+        }
+        return apiError(UI_STRINGS.appApiCostCentresRoute.costCentreNameAlreadyExistsForThisProject, 409);
+      }
       await writeStructuredLog('warn', 'cost_centre.creation_precondition_failed', {
         operation: 'create_cost_centre',
         route: '/api/cost-centres',
@@ -274,7 +297,7 @@ export async function POST(req: NextRequest) {
     return apiSuccess(costCentre, 201);
   } catch (error) {
     const uniqueConflict = error instanceof Error && /unique constraint|unique failed|P2002/i.test(error.message);
-    await writeStructuredLog(uniqueConflict ? 'warn' : 'error', uniqueConflict ? 'cost_centre.duplicate_code_conflict' : 'cost_centre.creation_failed', {
+    await writeStructuredLog(uniqueConflict ? 'warn' : 'error', uniqueConflict ? 'cost_centre.duplicate_conflict' : 'cost_centre.creation_failed', {
       operation: 'create_cost_centre',
       route: '/api/cost-centres',
       requestId: req.headers.get('x-request-id'),
@@ -288,7 +311,7 @@ export async function POST(req: NextRequest) {
         : { type: typeof error },
     });
     if (uniqueConflict && costCentreCode) {
-      return apiError(interpolateUiString(UI_STRINGS.appApiCostCentresRoute.costCentreCodeCodeAlreadyExistsForThisProject, { code: costCentreCode }), 409);
+      return apiError(UI_STRINGS.appApiCostCentresRoute.costCentreCodeOrNameAlreadyExistsForThisProject, 409);
     }
     return apiError(UI_STRINGS.common.userMessages.failedToCreateCostCentre2, 500);
   }

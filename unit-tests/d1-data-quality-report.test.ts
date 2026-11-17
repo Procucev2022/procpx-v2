@@ -44,6 +44,15 @@ function createDatabase(): LocalSQLiteDatabase {
       id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, rfqId TEXT NOT NULL, projectId TEXT, costCentreId TEXT,
       boqId TEXT, boqRevisionId TEXT, boqLineId TEXT, prLineId TEXT
     );
+    CREATE TABLE ppos (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL, vendorId TEXT NOT NULL);
+    CREATE TABLE ppo_lines (
+      id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, ppoId TEXT NOT NULL, vendorId TEXT NOT NULL, projectId TEXT NOT NULL,
+      boqId TEXT, boqRevisionId TEXT, boqLineId TEXT, prLineId TEXT, rfqLineId TEXT
+    );
+    CREATE TABLE actual_cost_transactions (
+      id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL, ppoId TEXT, ppoLineId TEXT,
+      vendorId TEXT, boqId TEXT, boqRevisionId TEXT, boqLineId TEXT, prLineId TEXT, rfqLineId TEXT
+    );
     INSERT INTO projects VALUES ('project-a', 'tenant-a');
     INSERT INTO projects VALUES ('project-b', 'tenant-a');
     INSERT INTO cost_centres VALUES ('centre-a', 'tenant-a', 'project-a');
@@ -60,6 +69,7 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO boq_revisions VALUES ('revision-other', 'tenant-a', 'boq-other', 'centre-other-project');
     INSERT INTO boq_lines VALUES ('source-line-valid', 'tenant-a', 'revision-valid');
     INSERT INTO boq_lines VALUES ('source-line-other', 'tenant-a', 'revision-other');
+    INSERT INTO boq_lines VALUES ('source-line-alt', 'tenant-a', 'revision-valid');
     INSERT INTO procurement_requests VALUES (
       'pr-valid', 'tenant-a', 'project-a', 'centre-a', 'boq-valid', 'revision-valid'
     );
@@ -91,6 +101,27 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO rfq_lines VALUES (
       'rfq-line-wrong-source', 'tenant-a', 'rfq-valid', 'project-a', 'centre-a', 'boq-valid', 'revision-valid', 'source-line-other', 'pr-line-valid'
     );
+    INSERT INTO rfq_lines VALUES (
+      'rfq-line-alt', 'tenant-a', 'rfq-valid', 'project-a', 'centre-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid'
+    );
+    INSERT INTO pr_lines VALUES (
+      'pr-line-alt', 'tenant-a', 'pr-valid', 'project-a', 'centre-a', 'boq-valid', 'revision-valid', 'source-line-valid'
+    );
+    INSERT INTO ppos VALUES
+      ('ppo-valid', 'tenant-a', 'project-a', 'vendor-a'),
+      ('ppo-other-project', 'tenant-a', 'project-b', 'vendor-a'),
+      ('ppo-other-vendor', 'tenant-a', 'project-a', 'vendor-b');
+    INSERT INTO ppo_lines VALUES (
+      'ppo-line-valid', 'tenant-a', 'ppo-valid', 'vendor-a', 'project-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-valid'
+    );
+    INSERT INTO actual_cost_transactions VALUES
+      ('actual-valid', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-valid'),
+      ('actual-wrong-boq-line', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-alt', 'pr-line-valid', 'rfq-line-valid'),
+      ('actual-wrong-pr-line', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-alt', 'rfq-line-valid'),
+      ('actual-wrong-rfq-line', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-a', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-alt'),
+      ('actual-wrong-vendor', 'tenant-a', 'project-a', 'ppo-valid', 'ppo-line-valid', 'vendor-b', 'boq-valid', 'revision-valid', 'source-line-valid', 'pr-line-valid', 'rfq-line-valid'),
+      ('actual-wrong-ppo-project', 'tenant-a', 'project-a', 'ppo-other-project', NULL, 'vendor-a', NULL, NULL, NULL, NULL, NULL),
+      ('actual-wrong-ppo-vendor', 'tenant-a', 'project-a', 'ppo-other-vendor', NULL, 'vendor-a', NULL, NULL, NULL, NULL, NULL);
   `);
   return database;
 }
@@ -107,7 +138,7 @@ describe('read-only D1 data-quality report queries', () => {
   });
 
   it('keeps every report check read-only', () => {
-    expect(CHECKS.length).toBe(25);
+    expect(CHECKS.length).toBe(26);
     expect(CHECKS.every(([, sql]) => /^\s*SELECT\b/i.test(sql))).toBe(true);
   });
 
@@ -151,5 +182,29 @@ describe('read-only D1 data-quality report queries', () => {
 
     expect(rows.map(({ rfqLineId }) => rfqLineId).sort()).toEqual(['rfq-line-wrong-pr', 'rfq-line-wrong-source']);
     expect(rows.some(({ rfqLineId }) => rfqLineId === 'rfq-line-valid')).toBe(false);
+  });
+
+  it('finds actual-cost line and vendor references that differ from the linked PPO line', () => {
+    const rows = database.prepare(findCheck(
+      'Actual-cost line references or vendor differ from the linked PPO line',
+    )).all();
+
+    expect(rows.map(({ actualCostId }) => actualCostId).sort()).toEqual([
+      'actual-wrong-boq-line',
+      'actual-wrong-pr-line',
+      'actual-wrong-rfq-line',
+      'actual-wrong-vendor',
+    ]);
+  });
+
+  it('finds PPO header project and vendor mismatches when no PPO line is linked', () => {
+    const rows = database.prepare(findCheck(
+      'Actual-cost PPO references whose PPO tenant, project, vendor, or line does not match',
+    )).all();
+
+    expect(rows.filter(({ ppoLineId }) => ppoLineId === null).map(({ actualCostId }) => actualCostId).sort()).toEqual([
+      'actual-wrong-ppo-project',
+      'actual-wrong-ppo-vendor',
+    ]);
   });
 });

@@ -221,6 +221,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return apiSuccess(updatedValues);
   } catch (error: unknown) {
+    const uniqueConflict = error instanceof Error && /unique constraint|unique failed|P2002/i.test(error.message);
     if (auditId && updatedAt && expectedUpdatedAt && updatedValues && oldValue) {
       try {
         const [current, audit] = await Promise.all([
@@ -251,7 +252,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     try {
-      await writeStructuredLog('error', COST_CENTRE_UPDATE_FAILED_EVENT, {
+      await writeStructuredLog(uniqueConflict ? 'warn' : 'error', uniqueConflict ? 'cost_centre.duplicate_name_conflict' : COST_CENTRE_UPDATE_FAILED_EVENT, {
         operation: 'update_cost_centre', route: '/api/cost-centres/[id]',
         requestId: req.headers.get('x-request-id') || null, tenantId: ctx.tenantId,
         userId: ctx.userId, role: ctx.role, costCentreId: id, durationMs: Date.now() - startedAt,
@@ -260,6 +261,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     } catch {
       // Preserve a stable API response when optional log storage fails.
     }
+    if (uniqueConflict) return apiError(UI_STRINGS.appApiCostCentresRoute.costCentreCodeOrNameAlreadyExistsForThisProject, 409);
     return apiError(UI_STRINGS.common.userMessages.failedToUpdateCostCentre, 500);
   }
 }

@@ -271,6 +271,27 @@ describe('cost centre and approved BOQ APIs', () => {
     });
   });
 
+  it('returns a normalized-name conflict for a cost centre already in the same project', async () => {
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-1' });
+    db.costCentre.findUnique.mockResolvedValueOnce(null);
+    writeBatch.mockResolvedValueOnce([
+      { meta: { changes: 0 }, results: [] },
+      { meta: { changes: 0 }, results: [] },
+      { meta: { changes: 0 }, results: [{ id: 'existing-cost-centre' }] },
+    ]);
+
+    await expect(createCostCentre(request('http://localhost/api/cost-centres', {
+      projectId: 'project-1', code: 'CC-9', name: ' office ',
+    }))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiCostCentresRoute.costCentreNameAlreadyExistsForThisProject,
+      status: 409,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'cost_centre.duplicate_name_conflict', expect.objectContaining({
+      operation: 'create_cost_centre', duplicateCostCentreId: 'existing-cost-centre', projectId: 'project-1',
+    }));
+  });
+
   it('lists approved BOQs with project/search constraints and derives sourcing summaries from line history', async () => {
     const denied = { status: 403 };
     auth.mockResolvedValueOnce(denied);

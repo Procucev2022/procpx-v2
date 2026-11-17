@@ -282,6 +282,8 @@ export const UI_STRINGS = {
   appApiCostCentresRoute: {
     activeCostCentreLookupExceedsMaximumSize: "This project has more than {{maxItems}} cost centres. Select a cost centre explicitly before importing by code.",
     costCentreCodeCodeAlreadyExistsForThisProject: "Cost Centre Code {{code}} already exists for this project.",
+    costCentreNameAlreadyExistsForThisProject: "A cost centre with this name already exists for this project.",
+    costCentreCodeOrNameAlreadyExistsForThisProject: "A cost centre with this code or name already exists for this project.",
     costCentreCreatedCodeNameValue3Sqft: "Cost Centre created: {{code}} - {{name}} ({{value3}} sqft)",
     projectIDCostCentreCodeAndNameAreMandatory: "Project ID, Cost Centre Code, and Name are mandatory.",
     projectNotFoundOrInaccessible: "Project not found or inaccessible.",
@@ -694,6 +696,7 @@ export const UI_STRINGS = {
   },
   appApiProcurementVendorsRoute: {
     vendorAndAuditWriteDidNotCommitAsExpected: "Vendor creation did not produce a committed vendor and audit record.",
+    vendorNameAlreadyExistsForThisTenant: "A vendor with this name already exists for this tenant.",
     operatingLocationIsRequired: "Operating Location is required.",
     primaryContactNameIsRequired: "Primary Contact Name is required.",
     primaryMobileNumberOrEmailIsRequired: "Primary Mobile Number or Email is required.",
@@ -728,9 +731,11 @@ export const UI_STRINGS = {
   },
   appApiProjectsIdRoute: {
     projectProjectCodeUpdated: "Project {{projectCode}} updated",
+    projectUpdateFailed: "Failed to update project.",
   },
   appApiProjectsRoute: {
     aProjectWithThisProjectCodeAlreadyExistsPleaseRetry: "A project with this project code already exists. Please retry.",
+    aProjectWithThisNameAlreadyExistsForThisTenant: "A project with this name already exists for this tenant.",
     projectProjectCodeCreatedTrim: "Project {{projectCode}} created: {{trim}}",
   },
   appApiPrRoute: {

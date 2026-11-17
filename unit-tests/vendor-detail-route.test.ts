@@ -237,6 +237,21 @@ describe('vendor detail route', () => {
     expect(errorResult).toHaveBeenNthCalledWith(2, UI_STRINGS.common.userMessages.failedToUpdateVendorProfile, 500);
   });
 
+  it('returns a conflict when a vendor profile update collides on the normalized tenant name', async () => {
+    permission.mockReturnValue(true);
+    db.vendor.findFirst.mockResolvedValueOnce(baseVendor);
+    writeBatch.mockRejectedValueOnce(new Error('UNIQUE constraint failed: vendors_tenant_normalized_name_unique_idx'));
+
+    await expect(PUT(putRequest({ name: 'Duplicate Supplier' }), params())).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiProcurementVendorsRoute.vendorNameAlreadyExistsForThisTenant,
+      status: 409,
+    });
+    expect(writeLog).toHaveBeenCalledWith('warn', 'vendor.duplicate_name_conflict', expect.objectContaining({
+      operation: 'update_vendor_profile', vendorId: 'vendor-1', tenantId: 'tenant-1',
+    }));
+  });
+
   it('keeps the stable profile error response if structured error storage fails', async () => {
     permission.mockReturnValue(true);
     writeBatch.mockRejectedValueOnce(new Error('database write failed'));
