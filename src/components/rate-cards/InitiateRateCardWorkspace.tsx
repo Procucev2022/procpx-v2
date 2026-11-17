@@ -28,31 +28,89 @@ import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import PageHeader from '@/components/ui/PageHeader';
 import WizardStepper from '@/components/ui/WizardStepper';
 import FormSection from '@/components/ui/FormSection';
-import type { RateLineItem, InitiateRateCardProps, InitiateRateCardForm } from "@app-types/components/rate-cards/InitiateRateCardWorkspace.types";
+import type { RateLineItem, InitiateRateCardProps, InitiateRateCardForm, RateCardVendorOption } from "@app-types/components/rate-cards/InitiateRateCardWorkspace.types";
 export type { RateLineItem };
-import { INITIAL_RATE_LINES } from "./InitiateRateCardWorkspace.constants";
+import { INITIAL_RATE_LINES, RATE_CARD_VENDOR_PAGE_SIZE } from "./InitiateRateCardWorkspace.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
 
 
 
+function toIsoDate(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function defaultValidityWindow(): { effectiveFrom: string; validUntil: string } {
+  const start = new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  end.setDate(end.getDate() - 1);
+  return { effectiveFrom: toIsoDate(start), validUntil: toIsoDate(end) };
+}
+
 export default function InitiateRateCardWorkspace({ onBack, onSubmit }: InitiateRateCardProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
+  // Tenant vendors and master categories (loaded from the server, never hardcoded)
+  const [vendorOptions, setVendorOptions] = useState<RateCardVendorOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [loadingMasters, setLoadingMasters] = useState(true);
+
   // Form State
-  const [form, setForm] = useState<InitiateRateCardForm>({
-    vendor: 'Ramakrishna Interiors (VND-0006)',
-    vendorId: '37b13f45-ed6f-4c27-af8c-b3ede1fd3063',
-    effectiveFrom: '2026-10-01',
-    validUntil: '2027-09-30',
-    category: 'Interior Works',
-    subcategory: 'Retail Turnkey Fitouts',
+  const [form, setForm] = useState<InitiateRateCardForm>(() => ({
+    vendor: '',
+    vendorId: '',
+    ...defaultValidityWindow(),
+    category: '',
+    subcategory: '',
     location: 'All India',
     title: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.retailStoreInteriorWorksFY202627,
     commercialTerms: 'Rates are exclusive of taxes. Valid for all retail outlets. Includes material and labour unless specified.',
     scope: 'Interior execution including civil, false ceiling, flooring, carpentry, painting and allied works for retail outlets.',
-  });
+  }));
+
+  // Load the tenant's active vendors and top-level master categories for selection.
+  useEffect(() => {
+    let cancelled = false;
+    const loadMasters = async () => {
+      try {
+        const [vendorRes, categoryRes] = await Promise.all([
+          fetch(`/api/procurement/vendors?status=ACTIVE&pageSize=${RATE_CARD_VENDOR_PAGE_SIZE}`),
+          fetch('/api/masters/categories'),
+        ]);
+        const vendorData = await vendorRes.json();
+        const categoryData = await categoryRes.json();
+        if (cancelled) return;
+        const rawVendors: Array<Partial<RateCardVendorOption> & { isBlacklisted?: boolean }> =
+          Array.isArray(vendorData?.vendors) ? vendorData.vendors : [];
+        const vendors = rawVendors
+          .filter((v) => v.id && !v.isBlacklisted)
+          .map((v) => ({ id: v.id, name: v.name, code: v.code }) as RateCardVendorOption);
+        const rawCategories: Array<{ name?: string; parentId?: string | null }> = Array.isArray(categoryData) ? categoryData : [];
+        const categories = rawCategories
+          .filter((c) => c.name && !c.parentId)
+          .map((c) => c.name as string);
+        setVendorOptions(vendors);
+        setCategoryOptions(categories);
+      } catch (error: unknown) {
+        reportHandledClientFailure(error, {
+          operation: 'load_rate_card_vendor_and_category_masters',
+          route: '/procurement/rate-cards/new',
+          fallback: 'keep_selected_vendor_and_category',
+        });
+      } finally {
+        if (!cancelled) setLoadingMasters(false);
+      }
+    };
+    void loadMasters();
+    return () => { cancelled = true; };
+  }, []);
+
+  const vendorLabel = (option: RateCardVendorOption) =>
+    interpolateUiString(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.vendorOptionLabel, { name: option.name, code: option.code });
+  const selectedVendorMissingFromOptions = Boolean(form.vendorId) && !vendorOptions.some((option) => option.id === form.vendorId);
+  const selectedCategoryMissingFromOptions = Boolean(form.category) && !categoryOptions.includes(form.category);
 
   // Single Authoritative Draft State for Rate Lines
   const [items, setItems] = useState<RateLineItem[]>(INITIAL_RATE_LINES);
@@ -601,28 +659,27 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 <label className="pro-form-label">{UI_STRINGS.common.contractingVendor}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <select
-                  value={form.vendor}
+                  aria-label={UI_STRINGS.common.contractingVendor}
+                  value={form.vendorId}
                   onChange={(e) => {
-                    const map: Record<string, string> = {
-                      'Ramakrishna Interiors (VND-0006)': '37b13f45-ed6f-4c27-af8c-b3ede1fd3063',
-                      'BuildRight Solutions (VND-0007)': '8e947620-4919-40b7-ad68-5f343861a737',
-                      'ElectroMax (VND-0008)': 'c68dd488-e7fc-4e45-a78b-eaec07d576d3',
-                      'CoolTech HVAC (VND-0009)': '5bea6420-c107-405d-9a51-642d631cd2b9',
-                      'Apex Infrastructure & Contracting Pvt Ltd (VND-0001)': 'b79ac9af-7c2b-43be-9a78-571e49daa3fb',
-                    };
+                    const selected = vendorOptions.find((option) => option.id === e.target.value);
                     setForm({
                       ...form,
-                      vendor: e.target.value,
-                      vendorId: map[e.target.value] || form.vendorId,
+                      vendorId: e.target.value,
+                      vendor: selected ? vendorLabel(selected) : '',
                     });
                   }}
                   className="pro-select"
                 >
-                  <option value="Ramakrishna Interiors (VND-0006)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.ramakrishnaInteriorsVND0006}</option>
-                  <option value="BuildRight Solutions (VND-0007)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.buildRightSolutionsVND0007}</option>
-                  <option value="ElectroMax (VND-0008)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electroMaxVND0008}</option>
-                  <option value="CoolTech HVAC (VND-0009)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.coolTechHVACVND0009}</option>
-                  <option value="Apex Infrastructure & Contracting Pvt Ltd (VND-0001)">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.apexInfrastructureContractingPvtLtdVND0001}</option>
+                  <option value="">{loadingMasters
+                    ? UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.loadingVendors
+                    : UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.selectVendor}</option>
+                  {selectedVendorMissingFromOptions && (
+                    <option value={form.vendorId}>{form.vendor || form.vendorId}</option>
+                  )}
+                  {vendorOptions.map((option) => (
+                    <option key={option.id} value={option.id}>{vendorLabel(option)}</option>
+                  ))}
                 </select>
               </div>
 
@@ -631,15 +688,18 @@ export default function InitiateRateCardWorkspace({ onBack, onSubmit }: Initiate
                 <label className="pro-form-label">{UI_STRINGS.common.category2}<span className="text-red-500">{UI_STRINGS.common.copyd1yn99}</span>
                 </label>
                 <select
+                  aria-label={UI_STRINGS.common.category2}
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
                   className="pro-select"
                 >
-                  <option value="Interior Works">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.interiorWorks}</option>
-                  <option value="Civil & Interior">{UI_STRINGS.common.civilInterior}</option>
-                  <option value="Electrical">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical}</option>
-                  <option value="HVAC">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.hVAC}</option>
-                  <option value="Furniture">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.furniture}</option>
+                  <option value="">{UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.selectCategory}</option>
+                  {selectedCategoryMissingFromOptions && (
+                    <option value={form.category}>{form.category}</option>
+                  )}
+                  {categoryOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
                 </select>
               </div>
 

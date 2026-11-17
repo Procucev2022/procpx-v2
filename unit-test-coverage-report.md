@@ -6,10 +6,10 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100114/100831) |
-| branches | 93.67% (22987/24540) |
-| functions | 98.57% (1939/1967) |
-| lines | 99.28% (100114/100831) |
+| statements | 99.30% (100222/100926) |
+| branches | 93.69% (23024/24573) |
+| functions | 98.58% (1948/1976) |
+| lines | 99.30% (100222/100926) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -54,10 +54,12 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/app/(app)/procurement/awards/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/negotiations/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/procurement/ppos/page.tsx` | 100.00% | 95.19% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/procurement/ppos/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/procurement/ppos/page.tsx` | 100.00% | 95.43% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/quotes/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rate-cards/page.tsx` | 99.47% | 94.54% | 100.00% | 99.47% | PASS |
-| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.23% | 90.04% | 93.22% | 98.23% | PASS |
+| `src/app/(app)/procurement/rfqs/[id]/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.45% | 91.17% | 93.93% | 98.45% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.79% | 90.20% | 97.10% | 99.79% | PASS |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
@@ -265,7 +267,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/components/rate-cards/BuyerAcceptanceWorkspace.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/HomeWorkspace.tsx` | 100.00% | 96.80% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/InitiateRateCardWorkspace.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/rate-cards/InitiateRateCardWorkspace.tsx` | 99.63% | 93.92% | 100.00% | 99.63% | PASS |
+| `src/components/rate-cards/InitiateRateCardWorkspace.tsx` | 99.64% | 94.75% | 100.00% | 99.64% | PASS |
 | `src/components/rate-cards/NegotiationWorkspace.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/Section5VendorAcceptance.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/Section6ApproverView.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -290,8 +292,8 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.04% | 92.85% | 98.96% | PASS |
-| `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.90% | 96.77% | 99.91% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.06% | 92.85% | 98.96% | PASS |
+| `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation-client.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

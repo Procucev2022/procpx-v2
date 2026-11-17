@@ -132,6 +132,7 @@ export default function Sidebar({ user }: SidebarProps) {
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
+            {navItem('/pr', UI_STRINGS.componentsSidebar.procurementRequests, Send, pathname === '/pr' || pathname.startsWith('/pr/'))}
 
             {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.vENDORPERFORMANCE}</div>}
             {navItem('/procurement/ppos', 'PPO Performance', Award, pathname.startsWith('/procurement/ppos'))}
@@ -178,6 +179,8 @@ export default function Sidebar({ user }: SidebarProps) {
             {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGETGOVERNANCE}</div>}
             {navItem('/finance/budget-approvals', 'Budget Approvals', CheckSquare, pathname.startsWith('/finance/budget-approvals'))}
             {navItem('/approvals/rate-cards', 'Rate Card Approvals', Tag, pathname.startsWith('/approvals/rate-cards'))}
+            {hasPermission(role, 'AWARD_APPROVE') &&
+              navItem('/procurement/awards', UI_STRINGS.componentsSidebar.awardApprovals, Award, pathname.startsWith('/procurement/awards'))}
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}

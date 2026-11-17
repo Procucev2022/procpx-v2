@@ -167,6 +167,15 @@ describe('procurement vendor directory API', () => {
     }));
   });
 
+  it('returns compliance and blacklist flags so sourcing screens can filter eligible vendors', async () => {
+    db.vendor.findMany.mockResolvedValueOnce([{ id: 'one', categories: '', complianceStatus: 'COMPLIANT', isBlacklisted: false }]);
+    db.vendor.count.mockResolvedValueOnce(1);
+    await expect(GET(getRequest(''))).resolves.toMatchObject({
+      ok: true, data: { vendors: [{ id: 'one', complianceStatus: 'COMPLIANT', isBlacklisted: false }] },
+    });
+    expect(db.vendor.findMany.mock.calls[0][0].select).toMatchObject({ complianceStatus: true, isBlacklisted: true });
+  });
+
   it('returns a safe GET failure while logging sanitized database details', async () => {
     db.vendor.findMany.mockRejectedValueOnce(new Error('directory unavailable'));
     await expect(GET(getRequest())).resolves.toEqual({ ok: false, error: 'Failed to fetch vendors', status: 500 });

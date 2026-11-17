@@ -36,6 +36,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { hasPermission, type UserRole } from '@/lib/permissions';
+import { PPO_COMPLETABLE_STATUSES, PPO_COMPLETION_IDEMPOTENCY_PREFIX } from './page.constants';
 
 
 function getPpoStatusBadgeStyle(status: string): { bg: string; color: string; border: string } {
@@ -140,6 +142,41 @@ export default function PposDeskPage() {
   };
 
   const isProjectUser = currentUserRole === 'PROJECT_USER' || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'CLIENT_ADMIN';
+  const canRecordCompletion = hasPermission(currentUserRole as UserRole, 'ACTUAL_COST_CREATE');
+  const [completingPpoId, setCompletingPpoId] = useState<string | null>(null);
+
+  // Records full completion of all remaining PPO quantities at the agreed rates.
+  // This posts actual cost so Budget vs Actual reflects executed orders.
+  const handleRecordCompletion = async (ppo: { id: string; ppoNumber: string }) => {
+    if (!window.confirm(interpolateUiString(UI_STRINGS.appAppProcurementPposPage.confirmRecordCompletion, { ppoNumber: ppo.ppoNumber }))) return;
+    setCompletingPpoId(ppo.id);
+    try {
+      const res = await fetch(`/api/procurement/ppos/${ppo.id}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `${PPO_COMPLETION_IDEMPOTENCY_PREFIX}-${ppo.id}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || UI_STRINGS.appAppProcurementPposPage.completionFailed);
+      toast.success(
+        UI_STRINGS.appAppProcurementPposPage.completionRecorded,
+        ppo.ppoNumber,
+        interpolateUiString(UI_STRINGS.appAppProcurementPposPage.completionRecordedMessage, { ppoNumber: ppo.ppoNumber }),
+      );
+      await fetchPpos();
+    } catch (err: unknown) {
+      toast.error({
+        title: UI_STRINGS.appAppProcurementPposPage.completionFailed,
+        message: (err as Error).message,
+        recordNumber: ppo.ppoNumber,
+      });
+    } finally {
+      setCompletingPpoId(null);
+    }
+  };
 
   // Live weighted overall score calculation
   const calculatedOverallScore = useMemo(() => {
@@ -707,6 +744,19 @@ export default function PposDeskPage() {
                               style={{ fontSize: 11, padding: '4px 9px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             >
                               <Eye size={11} />{UI_STRINGS.appAppProcurementPposPage.viewRating}</button>
+                          )}
+
+                          {canRecordCompletion && PPO_COMPLETABLE_STATUSES.includes(p.status) && (
+                            <button
+                              type="button"
+                              onClick={() => handleRecordCompletion(p)}
+                              disabled={completingPpoId === p.id}
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: 11, padding: '4px 9px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <CheckCircle2 size={11} />
+                              {completingPpoId === p.id ? UI_STRINGS.appAppProcurementPposPage.recordingCompletion : UI_STRINGS.appAppProcurementPposPage.recordCompletion}
+                            </button>
                           )}
 
                           <Link

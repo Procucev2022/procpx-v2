@@ -3409,7 +3409,7 @@ export default function BoqStudioPage() {
               <Send size={22} color="#2563eb" />
               <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#1e40af' }}>{UI_STRINGS.appAppBoqStudioPage.confirmBOQSubmission}</h3>
             </div>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>{UI_STRINGS.appAppBoqStudioPage.submitThisCommercialBOQForProjectApproverReviewAndSubsequentReleaseToCategoryManager}</p>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>{UI_STRINGS.appAppBoqStudioPage.submitThisCommercialBOQForProjectApproverReviewAndReleaseToProcurement}</p>
             <div style={{ background: '#f8fafc', padding: 14, borderRadius: 6, fontSize: 13, marginBottom: 20, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>{UI_STRINGS.common.bOQ2}</span>

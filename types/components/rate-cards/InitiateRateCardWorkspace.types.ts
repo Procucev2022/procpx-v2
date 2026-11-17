@@ -35,3 +35,9 @@ export interface InitiateRateCardForm {
   commercialTerms: string;
   scope: string;
 }
+
+export interface RateCardVendorOption {
+  id: string;
+  name: string;
+  code: string;
+}

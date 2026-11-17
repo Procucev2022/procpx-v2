@@ -159,9 +159,9 @@ describe('role-aware dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close chat' }));
 
     mockFetch.mockImplementation((_url: string, init?: RequestInit) => init?.method === 'POST' ? Promise.resolve(reply({})) : Promise.resolve(reply(dashboardData)));
-    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToCategoryManager)));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToProcurement)));
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/pr/pr-1/approve', expect.objectContaining({ method: 'POST' })));
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'PR-2026-001', UI_STRINGS.common.userMessages.releasedToCategoryManager));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'PR-2026-001', UI_STRINGS.common.userMessages.releasedToProcurement));
 
     page.unmount();
     dashboardData = { role: 'PROJECT_APPROVER', pendingPrs: [pendingPr()], recentlyApprovedList: [], recentlyRejectedList: [] };
@@ -169,7 +169,7 @@ describe('role-aware dashboard', () => {
     mockFetch.mockImplementation((_url: string, init?: RequestInit) => init?.method === 'POST' ? Promise.resolve(reply({ error: 'Approval blocked' }, false, 409)) : Promise.resolve(reply(dashboardData)));
     render(<DashboardPage />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.approvalDashboard))).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToCategoryManager)));
+    fireEvent.click(screen.getByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToProcurement)));
     expect(await screen.findByText('Approval blocked')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Approval blocked').parentElement!.parentElement!.querySelector('button')!);
     expect(screen.queryByText('Approval blocked')).not.toBeInTheDocument();
@@ -633,13 +633,13 @@ describe('role-aware dashboard', () => {
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }).at(-1)!);
 
     openSparseReview();
-    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToCategoryManager)).at(-1)!);
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToProcurement)).at(-1)!);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.approvalFailed))).toBeInTheDocument();
     closeReview();
     openSparseReview();
     mockFetch.mockImplementation((_url: string, init?: RequestInit) => init?.method === 'POST' ? Promise.resolve(reply({})) : Promise.resolve(reply(dashboardData)));
-    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToCategoryManager)).at(-1)!);
-    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'pr-empty-lines', UI_STRINGS.common.userMessages.releasedToCategoryManager));
+    fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.common.approveBOQAndReleaseToProcurement)).at(-1)!);
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith(UI_STRINGS.common.bOQApprovedSuccessfully, 'pr-empty-lines', UI_STRINGS.common.userMessages.releasedToProcurement));
     page.unmount();
   });
 

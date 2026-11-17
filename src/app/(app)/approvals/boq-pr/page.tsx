@@ -148,7 +148,7 @@ export default function BoqPrApprovalPage() {
         const err = await res.json();
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.approvalFailed }));
       }
-      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully, selectedPr?.prNumber || prId, UI_STRINGS.common.userMessages.releasedToCategoryManager);
+      toast.success(UI_STRINGS.common.bOQApprovedSuccessfully, selectedPr?.prNumber || prId, UI_STRINGS.common.userMessages.releasedToProcurement);
       setStatusMessage(UI_STRINGS.common.bOQApprovedSuccessfully);
       setReviewModalOpen(false);
       loadQueue();
@@ -398,7 +398,7 @@ export default function BoqPrApprovalPage() {
                         style={{ height: 28, padding: '0 10px', fontSize: 11, background: '#047857', borderColor: '#047857' }}
                         onClick={() => handleApprove(pr.id)}
                         disabled={processing}
-                        title={UI_STRINGS.common.approveBOQAndReleaseToCategoryManager}
+                        title={UI_STRINGS.common.approveBOQAndReleaseToProcurement}
                       >
                         <CheckCircle2 size={12} />{UI_STRINGS.common.approve}</button>
                       <button

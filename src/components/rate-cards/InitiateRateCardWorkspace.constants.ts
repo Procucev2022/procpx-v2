@@ -87,3 +87,6 @@ export const INITIAL_RATE_LINES: RateLineItem[] = [
     targetAmount: 160000,
   },
 ];
+
+/** Vendors loaded for the Contracting Vendor picker (the vendor directory API maximum page size). */
+export const RATE_CARD_VENDOR_PAGE_SIZE = 100;
