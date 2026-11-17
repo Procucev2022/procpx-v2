@@ -6,10 +6,10 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100682/101401) |
-| branches | 93.65% (23155/24723) |
+| statements | 99.29% (100691/101410) |
+| branches | 93.65% (23157/24725) |
 | functions | 98.59% (1959/1987) |
-| lines | 99.29% (100682/101401) |
+| lines | 99.29% (100691/101410) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -272,7 +272,7 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 | `src/components/rate-cards/BuyerAcceptanceWorkspace.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/HomeWorkspace.tsx` | 100.00% | 96.80% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/InitiateRateCardWorkspace.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/rate-cards/InitiateRateCardWorkspace.tsx` | 99.63% | 93.92% | 100.00% | 99.63% | PASS |
+| `src/components/rate-cards/InitiateRateCardWorkspace.tsx` | 99.63% | 94.09% | 100.00% | 99.63% | PASS |
 | `src/components/rate-cards/NegotiationWorkspace.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/Section5VendorAcceptance.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/Section6ApproverView.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -299,7 +299,7 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 | `src/components/ui/TopNav.tsx` | 99.40% | 96.55% | 100.00% | 99.40% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.06% | 92.85% | 98.96% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.04% | 92.85% | 98.96% | PASS |
 | `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation-client.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -355,7 +355,7 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.63% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
