@@ -67,7 +67,9 @@ function RfqDetailContent({ params }: { params: Promise<{ id: string }> }) {
       }));
   }, [id, router]);
 
-  const isDemoMode = id === 'RFQ-DEMO-001' || id === 'demo' || searchParams.get('demo') === 'true';
+  // Fixture-backed demo mode is limited to development and test builds. Production shows the stored RFQ or a not-found state.
+  const isDemoMode = process.env.NODE_ENV !== 'production'
+    && (id === 'RFQ-DEMO-001' || id === 'demo' || searchParams.get('demo') === 'true');
 
   // Normalize initial tab to one of the 3 lifecycle tabs: 'quotes' | 'negotiation' | 'awarding'
   const initialTabParam = searchParams.get('tab') || 'quotes';
