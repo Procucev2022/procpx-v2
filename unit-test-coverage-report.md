@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **373**. Files meeting all four 90% thresholds: **373/373**.
+Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100659/101378) |
-| branches | 93.65% (23149/24717) |
-| functions | 98.59% (1958/1986) |
-| lines | 99.29% (100659/101378) |
+| statements | 99.29% (100682/101401) |
+| branches | 93.65% (23155/24723) |
+| functions | 98.59% (1959/1987) |
+| lines | 99.29% (100682/101401) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -268,6 +268,7 @@ Files included: **373**. Files meeting all four 90% thresholds: **373/373**.
 | `src/components/PrDetailModal.tsx` | 99.77% | 94.90% | 100.00% | 99.77% | PASS |
 | `src/components/ProcurementCommercialWorkspace.tsx` | 98.80% | 90.35% | 97.56% | 98.80% | PASS |
 | `src/components/rate-cards/AgreementPreviewModal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/rate-cards/BuyerAcceptanceWorkspace.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/BuyerAcceptanceWorkspace.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/HomeWorkspace.tsx` | 100.00% | 96.80% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/InitiateRateCardWorkspace.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -354,7 +355,7 @@ Files included: **373**. Files meeting all four 90% thresholds: **373/373**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.63% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
