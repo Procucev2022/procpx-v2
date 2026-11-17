@@ -14,6 +14,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { TopNavProps } from "@app-types/components/ui/TopNav.types";
+import { hasPermission, UserRole } from '@/lib/permissions';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { NOTIFICATION_POLL_INTERVAL_MS } from "./TopNav.constants";
@@ -449,6 +450,7 @@ export default function TopNav({ user }: TopNavProps) {
                 >
                   <User size={15} color="#64748b" />{UI_STRINGS.common.profile}</Link>
 
+                {hasPermission(user.role as UserRole, 'AUDIT_VIEW') && (
                 <Link
                   href="/audit"
                   onClick={() => setUserDropdown(false)}
@@ -465,6 +467,7 @@ export default function TopNav({ user }: TopNavProps) {
                   onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
                   <Shield size={15} color="#64748b" />{UI_STRINGS.componentsUiTopNav.securityAudit}</Link>
+                )}
               </div>
 
               <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 4, paddingTop: 4 }}>

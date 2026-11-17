@@ -43,6 +43,18 @@ describe('TopNav', () => {
     global.fetch = originalFetch;
   });
 
+  it('offers the security audit link only to roles that hold AUDIT_VIEW', async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ notifications: [], unreadCount: 0 }));
+    render(<TopNav user={{ name: 'Casey Admin', role: 'CLIENT_ADMIN', tenantName: 'Tenant One' }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Casey Admin/ }));
+    const auditLink = screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.securityAudit) });
+    fireEvent.mouseOver(auditLink);
+    fireEvent.mouseOut(auditLink);
+    fireEvent.click(auditLink);
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).not.toBeInTheDocument();
+  });
+
   it('loads notifications, marks all read, refreshes, and controls the user menu', async () => {
     const notifications = [
       {
@@ -100,12 +112,9 @@ describe('TopNav', () => {
     fireEvent.click(profile);
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Ada Lovelace/ }));
-    const auditLink = screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.securityAudit) });
-    fireEvent.mouseOver(auditLink);
-    fireEvent.mouseOut(auditLink);
-    fireEvent.click(auditLink);
-    expect(screen.queryByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Ada Lovelace/ }));
+    // PROJECT_USER lacks AUDIT_VIEW, and every audit route requires it, so the menu must not offer the link.
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.securityAudit) })).not.toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.componentsUiTopNav.signedInAs))).toBeInTheDocument();
     const signOutButton = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.componentsUiTopNav.signOut) });
     fireEvent.mouseOver(signOutButton);
     fireEvent.mouseOut(signOutButton);
