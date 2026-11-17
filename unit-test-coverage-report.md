@@ -6,10 +6,10 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100572/101293) |
-| branches | 93.67% (23119/24679) |
-| functions | 98.58% (1955/1983) |
-| lines | 99.28% (100572/101293) |
+| statements | 99.28% (100585/101305) |
+| branches | 93.67% (23127/24689) |
+| functions | 98.58% (1956/1984) |
+| lines | 99.28% (100585/101305) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -64,7 +64,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.79% | 90.20% | 97.10% | 99.79% | PASS |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/vendors/[id]/page.tsx` | 99.23% | 90.59% | 100.00% | 99.23% | PASS |
-| `src/app/(app)/procurement/vendors/page.tsx` | 99.43% | 91.68% | 98.61% | 99.43% | PASS |
+| `src/app/(app)/procurement/vendors/page.tsx` | 99.45% | 91.70% | 98.61% | 99.45% | PASS |
 | `src/app/(app)/projects/[id]/page.tsx` | 99.07% | 96.85% | 90.00% | 99.07% | PASS |
 | `src/app/(app)/projects/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/projects/new/page.tsx` | 100.00% | 96.77% | 95.45% | 100.00% | PASS |
@@ -261,7 +261,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/app/login/page.tsx` | 100.00% | 98.24% | 97.36% | 100.00% | PASS |
 | `src/app/not-found.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/ApprovalChatDrawer.tsx` | 100.00% | 98.98% | 100.00% | 100.00% | PASS |
+| `src/components/ApprovalChatDrawer.tsx` | 100.00% | 97.22% | 100.00% | 100.00% | PASS |
 | `src/components/observability/ErrorFallback.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/PrDetailModal.tsx` | 99.77% | 94.90% | 100.00% | 99.77% | PASS |
 | `src/components/ProcurementCommercialWorkspace.tsx` | 98.80% | 90.35% | 97.56% | 98.80% | PASS |
