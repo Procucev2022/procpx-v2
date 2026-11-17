@@ -2,7 +2,7 @@
 // src/app/(app)/vendor-portal/rfqs/[id]/page.tsx
 // Dedicated Vendor RFQ Workspace: Itemized Quotation Submission & Clarifications
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Clock,
@@ -28,6 +28,8 @@ export default function VendorRfqWorkspacePage() {
   const toast = useToast();
   const params = useParams();
   const rfqId = params.id as string;
+  // Only the newest detail request may update the workspace. A slow response for an earlier RFQ is discarded.
+  const loadSequence = useRef(0);
 
   const [rfq, setRfq] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -56,10 +58,12 @@ export default function VendorRfqWorkspacePage() {
   const [chatOpen, setChatOpen] = useState(false);
 
   const loadRfqDetail = async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/vendor-portal/rfqs/${rfqId}`);
+      if (sequence !== loadSequence.current) return;
       if (!res.ok) {
         const err = await res.json().catch((error: unknown) => {
           reportHandledClientFailure(error, {
@@ -73,6 +77,7 @@ export default function VendorRfqWorkspacePage() {
         throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToLoadRfqWorkspace }));
       }
       const data = await res.json();
+      if (sequence !== loadSequence.current) return;
       const r = data.rfq;
       setRfq(r);
 
@@ -125,6 +130,7 @@ export default function VendorRfqWorkspacePage() {
         });
       }
     } catch (e: any) {
+      if (sequence !== loadSequence.current) return;
       reportHandledClientFailure(e, {
         operation: 'load_vendor_rfq_detail',
         route: '/api/vendor-portal/rfqs/:id',
@@ -133,7 +139,7 @@ export default function VendorRfqWorkspacePage() {
       });
       setError(e.message);
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   };
 
