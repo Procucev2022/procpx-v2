@@ -617,3 +617,21 @@ BOQ-to-budget allocation also ends with an in-batch invariant assertion. It veri
 - OpenNext's Windows symlink step initially failed with `EPERM`. A temporary fallback was used only in ignored `node_modules` to copy the package target; `npm run cf:build` then passed and the package file was restored before `wrangler dev` started. No vendor patch is present in the repository.
 - `npm run check:changed`, `npm run check:i18n`, and the full `npm run check:quality` passed. All 357 source files pass the four 90% thresholds (99.28% statements/lines, 93.67% branches, 98.57% functions); build and client budgets, typecheck, lint no-regression (1,040 existing errors and 60 warnings across 705 files), 156 mutation-boundary checks, safe migration stage, and shared local D1 integrity passed.
 - Shared local D1 remains at 44 tables/493 rows, 145/145 indexes, 25 logical duplicate checks, zero foreign-key violations, zero cross-tenant references, and no schema drift. No migration ran and no shared records changed. Remote D1 and hosted PR checks remain unverified due to the external Cloudflare permissions blocker and unavailable GitHub check API credentials.
+
+## Continuation on 2026-11-17
+
+Six read-only analyses covered security, schema integrity, D1 cost, error capture, mocked features, and intermittent behaviour. The full write-up with priorities and evidence is in the review artifact for this session. Items fixed and pushed to `anshul2`:
+
+- `/api/auth/me` and `requireAuth` no longer trust `x-test-user-id` or `x-test-tenant-id`.
+- Production runtimes fail closed without `NEXTAUTH_SECRET` or `AUTH_SECRET`. Set the Worker secret before deploying.
+- Administrators cannot assign or edit `SUPER_ADMIN`, cannot change their own role or status, and only valid roles and statuses are stored. Emails are normalised before the duplicate check.
+- Vendor users see only their own purchase orders, and buyer ratings are withheld from them.
+- Session lookup failures return 503 with `auth.session_lookup_failed` instead of a 401 logout.
+- Error logs keep the Next.js digest, driver code, and cause. Outbox failures log `dead_lettered`, `retry_scheduled`, or `dispatch_failed` separately, with reason codes and a per-tick summary.
+- Each cron tick drains up to five full notification batches.
+- Error boundaries forward Next's `reset` prop, so "Try again" works. Route-level loading, root error, and not-found pages were added.
+- Fixture-backed demo RFQs are limited to non-production builds.
+- Migration `0034` indexes auction status with its start and end times for the scheduled transitions.
+- `npm run db:seed:dev` seeds the ordinary local D1 with the labelled `fx-` baseline. It uses insert-if-missing statements and has no remote mode.
+
+Still open: vendor access to negotiation and benchmark fields, budget total double counting, manual actuals bypassing the PPO completion cap, the `bestQuoteAmount` and `bestBidRank` semantics, BOQ line deletion under live references, the procurement dashboard read count, and the H-priority items in the analysis. Several need business decisions, listed in the analysis.

@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
+Files included: **365**. Files meeting all four 90% thresholds: **365/365**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100114/100831) |
-| branches | 93.67% (22987/24540) |
-| functions | 98.57% (1939/1967) |
-| lines | 99.28% (100114/100831) |
+| statements | 99.29% (100299/101013) |
+| branches | 93.68% (23043/24595) |
+| functions | 98.58% (1948/1976) |
+| lines | 99.29% (100299/101013) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -42,6 +42,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/app/(app)/error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/finance/budget-approvals/page.tsx` | 98.05% | 91.60% | 96.15% | 98.05% | PASS |
 | `src/app/(app)/layout.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/loading.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/categories/page.tsx` | 100.00% | 96.77% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/standard-boq/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/standard-boq/page.tsx` | 99.31% | 94.64% | 97.87% | 99.31% | PASS |
@@ -194,7 +195,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/app/api/procurement/ppos/[id]/vendor-accept/route.ts` | 100.00% | 94.11% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/ppos/[id]/vendor-issue/route.ts` | 100.00% | 95.74% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/ppos/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/api/procurement/ppos/route.ts` | 97.34% | 91.84% | 100.00% | 97.34% | PASS |
+| `src/app/api/procurement/ppos/route.ts` | 97.37% | 92.05% | 100.00% | 97.37% | PASS |
 | `src/app/api/procurement/ppos/vendor-action.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/quotes/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/quotes/route.ts` | 95.81% | 90.13% | 100.00% | 95.81% | PASS |
@@ -251,11 +252,13 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/app/api/vendor-portal/rfqs/[id]/route.ts` | 99.79% | 94.92% | 100.00% | 99.79% | PASS |
 | `src/app/api/vendor-portal/rfqs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/vendor-portal/rfqs/route.ts` | 100.00% | 98.26% | 100.00% | 100.00% | PASS |
+| `src/app/error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/global-error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/layout.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/layout.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/login/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/login/page.tsx` | 100.00% | 98.24% | 97.36% | 100.00% | PASS |
+| `src/app/not-found.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ApprovalChatDrawer.tsx` | 100.00% | 98.98% | 100.00% | 100.00% | PASS |
 | `src/components/observability/ErrorFallback.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -281,6 +284,8 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/components/ui/LongTextCell.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/Modal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/PageHeader.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/ui/PageLoadingSkeleton.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/ui/PageLoadingSkeleton.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/SpecificationCell.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/StatusBadge.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/Stepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -290,18 +295,21 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/components/ui/TopNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.04% | 92.85% | 98.96% | PASS |
-| `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.90% | 96.77% | 99.91% | PASS |
+| `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.06% | 92.85% | 98.96% | PASS |
+| `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation-client.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/admin-user-policy.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/admin-user-policy.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/api-utils.ts` | 100.00% | 98.88% | 100.00% | 100.00% | PASS |
+| `src/lib/api-utils.ts` | 100.00% | 98.61% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-bids.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 91.30% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.ts` | 97.87% | 97.72% | 100.00% | 97.87% | PASS |
+| `src/lib/auth-secret.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auth.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auth.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/boq-cost-breakdown.ts` | 98.31% | 96.29% | 100.00% | 98.31% | PASS |
@@ -331,7 +339,7 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/lib/negotiation-history.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/negotiation-history.ts` | 95.91% | 92.00% | 100.00% | 95.91% | PASS |
 | `src/lib/notification-outbox.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/notification-outbox.ts` | 99.31% | 92.38% | 100.00% | 99.31% | PASS |
+| `src/lib/notification-outbox.ts` | 100.00% | 93.80% | 100.00% | 100.00% | PASS |
 | `src/lib/notifications.ts` | 100.00% | 97.40% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/client-reporter.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/client-reporter.ts` | 100.00% | 98.11% | 100.00% | 100.00% | PASS |
@@ -340,9 +348,9 @@ Files included: **357**. Files meeting all four 90% thresholds: **357/357**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
+| `src/lib/observability/shared.ts` | 100.00% | 98.63% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/password.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/permissions.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
