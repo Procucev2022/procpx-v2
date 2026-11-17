@@ -1488,6 +1488,8 @@ model Notification {
 
   @@index([tenantId, isRead, createdAt], map: "notifications_tenantId_isRead_createdAt_idx")
   @@index([tenantId, createdAt], map: "notifications_tenantId_createdAt_idx")
+  @@index([tenantId, userId, isRead, createdAt], map: "notifications_tenant_user_read_created_idx")
+  @@index([tenantId, targetRole, isRead, createdAt], map: "notifications_tenant_role_read_created_idx")
   @@map("notifications")
 }
 
