@@ -1,4 +1,5 @@
 /** @jest-environment jsdom */
+jest.mock('../src/lib/observability/client-reporter', () => ({ reportClientEvent: jest.fn(), describeError: jest.fn() }));
 import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';

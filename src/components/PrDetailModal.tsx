@@ -17,6 +17,7 @@ import {
   Package,
 } from 'lucide-react';
 import type { PrDetailModalProps, PurchaseRequestRfqSummary } from "@app-types/components/PrDetailModal.types";
+import { reportClientEvent } from '@/lib/observability/client-reporter';
 export type { PrDetailModalProps };
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
@@ -70,7 +71,7 @@ export default function PrDetailModal({
       fetch(`/api/pr/${prId}`)
         .then(async (res) => {
           if (!res.ok) {
-            console.error(JSON.stringify({ event: 'purchase_request.detail_fetch_failed', prId, status: res.status }));
+            reportClientEvent('error', 'purchase_request.detail_fetch_failed', { prId, status: res.status });
             return null;
           }
           return res.json();
@@ -93,7 +94,7 @@ export default function PrDetailModal({
         })
         .catch(() => {
           if (!active || sequence !== linePageRequestSequence.current) return;
-          console.error(JSON.stringify({ event: 'purchase_request.detail_fetch_failed', prId, reason: 'network_error' }));
+          reportClientEvent('error', 'purchase_request.detail_fetch_failed', { prId, reason: 'network_error' });
           setDetailedPr(pr);
           setLinePagination(null);
         })
@@ -165,7 +166,7 @@ export default function PrDetailModal({
     } catch {
       if (sequence !== linePageRequestSequence.current) return;
       setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
-      console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
+      reportClientEvent('error', 'purchase_request.lines_page_fetch_failed', { prId });
     } finally {
       if (sequence === linePageRequestSequence.current) setLoadingMoreLines(false);
     }

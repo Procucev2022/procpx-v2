@@ -44,6 +44,7 @@ function getProjectDocumentCategoryLabel(category: string): string {
   }
 }
 
+import { reportClientEvent } from '@/lib/observability/client-reporter';
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<any>(null);
@@ -63,7 +64,7 @@ export default function ProjectDetailPage() {
       .then(async (r) => {
         const result = await r.json();
         if (!r.ok || result?.error) {
-          console.error(JSON.stringify({ event: 'project.detail_fetch_failed', projectId: id, status: r.status }));
+          reportClientEvent('error', 'project.detail_fetch_failed', { projectId: id, status: r.status });
           return null;
         }
         return result;
@@ -78,7 +79,7 @@ export default function ProjectDetailPage() {
       .catch(() => {
         if (active) {
           setProject(null);
-          console.error(JSON.stringify({ event: 'project.detail_fetch_failed', projectId: id }));
+          reportClientEvent('error', 'project.detail_fetch_failed', { projectId: id });
         }
       })
       .finally(() => { if (active) setLoadedProjectId(id); });
@@ -95,7 +96,7 @@ export default function ProjectDetailPage() {
       const result = await response.json();
       if (!response.ok || result?.error || !Array.isArray(result?.documents)) {
         setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
-        console.error(JSON.stringify({ event: 'project.documents_page_fetch_failed', projectId: id, page: nextPage, status: response.status }));
+        reportClientEvent('error', 'project.documents_page_fetch_failed', { projectId: id, page: nextPage, status: response.status });
         return;
       }
       setProject((current: ProjectDetailState) => ({
@@ -109,7 +110,7 @@ export default function ProjectDetailPage() {
       setDocumentsPage(nextPage);
     } catch {
       setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
-      console.error(JSON.stringify({ event: 'project.documents_page_fetch_failed', projectId: id, page: nextPage }));
+      reportClientEvent('error', 'project.documents_page_fetch_failed', { projectId: id, page: nextPage });
     } finally {
       setLoadingDocuments(false);
     }
@@ -130,7 +131,7 @@ export default function ProjectDetailPage() {
       const result = await response.json();
       if (!response.ok || result?.error || !result?.id) {
         setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
-        console.error(JSON.stringify({ event: 'project.document_upload_failed', projectId: id, status: response.status }));
+        reportClientEvent('error', 'project.document_upload_failed', { projectId: id, status: response.status });
         return;
       }
       setProject((current: ProjectDetailState) => ({
@@ -141,7 +142,7 @@ export default function ProjectDetailPage() {
       setSelectedDocumentFile(null);
     } catch {
       setDocumentsError(UI_STRINGS.common.userMessages.failedToFetchProjects);
-      console.error(JSON.stringify({ event: 'project.document_upload_failed', projectId: id }));
+      reportClientEvent('error', 'project.document_upload_failed', { projectId: id });
     } finally {
       setUploadingDocument(false);
     }

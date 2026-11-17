@@ -25,6 +25,7 @@ import { interpolateUiString } from "@/lib/i18n";
 import type { PrLinePaginationMetadata } from '@app-types/lib/pr-line-pagination.types';
 
 
+import { reportClientEvent } from '@/lib/observability/client-reporter';
 export default function BoqPrApprovalPage() {
   const toast = useToast();
   const [queue, setQueue] = useState<any[]>([]);
@@ -127,7 +128,7 @@ export default function BoqPrApprovalPage() {
       setLinePagination(page.linePagination || null);
     } catch {
       if (sequence === reviewRequestSequence.current) {
-        console.error(JSON.stringify({ event: 'purchase_request.lines_page_fetch_failed', prId }));
+        reportClientEvent('error', 'purchase_request.lines_page_fetch_failed', { prId });
         setLineLoadError(UI_STRINGS.common.userMessages.failedToFetchProcurementRequests);
       }
     } finally {
