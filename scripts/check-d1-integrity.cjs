@@ -249,8 +249,8 @@ if (untrackedIndexes.length > 0) {
 const duplicateResults = execute(LOGICAL_DUPLICATE_CHECKS.map(({ sql }) => sql).join(';'));
 const duplicateRows = collectRows(duplicateResults, (row) => Object.prototype.hasOwnProperty.call(row, 'duplicateGroups'));
 const duplicateFailures = duplicateRows
-  .filter((row) => Number(row.duplicateGroups) > 0)
-  .map((row, index) => ({ check: LOGICAL_DUPLICATE_CHECKS[index]?.name || 'logical_duplicate', count: Number(row.duplicateGroups) }));
+  .map((row, index) => ({ check: LOGICAL_DUPLICATE_CHECKS[index]?.name || 'logical_duplicate', count: Number(row.duplicateGroups) }))
+  .filter((failure) => failure.count > 0);
 if (duplicateFailures.length > 0) {
   fail(`logical duplicate groups found: ${duplicateFailures.map(({ check, count }) => `${check}=${count}`).join(', ')}`);
 }
