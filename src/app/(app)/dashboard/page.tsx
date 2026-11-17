@@ -3,6 +3,7 @@
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { useEffect, useState, Fragment } from 'react';
 import Link from 'next/link';
+import { DEMO_WORKFLOW_RFQ_HREF, SHOW_DEMO_WORKFLOW_LINKS } from "./page.constants";
 import {
   Building2,
   ShieldCheck,
@@ -1042,12 +1043,14 @@ export default function DashboardPage() {
             <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.bOQSourcingQuotationComparisonNegotiationAndAwards}</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Link
-              href="/procurement/rfqs/RFQ-DEMO-001?demo=true"
-              className="btn btn-sm btn-secondary"
-              style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
-            >
-              <Sparkles size={14} color="#16a34a" />{UI_STRINGS.appAppDashboardPage.viewWorkflowExample}</Link>
+            {SHOW_DEMO_WORKFLOW_LINKS && (
+              <Link
+                href={DEMO_WORKFLOW_RFQ_HREF}
+                className="btn btn-sm btn-secondary"
+                style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
+              >
+                <Sparkles size={14} color="#16a34a" />{UI_STRINGS.appAppDashboardPage.viewWorkflowExample}</Link>
+            )}
             <Link href="/procurement/rfqs/new" className="btn btn-primary btn-sm">{UI_STRINGS.appAppDashboardPage.createRFQ2}</Link>
           </div>
         </div>
@@ -1870,17 +1873,20 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span className="badge badge-info" style={{ fontSize: 13, padding: '6px 12px' }}>{UI_STRINGS.appAppDashboardPage.roleCATEGORYMANAGER}</span>
-            <Link
-              href="/procurement/rfqs/RFQ-DEMO-001?demo=true"
-              className="btn btn-sm btn-secondary"
-              style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
-            >
-              <Sparkles size={14} color="#16a34a" />{UI_STRINGS.appAppDashboardPage.viewInteractiveDemo}</Link>
+            {SHOW_DEMO_WORKFLOW_LINKS && (
+              <Link
+                href={DEMO_WORKFLOW_RFQ_HREF}
+                className="btn btn-sm btn-secondary"
+                style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' }}
+              >
+                <Sparkles size={14} color="#16a34a" />{UI_STRINGS.appAppDashboardPage.viewInteractiveDemo}</Link>
+            )}
             <Link href="/procurement/rfqs/new" className="btn btn-primary btn-sm">{UI_STRINGS.appAppDashboardPage.createNewRFQ}</Link>
           </div>
         </div>
 
-        {/* Interactive Demonstration Banner */}
+        {/* Interactive Demonstration Banner: demo-only, hidden in production builds */}
+        {SHOW_DEMO_WORKFLOW_LINKS && (
         <div
           style={{
             background: 'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%)',
@@ -1922,7 +1928,7 @@ export default function DashboardPage() {
           </div>
 
           <Link
-            href="/procurement/rfqs/RFQ-DEMO-001?demo=true"
+            href={DEMO_WORKFLOW_RFQ_HREF}
             className="btn btn-sm btn-primary"
             style={{
               fontWeight: 700,
@@ -1937,6 +1943,7 @@ export default function DashboardPage() {
           >
             <Sparkles size={14} />{UI_STRINGS.appAppDashboardPage.viewWorkflowExample2}</Link>
         </div>
+        )}
 
         {/* 1. Four Compact, Live Clickable Summary Cards */}
         <div className="kpi-grid mb-6">
