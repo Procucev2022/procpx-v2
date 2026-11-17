@@ -4,6 +4,7 @@ export type { ExtractedDrawingItem, DrawingParseResult };
 import { CATEGORY_RULES, KNOWN_UOMS } from "./drawing-parser.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { logEvent } from "@/lib/observability/server-logger";
 
 
 
@@ -408,7 +409,9 @@ Return STRICT JSON format adhering to this structure:
         }
       }
     } catch (err: any) {
-      console.warn('Gemini vision extraction failed, falling back to native parser:', err.message);
+      logEvent('warn', 'boq.drawing_extraction_fallback', {
+        operation: 'extract_drawing_items', provider: 'gemini', fallback: 'native_parser', error: err,
+      });
     }
   }
 
@@ -479,7 +482,9 @@ Return STRICT JSON format adhering to this structure:
         }
       }
     } catch (err: any) {
-      console.warn('OpenAI vision extraction failed, falling back to native parser:', err.message);
+      logEvent('warn', 'boq.drawing_extraction_fallback', {
+        operation: 'extract_drawing_items', provider: 'openai', fallback: 'native_parser', error: err,
+      });
     }
   }
 

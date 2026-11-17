@@ -6,6 +6,9 @@ import {
   processDrawingFile,
 } from '../src/lib/drawing-parser';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import * as serverLogger from '../src/lib/observability/server-logger';
+
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 
 
@@ -210,10 +213,10 @@ describe('AI drawing parser and file processing', () => {
     fetchMock().mockResolvedValueOnce(response({ candidates: [{ content: { parts: [] } }] }));
     await expect(parseDrawingWithAiVision(Buffer.from('drawing'), 'image/png')).resolves.toBeNull();
 
-    const warning = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warning = (serverLogger.logEvent as jest.Mock).mockClear();
     fetchMock().mockResolvedValueOnce(response({ candidates: [{ content: { parts: [{ text: '{broken' }] } }] }));
     await expect(parseDrawingWithAiVision(Buffer.from('drawing'), 'image/png')).resolves.toBeNull();
-    expect(warning).toHaveBeenCalledWith('Gemini vision extraction failed, falling back to native parser:', expect.any(String));
+    expect(warning).toHaveBeenCalledWith('warn', 'boq.drawing_extraction_fallback', expect.objectContaining({ provider: 'gemini', fallback: 'native_parser' }));
     warning.mockRestore();
   });
 
@@ -234,7 +237,7 @@ describe('AI drawing parser and file processing', () => {
   it('falls back from Gemini to OpenAI and contains OpenAI failures', async () => {
     process.env.GEMINI_API_KEY = 'test-gemini-key';
     process.env.OPENAI_API_KEY = 'test-openai-key';
-    const warning = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warning = (serverLogger.logEvent as jest.Mock).mockClear();
     fetchMock()
       .mockRejectedValueOnce(new Error('Gemini unavailable'))
       .mockResolvedValueOnce(response({ choices: [{ message: { content: JSON.stringify({ items: [{ quantity: 1 }] }) } }] }));
@@ -242,7 +245,7 @@ describe('AI drawing parser and file processing', () => {
 
     fetchMock().mockResolvedValueOnce(response({ choices: [{ message: { content: 'not json' } }] }));
     await expect(parseDrawingWithAiVision(Buffer.from('drawing'), 'image/jpeg')).resolves.toBeNull();
-    expect(warning).toHaveBeenCalledWith('OpenAI vision extraction failed, falling back to native parser:', expect.any(String));
+    expect(warning).toHaveBeenCalledWith('warn', 'boq.drawing_extraction_fallback', expect.objectContaining({ provider: 'openai', fallback: 'native_parser' }));
     warning.mockRestore();
   });
 
