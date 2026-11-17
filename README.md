@@ -43,6 +43,12 @@ npm run db:seed:test
 ```
 The command applies ordered Wrangler migrations and uses stable `fx-` IDs with insert-if-missing statements. It always writes to `.wrangler/e2e-d1`, never to shared local or remote D1. Fixture user accounts use the password `Mock@1234`; use them only with this isolated test D1.
 
+To add the same labelled mock baseline to the ordinary local development D1 (for manual testing in `npm run dev`):
+```bash
+npm run db:seed:dev
+```
+This command writes only to the local `procpx-dev` state under `.wrangler/`. It inserts the `fx-` rows that are missing (existing rows are kept), it never deletes data, and it has no remote mode. Mock users receive the same `Mock@1234` password as the regression personas. Remote D1 is never seeded automatically.
+
 **D1 transaction safety:** Prisma's D1 adapter ignores Prisma transaction boundaries, including callback and array transactions. The Prisma proxy rejects explicit `$transaction` calls. RFQ invitations, vendor quote submission, negotiation round submission, and PPO creation write their related records through native D1 batches, which execute sequentially and roll back together on failure. Additions that require atomic multi-write behavior must use the shared D1 batch helper.
 
 ### 3. Launch Development Server
