@@ -60,7 +60,63 @@ function migrationStatus(migrationFilenames, appliedNames) {
   };
 }
 
+function validateRowCounts(rowCounts, label) {
+  if (!rowCounts || typeof rowCounts !== 'object' || Array.isArray(rowCounts)) {
+    throw new TypeError(`${label} must be an object keyed by table name`);
+  }
+
+  const entries = Object.entries(rowCounts);
+  for (const [tableName, rowCount] of entries) {
+    if (!tableName || !Number.isSafeInteger(rowCount) || rowCount < 0) {
+      throw new TypeError(`${label} contains an invalid table name or row count`);
+    }
+  }
+  return Object.fromEntries(entries.sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function compareRowCounts(baselineCounts, currentCounts) {
+  const baseline = validateRowCounts(baselineCounts, 'Baseline row counts');
+  const current = validateRowCounts(currentCounts, 'Current row counts');
+  const baselineTables = new Set(Object.keys(baseline));
+  const currentTables = new Set(Object.keys(current));
+  const decreases = [];
+  const increases = [];
+
+  for (const tableName of baselineTables) {
+    if (!currentTables.has(tableName)) continue;
+    const change = {
+      tableName,
+      baselineRowCount: baseline[tableName],
+      currentRowCount: current[tableName],
+    };
+    if (change.currentRowCount < change.baselineRowCount) decreases.push(change);
+    if (change.currentRowCount > change.baselineRowCount) increases.push(change);
+  }
+
+  return {
+    removedTables: [...baselineTables].filter((tableName) => !currentTables.has(tableName)),
+    addedTables: [...currentTables].filter((tableName) => !baselineTables.has(tableName)),
+    decreases,
+    increases,
+  };
+}
+
+function compareD1IntegrityBaseline(baseline, currentTarget, currentRowCounts) {
+  if (!baseline || baseline.format !== 'procpx-d1-integrity-baseline-v1' || !baseline.target) {
+    throw new TypeError('The D1 integrity baseline has an unsupported format');
+  }
+  for (const key of ['accountId', 'databaseId', 'databaseName']) {
+    if (typeof baseline.target[key] !== 'string' || baseline.target[key] !== currentTarget[key]) {
+      throw new Error(`The D1 integrity baseline target does not match the current ${key}`);
+    }
+  }
+
+  return compareRowCounts(baseline.rowCounts, currentRowCounts);
+}
+
 module.exports = {
+  compareD1IntegrityBaseline,
+  compareRowCounts,
   expectedColumnsByTable,
   expectedIndexNamesFromMigrations,
   findMissingColumns,

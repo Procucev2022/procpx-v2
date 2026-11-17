@@ -9,6 +9,7 @@ import { POST as revertRateCard } from '../src/app/api/procurement/rate-cards/[i
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { RATE_CARD_REJECT_UPDATE_SQL, RATE_CARD_REVERT_UPDATE_SQL, RATE_CARD_SUBMIT_UPDATE_SQL } from '../src/lib/d1-batch.constants';
 import { RATE_CARD_APPROVAL_HISTORY_PAGE_SIZE } from '../src/lib/rate-card-approval-history.constants';
+import { logEvent } from '../src/lib/observability/server-logger';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -25,6 +26,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeRateCardTransitionAtomically: jest.fn() }));
+jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
 
 const db = prisma as unknown as {
   vendorRateCard: { findFirst: jest.Mock; update: jest.Mock };
@@ -33,6 +35,7 @@ const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const audit = createAuditLog as jest.Mock;
 const transition = writeRateCardTransitionAtomically as jest.Mock;
+const structuredLog = logEvent as jest.Mock;
 const context = {
   tenantId: 'tenant-1', userId: 'user-1', userName: 'Approver One', userEmail: 'approver@example.test', role: 'PROJECT_APPROVER',
 };
@@ -63,6 +66,7 @@ describe('vendor rate card submit, reject, and correction routes', () => {
     isContext.mockReturnValue(true);
     audit.mockResolvedValue(undefined);
     transition.mockResolvedValue(true);
+    structuredLog.mockReset();
     consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -120,10 +124,17 @@ describe('vendor rate card submit, reject, and correction routes', () => {
       ok: false, error: UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, status: 409,
     });
 
-    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('submit database error'));
-    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: 'submit database error', status: 500 });
+    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('sensitive submit database details'));
+    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitRateCard, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.submission_failed', expect.objectContaining({
+      operation: 'submit_rate_card', route: '/api/procurement/rate-cards/[id]/submit', method: 'POST',
+      tenantId: 'tenant-1', userId: 'user-1', role: 'PROJECT_APPROVER', rateCardId: 'card-1', httpStatus: 500,
+      durationMs: expect.any(Number), error: { name: 'Error' },
+    }));
+    expect(JSON.stringify(structuredLog.mock.calls.at(-1))).not.toContain('sensitive submit database details');
     db.vendorRateCard.findFirst.mockRejectedValueOnce({});
-    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: 'Failed to submit rate card', status: 500 });
+    await expect(submitRateCard(request(), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToSubmitRateCard, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.submission_failed', expect.objectContaining({ error: { type: 'object' } }));
   });
 
   it('rejects pending rate cards with a reason at the correct approval level', async () => {
@@ -160,10 +171,16 @@ describe('vendor rate card submit, reject, and correction routes', () => {
       approvalValues: expect.arrayContaining(['LEVEL_2_FINANCE', 'PROJECT_APPROVER', null, 'REJECTED', 'Budget not approved']),
     }));
 
-    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('reject database error'));
-    await expect(rejectRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: 'reject database error', status: 500 });
+    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('sensitive reject database details'));
+    await expect(rejectRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToRejectRateCard2, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.rejection_failed', expect.objectContaining({
+      operation: 'reject_rate_card', tenantId: 'tenant-1', userId: 'user-1', rateCardId: 'card-1', httpStatus: 500,
+      durationMs: expect.any(Number), error: { name: 'Error' },
+    }));
+    expect(JSON.stringify(structuredLog.mock.calls.at(-1))).not.toContain('sensitive reject database details');
     db.vendorRateCard.findFirst.mockRejectedValueOnce({});
-    await expect(rejectRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: 'Failed to reject rate card', status: 500 });
+    await expect(rejectRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToRejectRateCard2, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.rejection_failed', expect.objectContaining({ error: { type: 'object' } }));
   });
 
   it('returns pending cards for correction and records the reason and audit', async () => {
@@ -204,11 +221,15 @@ describe('vendor rate card submit, reject, and correction routes', () => {
       approvalValues: expect.arrayContaining([UI_STRINGS.componentsVendorNegotiationWorkspace.lEVEL1PROJECT, 'PROJECT_APPROVER', null, 'RETURNED_FOR_CORRECTION', 'Update insurance certificate']),
     }));
 
-    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('revert database error'));
-    await expect(revertRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: 'revert database error', status: 500 });
+    db.vendorRateCard.findFirst.mockRejectedValueOnce(new Error('sensitive revert database details'));
+    await expect(revertRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToReturnRateCardForCorrection, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.return_for_correction_failed', expect.objectContaining({
+      operation: 'return_rate_card_for_correction', tenantId: 'tenant-1', userId: 'user-1', rateCardId: 'card-1', httpStatus: 500,
+      durationMs: expect.any(Number), error: { name: 'Error' },
+    }));
+    expect(JSON.stringify(structuredLog.mock.calls.at(-1))).not.toContain('sensitive revert database details');
     db.vendorRateCard.findFirst.mockRejectedValueOnce({});
-    await expect(revertRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({
-      ok: false, error: 'Failed to return rate card for correction', status: 500,
-    });
+    await expect(revertRateCard(request({ reason: 'Other' }), params())).resolves.toEqual({ ok: false, error: UI_STRINGS.common.userMessages.failedToReturnRateCardForCorrection, status: 500 });
+    expect(structuredLog).toHaveBeenLastCalledWith('error', 'rate_card.return_for_correction_failed', expect.objectContaining({ error: { type: 'object' } }));
   });
 });

@@ -10,10 +10,19 @@ import { getListPageWindow } from '@/lib/api-utils';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { VENDOR_DIRECTORY_MAX_SEARCH_LENGTH } from './route.constants';
 import { writeD1BatchAtomically } from '@/lib/d1-batch';
-import { VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL, VENDOR_INSERT_NEXT_CODE_SQL } from '@/lib/d1-batch.constants';
+import {
+  VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL,
+  VENDOR_INSERT_NEXT_CODE_SQL,
+  VENDOR_NORMALIZED_NAME_EXISTS_SQL,
+} from '@/lib/d1-batch.constants';
 import type { Prisma } from '@prisma/client';
 import { readByD1FilterChunks } from '@/lib/d1-query';
 
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { code?: unknown; message?: unknown };
+  return value.code === 'P2002' || (typeof value.message === 'string' && /unique constraint|unique failed/i.test(value.message));
+}
 
 export async function GET(req: NextRequest) {
   const ctx = await requireAuth('VENDOR_VIEW');
@@ -378,33 +387,62 @@ export async function POST(req: NextRequest) {
         onboardingStatus: '__D1_VENDOR_ONBOARDING_STATUS__',
       },
     );
-    const batchResults = await writeD1BatchAtomically([
-      {
-        sql: VENDOR_INSERT_NEXT_CODE_SQL,
-        values: [
-          ctx.tenantId, vendorId, ctx.tenantId, name.trim(), vendorType, contactPerson.trim(), email ? email.trim() : null,
-          phone ? phone.trim() : null, category.trim(), operatingLocation ? operatingLocation.trim() : `${city || ''}, ${state || ''}`.trim(),
-          city ? city.trim() : (operatingLocation ? operatingLocation.split(',')[0].trim() : null), state ? state.trim() : null,
-          country || 'India', legalStructure || null, gstin ? gstin.trim().toUpperCase() : null,
-          pan ? pan.trim().toUpperCase() : null, website ? website.trim() : null, address ? address.trim() : null,
-          experienceYears ? Number(experienceYears) : 3, turnoverCrores ? Number(turnoverCrores) : null,
-          capabilities ? (typeof capabilities === 'string' ? capabilities : JSON.stringify(capabilities)) : null,
-          serviceCoverage ? (typeof serviceCoverage === 'string' ? serviceCoverage : JSON.stringify(serviceCoverage)) : null,
-          clientReferences ? (typeof clientReferences === 'string' ? clientReferences : JSON.stringify(clientReferences)) : null,
-          certifications ? (typeof certifications === 'string' ? certifications : JSON.stringify(certifications)) : null,
-          onboardingStatus, 'NOT_EVALUATED', 'COMPLIANT', 'PENDING', 'ACTIVE', createdAt, createdAt, ctx.tenantId,
-        ],
-      },
-      {
-        sql: VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL,
-        values: [vendorId, ctx.tenantId, crypto.randomUUID(), ctx.tenantId, ctx.userId, descriptionTemplate, createdAt],
-      },
-    ]);
-    const insertedVendor = batchResults[0]?.results?.[0] as { id?: string; code?: string; name?: string } | undefined;
-    if (Number(batchResults[0]?.meta?.changes || 0) !== 1 || Number(batchResults[1]?.meta?.changes || 0) !== 1
-      || insertedVendor?.id !== vendorId || !insertedVendor.code) {
-      throw new Error(UI_STRINGS.appApiProcurementVendorsRoute.vendorAndAuditWriteDidNotCommitAsExpected);
+    let insertedVendor: { id?: string; code?: string; name?: string } | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const batchResults = await writeD1BatchAtomically([
+        {
+          sql: VENDOR_INSERT_NEXT_CODE_SQL,
+          values: [
+            ctx.tenantId, vendorId, ctx.tenantId, name.trim(), vendorType, contactPerson.trim(), email ? email.trim() : null,
+            phone ? phone.trim() : null, category.trim(), operatingLocation ? operatingLocation.trim() : `${city || ''}, ${state || ''}`.trim(),
+            city ? city.trim() : (operatingLocation ? operatingLocation.split(',')[0].trim() : null), state ? state.trim() : null,
+            country || 'India', legalStructure || null, gstin ? gstin.trim().toUpperCase() : null,
+            pan ? pan.trim().toUpperCase() : null, website ? website.trim() : null, address ? address.trim() : null,
+            experienceYears ? Number(experienceYears) : 3, turnoverCrores ? Number(turnoverCrores) : null,
+            capabilities ? (typeof capabilities === 'string' ? capabilities : JSON.stringify(capabilities)) : null,
+            serviceCoverage ? (typeof serviceCoverage === 'string' ? serviceCoverage : JSON.stringify(serviceCoverage)) : null,
+            clientReferences ? (typeof clientReferences === 'string' ? clientReferences : JSON.stringify(clientReferences)) : null,
+            certifications ? (typeof certifications === 'string' ? certifications : JSON.stringify(certifications)) : null,
+            onboardingStatus, 'NOT_EVALUATED', 'COMPLIANT', 'PENDING', 'ACTIVE', createdAt, createdAt, ctx.tenantId,
+          ],
+        },
+        {
+          sql: VENDOR_CREATE_AUDIT_INSERT_AFTER_CHANGE_SQL,
+          values: [vendorId, ctx.tenantId, crypto.randomUUID(), ctx.tenantId, ctx.userId, descriptionTemplate, createdAt],
+        },
+        {
+          sql: VENDOR_NORMALIZED_NAME_EXISTS_SQL,
+          values: [ctx.tenantId, name.trim()],
+        },
+      ]);
+      insertedVendor = batchResults[0]?.results?.[0] as { id?: string; code?: string; name?: string } | undefined;
+      const insertChanges = Number(batchResults[0]?.meta?.changes || 0);
+      const auditChanges = Number(batchResults[1]?.meta?.changes || 0);
+      if (insertChanges === 1 && auditChanges === 1
+        && insertedVendor?.id === vendorId && insertedVendor.code) break;
+      if (insertChanges !== 0 || auditChanges !== 0) {
+        throw new Error(UI_STRINGS.appApiProcurementVendorsRoute.vendorAndAuditWriteDidNotCommitAsExpected);
+      }
+
+      const duplicateName = batchResults[2]?.results?.[0] as { id?: string } | undefined;
+      if (duplicateName?.id) {
+        try {
+          await writeStructuredLog('warn', 'vendor.duplicate_name_conflict', {
+            operation: 'create_vendor', route: '/api/procurement/vendors',
+            requestId: req.headers.get('x-request-id') || null,
+            tenantId: ctx.tenantId, userId: ctx.userId, duplicateVendorId: duplicateName.id,
+          });
+        } catch {
+          // Keep the conflict response stable if optional log storage is unavailable.
+        }
+        return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameAlreadyExistsForThisTenant, 409);
+      }
+
+      if (attempt === 2) {
+        throw new Error(UI_STRINGS.appApiProcurementVendorsRoute.vendorAndAuditWriteDidNotCommitAsExpected);
+      }
     }
+    if (!insertedVendor?.code) throw new Error(UI_STRINGS.appApiProcurementVendorsRoute.vendorAndAuditWriteDidNotCommitAsExpected);
 
     // Prisma gives the API its normal typed row shape. If the follow-up read is
     // temporarily unavailable, use the row returned by the committed insert
@@ -433,18 +471,24 @@ export async function POST(req: NextRequest) {
 
     return apiSuccess({ vendor, message: interpolateUiString(UI_STRINGS.appApiProcurementVendorsRoute.vendorCodeOnboardedSuccessfully, { "code": insertedVendor.code }) }, 201);
   } catch (error) {
-    await writeStructuredLog('error', 'vendor.onboarding_failed', {
-      operation: 'create_or_update_vendor',
-      route: '/api/procurement/vendors',
-      requestId: req.headers.get('x-request-id') || null,
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      role: ctx.role,
-      vendorId,
-      error: error instanceof Error
-        ? { name: error.name, message: error.message.slice(0, 400) }
-        : { type: typeof error },
-    });
+    const uniqueConflict = isUniqueConstraintError(error);
+    try {
+      await writeStructuredLog(uniqueConflict ? 'warn' : 'error', uniqueConflict ? 'vendor.duplicate_name_conflict' : 'vendor.onboarding_failed', {
+        operation: 'create_or_update_vendor',
+        route: '/api/procurement/vendors',
+        requestId: req.headers.get('x-request-id') || null,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        role: ctx.role,
+        vendorId,
+        error: error instanceof Error
+          ? { name: error.name, message: error.message.slice(0, 400) }
+          : { type: typeof error },
+      });
+    } catch {
+      // Preserve the database outcome if optional log storage is unavailable.
+    }
+    if (uniqueConflict) return apiError(UI_STRINGS.appApiProcurementVendorsRoute.vendorNameAlreadyExistsForThisTenant, 409);
     return apiError(UI_STRINGS.common.userMessages.failedToOnboardVendor, 500);
   }
 }

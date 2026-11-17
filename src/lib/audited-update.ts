@@ -38,11 +38,12 @@ export async function runAuditedD1UpdateAtomically(
   }
   const jsonColumns = 'jsonColumns' in tableConfig ? tableConfig.jsonColumns as readonly string[] : [];
   const booleanColumns = 'booleanColumns' in tableConfig ? tableConfig.booleanColumns as readonly string[] : [];
+  const updatedAtColumn = 'updatedAtColumn' in tableConfig ? tableConfig.updatedAtColumn : 'updatedAt';
 
   const updatedAt = input.updatedAt || new Date();
   const auditId = crypto.randomUUID();
   const assignments = entries.map(([key]) => `"${key}" = ?`);
-  assignments.push('"updatedAt" = ?');
+  if (updatedAtColumn) assignments.push(`"${updatedAtColumn}" = ?`);
   const updateStatement: D1BatchInputStatement = {
     sql: `UPDATE "${tableConfig.table}" SET ${assignments.join(', ')} WHERE "id" = ? AND "tenantId" = ? RETURNING ${tableConfig.returning}`,
     values: [
@@ -51,7 +52,7 @@ export async function runAuditedD1UpdateAtomically(
         if (booleanColumns.includes(key) && typeof value === 'boolean') return Number(value);
         return value;
       }),
-      updatedAt,
+      ...(updatedAtColumn ? [updatedAt] : []),
       input.id,
       input.tenantId,
     ],

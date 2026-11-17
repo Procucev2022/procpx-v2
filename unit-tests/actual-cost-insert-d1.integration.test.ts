@@ -27,9 +27,9 @@ function createDatabase(): LocalSQLiteDatabase {
     CREATE TABLE boq_revisions (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, boqId TEXT NOT NULL);
     CREATE TABLE boq_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, boqRevisionId TEXT NOT NULL);
     CREATE TABLE procurement_requests (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL);
-    CREATE TABLE pr_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, prId TEXT NOT NULL);
+    CREATE TABLE pr_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, prId TEXT NOT NULL, projectId TEXT);
     CREATE TABLE rfqs (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL);
-    CREATE TABLE rfq_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, rfqId TEXT NOT NULL);
+    CREATE TABLE rfq_lines (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, rfqId TEXT NOT NULL, projectId TEXT);
     CREATE TABLE ppos (id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, projectId TEXT NOT NULL, vendorId TEXT NOT NULL);
     CREATE TABLE ppo_lines (
       id TEXT PRIMARY KEY, tenantId TEXT NOT NULL, ppoId TEXT NOT NULL, vendorId TEXT NOT NULL,
@@ -56,29 +56,40 @@ function createDatabase(): LocalSQLiteDatabase {
     INSERT INTO boqs VALUES ('boq-1', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO boqs VALUES ('boq-2', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO boqs VALUES ('boq-other', 'other-tenant', 'other-project');
+    INSERT INTO boqs VALUES ('boq-cross-tenant-parent', 'other-tenant', '${PROJECT_ID}');
     INSERT INTO boq_revisions VALUES ('revision-1', '${TENANT_ID}', 'boq-1');
     INSERT INTO boq_revisions VALUES ('revision-2', '${TENANT_ID}', 'boq-2');
     INSERT INTO boq_revisions VALUES ('revision-other', 'other-tenant', 'boq-other');
+    INSERT INTO boq_revisions VALUES ('revision-cross-tenant-parent', '${TENANT_ID}', 'boq-cross-tenant-parent');
     INSERT INTO boq_lines VALUES ('boq-line-1', '${TENANT_ID}', 'revision-1');
     INSERT INTO boq_lines VALUES ('boq-line-2', '${TENANT_ID}', 'revision-2');
     INSERT INTO boq_lines VALUES ('boq-line-other', 'other-tenant', 'revision-other');
+    INSERT INTO boq_lines VALUES ('boq-line-cross-tenant-parent', '${TENANT_ID}', 'revision-cross-tenant-parent');
     INSERT INTO procurement_requests VALUES ('pr-1', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO procurement_requests VALUES ('pr-2', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO procurement_requests VALUES ('pr-other', 'other-tenant', 'other-project');
-    INSERT INTO pr_lines VALUES ('pr-line-1', '${TENANT_ID}', 'pr-1');
-    INSERT INTO pr_lines VALUES ('pr-line-2', '${TENANT_ID}', 'pr-2');
-    INSERT INTO pr_lines VALUES ('pr-line-other', 'other-tenant', 'pr-other');
+    INSERT INTO procurement_requests VALUES ('pr-cross-tenant-parent', 'other-tenant', '${PROJECT_ID}');
+    INSERT INTO pr_lines VALUES ('pr-line-1', '${TENANT_ID}', 'pr-1', '${PROJECT_ID}');
+    INSERT INTO pr_lines VALUES ('pr-line-2', '${TENANT_ID}', 'pr-2', '${PROJECT_ID}');
+    INSERT INTO pr_lines VALUES ('pr-line-other', 'other-tenant', 'pr-other', 'other-project');
+    INSERT INTO pr_lines VALUES ('pr-line-cross-tenant-parent', '${TENANT_ID}', 'pr-cross-tenant-parent', '${PROJECT_ID}');
+    INSERT INTO pr_lines VALUES ('pr-line-wrong-project', '${TENANT_ID}', 'pr-1', 'other-project');
     INSERT INTO rfqs VALUES ('rfq-1', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO rfqs VALUES ('rfq-2', '${TENANT_ID}', '${PROJECT_ID}');
     INSERT INTO rfqs VALUES ('rfq-other', 'other-tenant', 'other-project');
-    INSERT INTO rfq_lines VALUES ('rfq-line-1', '${TENANT_ID}', 'rfq-1');
-    INSERT INTO rfq_lines VALUES ('rfq-line-2', '${TENANT_ID}', 'rfq-2');
-    INSERT INTO rfq_lines VALUES ('rfq-line-other', 'other-tenant', 'rfq-other');
+    INSERT INTO rfqs VALUES ('rfq-cross-tenant-parent', 'other-tenant', '${PROJECT_ID}');
+    INSERT INTO rfq_lines VALUES ('rfq-line-1', '${TENANT_ID}', 'rfq-1', '${PROJECT_ID}');
+    INSERT INTO rfq_lines VALUES ('rfq-line-2', '${TENANT_ID}', 'rfq-2', '${PROJECT_ID}');
+    INSERT INTO rfq_lines VALUES ('rfq-line-other', 'other-tenant', 'rfq-other', 'other-project');
+    INSERT INTO rfq_lines VALUES ('rfq-line-cross-tenant-parent', '${TENANT_ID}', 'rfq-cross-tenant-parent', '${PROJECT_ID}');
+    INSERT INTO rfq_lines VALUES ('rfq-line-wrong-project', '${TENANT_ID}', 'rfq-1', 'other-project');
     INSERT INTO ppos VALUES ('ppo-1', '${TENANT_ID}', '${PROJECT_ID}', 'vendor-1');
     INSERT INTO ppos VALUES ('ppo-other', 'other-tenant', 'other-project', 'vendor-other');
+    INSERT INTO ppos VALUES ('ppo-cross-tenant-parent', 'other-tenant', '${PROJECT_ID}', 'vendor-1');
     INSERT INTO ppo_lines VALUES ('ppo-line-1', '${TENANT_ID}', 'ppo-1', 'vendor-1', '${PROJECT_ID}', 'boq-1', 'revision-1', 'boq-line-1', 'pr-line-1', 'rfq-line-1');
     INSERT INTO ppo_lines VALUES ('ppo-line-other', 'other-tenant', 'ppo-other', 'vendor-other', 'other-project', 'boq-other', 'revision-other', 'boq-line-other', 'pr-line-other', 'rfq-line-other');
     INSERT INTO ppo_lines VALUES ('ppo-line-vendor-mismatch', '${TENANT_ID}', 'ppo-1', 'vendor-2', '${PROJECT_ID}', 'boq-1', 'revision-1', 'boq-line-1', 'pr-line-1', 'rfq-line-1');
+    INSERT INTO ppo_lines VALUES ('ppo-line-cross-tenant-parent', '${TENANT_ID}', 'ppo-cross-tenant-parent', 'vendor-1', '${PROJECT_ID}', NULL, NULL, NULL, NULL, NULL);
     INSERT INTO vendors VALUES ('vendor-1', '${TENANT_ID}');
     INSERT INTO vendors VALUES ('vendor-2', '${TENANT_ID}');
     INSERT INTO vendors VALUES ('vendor-other', 'other-tenant');
@@ -160,6 +171,42 @@ describe('actual-cost reference validation against isolated SQLite D1 semantics'
       boqRevisionId: null,
       boqLineId: 'boq-line-2',
     }));
+
+    expect(Number(result.changes)).toBe(0);
+    expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
+      .toEqual({ total: 0 });
+  });
+
+  it.each([
+    ['BOQ revision and line', {
+      boqId: null, boqRevisionId: 'revision-cross-tenant-parent', boqLineId: 'boq-line-cross-tenant-parent',
+      prId: null, prLineId: null, rfqId: null, rfqLineId: null, ppoId: null, ppoLineId: null, vendorId: null,
+    }],
+    ['PR line parent', {
+      boqId: null, boqRevisionId: null, boqLineId: null, prId: null, prLineId: 'pr-line-cross-tenant-parent',
+      rfqId: null, rfqLineId: null, ppoId: null, ppoLineId: null, vendorId: null,
+    }],
+    ['RFQ line parent', {
+      boqId: null, boqRevisionId: null, boqLineId: null, prId: null, prLineId: null, rfqId: null,
+      rfqLineId: 'rfq-line-cross-tenant-parent', ppoId: null, ppoLineId: null, vendorId: null,
+    }],
+    ['PPO line parent', {
+      boqId: null, boqRevisionId: null, boqLineId: null, prId: null, prLineId: null, rfqId: null,
+      rfqLineId: null, ppoId: null, ppoLineId: 'ppo-line-cross-tenant-parent', vendorId: null,
+    }],
+  ])('rejects a %s whose parent belongs to another tenant sharing the project ID', (_reference, overrides) => {
+    const result = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues(overrides));
+
+    expect(Number(result.changes)).toBe(0);
+    expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())
+      .toEqual({ total: 0 });
+  });
+
+  it.each([
+    ['PR', { boqId: null, boqRevisionId: null, boqLineId: null, prId: null, prLineId: 'pr-line-wrong-project', rfqId: null, rfqLineId: null, ppoId: null, ppoLineId: null, vendorId: null }],
+    ['RFQ', { boqId: null, boqRevisionId: null, boqLineId: null, prId: null, prLineId: null, rfqId: null, rfqLineId: 'rfq-line-wrong-project', ppoId: null, ppoLineId: null, vendorId: null }],
+  ])('rejects a %s line whose stored project differs from the actual-cost project', (_reference, overrides) => {
+    const result = sqlite.prepare(ACTUAL_COST_INSERT_IF_VALID_SQL).run(...actualCostValues(overrides));
 
     expect(Number(result.changes)).toBe(0);
     expect(sqlite.prepare('SELECT COUNT(*) AS total FROM actual_cost_transactions').get())

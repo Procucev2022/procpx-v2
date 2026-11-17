@@ -32,6 +32,9 @@ module.exports = createJestConfig({
   testTimeout: 30_000,
   testMatch: ['<rootDir>/unit-tests/**/*.test.ts', '<rootDir>/unit-tests/**/*.test.tsx'],
   modulePathIgnorePatterns: ['<rootDir>/.next/'],
+  moduleNameMapper: {
+    '^@prisma/client-worker$': '<rootDir>/generated/prisma/client.ts',
+  },
   setupFilesAfterEnv: ['<rootDir>/unit-tests/jest.setup.ts'],
   coverageProvider: 'v8',
   collectCoverageFrom: ['<rootDir>/src/**/*.{ts,tsx}'],

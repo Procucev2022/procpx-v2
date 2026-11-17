@@ -5,6 +5,7 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { createAuditLog } from '../src/lib/audit';
 import { runAuditedD1UpdateAtomically } from '../src/lib/audited-update';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { VENDOR_NORMALIZED_NAME_EXISTS_SQL } from '../src/lib/d1-batch.constants';
 
 const mockWriteStructuredLog = jest.fn();
 const mockWriteD1BatchAtomically = jest.fn();
@@ -289,6 +290,20 @@ describe('procurement vendor directory API', () => {
     }));
   });
 
+  it('returns a conflict when onboarding updates collide on the normalized tenant vendor name', async () => {
+    db.vendor.findFirst.mockResolvedValueOnce(existingVendor);
+    auditedUpdate.mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
+
+    await expect(POST(postRequest({ ...validVendor, id: 'vendor-1', name: 'Duplicate Supplier' }))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiProcurementVendorsRoute.vendorNameAlreadyExistsForThisTenant,
+      status: 409,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'vendor.duplicate_name_conflict', expect.objectContaining({
+      operation: 'create_or_update_vendor', vendorId: 'vendor-1', tenantId: 'tenant-1',
+    }));
+  });
+
   it('creates vendor and audit together with a D1 allocated code and serialized structured capabilities', async () => {
     atomicBatch.mockImplementationOnce(async (statements: Array<{ values: unknown[] }>) => [
       { success: true, meta: { changes: 1 }, results: [{ id: statements[0].values[1], code: 'VND-0015', name: 'FineBuild' }] },
@@ -305,7 +320,9 @@ describe('procurement vendor directory API', () => {
     }));
     expect(result).toMatchObject({ ok: true, status: 201, data: { message: 'Vendor VND-0015 onboarded successfully.' } });
     const statements = atomicBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
+    expect(statements[2].sql).toBe(VENDOR_NORMALIZED_NAME_EXISTS_SQL);
+    expect(statements[2].values).toEqual(['tenant-1', 'FineBuild']);
     expect(statements[0].sql).toContain("MAX(CAST(SUBSTR(\"code\", 5) AS INTEGER))");
     expect(statements[0].sql).toContain('RETURNING *');
     expect(statements[0].values).toEqual(expect.arrayContaining([
@@ -317,6 +334,24 @@ describe('procurement vendor directory API', () => {
     expect(db.vendor.findMany).not.toHaveBeenCalled();
     expect(db.vendor.create).not.toHaveBeenCalled();
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it('returns a normalized-name conflict when vendor creation finds an existing tenant vendor', async () => {
+    atomicBatch.mockResolvedValueOnce([
+      { success: true, meta: { changes: 0 }, results: [] },
+      { success: true, meta: { changes: 0 } },
+      { success: true, meta: { changes: 0 }, results: [{ id: 'existing-vendor' }] },
+    ]);
+
+    await expect(POST(postRequest(validVendor))).resolves.toEqual({
+      ok: false,
+      error: UI_STRINGS.appApiProcurementVendorsRoute.vendorNameAlreadyExistsForThisTenant,
+      status: 409,
+    });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'vendor.duplicate_name_conflict', expect.objectContaining({
+      operation: 'create_vendor', duplicateVendorId: 'existing-vendor', tenantId: 'tenant-1',
+    }));
+    expect(db.vendor.findUnique).not.toHaveBeenCalled();
   });
 
   it('uses the committed insert result when the typed follow-up read fails', async () => {

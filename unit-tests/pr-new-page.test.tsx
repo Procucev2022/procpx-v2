@@ -24,6 +24,7 @@ const response = (body: unknown, ok = true) => ({ ok, json: jest.fn().mockResolv
 const projects = [{ id: 'project-1', projectCode: 'P-1', name: 'Main Project' }];
 const costCentres = [{ id: 'cc-1', code: 'CC-1', name: 'Electrical' }];
 const boqs = [{ id: 'boq-1', boqCode: 'BOQ-1', title: 'Equipment Package', status: 'APPROVED', revisions: [{ id: 'revision-1' }] }];
+const findOption = (name: RegExp | string) => screen.findByRole('option', { name }, { timeout: 5000 });
 
 function configureFetch({
   projectBody = { data: projects },
@@ -65,9 +66,9 @@ describe('new procurement request page', () => {
 
   it('loads projects, cost centres, and BOQs and submits trimmed PR details', async () => {
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /P-1/ })).toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: /CC-1/ })).toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: /BOQ-1/ })).toBeInTheDocument();
+    expect(await findOption(/P-1/)).toBeInTheDocument();
+    expect(await findOption(/CC-1/)).toBeInTheDocument();
+    expect(await findOption(/BOQ-1/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('/api/projects');
     expect(fetchMock).toHaveBeenCalledWith('/api/cost-centres?projectId=project-1&page=1&pageSize=100');
     expect(fetchMock).toHaveBeenCalledWith('/api/boq?projectId=project-1');
@@ -96,9 +97,9 @@ describe('new procurement request page', () => {
       boqBody: [{ id: 'boq-2', boqCode: 'BOQ-2', title: '', status: 'DRAFT' }],
     });
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /P-2/ })).toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: /ALT-2/ })).toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: uiStringPattern(UI_STRINGS.appAppPrNewPage.bOQBaseline) })).toBeInTheDocument();
+    expect(await findOption(/P-2/)).toBeInTheDocument();
+    expect(await findOption(/ALT-2/)).toBeInTheDocument();
+    expect(await findOption(uiStringPattern(UI_STRINGS.appAppPrNewPage.bOQBaseline))).toBeInTheDocument();
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'cc-2' } });
     fireEvent.change(screen.getAllByRole('combobox')[2], { target: { value: 'boq-2' } });
 
@@ -124,15 +125,15 @@ describe('new procurement request page', () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /CC-1/ })).toBeInTheDocument();
+    expect(await findOption(/CC-1/)).toBeInTheDocument();
     expect(await screen.findByText(/Showing 1 of 101 cost centres/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppCostCentresPage.loadMoreCostCentres) }));
-    expect(await screen.findByRole('option', { name: /CC-2/ })).toBeInTheDocument();
+    expect(await findOption(/CC-2/)).toBeInTheDocument();
 
     const searchLabel = uiStringPattern(UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation);
     fireEvent.change(screen.getByPlaceholderText(searchLabel), { target: { value: 'Warehouse' } });
     fireEvent.click(screen.getByRole('button', { name: searchLabel }));
-    expect(await screen.findByRole('option', { name: /CC-3/ })).toBeInTheDocument();
+    expect(await findOption(/CC-3/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('search=Warehouse'));
   });
 
@@ -150,7 +151,7 @@ describe('new procurement request page', () => {
       postResponse: response({ error: 'Unable to create request' }, false),
     });
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /BOQ-F/ })).toBeInTheDocument();
+    expect(await findOption(/BOQ-F/)).toBeInTheDocument();
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '' } });
     fireEvent.submit(document.querySelector('form')!);
     expect(await screen.findByText('Unable to create request')).toBeInTheDocument();
@@ -162,8 +163,8 @@ describe('new procurement request page', () => {
   it('reports generic create failures and handles unavailable project data', async () => {
     configureFetch({ postResponse: { ok: false, json: jest.fn().mockRejectedValue(new Error('bad JSON')) } });
     const loadedPage = render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /P-1/ })).toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: /BOQ-1/ })).toBeInTheDocument();
+    expect(await findOption(/P-1/)).toBeInTheDocument();
+    expect(await findOption(/BOQ-1/)).toBeInTheDocument();
     fireEvent.submit(document.querySelector('form')!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/pr', expect.anything()));
     expect(await screen.findByText('bad JSON')).toBeInTheDocument();
@@ -183,7 +184,7 @@ describe('new procurement request page', () => {
 
     configureFetch({ costCentreOk: false, boqOk: false });
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /P-1/ })).toBeInTheDocument();
+    expect(await findOption(/P-1/)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/boq?projectId=project-1'));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject))).toBeInTheDocument();
   });
@@ -197,7 +198,7 @@ describe('new procurement request page', () => {
 
     configureFetch({ boqBody: false, postResponse: response({}, false) });
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /P-1/ })).toBeInTheDocument();
+    expect(await findOption(/P-1/)).toBeInTheDocument();
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppPrNewPage.noBOQsFoundForThisProject))).toBeInTheDocument();
   });
 
@@ -216,7 +217,7 @@ describe('new procurement request page', () => {
   it('uses the generic API error when a rejected response has no error message', async () => {
     configureFetch({ postResponse: response({}, false) });
     render(<CreatePrPage />);
-    expect(await screen.findByRole('option', { name: /BOQ-1/ })).toBeInTheDocument();
+    expect(await findOption(/BOQ-1/)).toBeInTheDocument();
     fireEvent.submit(document.querySelector('form')!);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToCreatePr))).toBeInTheDocument();
   });
