@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **369**. Files meeting all four 90% thresholds: **369/369**.
+Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100505/101224) |
-| branches | 93.67% (23096/24655) |
-| functions | 98.58% (1952/1980) |
-| lines | 99.28% (100505/101224) |
+| statements | 99.28% (100548/101267) |
+| branches | 93.67% (23111/24671) |
+| functions | 98.58% (1955/1983) |
+| lines | 99.28% (100548/101267) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -183,7 +183,7 @@ Files included: **369**. Files meeting all four 90% thresholds: **369/369**.
 | `src/app/api/procurement/approved-prs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/approved-prs/route.ts` | 100.00% | 90.90% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/auctions/[id]/bid/route.ts` | 94.58% | 92.05% | 100.00% | 94.58% | PASS |
-| `src/app/api/procurement/auctions/[id]/route.ts` | 98.00% | 90.45% | 100.00% | 98.00% | PASS |
+| `src/app/api/procurement/auctions/[id]/route.ts` | 98.03% | 90.28% | 100.00% | 98.03% | PASS |
 | `src/app/api/procurement/auctions/[id]/terms-accept/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/auctions/rfq-options/route.ts` | 100.00% | 96.87% | 100.00% | 100.00% | PASS |
 | `src/app/api/procurement/auctions/route.ts` | 91.23% | 92.24% | 100.00% | 91.23% | PASS |
@@ -308,6 +308,8 @@ Files included: **369**. Files meeting all four 90% thresholds: **369/369**.
 | `src/lib/auction-lifecycle.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-polling.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/auction-ranking.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/auction-ranking.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audit.ts` | 100.00% | 91.30% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/audited-update.ts` | 97.87% | 97.72% | 100.00% | 97.87% | PASS |
@@ -350,7 +352,7 @@ Files included: **369**. Files meeting all four 90% thresholds: **369/369**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.63% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
