@@ -19,7 +19,7 @@ describe('error boundaries', () => {
   it('reports an app render error with its digest and retries on request', () => {
     const retry = jest.fn();
     const error = Object.assign(new Error('render failed'), { digest: 'abc123' });
-    render(<AppError error={error} retry={retry} />);
+    render(<AppError error={error} reset={retry} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(UI_STRINGS.appErrorBoundary.title);
     expect(screen.getByText(interpolateUiString(UI_STRINGS.appErrorBoundary.reference, { digest: 'abc123' }))).toBeInTheDocument();
@@ -33,7 +33,7 @@ describe('error boundaries', () => {
   it('renders the global boundary without a digest', () => {
     // global-error renders its own <html>; mounting it inside the test container is enough to exercise it.
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    render(<GlobalError error={new Error('layout failed')} retry={jest.fn()} />);
+    render(<GlobalError error={new Error('layout failed')} reset={jest.fn()} />);
     consoleError.mockRestore();
 
     expect(screen.getByText(UI_STRINGS.appErrorBoundary.description)).toBeInTheDocument();
