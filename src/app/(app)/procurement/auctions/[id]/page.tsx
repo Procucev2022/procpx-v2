@@ -27,6 +27,7 @@ import { mergeAuctionBidPages } from '@/lib/auction-bids';
 import type { AuctionBidCursor, AuctionBidHistoryState, AuctionDetailSnapshot } from '@app-types/api/auction-detail.types';
 
 
+import { AUCTION_DETAIL_DEFAULT_REFRESH_SECONDS } from '@/lib/auction-polling.constants';
 export default function LiveAuctionRoomPage({
   params,
 }: {
@@ -71,7 +72,7 @@ export default function LiveAuctionRoomPage({
 
   // Periodic polling according to configured refresh interval
   useEffect(() => {
-    const intervalSecs = auction?.refreshIntervalSeconds || 10;
+    const intervalSecs = auction?.refreshIntervalSeconds || AUCTION_DETAIL_DEFAULT_REFRESH_SECONDS;
     const timer = setInterval(() => {
       fetchAuction(true);
     }, intervalSecs * 1000);
