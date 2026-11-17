@@ -29,11 +29,11 @@ describe('administration masters page', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppAdminMastersPage.loadingMasters))).toBeInTheDocument();
 
     await act(async () => {
-      resolveUoms({ json: async () => [
+      resolveUoms({ ok: true, json: async () => [
         { id: 'uom-1', code: 'M', name: 'Metre', category: 'LENGTH', aliases: '["m","meter"]' },
         { id: 'uom-2', code: 'EA', name: 'Each', category: 'COUNT', aliases: null },
       ] });
-      resolveCategories({ json: async () => [
+      resolveCategories({ ok: true, json: async () => [
         { id: 'category-1', name: 'Electrical', children: [{ id: 'sub-1', name: 'Cables' }] },
         { id: 'category-2', name: 'Civil', children: [] },
       ] });
@@ -51,8 +51,8 @@ describe('administration masters page', () => {
 
   it('validates and creates UOMs, resets the form, reloads data, and dismisses feedback', async () => {
     (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({ json: async () => [] })
-      .mockResolvedValueOnce({ json: async () => [] });
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
     render(<MastersPage />);
     await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppAdminMastersPage.loadingMasters))).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminMastersPage.addUOM2) }));
@@ -68,8 +68,8 @@ describe('administration masters page', () => {
 
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'uom-new' }) })
-      .mockResolvedValueOnce({ json: async () => [{ id: 'uom-new', code: 'SQM', name: 'Square metre', category: 'AREA', aliases: null }] })
-      .mockResolvedValueOnce({ json: async () => [] });
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'uom-new', code: 'SQM', name: 'Square metre', category: 'AREA', aliases: null }] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminMastersPage.create) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAdminMastersPage.uOMCreatedSuccessfully))).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Square metre')).toBeInTheDocument());
@@ -91,8 +91,8 @@ describe('administration masters page', () => {
 
   it('creates categories with optional parent and code and shows failed/success feedback', async () => {
     (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({ json: async () => [] })
-      .mockResolvedValueOnce({ json: async () => [{ id: 'cat-parent', name: 'Electrical', children: [] }] });
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'cat-parent', name: 'Electrical', children: [] }] });
     render(<MastersPage />);
     await waitFor(() => expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppAdminMastersPage.loadingMasters))).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.categories) }));
@@ -108,8 +108,8 @@ describe('administration masters page', () => {
 
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'category-new' }) })
-      .mockResolvedValueOnce({ json: async () => [] })
-      .mockResolvedValueOnce({ json: async () => [{ id: 'cat-parent', name: 'Electrical', children: [{ id: 'category-new', name: 'Lighting' }] }] });
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'cat-parent', name: 'Electrical', children: [{ id: 'category-new', name: 'Lighting' }] }] });
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminMastersPage.create) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppAdminMastersPage.categoryCreatedSuccessfully))).toBeInTheDocument();
     expect(global.fetch).toHaveBeenLastCalledWith('/api/masters/categories');

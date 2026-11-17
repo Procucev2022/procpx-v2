@@ -773,6 +773,7 @@ export const UI_STRINGS = {
     rEVISEDQUOTERECORDEDVendorSubmittedQuoteVNextVersionToLocaleStringRespondingToRoundRoundNumber: "[REVISED QUOTE RECORDED] Vendor submitted Quote v{{nextVersion}} (₹ {{toLocaleString}}) responding to Round {{roundNumber}}.",
   },
   appAppAdminMastersPage: {
+    failedToLoadMasterData: "Master data could not be loaded. Refresh the page to try again.",
     addUOM: " Add UOM",
     addCategory: "Add Category",
     addUOM2: "Add UOM",
