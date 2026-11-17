@@ -6,10 +6,10 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.28% (100585/101305) |
-| branches | 93.67% (23127/24689) |
-| functions | 98.58% (1956/1984) |
-| lines | 99.28% (100585/101305) |
+| statements | 99.29% (100608/101327) |
+| branches | 93.66% (23144/24709) |
+| functions | 98.59% (1958/1986) |
+| lines | 99.29% (100608/101327) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -274,7 +274,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/components/rate-cards/Section5VendorAcceptance.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/Section6ApproverView.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/rate-cards/Section7FinalisedDetails.tsx` | 100.00% | 95.90% | 100.00% | 100.00% | PASS |
-| `src/components/RfqChatDrawer.tsx` | 100.00% | 93.33% | 100.00% | 100.00% | PASS |
+| `src/components/RfqChatDrawer.tsx` | 100.00% | 91.74% | 100.00% | 100.00% | PASS |
 | `src/components/Sidebar.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/BoqDescriptionCell.tsx` | 100.00% | 95.55% | 100.00% | 100.00% | PASS |
 | `src/components/ui/Breadcrumbs.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -297,7 +297,7 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/components/ui/WizardStepper.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ui/WorkflowStageNav.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/VendorNegotiationWorkspace.tsx` | 98.96% | 93.06% | 92.85% | 98.96% | PASS |
-| `src/components/VendorSourcingDashboard.tsx` | 99.91% | 91.90% | 96.77% | 99.91% | PASS |
+| `src/components/VendorSourcingDashboard.tsx` | 100.00% | 91.94% | 96.77% | 100.00% | PASS |
 | `src/instrumentation-client.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/instrumentation.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/admin-user-policy.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
