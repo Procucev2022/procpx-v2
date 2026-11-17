@@ -2,12 +2,35 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from './password';
-import { AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from './auth.constants';
+import {
+  AUTH_ACCOUNT_RECHECK_INTERVAL_MS,
+  AUTH_LOCKOUT_DURATION_MS,
+  AUTH_MAX_FAILED_LOGIN_ATTEMPTS,
+  AUTH_SESSION_MAX_AGE_SECONDS,
+  AUTH_TIMING_DUMMY_HASH,
+  AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT,
+} from './auth.constants';
 import { resolveAuthSecret } from './auth-secret';
 import { logEvent } from './observability/server-logger';
 import { prisma } from './prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
+
+/**
+ * Counts a failed password and locks the account once the threshold is reached. A failed write is logged,
+ * but the caller still rejects the login.
+ */
+async function recordFailedLogin(userId: string, tenantId: string, previousFailures: number): Promise<void> {
+  const failures = previousFailures + 1;
+  const lockedUntil = failures >= AUTH_MAX_FAILED_LOGIN_ATTEMPTS ? new Date(Date.now() + AUTH_LOCKOUT_DURATION_MS) : null;
+  try {
+    await prisma.user.update({ where: { id: userId }, data: { failedLoginCount: failures, lockedUntil } });
+  } catch (error) {
+    logEvent('error', 'auth.failed_login_record_failed', { operation: 'record_failed_login', userId, tenantId, error });
+    return;
+  }
+  logEvent('warn', 'auth.login_failed', { operation: 'authorize_credentials', userId, tenantId, failures, locked: lockedUntil !== null });
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -86,15 +109,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        if (!user) return null;
-
         const password = credentials.password as string;
+        if (!user) {
+          // Spend comparable bcrypt time for unknown emails so response timing does not reveal which accounts exist.
+          await verifyPassword(password, AUTH_TIMING_DUMMY_HASH);
+          return null;
+        }
+        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+          logEvent('warn', 'auth.account_locked', { operation: 'authorize_credentials', userId: user.id, tenantId: user.tenantId });
+          return null;
+        }
         const isValid = await verifyPassword(password, user.passwordHash);
-        if (!isValid) return null;
+        if (!isValid) {
+          await recordFailedLogin(user.id, user.tenantId, user.failedLoginCount ?? 0);
+          return null;
+        }
 
         // Update last login. Hashes created with a higher bcrypt cost are replaced
         // once so later logins stay within the Cloudflare Workers CPU budget.
-        const loginUpdate: { lastLoginAt: Date; passwordHash?: string } = { lastLoginAt: new Date() };
+        const loginUpdate: { lastLoginAt: Date; passwordHash?: string; failedLoginCount?: number; lockedUntil?: null } = { lastLoginAt: new Date() };
+        if ((user.failedLoginCount ?? 0) > 0 || user.lockedUntil) {
+          loginUpdate.failedLoginCount = 0;
+          loginUpdate.lockedUntil = null;
+        }
         if (passwordNeedsRehash(user.passwordHash)) {
           loginUpdate.passwordHash = await hashPassword(password);
         }
@@ -125,10 +162,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.tenantName = (user as any).tenantName;
         token.tenantSlug = (user as any).tenantSlug;
         token.vendorId = (user as any).vendorId;
+        token.checkedAt = Date.now();
+        return token;
       }
+      if (token.revoked || typeof token.id !== 'string') return token;
+      const lastChecked = typeof token.checkedAt === 'number' ? token.checkedAt : 0;
+      if (Date.now() - lastChecked < AUTH_ACCOUNT_RECHECK_INTERVAL_MS) return token;
+
+      // Re-read the account so a deactivated user or a changed role takes effect within the recheck interval.
+      const account = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { role: true, status: true, tenantId: true, vendorId: true, tenant: { select: { name: true, slug: true } } },
+      });
+      if (!account || account.status !== 'ACTIVE') {
+        token.revoked = true;
+        logEvent('warn', 'auth.session_revoked', { operation: 'recheck_session_account', userId: token.id });
+        return token;
+      }
+      token.role = account.role;
+      token.tenantId = account.tenantId;
+      token.vendorId = account.vendorId;
+      token.tenantName = account.tenant.name;
+      token.tenantSlug = account.tenant.slug;
+      token.checkedAt = Date.now();
       return token;
     },
     async session({ session, token }) {
+      if (token?.revoked) {
+        // Without a user, auth() reports no session, so API routes return 401 and the app layout redirects to sign-in.
+        return { expires: session.expires } as typeof session;
+      }
       if (token) {
         session.user.id = token.id as string;
         (session.user as any).role = token.role;
@@ -139,11 +202,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session;
     },
-  },
-  pages: {
+  },  pages: {
     signIn: '/login',
     error: UI_STRINGS.libAuth.login,
   },
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: AUTH_SESSION_MAX_AGE_SECONDS },
   secret: resolveAuthSecret(),
 });

@@ -68,6 +68,8 @@ model User {
   role          String    // SUPER_ADMIN, CLIENT_ADMIN, PROJECT_USER, PROJECT_APPROVER, PROCUREMENT_USER, FINANCE_USER, CATEGORY_MANAGER, VIEWER
   status        String    @default("ACTIVE") // ACTIVE, INACTIVE, LOCKED
   lastLoginAt   DateTime?
+  failedLoginCount Int       @default(0)
+  lockedUntil   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   createdBy     String?
