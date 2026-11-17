@@ -70,9 +70,9 @@ function auction(overrides: Record<string, any> = {}) {
     },
     vendors: [
       { id: 'participant-1', vendorId: 'vendor-1', vendor: { id: 'vendor-1', name: 'Acme', code: 'AC', email: 'acme@example.test', phone: '111' },
-        termsAcceptedAt: new Date(now - 20_000), bidsCount: 2, lastBidAmount: 0, bestBidRank: 1 },
+        termsAcceptedAt: new Date(now - 20_000), bidsCount: 2, lastBidAmount: 0, bestBidAmount: 50 },
       { id: 'participant-2', vendorId: 'vendor-2', vendor: { id: 'vendor-2', name: 'Other', code: 'OT', email: 'other@example.test', phone: '222' },
-        termsAcceptedAt: null, bidsCount: 1, lastBidAmount: 60, bestBidRank: 2 },
+        termsAcceptedAt: null, bidsCount: 1, lastBidAmount: 60, bestBidAmount: 60 },
     ],
     items: [{ id: 'item-1', itemCode: 'ITEM-1', description: 'Cable', category: 'Electrical', subcategory: 'Wires', uom: 'MTR', quantity: '2', startPrice: 0, currentLeadingBid: 70 }],
     bids: [

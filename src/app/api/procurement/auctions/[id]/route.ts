@@ -8,6 +8,7 @@ import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL, AUCTION_AUTO_CLOSE_IF_DUE_SQL, AUCTI
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { writeStructuredLog } from '@/lib/observability/server-logger';
+import { rankAuctionVendors } from '@/lib/auction-ranking';
 
 function getRequestId(req: NextRequest): string | undefined {
   const value = req.headers.get('x-request-id') || req.headers.get('cf-ray');
@@ -160,6 +161,13 @@ export async function GET(
       }
     }
 
+    // Vendor ranks are derived from each vendor's best bid on every read. A stored rank only described the last bidder.
+    const vendorRanks = rankAuctionVendors(auction.auctionType, auction.auctionCategory, auction.vendors.map((vendor) => ({
+      vendorId: vendor.vendorId,
+      bidsCount: vendor.bidsCount,
+      bestBidAmount: vendor.bestBidAmount,
+    })));
+
     // Check vendor context if caller is a vendor
     let currentVendorParticipation: any = null;
     let isInvitedVendor = false;
@@ -189,7 +197,7 @@ export async function GET(
             termsAcceptedAt: participation.termsAcceptedAt?.toISOString() || null,
             bidCount: participation.bidsCount,
             lastBidAmount: participation.lastBidAmount ? Number(participation.lastBidAmount) : null,
-            bestRank: participation.bestBidRank,
+            bestRank: vendorRanks.get(vendorRecord.id) ?? null,
           };
         }
       }
@@ -323,7 +331,9 @@ export async function GET(
           termsAcceptedAt: v.termsAcceptedAt?.toISOString() || null,
           bidCount: isSealedAndActive && ctx.role === 'VENDOR' && v.vendorId !== userVendorId ? null : v.bidsCount,
           lastBidAmount: hideLeadingPrice && ctx.role === 'VENDOR' && v.vendorId !== userVendorId ? null : (v.lastBidAmount ? Number(v.lastBidAmount) : null),
-          bestRank: isSealedAndActive ? null : v.bestBidRank,
+          bestRank: isSealedAndActive || (hideLeadingPrice && ctx.role === 'VENDOR' && v.vendorId !== userVendorId)
+            ? null
+            : (vendorRanks.get(v.vendorId) ?? null),
         })),
         items: auction.items.map((i) => ({
           id: i.id,

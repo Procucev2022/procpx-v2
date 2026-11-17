@@ -1494,7 +1494,7 @@ export const AUCTION_ITEM_UPDATE_AFTER_CHANGE_SQL = `
 export const AUCTION_VENDOR_UPDATE_AFTER_BID_SQL = `
   UPDATE "auction_vendors"
   SET "bidsCount" = ?, "lastBidAmount" = ?, "lastBidAt" = ?,
-      "bestBidAmount" = ?, "bestBidRank" = 1
+      "bestBidAmount" = ?
   WHERE "id" = ? AND "tenantId" = ? AND "auctionId" = ? AND "vendorId" = ?
     AND "bidsCount" IS ? AND changes() = 1
 `;
