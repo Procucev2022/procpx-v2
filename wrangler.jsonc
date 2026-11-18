@@ -53,7 +53,8 @@
     "dev": {
       "name": "procpx",
       "vars": {
-        "UPLOAD_DIR": "r2"
+        "UPLOAD_DIR": "r2",
+        "NEXTAUTH_URL": "https://procpx.anshul-goel.workers.dev/login",
       },
       "d1_databases": [
         {
@@ -73,7 +74,8 @@
     "prod": {
       "name": "procpx-prod",
       "vars": {
-        "UPLOAD_DIR": "r2"
+        "UPLOAD_DIR": "r2",
+        "NEXTAUTH_URL": "https://procpx-prod.srinivas-mukku.workers.dev/login",
       },
       "d1_databases": [
         {
