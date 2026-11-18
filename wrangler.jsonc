@@ -1,15 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "procpx",
-  "account_id": "97a5dd65ad21c0f5dcd8547de147c806",
   "main": "./custom-worker.ts",
   "compatibility_date": "2026-10-01",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "limits": {
     "cpu_ms": 300000
   },
-
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -45,6 +45,50 @@
     }
   ],
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "env": {
+    "dev": {
+      "name": "procpx",
+      "vars": {
+        "UPLOAD_DIR": "r2"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "procpx-dev",
+          "database_id": "ffb73313-6ac9-4306-87e9-751b6a0f6e81",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "UPLOADS",
+          "bucket_name": "procpx-uploads"
+        }
+      ]
+    },
+    "prod": {
+      "name": "procpx-prod",
+      "vars": {
+        "UPLOAD_DIR": "r2"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "procpx-prod",
+          "database_id": "646df8db-22b5-4e86-8116-b6abbe0974be",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "UPLOADS",
+          "bucket_name": "procpx-uploads"
+        }
+      ]
+    }
   }
 }
