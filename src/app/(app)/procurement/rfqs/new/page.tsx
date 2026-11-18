@@ -36,6 +36,7 @@ import {
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import { useToast } from '@/components/ui/Toast';
 import { STEP_THEMES } from "./page.constants";
+import { isRateCardSelectable } from "@/lib/rate-card-selection";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import { reportClientEvent, reportHandledClientFailure } from '@/lib/observability/client-reporter';
@@ -742,11 +743,7 @@ export default function NewRfqPage() {
 
   // Applicable Rate Cards for Step 4
   const applicableRateCards = useMemo(() => {
-    return rateCards.filter((rc) => {
-      const isApproved = rc.status === 'APPROVED';
-      const notExpired = !rc.validTo || new Date(rc.validTo) >= new Date();
-      return isApproved && notExpired;
-    });
+    return rateCards.filter((rc) => isRateCardSelectable(rc));
   }, [rateCards]);
 
   const activeTheme = STEP_THEMES[step as keyof typeof STEP_THEMES] || STEP_THEMES[1];
