@@ -1,0 +1,63 @@
+name: Deploy Production to Cloudflare
+
+on:
+  push:
+    branches:
+      - prod
+      - 'prod-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Quality checks, migrate D1, and deploy
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 60
+    env:
+      CI: true
+      NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || vars.NEXTAUTH_URL }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_DATABASE_NAME: procpx-prod
+      CLOUDFLARE_DATABASE_ID: ${{ secrets.CLOUDFLARE_DATABASE_ID || vars.CLOUDFLARE_DATABASE_ID}}
+      CLOUDFLARE_ENV: prod
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run workspace quality gate
+        run: npm run check:quality
+
+      - name: Verify remote D1 integrity before migration
+        env:
+          D1_INTEGRITY_BASELINE_PATH: ${{ runner.temp }}/procpx-d1-baseline-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: npm run db:integrity:remote -- --allow-pending-migrations --baseline-out "$D1_INTEGRITY_BASELINE_PATH"
+
+      - name: Apply reviewed D1 migrations
+        run: npm run db:d1:migrate:remote
+
+      - name: Verify remote D1 integrity
+        env:
+          D1_INTEGRITY_BASELINE_PATH: ${{ runner.temp }}/procpx-d1-baseline-${{ github.run_id }}-${{ github.run_attempt }}.json
+        run: npm run db:integrity:remote -- --compare-baseline "$D1_INTEGRITY_BASELINE_PATH"
+
+      - name: Deploy OpenNext application
+        run: npm run cf:deploy -- --env prod

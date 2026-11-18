@@ -78,6 +78,9 @@ function collectRows(value, predicate) {
   return [...matches, ...Object.values(value).flatMap((child) => collectRows(child, predicate))];
 }
 
+const wranglerEnv = process.env.CLOUDFLARE_ENV || process.env.WRANGLER_ENV;
+const envArgs = (mode === '--remote' && wranglerEnv) ? ['--env', wranglerEnv] : [];
+
 function execute(sql) {
   const result = spawnSync(process.execPath, [
     wranglerCli,
@@ -85,6 +88,7 @@ function execute(sql) {
     'execute',
     DATABASE_NAME,
     mode,
+    ...envArgs,
     '--json',
     '--command',
     sql,
@@ -111,9 +115,10 @@ function execute(sql) {
 
 if (!fs.existsSync(wranglerCli)) fail('the local Wrangler CLI was not found; install dependencies first');
 const configText = fs.readFileSync(configPath, 'utf8');
+const configuredDbId = configText.match(new RegExp(`"database_name"\\s*:\\s*["']${DATABASE_NAME}["'][\\s\\S]*?"database_id"\\s*:\\s*["']([^"']+)["']`))?.[1] || configText.match(/"database_id"\s*:\s*["']([^"']+)["']/)?.[1] || '';
 const d1Target = {
-  accountId: configText.match(/"account_id"\s*:\s*["']([^"']+)["']/)?.[1] || '',
-  databaseId: configText.match(/"database_id"\s*:\s*["']([^"']+)["']/)?.[1] || '',
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID || configText.match(/"account_id"\s*:\s*["']([^"']+)["']/)?.[1] || '',
+  databaseId: process.env.CLOUDFLARE_DATABASE_ID || configuredDbId,
   databaseName: DATABASE_NAME,
 };
 if (mode === '--remote') {
@@ -121,7 +126,7 @@ if (mode === '--remote') {
   // Authentication comes from CLOUDFLARE_API_TOKEN or an interactive `wrangler login`.
   // When a database ID is supplied it must match the tracked Wrangler configuration.
   const expectedDatabaseId = env.CLOUDFLARE_DATABASE_ID;
-  if (expectedDatabaseId && !expectedDatabaseId.startsWith('replace-with-') && d1Target.databaseId !== expectedDatabaseId) {
+  if (expectedDatabaseId && !expectedDatabaseId.startsWith('replace-with-') && configuredDbId && configuredDbId !== expectedDatabaseId) {
     fail('the database_id in wrangler.jsonc must match CLOUDFLARE_DATABASE_ID');
   }
   // A login with access to several accounts needs an explicit account in non-interactive runs.

@@ -61,9 +61,9 @@ if (mode === '--remote') {
   }
   // Authentication comes from CLOUDFLARE_API_TOKEN or an interactive `wrangler login`.
   // When a database ID is supplied it must match the tracked Wrangler configuration.
-  const configuredDatabaseId = configText.match(/"database_id"\s*:\s*["']([^"']+)["']/)?.[1];
+  const configuredDatabaseId = configText.match(new RegExp(`"database_name"\\s*:\\s*["']${DATABASE_NAME}["'][\\s\\S]*?"database_id"\\s*:\\s*["']([^"']+)["']`))?.[1] || configText.match(/"database_id"\s*:\s*["']([^"']+)["']/)?.[1];
   const expectedDatabaseId = env.CLOUDFLARE_DATABASE_ID;
-  if (expectedDatabaseId && !expectedDatabaseId.startsWith('replace-with-') && configuredDatabaseId !== expectedDatabaseId) {
+  if (expectedDatabaseId && !expectedDatabaseId.startsWith('replace-with-') && configuredDatabaseId && configuredDatabaseId !== expectedDatabaseId) {
     fail('the database_id in wrangler.jsonc must match CLOUDFLARE_DATABASE_ID');
   }
   // A login with access to several accounts needs an explicit account in non-interactive runs.
@@ -74,7 +74,9 @@ if (mode === '--remote') {
 }
 
 process.stdout.write(`Applying unapplied D1 migrations to the ${mode === '--local' ? 'local' : 'remote'} database.\n`);
-const args = [wranglerCli, 'd1', 'migrations', 'apply', DATABASE_NAME, mode, '--config', configPath, ...persistArgs];
+const wranglerEnv = process.env.CLOUDFLARE_ENV || process.env.WRANGLER_ENV;
+const envArgs = (mode === '--remote' && wranglerEnv) ? ['--env', wranglerEnv] : [];
+const args = [wranglerCli, 'd1', 'migrations', 'apply', DATABASE_NAME, mode, '--config', configPath, ...envArgs, ...persistArgs];
 if (mode === '--remote') {
   for (const filename of ['.env', '.env.local']) {
     const envFile = path.join(root, filename);

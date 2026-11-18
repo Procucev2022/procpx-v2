@@ -1,5 +1,5 @@
 /* eslint @typescript-eslint/no-require-imports: "off" -- This module intentionally uses CommonJS. */
-const DATABASE_NAME = 'procpx-dev';
+const DATABASE_NAME = process.env.CLOUDFLARE_DATABASE_NAME || process.env.D1_DATABASE_NAME || 'procpx-dev';
 const LOCAL_E2E_D1_PERSIST_PATH = '.wrangler/e2e-d1';
 const fs = require('node:fs');
 const path = require('node:path');
