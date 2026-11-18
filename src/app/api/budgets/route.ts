@@ -6,6 +6,7 @@ import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } fr
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { logEvent } from '@/lib/observability/server-logger';
 import { getUserProjectAccessFilter } from '@/lib/project-auth';
+import { BUDGET_TRANSACTION_SUPERSEDED_STATUS } from '@/lib/budget-transaction-status.constants';
 import {
   ACTUAL_COST_SUMMARY_STATUSES,
   BUDGET_APPROVED_STATUS,
@@ -176,7 +177,8 @@ export async function GET(req: NextRequest) {
       _sum: { acceptedEstimatedValue: true, totalEstimatedValue: true }, _count: { _all: true },
     })) : Promise.resolve([]),
     costCentreIds.length > 0 ? readByD1FilterChunks(costCentreIds, (chunk) => prisma.budgetTransaction.groupBy({
-      by: ['costCentreId', 'status'], where: { ...pageAggregateWhere, costCentreId: { in: chunk } },
+      by: ['costCentreId', 'status'],
+      where: { ...pageAggregateWhere, costCentreId: { in: chunk }, status: { not: BUDGET_TRANSACTION_SUPERSEDED_STATUS } },
       _sum: { amount: true }, _count: { _all: true },
     })) : Promise.resolve([]),
   ]);

@@ -74,7 +74,7 @@ describe('budget transaction ledger API', () => {
     const result = await GET(request('?projectId=project-1&page=2&pageSize=25'));
 
     expect(db.budgetTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { tenantId: 'tenant-1', projectId: 'project-1' }, skip: 25, take: 25,
+      where: { tenantId: 'tenant-1', projectId: 'project-1', status: { not: 'SUPERSEDED' } }, skip: 25, take: 25,
       orderBy: [{ budgetDate: 'desc' }, { id: 'desc' }],
     }));
     expect(result).toMatchObject({ ok: true, data: {

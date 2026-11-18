@@ -989,7 +989,7 @@ export const BUDGET_AUDIT_INSERT_AFTER_TRANSITION_SQL = `
 
 export const BUDGET_TRANSACTIONS_UPDATE_AFTER_AUDIT_SQL = `
   UPDATE "budget_transactions" SET "status" = ?
-  WHERE "tenantId" = ? AND "contributionId" = ? AND EXISTS (
+  WHERE "tenantId" = ? AND "contributionId" = ? AND "status" <> 'SUPERSEDED' AND EXISTS (
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
 `;
@@ -1145,9 +1145,11 @@ export const BUDGET_CONTRIBUTION_ASSERT_AFTER_UPSERT_SQL = `
     THEN '{}' ELSE 'invalid' END, '$') AS "allocation"
 `;
 
-export const BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL = `
-  DELETE FROM "budget_transactions"
-  WHERE "tenantId" = ? AND "contributionId" = ? AND EXISTS (
+// Resubmission marks earlier ledger rows as SUPERSEDED instead of deleting them.
+// Their transaction codes stay reserved, so MAX+1 code generation never reissues them.
+export const BUDGET_TRANSACTION_SUPERSEDE_AFTER_AUDIT_SQL = `
+  UPDATE "budget_transactions" SET "status" = 'SUPERSEDED'
+  WHERE "tenantId" = ? AND "contributionId" = ? AND "status" <> 'SUPERSEDED' AND EXISTS (
     SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?
   )
 `;

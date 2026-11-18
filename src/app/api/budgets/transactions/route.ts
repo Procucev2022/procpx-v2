@@ -5,6 +5,7 @@ import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { logEvent } from '@/lib/observability/server-logger';
 import { readByD1FilterChunks } from '@/lib/d1-query';
 import { COST_CENTRE_FILTER_PAGE_SIZE } from './route.constants';
+import { BUDGET_TRANSACTION_SUPERSEDED_STATUS } from '@/lib/budget-transaction-status.constants';
 
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
   const costCentrePage = getListPageWindow(costCentrePageParams);
 
   try {
-    const where: Record<string, unknown> = { tenantId: ctx.tenantId };
+    const where: Record<string, unknown> = { tenantId: ctx.tenantId, status: { not: BUDGET_TRANSACTION_SUPERSEDED_STATUS } };
     if (projectId) where.projectId = projectId;
     if (costCentreId) where.costCentreId = costCentreId;
     if (category) where.category = category;
@@ -105,7 +106,10 @@ export async function GET(req: NextRequest) {
         },
       }),
       fetchCostCentres(),
-      prisma.budgetTransaction.groupBy({ by: ['category'], where: { tenantId: ctx.tenantId, ...(projectId ? { projectId } : {}) } }),
+      prisma.budgetTransaction.groupBy({
+        by: ['category'],
+        where: { tenantId: ctx.tenantId, status: { not: BUDGET_TRANSACTION_SUPERSEDED_STATUS }, ...(projectId ? { projectId } : {}) },
+      }),
     ]);
 
     const userIds = Array.from(new Set(records.flatMap((tx) => [

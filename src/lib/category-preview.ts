@@ -20,6 +20,10 @@ export async function getCategoryPreviews(input: CategoryPreviewQuery) {
   const source = CATEGORY_PREVIEW_SOURCES[input.source];
   const tableName = Prisma.raw(`"${source.table}"`);
   const entityColumn = Prisma.raw(`"${source.entityColumn}"`);
+  // Superseded ledger rows are kept for audit, so previews must skip them.
+  const excludedStatusFilter = source.excludedStatus
+    ? Prisma.sql`AND "status" <> ${source.excludedStatus}`
+    : Prisma.empty;
   const rows = await readByD1FilterChunks(input.entityIds, (entityIds) => prisma.$queryRaw<CategoryPreviewRow[]>(Prisma.sql`
     WITH distinct_categories AS (
       SELECT DISTINCT ${entityColumn} AS "entityId", "category"
@@ -27,6 +31,7 @@ export async function getCategoryPreviews(input: CategoryPreviewQuery) {
       WHERE "tenantId" = ${input.tenantId}
         AND ${entityColumn} IN (${Prisma.join(entityIds)})
         AND "category" IS NOT NULL AND TRIM("category") <> ''
+        ${excludedStatusFilter}
     ), ranked_categories AS (
       SELECT "entityId", "category",
         ROW_NUMBER() OVER (PARTITION BY "entityId" ORDER BY "category" COLLATE NOCASE, "category") AS "categoryRank",

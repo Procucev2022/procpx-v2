@@ -130,12 +130,15 @@ describe('BOQ add-to-budget API', () => {
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-1', status: 'UNDER_APPROVAL', totalEstimatedValue: 100 });
     db.budgetTransaction.findFirst.mockResolvedValueOnce({ transactionCode: 'BTX-000008' });
     db.budgetTransaction.count.mockResolvedValueOnce(2);
+    const activeLedgerWhere = { tenantId: 'tenant-1', contributionId: 'contribution-1', status: { not: 'SUPERSEDED' } };
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toEqual({
       ok: true, status: 200, data: expect.objectContaining({
         success: true, alreadySubmitted: true, contributionId: 'contribution-1', transactionCode: 'BTX-000008',
         totalAmount: 100, transactionsCount: 2, status: 'UNDER_APPROVAL',
       }),
     });
+    expect(db.budgetTransaction.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: activeLedgerWhere }));
+    expect(db.budgetTransaction.count).toHaveBeenCalledWith({ where: activeLedgerWhere });
 
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-2', status: 'PENDING_PROJECT_APPROVAL', totalEstimatedValue: 70 });
     db.budgetTransaction.findFirst.mockResolvedValueOnce(null);
@@ -183,14 +186,15 @@ describe('BOQ add-to-budget API', () => {
     }));
   });
 
-  it('resubmits rejected contributions, replaces their transactions, and adds to an existing budget', async () => {
+  it('resubmits rejected contributions by superseding their earlier ledger rows, then adds to an existing budget', async () => {
     db.budgetContribution.findFirst.mockResolvedValueOnce({ id: 'contribution-rejected', status: 'REJECTED' });
     await POST(request({ revisionId: 'revision-1', costCentreId: 'cc-target' }));
     const batch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
     expect(batch).toHaveLength(9);
     expect(batch[0].sql).toContain("'DRAFT', 'REJECTED'");
     expect(batch[1].sql).toContain('WHERE changes() = 1');
-    expect(batch[2].sql).toContain('DELETE FROM "budget_transactions"');
+    expect(batch[2].sql).toContain(`SET "status" = 'SUPERSEDED'`);
+    expect(batch[2].sql).not.toContain('DELETE');
     expect(batch[3].sql).toContain('INSERT INTO "budget_transactions"');
     expect(batch[7].sql).toContain('"pendingAmount" = "budgets"."pendingAmount" + excluded."pendingAmount"');
     expect(batch[8].sql).toContain('changes() = 1');

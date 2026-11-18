@@ -39,4 +39,15 @@ describe('category previews', () => {
     expect(result.get('entity-0')).toEqual({ categories: ['Electrical', 'Mechanical'], total: 2 });
     expect(result.get('entity-94')).toEqual({ categories: ['Civil'], total: 1 });
   });
+
+  it('skips superseded ledger rows when previewing budget contribution categories', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ entityId: 'contribution-1', category: 'Electrical', categoryCount: 1 }]);
+
+    const result = await getCategoryPreviews({ tenantId: 'tenant-1', entityIds: ['contribution-1'], source: 'budgetContributions' });
+
+    const query = mockQueryRaw.mock.calls[0][0] as { sql: string; values: unknown[] };
+    expect(query.sql).toContain('"status" <>');
+    expect(query.values).toContain('SUPERSEDED');
+    expect(result.get('contribution-1')).toEqual({ categories: ['Electrical'], total: 1 });
+  });
 });

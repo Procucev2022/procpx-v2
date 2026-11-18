@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { apiError, apiSuccess, isApiContext, requireAuth } from '@/lib/api-utils';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { BUDGET_TRANSACTION_SUPERSEDED_STATUS } from '@/lib/budget-transaction-status.constants';
 import {
   BUDGET_CONTRIBUTION_DETAIL_LINE_PAGE_SIZE,
   BUDGET_CONTRIBUTION_DETAIL_TRANSACTION_PAGE_SIZE,
@@ -91,6 +92,7 @@ export async function GET(req: NextRequest, { params }: BudgetContributionDetail
         where: {
           tenantId: ctx.tenantId,
           contributionId: contribution.id,
+          status: { not: BUDGET_TRANSACTION_SUPERSEDED_STATUS },
           OR: [
             { category: { gt: cursor.category } },
             { category: cursor.category, id: { gt: cursor.id } },

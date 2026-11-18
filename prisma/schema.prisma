@@ -1156,7 +1156,7 @@ model BudgetTransaction {
   rate                   Float?   // Budget Rate
   budgetDate             DateTime @default(now())
   createdBy              String
-  status                 String   @default("DRAFT") // DRAFT, PENDING_PROJECT_APPROVAL, PROJECT_APPROVED, PENDING_FINANCE_APPROVAL, APPROVED, REJECTED, REVERSED
+  status                 String   @default("DRAFT") // DRAFT, UNDER_APPROVAL, PENDING_PROJECT_APPROVAL, PROJECT_APPROVED, PENDING_FINANCE_APPROVAL, APPROVED, REJECTED, REVERSED, SUPERSEDED
   isReversal             Boolean  @default(false)
   reversalReason         String?
   reversedTransactionId  String?

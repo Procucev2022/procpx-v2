@@ -11,6 +11,7 @@ import {
   BUDGET_PENDING_STATUSES,
 } from '../route.constants';
 import type { BudgetCategoryAggregateRow } from '@app-types/app/api/budgets/categories.types';
+import { BUDGET_TRANSACTION_SUPERSEDED_STATUS } from '@/lib/budget-transaction-status.constants';
 
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
           SUM(CASE WHEN "status" = 'REJECTED' THEN 1 ELSE 0 END) AS "rejectedCount"
         FROM "budget_transactions"
         WHERE "tenantId" = ${ctx.tenantId} AND "projectId" = ${projectId} AND "costCentreId" = ${costCentreId}
+          AND "status" <> ${BUDGET_TRANSACTION_SUPERSEDED_STATUS}
       ), cost_centre_status AS (
         SELECT CASE WHEN contribution_statuses."rowCount" > 0 THEN
           CASE WHEN contribution_statuses."approvedCount" = contribution_statuses."rowCount" THEN 'APPROVED'
@@ -86,6 +88,7 @@ export async function GET(req: NextRequest) {
           MAX(CASE WHEN "status" = 'DRAFT' THEN 1 ELSE 0 END) AS "hasDraft"
         FROM "budget_transactions"
         WHERE "tenantId" = ${ctx.tenantId} AND "projectId" = ${projectId} AND "costCentreId" = ${costCentreId}
+          AND "status" <> ${BUDGET_TRANSACTION_SUPERSEDED_STATUS}
         GROUP BY COALESCE(NULLIF("category", ''), 'General')
       ), actual_categories AS (
         SELECT COALESCE(NULLIF("category", ''), 'General') AS "category",

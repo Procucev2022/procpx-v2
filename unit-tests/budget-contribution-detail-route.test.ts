@@ -192,6 +192,7 @@ describe('budget contribution detail route', () => {
       where: {
         tenantId: 'tenant-1',
         contributionId: 'contribution-1',
+        status: { not: 'SUPERSEDED' },
         OR: [
           { category: { gt: 'Electrical' } },
           { category: 'Electrical', id: { gt: 'transaction-25' } },

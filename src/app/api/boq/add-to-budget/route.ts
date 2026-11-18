@@ -13,14 +13,15 @@ import {
   BUDGET_CONTRIBUTION_CREATE_UNDER_APPROVAL_SQL,
   BUDGET_CONTRIBUTION_RESUBMIT_SQL,
   BUDGET_CONTRIBUTION_REVISION_UPDATE_AFTER_AUDIT_SQL,
-  BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL,
   BUDGET_TRANSACTION_INSERT_AFTER_AUDIT_SQL,
+  BUDGET_TRANSACTION_SUPERSEDE_AFTER_AUDIT_SQL,
   MAX_D1_BATCH_STATEMENTS,
 } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import type { BudgetCategoryTotal } from '@app-types/app/api/boq/add-to-budget.types';
 import type { BudgetContributionLineAggregateRow } from '@app-types/lib/budget-contribution-lines.types';
 import { getBudgetContributionLineAggregate } from '@/lib/budget-contribution-lines';
+import { BUDGET_TRANSACTION_SUPERSEDED_STATUS } from '@/lib/budget-transaction-status.constants';
 
 export async function POST(req: NextRequest) {
   const ctx = await requireAuth('BUDGET_CREATE');
@@ -105,7 +106,11 @@ export async function POST(req: NextRequest) {
       where: { tenantId: ctx.tenantId, boqRevisionId: revision.id },
     });
     if (existingContribution && ['UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL', 'PROJECT_APPROVED'].includes(existingContribution.status)) {
-      const transactionWhere = { tenantId: ctx.tenantId, contributionId: existingContribution.id };
+      const transactionWhere = {
+        tenantId: ctx.tenantId,
+        contributionId: existingContribution.id,
+        status: { not: BUDGET_TRANSACTION_SUPERSEDED_STATUS },
+      };
       const [firstTransaction, transactionsCount] = await Promise.all([
         prisma.budgetTransaction.findFirst({
           where: transactionWhere,
@@ -171,7 +176,7 @@ export async function POST(req: NextRequest) {
         action, description, auditOldValue, auditNewValue, null, null, now],
     });
     if (existingContribution) {
-      batch.push({ sql: BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL, values: [ctx.tenantId, contributionId, auditId, ctx.tenantId] });
+      batch.push({ sql: BUDGET_TRANSACTION_SUPERSEDE_AFTER_AUDIT_SQL, values: [ctx.tenantId, contributionId, auditId, ctx.tenantId] });
     }
     const transactionStart = batch.length;
     for (const [categoryName, category] of categoryTotals.entries()) {
