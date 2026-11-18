@@ -20,6 +20,7 @@ export const UI_STRINGS = {
   appApiAdminUsersRoute: {
     aUserWithThisEmailAlreadyExists: "A user with this email already exists.",
     emailIsRequired: "Email is required.",
+    failedToCreateUser: "Failed to create the user. Please try again.",
     failedToFetchUsers: "Failed to fetch users.",
     nameIsRequired: "Name is required.",
     passwordMustBeAtLeast8Characters: "Password must be at least 8 characters.",

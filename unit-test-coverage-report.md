@@ -6,10 +6,10 @@ Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100741/101460) |
-| branches | 93.66% (23173/24741) |
-| functions | 98.59% (1960/1988) |
-| lines | 99.29% (100741/101460) |
+| statements | 99.29% (100779/101498) |
+| branches | 93.66% (23186/24754) |
+| functions | 98.59% (1962/1990) |
+| lines | 99.29% (100779/101498) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -306,7 +306,7 @@ Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
 | `src/lib/admin-user-policy.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/admin-user-policy.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/api-utils.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/api-utils.ts` | 100.00% | 98.61% | 100.00% | 100.00% | PASS |
+| `src/lib/api-utils.ts` | 100.00% | 98.63% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-bids.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/auction-lifecycle.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -356,7 +356,7 @@ Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.63% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |

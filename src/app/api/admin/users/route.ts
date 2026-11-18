@@ -50,7 +50,12 @@ export async function POST(req: NextRequest) {
   const ctx = await requireAuth('USER_CREATE');
   if (!isApiContext(ctx)) return ctx;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object') {
+    return apiError(UI_STRINGS.common.invalidRequestBody, 400, {
+      route: '/api/admin/users', method: 'POST', event: 'admin.user_create_invalid_body', userId: ctx.userId,
+    });
+  }
   const { email, name, role, password } = body;
 
   if (!email?.trim()) return apiError(UI_STRINGS.appApiAdminUsersRoute.emailIsRequired);
@@ -64,21 +69,38 @@ export async function POST(req: NextRequest) {
   if (!password || password.length < 8) return apiError(UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters);
 
   const normalizedEmail = email.trim().toLowerCase();
-  const existing = await prisma.user.findFirst({ where: { tenantId: ctx.tenantId, email: normalizedEmail } });
-  if (existing) return apiError(UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists);
+  const failureContext = { route: '/api/admin/users', method: 'POST', tenantId: ctx.tenantId, userId: ctx.userId };
+  try {
+    const existing = await prisma.user.findFirst({ where: { tenantId: ctx.tenantId, email: normalizedEmail } });
+    if (existing) return apiError(UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists);
 
-  const user = await prisma.user.create({
-    data: {
-      tenantId: ctx.tenantId,
-      email: normalizedEmail,
-      name: name.trim(),
-      role,
-      passwordHash: await hashPassword(password),
-      status: 'ACTIVE',
-      createdBy: ctx.userId,
-    },
-    select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
-  });
+    const user = await prisma.user.create({
+      data: {
+        tenantId: ctx.tenantId,
+        email: normalizedEmail,
+        name: name.trim(),
+        role,
+        passwordHash: await hashPassword(password),
+        status: 'ACTIVE',
+        createdBy: ctx.userId,
+      },
+      select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
+    });
 
-  return apiSuccess(user, 201);
+    return apiSuccess(user, 201);
+  } catch (error: unknown) {
+    // A concurrent request can pass the findFirst check and then hit the unique index.
+    if (isUniqueConstraintError(error)) {
+      return apiError(UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists, 400, {
+        ...failureContext, event: 'admin.user_create_conflict',
+      });
+    }
+    return apiError(UI_STRINGS.appApiAdminUsersRoute.failedToCreateUser, 500, {
+      ...failureContext, event: 'admin.user_create_failed', error,
+    });
+  }
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
 }

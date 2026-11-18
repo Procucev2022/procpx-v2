@@ -135,6 +135,27 @@ describe('admin user update route', () => {
     });
   });
 
+  it('reports malformed bodies, failed creates, and duplicate races as API errors instead of throwing', async () => {
+    const malformed = { json: jest.fn().mockRejectedValue(new SyntaxError('Unexpected token')), headers: new Headers() };
+    await expect(createUser(malformed as unknown as Parameters<typeof createUser>[0])).resolves.toEqual({
+      ok: false, error: UI_STRINGS.common.invalidRequestBody, status: 400,
+    });
+
+    const create = (body: unknown) => createUser(makeRequest(body, 'POST'));
+    const validBody = { email: 'ada@example.test', name: 'Ada', role: 'PROCUREMENT_USER', password: 'long-password' };
+    userDb.findFirst.mockResolvedValueOnce(null);
+    userDb.create.mockRejectedValueOnce(new Error('D1 unavailable'));
+    await expect(create(validBody)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiAdminUsersRoute.failedToCreateUser, status: 500,
+    });
+
+    userDb.findFirst.mockResolvedValueOnce(null);
+    userDb.create.mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
+    await expect(create(validBody)).resolves.toEqual({
+      ok: false, error: UI_STRINGS.appApiAdminUsersRoute.aUserWithThisEmailAlreadyExists, status: 400,
+    });
+  });
+
   it('requires a user-edit context and reports missing users', async () => {
     const denied = { status: 403 };
     auth.mockResolvedValueOnce(denied);

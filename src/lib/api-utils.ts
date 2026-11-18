@@ -36,6 +36,21 @@ export function setTestAuthContext(ctx: { userId?: string; tenantId?: string } |
   currentTestContext = ctx;
 }
 
+// A permission denial is logged with the permission, role and user, so refused actions show in logs and not only in the UI.
+function permissionDenied(
+  permission: Permission,
+  subject: { userId: string; tenantId: string; role: string },
+): NextResponse {
+  logEvent('warn', 'auth.permission_denied', {
+    operation: 'require_permission',
+    permission,
+    role: subject.role,
+    userId: subject.userId,
+    tenantId: subject.tenantId,
+  });
+  return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
+}
+
 export async function requireAuth(permission?: Permission): Promise<ApiContext | NextResponse> {
   // 1. Check test context (used by automated test suites)
   if (currentTestContext?.userId || currentTestContext?.tenantId) {
@@ -46,7 +61,7 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
     });
     if (user) {
       if (permission && !hasPermission(user.role as UserRole, permission)) {
-        return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
+        return permissionDenied(permission, { userId: user.id, tenantId: user.tenantId, role: user.role });
       }
       return {
         userId: user.id,
@@ -74,7 +89,7 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
   }
   const user = session.user as unknown as AuthenticatedSessionUser;
   if (permission && !hasPermission(user.role as UserRole, permission)) {
-    return NextResponse.json({ error: UI_STRINGS.common.forbiddenInsufficientPermissions }, { status: 403 });
+    return permissionDenied(permission, { userId: user.id, tenantId: user.tenantId, role: user.role });
   }
 
   let vendorId = user.vendorId;

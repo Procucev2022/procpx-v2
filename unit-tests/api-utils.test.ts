@@ -150,6 +150,9 @@ describe('requireAuth', () => {
     await expect(responseJson(await requireAuth('PROJECT_CREATE'))).resolves.toEqual({
       status: 403, body: { error: UI_STRINGS.common.forbiddenInsufficientPermissions },
     });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'auth.permission_denied', expect.objectContaining({
+      permission: 'PROJECT_CREATE', role: 'VIEWER', userId: 'user-1', tenantId: 'tenant-1',
+    }));
   });
 
   it('returns unauthenticated when auth and request headers have no identity', async () => {
@@ -191,6 +194,9 @@ describe('requireAuth', () => {
     await expect(responseJson(await requireAuth('PROJECT_CREATE'))).resolves.toEqual({
       status: 403, body: { error: UI_STRINGS.common.forbiddenInsufficientPermissions },
     });
+    expect(structuredLog).toHaveBeenCalledWith('warn', 'auth.permission_denied', expect.objectContaining({
+      permission: 'PROJECT_CREATE', role: 'VIEWER', userId: 'viewer', tenantId: 'tenant-1',
+    }));
 
     userModel.findUnique.mockRejectedValueOnce(new Error('lookup failed'));
     authMock.mockResolvedValueOnce({ user: { id: 'vendor', tenantId: 'tenant-1', role: 'VENDOR' } });
