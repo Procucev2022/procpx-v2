@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
+Files included: **375**. Files meeting all four 90% thresholds: **375/375**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100699/101418) |
-| branches | 93.66% (23165/24733) |
-| functions | 98.59% (1959/1987) |
-| lines | 99.29% (100699/101418) |
+| statements | 99.29% (100707/101426) |
+| branches | 93.66% (23169/24737) |
+| functions | 98.59% (1960/1988) |
+| lines | 99.29% (100707/101426) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -61,7 +61,7 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 | `src/app/(app)/procurement/rate-cards/page.tsx` | 99.47% | 94.54% | 100.00% | 99.47% | PASS |
 | `src/app/(app)/procurement/rfqs/[id]/page.tsx` | 98.23% | 90.04% | 93.22% | 98.23% | PASS |
 | `src/app/(app)/procurement/rfqs/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.79% | 90.20% | 97.10% | 99.79% | PASS |
+| `src/app/(app)/procurement/rfqs/new/page.tsx` | 99.79% | 90.16% | 97.10% | 99.79% | PASS |
 | `src/app/(app)/procurement/rfqs/page.tsx` | 100.00% | 97.50% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/vendors/[id]/page.tsx` | 99.23% | 90.59% | 100.00% | 99.23% | PASS |
 | `src/app/(app)/procurement/vendors/page.tsx` | 99.45% | 91.70% | 98.61% | 99.45% | PASS |
@@ -374,6 +374,7 @@ Files included: **374**. Files meeting all four 90% thresholds: **374/374**.
 | `src/lib/project-document.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/rate-card-approval-history.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/rate-card-approval-history.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/rate-card-selection.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/rate-card-utils.ts` | 99.43% | 98.75% | 100.00% | 99.43% | PASS |
 | `src/lib/runtime.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/storage.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
