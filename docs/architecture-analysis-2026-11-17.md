@@ -21,9 +21,9 @@ Date: 2026-11-17. Branch: `anshul2`. Scope: `src/`, `prisma/schema.prisma`, `mig
 
 | # | ID | Why it ranks here | Status |
 |---|----|-------------------|--------|
-| 1 | DB-01 | Resubmitting a budget contribution deletes its ledger rows and reissues their codes. Ledger history is lost. | Open |
+| 1 | DB-01 | Resubmitting a budget contribution deletes its ledger rows and reissues their codes. Ledger history is lost. | Fixed in 3a3c177 |
 | 2 | MOCK-01 to MOCK-04 | Production approval and rate-card pages show hardcoded data for one named vendor, including a pre-signed agreement. | Open |
-| 3 | LOG-01, LOG-02 | Permission denials (403) are not logged. Server errors (5xx) log only the public message, not the cause. | Open |
+| 3 | LOG-01, LOG-02 | Permission denials (403) are not logged. Server errors (5xx) log only the public message, not the cause. | LOG-01 fixed in 7e2a4f6. LOG-02 open. |
 | 4 | DB-02 | Manual BOQ replace deletes a revision's lines without checking status. Downstream links clear silently. | Open |
 | 5 | DB-04 | Some budget sums count REJECTED and REVERSED rows. | Open |
 | 6 | D1-04 | Queries over D1's bound-variable limit re-run in pages. Small test data never reaches this path. | Open |
@@ -35,7 +35,7 @@ Date: 2026-11-17. Branch: `anshul2`. Scope: `src/`, `prisma/schema.prisma`, `mig
 
 | ID | Severity | Finding | Evidence | Status |
 |---|---|---|---|---|
-| DB-01 | Critical | On resubmission, `add-to-budget` deletes every `budget_transactions` row for the contribution. New `BTX-` codes come from `MAX + 1`, so a code can later point to a different row. | `src/app/api/boq/add-to-budget/route.ts` 173–175 (verified). `BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL` in `src/lib/d1-batch.constants.ts` 1148 (verified). | Open |
+| DB-01 | Critical | On resubmission, `add-to-budget` deletes every `budget_transactions` row for the contribution. New `BTX-` codes come from `MAX + 1`, so a code can later point to a different row. | `src/app/api/boq/add-to-budget/route.ts` 173–175 (verified). `BUDGET_TRANSACTION_DELETE_AFTER_AUDIT_SQL` in `src/lib/d1-batch.constants.ts` 1148 (verified). | Fixed in 3a3c177: superseded rows stay, and every reader excludes them (regression test: `unit-tests/budget-ledger-supersede.integration.test.ts`). Rows deleted before this fix are not recoverable from local D1. |
 | DB-02 | High | Manual BOQ replace hard-deletes all lines of a revision with no DRAFT check. PR, RFQ, PPO, actual-cost and budget foreign keys are `ON DELETE SET NULL`, so links clear without an error. | `d1-batch.constants.ts` ~198–208; `src/app/api/boq/manual/route.ts` ~350–353 | Open |
 | DB-03 | High | Quote numbers use `QT-{rfqNumber}-{version}`, so vendors on the same RFQ can share a number. `quotes.quoteNumber` has only a non-unique index. | `src/app/api/vendor-portal/rfqs/[id]/route.ts` ~262; `d1-batch.constants.ts` ~791–800 | Open |
 | DB-04 | High | Budget totals mix statuses. Dashboard proposed sums include REJECTED and REVERSED. The fallback reads APPROVED rows, but reversal rows are also APPROVED. `MAX(0, …)` clamps negative drift without logging it. | `src/app/api/dashboard/route.ts` ~1186–1228; `src/app/api/approvals/route.ts` ~195, ~207 | Open |
@@ -59,11 +59,11 @@ Current write path: `prisma.$transaction` throws on D1 by design (`src/lib/prism
 | D1-02 | High | The SUPER_ADMIN audit query has no tenant filter, so index `audit_logs_tenant_created_idx` (0025) cannot serve it. | `dashboard` and audit routes | Open |
 | D1-03 | Medium | TopNav polls `/api/notifications?limit=10` every 120 s and refetches on `visibilitychange`. The unread count uses an OR visibility filter (`notificationVisibilityWhere`) that can scan unread rows across the tenant. Migration 0036 added indexes, so re-measure first. | TopNav; `notificationVisibilityWhere` | Open |
 | D1-04 | High | `findManyWithinD1Limits` in `src/lib/d1-compat.ts` re-runs the whole query through `findManyInPages` when D1 reports too many SQL variables. Page size starts at 90 and halves. Logs `db.d1_parameter_limit_paging`. Small test data never triggers this path, so production can behave differently. | `src/lib/d1-compat.ts` | Open |
-| D1-05 | Medium | `procurement_requests`, `rfqs` and `boqs` have no `(tenantId, status)` index. Migrations 0001 to 0036 index only `projectId`, `costCentreId`, `boqRevisionId`, `boqId`, `prId` and `tenantId`+number on these tables (verified by grep). | `migrations/0031_add_lookup_indexes.sql` 9–17, 54–57 | Open. Planned in migration 0037. |
+| D1-05 | Medium | `procurement_requests`, `rfqs` and `boqs` have no `(tenantId, status)` index. Migrations 0001 to 0036 index only `projectId`, `costCentreId`, `boqRevisionId`, `boqId`, `prId` and `tenantId`+number on these tables (verified by grep). | `migrations/0031_add_lookup_indexes.sql` 9–17, 54–57 | Fixed in 16f7d13 (migration 0037). |
 | D1-06 | Medium | The PROJECT_USER fallback budget reads all lines of every revision (`fallbackBudget` raw query). | Sub-agent reading | Open |
 | D1-07 | Medium | The BOQ revision page calls `getBoqLineSummary` on every load. Counters already exist on `boq_revisions`. | `src/app/api/boq/[revisionId]/route.ts` ~105–109 | Open |
 | D1-08 | Medium | Manual BOQ writes recount the revision on each non-replace write, without an `isDeleted` filter. | `boq/manual/route.ts` ~264–267 | Open |
-| D1-09 | Medium | `actual-costs` runs a count and a findMany ordered by `actualDate`, with no index that matches. | `src/app/api/actual-costs/route.ts` 113–117 | Open. Planned in 0037. |
+| D1-09 | Medium | `actual-costs` runs a count and a findMany ordered by `actualDate`, with no index that matches. | `src/app/api/actual-costs/route.ts` 113–117 | Fixed in 16f7d13 (migration 0037 index on tenant, actual date and id). |
 | D1-10 | Low | `readByD1FilterChunks` and `countByD1FilterChunks` await 90-ID chunks one after another. | `src/lib/d1-query.ts` ~18–31 | Open |
 | D1-11 | Low | The auction room polls every `refreshIntervalSeconds` (15 s, paused while the tab is hidden). Cost not measured. | Sub-agent reading | Open |
 | D1-12 | Medium | Eight pages call `/api/auth/me` on mount. Whether route auth writes a refreshed token back is not verified. | approvals/rate-cards, budget, cost-centres, masters/categories, masters/standard-boq, procurement/vendors/[id], projects, projects/new | Open (verify first) |
@@ -90,9 +90,9 @@ Why production logs show few errors:
 
 | ID | Severity | Finding | Evidence | Status |
 |---|---|---|---|---|
-| LOG-01 | High | `requireAuth` returns 403 without logging. The permission, role and user are not recorded. | `src/lib/api-utils.ts` ~49 and ~77 (verified) | Fixing next |
-| LOG-02 | High | `apiError` logs only the developer message for 5xx responses. The underlying error is not recorded unless a caller passes it. | `src/lib/api-utils.ts` `apiError` (verified) | Fixing next |
-| LOG-03 | High | `admin/users` POST has no try block, so `req.json()` and `prisma.user.create` failures reach the framework default. The GET handler has one. | `src/app/api/admin/users/route.ts` POST (verified) | Open |
+| LOG-01 | High | `requireAuth` returns 403 without logging. The permission, role and user are not recorded. | `src/lib/api-utils.ts` ~49 and ~77 (verified) | Fixed in 7e2a4f6 (`auth.permission_denied`, with permission, role, user and tenant) |
+| LOG-02 | High | `apiError` logs only the developer message for 5xx responses. The underlying error is not recorded unless a caller passes it. | `src/lib/api-utils.ts` `apiError` (verified) | Open. Callers must pass the caught error in `details.error`, and only 6 of 163 5xx call sites do. |
+| LOG-03 | High | `admin/users` POST has no try block, so `req.json()` and `prisma.user.create` failures reach the framework default. The GET handler has one. | `src/app/api/admin/users/route.ts` POST (verified) | Fixed in 7e2a4f6 (malformed body returns 400; create failures log `admin.user_create_failed`) |
 | LOG-04 | High | `budgets/approve` (approve, finance reject, reverse) logs only name and message. Malformed JSON becomes a logged 500. | `src/app/api/budgets/approve/route.ts` ~71–95 | Open |
 | LOG-05 | Medium | `vendor-portal/rfqs/[id]` replaces malformed `lineItemsJson` with `[]` without logging. | ~409–410 | Open |
 | LOG-06 | Medium | `approvals/vendor-ratings` overwrites malformed-history warnings. | ~229–241 | Open |
@@ -181,7 +181,21 @@ Causes:
 | GATE-01 | The gate takes about 25 minutes per run. Jest is about 15 of those minutes. | Open |
 | GATE-02 | `unit-tests/boq-studio-page.test.tsx` (23 tests) failed once under full-gate load and passed on rerun. Its slowest tests take 5 to 8 s alone. | Open |
 
-Planned options, ranked by time saved: shard Jest into separate processes and merge coverage before the threshold check; run the non-Jest stages beside Jest; batch integrity queries; add an ESLint cache; fix the `check:changed` trigger gaps. Rejected: removing `--detectOpenHandles`, and changed-only lint in the gate.
+The full gate ran in 1,907 s (about 32 min) on 2026-11-17, with Jest at roughly 25 of those minutes.
+
+Sharding experiment (not committed; reverted):
+
+| Run | Wall time | Result |
+|---|---|---|
+| Single process, V8 coverage (committed gate) | ~25 min Jest | 376/376 files pass; overall branches 93.66% |
+| 4 shards, V8 coverage, merged by source location | 264 s | Tests pass. 5 files fail on branches (`src/app/api/pr/[id]/route.ts`, `pr/[id]/release-to-procurement/route.ts`, `src/lib/auth.ts`, `src/lib/boq-reference-catalog.ts`, `src/lib/observability/runtime-logger.ts`). |
+| 4 shards, Babel (istanbul) coverage, merged | 195 s | Tests pass. 32 files fall below 90%, mostly on branches. |
+
+Why V8 sharding does not reproduce the single-run numbers: V8 reports different branch points for the same file in different processes. For `release-to-procurement/route.ts`, shard 2 reports the branch at line 66 with zero hits, and shard 3 does not report that branch at all. The tests that reach line 66 may run in shard 3, which would make the merged count wrong. This was not confirmed by a test. The single-run baseline may carry the same error; it passes today.
+
+Options, for a decision (see D-13): keep the single-process gate (about 32 min), or switch to Babel coverage and shard (about 3 min), then add tests for the 32 files it flags. Both keep the 90% thresholds. Neither is done here.
+
+Other speed-ups still open: run the non-Jest stages beside Jest, batch integrity queries, add an ESLint cache, and fix the `check:changed` trigger gaps. Rejected: removing `--detectOpenHandles`, and changed-only lint in the gate.
 
 ## 9. Verified not defects
 
@@ -205,6 +219,7 @@ Planned options, ranked by time saved: shard Jest into separate processes and me
 | D-10 | Vendor directory visibility. Reads are cross-tenant and writes tenant-scoped. Keep it? | Unchanged |
 | D-11 | Remote D1 target. `wrangler.jsonc` database IDs changed in merged PR #11. Confirm the target before any remote migration. | No remote migration |
 | D-12 | `NEXTAUTH_SECRET` (or `AUTH_SECRET`) must be a Worker secret before deploy. Production fails closed without it. | Deploy blocked until set |
+| D-13 | Unit coverage: keep the single-process V8 gate (about 32 min), or switch to Babel coverage and shard it (about 3 min), which flags 32 files below 90% until tests are added. | Keep the single-process gate |
 
 ## 11. Fix order
 
@@ -217,3 +232,14 @@ Each fix is committed and pushed on its own, after `npm run check:quality` passe
 5. Budget totals: exclude REJECTED and REVERSED rows from proposed sums (DB-04).
 6. Gate speed: parallel stages and sharded Jest, measured before and after (GATE-01).
 7. Remaining items in sections 1 to 6, in priority order, as decisions are made.
+
+## 12. Commits in this cycle
+
+| Commit | What changed | Gate |
+|---|---|---|
+| 14576c2 | This analysis document | Docs only; no code change |
+| 3a3c177 | Budget resubmission keeps superseded ledger rows (DB-01). Every active total, list, category summary, and preview excludes them. | Full `check:quality` passed |
+| 7e2a4f6 | Permission denials are logged as `auth.permission_denied` (LOG-01). `admin/users` POST handles malformed bodies and failed creates (LOG-03). | Full `check:quality` passed |
+| 16f7d13 | Migration 0037 adds tenant status indexes for procurement requests, RFQs and BOQs, and an actual cost index on tenant and `actualDate` (D1-05, D1-09). | Full `check:quality` passed; migration applied locally |
+
+Not changed in this cycle: MOCK-01 to MOCK-16 (production-visible Ramakrishna data and fallback prices are still in place), LOG-02 (5xx causes), LOG-04 to LOG-16, DB-02 to DB-13, D1-01 to D1-04 and D1-06 to D1-12, F-01 to F-19, and the latency items in section 7. The coverage sharding experiment was reverted (section 8).
