@@ -204,6 +204,7 @@ model Boq {
 
   @@unique([tenantId, boqCode])
   @@index([projectId], map: "boqs_projectId_idx")
+  @@index([tenantId, status], map: "boqs_tenantId_status_idx")
   @@index([costCentreId], map: "boqs_costCentreId_idx")
   @@map("boqs")
 }
@@ -514,6 +515,7 @@ model Rfq {
 
   @@unique([tenantId, rfqNumber])
   @@index([projectId], map: "rfqs_projectId_idx")
+  @@index([tenantId, status], map: "rfqs_tenantId_status_idx")
   @@index([boqRevisionId], map: "rfqs_boqRevisionId_idx")
   @@index([prId], map: "rfqs_prId_idx")
   @@map("rfqs")
@@ -1002,6 +1004,7 @@ model ActualCostTransaction {
 
   @@unique([tenantId, transactionCode])
   @@index([projectId], map: "actual_cost_transactions_projectId_idx")
+  @@index([tenantId, actualDate, id], map: "actual_cost_transactions_tenantId_actualDate_id_idx")
   @@index([costCentreId], map: "actual_cost_transactions_costCentreId_idx")
   @@index([ppoId], map: "actual_cost_transactions_ppoId_idx")
   @@index([tenantId, completionRequestId])
@@ -1237,6 +1240,7 @@ model ProcurementRequest {
 
   @@unique([tenantId, prNumber])
   @@index([projectId], map: "procurement_requests_projectId_idx")
+  @@index([tenantId, status], map: "procurement_requests_tenantId_status_idx")
   @@index([costCentreId], map: "procurement_requests_costCentreId_idx")
   @@index([boqRevisionId], map: "procurement_requests_boqRevisionId_idx")
   @@index([boqId], map: "procurement_requests_boqId_idx")
