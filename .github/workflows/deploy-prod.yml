@@ -60,5 +60,4 @@ jobs:
         run: npm run db:integrity:remote -- --compare-baseline "$D1_INTEGRITY_BASELINE_PATH"
 
       - name: Deploy OpenNext application
-        run: npm run cf:deploy
         run: npm run cf:deploy -- --env prod
