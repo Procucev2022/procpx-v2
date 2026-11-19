@@ -7,7 +7,7 @@ Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
 | Overall | Coverage |
 | --- | ---: |
 | statements | 99.29% (100755/101468) |
-| branches | 93.73% (23190/24741) |
+| branches | 93.73% (23187/24738) |
 | functions | 98.59% (1961/1989) |
 | lines | 99.29% (100755/101468) |
 
@@ -347,7 +347,7 @@ Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
