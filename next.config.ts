@@ -5,12 +5,18 @@ const nextConfig: NextConfig = {
   // `generated/prisma` output by the Cloudflare runtime.
 };
 
-// Initialize local Wrangler bindings for `next dev`; remote D1 access is reserved
-// for explicit Wrangler commands and is never enabled by the dev config.
+// Initialize Wrangler bindings for `next dev`. By default they are local (`.wrangler/`).
+// Only the explicit `npm run dev:remote` command sets PROCPX_DEV_REMOTE=true, which selects
+// the wrangler.jsonc "remote" environment whose D1/R2 bindings are marked `"remote": true`
+// and therefore read and write the deployed Cloudflare resources.
 export default async function config(): Promise<NextConfig> {
   if (process.env.DATABASE_PROVIDER === "d1") {
     const { initOpenNextCloudflareForDev } = await import("@opennextjs/cloudflare");
-    await initOpenNextCloudflareForDev();
+    if (process.env.PROCPX_DEV_REMOTE === "true") {
+      await initOpenNextCloudflareForDev({ environment: "remote", remoteBindings: true });
+    } else {
+      await initOpenNextCloudflareForDev();
+    }
   }
   return nextConfig;
 }

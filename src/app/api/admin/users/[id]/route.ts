@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
 import { runAuditedD1UpdateAtomically } from '@/lib/audited-update';
+import { canChooseAnyBusiness } from '@/lib/business-name';
+import { CROSS_BUSINESS_ADMIN_ROLE } from '@/lib/business-directory.constants';
+import { ASSIGNABLE_USER_ROLES } from '../route.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -11,19 +14,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const ctx = await requireAuth('USER_EDIT');
   if (!isApiContext(ctx)) return ctx;
   const { id } = await params;
+  const isSuperAdmin = canChooseAnyBusiness(ctx.role);
 
+  // A Super Admin manages users in every business; other administrators only their own.
   const existing = await prisma.user.findFirst({
-    where: { id, tenantId: ctx.tenantId },
+    where: isSuperAdmin ? { id } : { id, tenantId: ctx.tenantId },
   });
   if (!existing) return apiError(UI_STRINGS.appApiAdminUsersIdRoute.userNotFound, 404, { route: '/api/admin/users/[id]', method: 'PUT' });
+  if (existing.role === CROSS_BUSINESS_ADMIN_ROLE && !isSuperAdmin) {
+    return apiError(UI_STRINGS.appApiAdminUsersIdRoute.superAdminAccountsCanOnlyBeChangedByASuperAdmin, 403);
+  }
 
   const body = await req.json();
   const { name, role, status } = body;
+  // Keeping the current role is always allowed; any change must be to an assignable role,
+  // so the edit form can never grant SUPER_ADMIN or VENDOR.
+  if (role != null && role !== existing.role && !ASSIGNABLE_USER_ROLES.includes(role)) {
+    return apiError(UI_STRINGS.appApiAdminUsersIdRoute.roleIsInvalid);
+  }
 
   const updated = await runAuditedD1UpdateAtomically({
     table: 'user',
     id,
-    tenantId: ctx.tenantId,
+    tenantId: existing.tenantId,
     data: {
       name: name?.trim() ?? existing.name,
       role: role ?? existing.role,
@@ -33,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     route: '/api/admin/users/[id]',
     requestId: req.headers.get('x-request-id'),
     audit: {
-      tenantId: ctx.tenantId,
+      tenantId: existing.tenantId,
       userId: ctx.userId,
       entityType: 'USER',
       entityId: id,

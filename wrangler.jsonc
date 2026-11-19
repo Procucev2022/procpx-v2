@@ -46,5 +46,33 @@
   ],
   "triggers": {
     "crons": ["* * * * *"]
+  },
+
+  // Used only by `npm run dev:remote` (next dev with PROCPX_DEV_REMOTE=true). Deploys and
+  // migrations never select this environment. Bindings are not inherited between Wrangler
+  // environments, so they are repeated here with "remote": true to reach the deployed
+  // D1 database and R2 bucket from a local `next dev` process.
+  "env": {
+    "remote": {
+      "vars": {
+        "UPLOAD_DIR": "r2"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "procpx-dev",
+          "database_id": "ffb73313-6ac9-4306-87e9-751b6a0f6e81",
+          "migrations_dir": "migrations",
+          "remote": true
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "UPLOADS",
+          "bucket_name": "procpx-uploads",
+          "remote": true
+        }
+      ]
+    }
   }
 }

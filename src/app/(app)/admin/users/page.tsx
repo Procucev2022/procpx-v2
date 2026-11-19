@@ -1,11 +1,14 @@
 'use client';
 // app/(app)/admin/users/page.tsx - User Management & RBAC Permissions
 import { useEffect, useState } from 'react';
-import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus } from 'lucide-react';
+import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus, Building2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { ROLES, PERMISSIONS_MATRIX } from "./page.constants";
+import { COMPANY_NAME_MAX_LENGTH } from "@/lib/business-directory.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
+import { findBusinessByName, normalizeCompanyName } from "@/lib/business-name";
+import type { BusinessDirectory } from "@app-types/app/api/admin/users/route.types";
 
 
 
@@ -17,7 +20,8 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ email: '', name: '', role: 'PROJECT_USER', password: '' });
+  const [form, setForm] = useState({ email: '', name: '', role: 'PROJECT_USER', password: '', companyName: '' });
+  const [directory, setDirectory] = useState<BusinessDirectory | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const pageSize = 20;
@@ -31,20 +35,47 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [page, search]);
 
+  // Businesses this administrator may link users to: every business for a Super Admin,
+  // only their own business for everyone else.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/businesses')
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: BusinessDirectory | null) => { if (!cancelled) setDirectory(d); })
+      .catch(() => { if (!cancelled) setDirectory(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const ownBusinessName = directory?.currentBusiness?.name || '';
+  const canChooseBusiness = directory?.canChooseBusiness === true;
+  const typedCompany = normalizeCompanyName(form.companyName);
+  const matchedBusiness = canChooseBusiness ? findBusinessByName(directory?.businesses || [], typedCompany) : null;
+
+  function openInviteModal() {
+    setError('');
+    setForm(f => ({ ...f, companyName: ownBusinessName }));
+    setShowModal(true);
+  }
+
   async function createUser(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, companyName: canChooseBusiness ? typedCompany : ownBusinessName }),
     });
     const d = await res.json();
     if (!res.ok) { setError(d.error); return; }
-    setSuccess(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedSuccessfully, { "email": d.email }));
+    setSuccess(d.tenant?.name
+      ? interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedInCompany, { email: d.email, company: d.tenant.name })
+      : interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedSuccessfully, { "email": d.email }));
     setShowModal(false);
-    setForm({ email: '', name: '', role: 'PROJECT_USER', password: '' });
+    setForm({ email: '', name: '', role: 'PROJECT_USER', password: '', companyName: '' });
     load();
+    if (d.tenant?.id && canChooseBusiness && !directory?.businesses.some(b => b.id === d.tenant.id)) {
+      setDirectory(prev => prev && { ...prev, businesses: [...prev.businesses, { id: d.tenant.id, name: d.tenant.name }] });
+    }
   }
 
   async function toggleStatus(u: any) {
@@ -77,7 +108,7 @@ export default function UsersPage() {
             <button
               type="button"
               className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
-              onClick={() => setShowModal(true)}
+              onClick={openInviteModal}
             >
               <Plus size={16} />{UI_STRINGS.appAppAdminUsersPage.inviteUser}</button>
           ) : undefined
@@ -147,6 +178,7 @@ export default function UsersPage() {
                   <tr>
                     <th>{UI_STRINGS.common.name}</th>
                     <th>{UI_STRINGS.common.email}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.company}</th>
                     <th>{UI_STRINGS.appAppAdminUsersPage.role}</th>
                     <th>{UI_STRINGS.common.status}</th>
                     <th>{UI_STRINGS.appAppAdminUsersPage.lastLogin}</th>
@@ -159,6 +191,7 @@ export default function UsersPage() {
                     <tr key={u.id}>
                       <td style={{ fontWeight: 600 }}>{u.name}</td>
                       <td className="text-muted">{u.email}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{u.tenant?.name || UI_STRINGS.common.copy4s9bsz}</td>
                       <td><span className="badge badge-info">{u.role.replace(/_/g, ' ')}</span></td>
                       <td>
                         <span className={`badge ${u.status === 'ACTIVE' ? 'badge-approved' : 'badge-draft'}`}>
@@ -250,6 +283,40 @@ export default function UsersPage() {
                 <div className="form-group">
                   <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.emailAddress}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   <input type="email" className="form-control" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="invite-company">{UI_STRINGS.appAppAdminUsersPage.companyBusinessName}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
+                  {canChooseBusiness ? (
+                    <>
+                      <input
+                        id="invite-company"
+                        className="form-control"
+                        list="invite-company-options"
+                        value={form.companyName}
+                        maxLength={COMPANY_NAME_MAX_LENGTH}
+                        placeholder={UI_STRINGS.appAppAdminUsersPage.companyNamePlaceholder}
+                        onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+                        required
+                      />
+                      <datalist id="invite-company-options">
+                        {directory?.businesses.map(b => <option key={b.id} value={b.name} />)}
+                      </datalist>
+                      <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{UI_STRINGS.appAppAdminUsersPage.companyHelpSuperAdmin}</p>
+                      {typedCompany && (
+                        <p data-testid="invite-company-outcome" style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: matchedBusiness ? '#047857' : '#b45309' }}>
+                          <Building2 size={12} />
+                          {matchedBusiness
+                            ? interpolateUiString(UI_STRINGS.appAppAdminUsersPage.existingBusinessWillBeUsed, { name: matchedBusiness.name })
+                            : interpolateUiString(UI_STRINGS.appAppAdminUsersPage.newBusinessWillBeCreated, { name: typedCompany })}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <input id="invite-company" className="form-control" value={ownBusinessName} readOnly aria-readonly="true" />
+                      <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{UI_STRINGS.appAppAdminUsersPage.companyHelpLocked}</p>
+                    </>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.role2}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
