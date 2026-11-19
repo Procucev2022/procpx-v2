@@ -52,6 +52,13 @@ npm run dev
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
+To run the local app against the **deployed server data** (the `procpx-dev` D1 database and `procpx-uploads` R2 bucket in `wrangler.jsonc`):
+```bash
+npx wrangler login      # once; the account must have access to the account_id in wrangler.jsonc
+npm run dev:remote
+```
+Remote mode uses the `remote` Wrangler environment, whose bindings are marked `"remote": true`. Every record you create, edit or approve is written to the shared server database, so follow the D1 persistence rules in `AGENTS.md`. Both `npm run dev` and `npm run dev:remote` first check `.env` and report problems: a missing `NEXTAUTH_SECRET`, an `NEXTAUTH_URL` that doesn't match the port, a leftover `DATABASE_URL`, or a mismatched `CLOUDFLARE_ACCOUNT_ID`.
+
 For a D1-backed workflow regression, seed the isolated test D1 and start the OpenNext Worker against the same state:
 ```bash
 npm run db:seed:test

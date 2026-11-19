@@ -45,50 +45,32 @@
     }
   ],
   "triggers": {
-    "crons": [
-      "* * * * *"
-    ]
+    "crons": ["* * * * *"]
   },
+
+  // Used only by `npm run dev:remote` (next dev with PROCPX_DEV_REMOTE=true). Deploys and
+  // migrations never select this environment. Bindings are not inherited between Wrangler
+  // environments, so they are repeated here with "remote": true to reach the deployed
+  // D1 database and R2 bucket from a local `next dev` process.
   "env": {
-    "dev": {
-      "name": "procpx",
+    "remote": {
       "vars": {
-        "UPLOAD_DIR": "r2",
-        "NEXTAUTH_URL": "https://procpx.anshul-goel.workers.dev/login",
+        "UPLOAD_DIR": "r2"
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "procpx-dev",
           "database_id": "ffb73313-6ac9-4306-87e9-751b6a0f6e81",
-          "migrations_dir": "migrations"
+          "migrations_dir": "migrations",
+          "remote": true
         }
       ],
       "r2_buckets": [
         {
           "binding": "UPLOADS",
-          "bucket_name": "procpx-uploads"
-        }
-      ]
-    },
-    "prod": {
-      "name": "procpx-prod",
-      "vars": {
-        "UPLOAD_DIR": "r2",
-        "NEXTAUTH_URL": "https://procpx-prod.srinivas-mukku.workers.dev/login",
-      },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "procpx-prod",
-          "database_id": "646df8db-22b5-4e86-8116-b6abbe0974be",
-          "migrations_dir": "migrations"
-        }
-      ],
-      "r2_buckets": [
-        {
-          "binding": "UPLOADS",
-          "bucket_name": "procpx-uploads"
+          "bucket_name": "procpx-uploads",
+          "remote": true
         }
       ]
     }

@@ -1,15 +1,9 @@
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { ASSIGNABLE_USER_ROLES } from "@/app/api/admin/users/route.constants";
 /* Application constants extracted from app/(app)/admin/users/page.tsx. */
 
-export const ROLES = [
-  'PROJECT_USER',
-  'PROJECT_APPROVER',
-  'PROCUREMENT_USER',
-  'FINANCE_USER',
-  'CATEGORY_MANAGER',
-  'CLIENT_ADMIN',
-  'VIEWER',
-];
+// The invite form offers exactly the roles the users API accepts.
+export const ROLES: string[] = [...ASSIGNABLE_USER_ROLES];
 
 export const PERMISSIONS_MATRIX: Array<{ permission: string; description: string; roles: string[] }> = [
   { permission: 'PROJECT_VIEW', description: UI_STRINGS.appAppAdminUsersPageConstants.viewTenantProjectsOverviews, roles: ['SUPER_ADMIN', 'CLIENT_ADMIN', 'PROJECT_USER', 'PROJECT_APPROVER', 'PROCUREMENT_USER', 'FINANCE_USER', 'CATEGORY_MANAGER', 'VIEWER'] },
