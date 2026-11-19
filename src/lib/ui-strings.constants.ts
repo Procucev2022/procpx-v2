@@ -811,6 +811,8 @@ export const UI_STRINGS = {
     activate: "Activate",
     company: "Company",
     companyBusinessName: "Company / Business Name ",
+    companyHelpLocked: "Users you add belong to your business and can only see its data.",
+    companyHelpSuperAdmin: "Pick an existing business or type a new company name to create it. The user will only see that business's data.",
     companyNamePlaceholder: "Type an existing business or a new company name",
     existingBusinessWillBeUsed: "The user will be linked to the existing business \"{{name}}\".",
     newBusinessWillBeCreated: "A new business \"{{name}}\" will be created.",
