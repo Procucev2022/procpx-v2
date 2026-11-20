@@ -12,6 +12,7 @@ import {
 } from '../src/lib/business-name';
 import { writeStructuredLog } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
+import { BUSINESS_SUMMARY_SELECT } from '@/lib/business-directory.constants';
 
 jest.mock('../src/lib/prisma', () => ({ prisma: { tenant: { findMany: jest.fn() } } }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
@@ -66,7 +67,7 @@ describe('business directory', () => {
       canChooseBusiness: true, currentBusiness: RETAIL, businesses: [HOSPITALITY, RETAIL],
     });
     expect(tenantDb.findMany).toHaveBeenCalledWith({
-      where: {}, select: { id: true, name: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      where: {}, select: BUSINESS_SUMMARY_SELECT, orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
   });
 

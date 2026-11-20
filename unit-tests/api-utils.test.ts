@@ -111,7 +111,7 @@ describe('requireAuth', () => {
       userName: 'A User', userEmail: 'a@example.test', vendorId: null,
     });
     expect(userModel.findFirst).toHaveBeenCalledWith({
-      where: { id: 'user-1' }, include: { tenant: true },
+      where: { id: 'user-1' }, include: { tenant: { select: { name: true } } },
     });
     expect(authMock).not.toHaveBeenCalled();
   });
@@ -136,7 +136,7 @@ describe('requireAuth', () => {
     userModel.findFirst.mockResolvedValueOnce(dbUser);
     await expect(requireAuth()).resolves.toMatchObject({ tenantId: 'tenant-1' });
     expect(userModel.findFirst).toHaveBeenLastCalledWith({
-      where: { tenantId: 'tenant-1' }, include: { tenant: true },
+      where: { tenantId: 'tenant-1' }, include: { tenant: { select: { name: true } } },
     });
 
     setTestAuthContext({ userId: 'missing-user' });
@@ -167,7 +167,7 @@ describe('requireAuth', () => {
     headersMock.mockResolvedValue({ get: (name: string) => name === 'x-test-user-id' ? 'header-user' : null });
     await expect(requireAuth()).resolves.toMatchObject({ userId: 'user-1', role: 'SUPER_ADMIN' });
     expect(userModel.findFirst).toHaveBeenCalledWith({
-      where: { id: 'header-user' }, include: { tenant: true },
+      where: { id: 'header-user' }, include: { tenant: { select: { name: true } } },
     });
 
     userModel.findFirst.mockResolvedValueOnce({ ...dbUser, name: '', email: '', tenant: {} });

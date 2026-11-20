@@ -1,27 +1,34 @@
 'use client';
 // app/(app)/admin/users/page.tsx - User Management & RBAC Permissions
 import { useEffect, useState } from 'react';
-import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus, Building2 } from 'lucide-react';
+import { CheckCircle2, X, Search, Users, Shield, AlertTriangle, Plus, Building2, SlidersHorizontal } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import { ROLES, PERMISSIONS_MATRIX } from "./page.constants";
-import { COMPANY_NAME_MAX_LENGTH } from "@/lib/business-directory.constants";
+import CreateCompanyModal from '@/components/admin/CreateCompanyModal';
+import RoleLimitsModal from '@/components/admin/RoleLimitsModal';
+import { ROLES, PERMISSIONS_MATRIX, EMPTY_INVITE_FORM } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
-import { findBusinessByName, normalizeCompanyName } from "@/lib/business-name";
-import type { BusinessDirectory } from "@app-types/app/api/admin/users/route.types";
+import { industryLabel } from "@/lib/company-profile";
+import type { BusinessDirectory, BusinessSummary } from "@app-types/app/api/admin/users/route.types";
+import type { RoleLimitUsage } from "@app-types/lib/business-directory.types";
+import type { RoleLimitResponse } from "@app-types/components/admin/role-limits.types";
+import type { InviteFormValues } from "@app-types/app/(app)/admin/users/page.types";
 
 
 
 export default function UsersPage() {
-  const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'roles'>('users');
   const [users, setUsers] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ email: '', name: '', role: 'PROJECT_USER', password: '', companyName: '' });
+  const [form, setForm] = useState<InviteFormValues>({ ...EMPTY_INVITE_FORM });
   const [directory, setDirectory] = useState<BusinessDirectory | null>(null);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [limitsBusiness, setLimitsBusiness] = useState<BusinessSummary | null>(null);
+  const [loadedUsage, setLoadedUsage] = useState<{ businessId: string; roles: RoleLimitUsage[] | null } | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const pageSize = 20;
@@ -46,15 +53,48 @@ export default function UsersPage() {
     return () => { cancelled = true; };
   }, []);
 
+  const ownBusinessId = directory?.currentBusiness?.id || '';
   const ownBusinessName = directory?.currentBusiness?.name || '';
   const canChooseBusiness = directory?.canChooseBusiness === true;
-  const typedCompany = normalizeCompanyName(form.companyName);
-  const matchedBusiness = canChooseBusiness ? findBusinessByName(directory?.businesses || [], typedCompany) : null;
+  const selectedBusinessId = canChooseBusiness ? form.businessId : ownBusinessId;
+
+  // Seat usage for the company chosen in the invite form, so full roles can be disabled.
+  useEffect(() => {
+    if (!showModal || !selectedBusinessId) return;
+    let cancelled = false;
+    fetch(`/api/admin/businesses/${encodeURIComponent(selectedBusinessId)}/role-limits`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: RoleLimitResponse | null) => { if (!cancelled) setLoadedUsage({ businessId: selectedBusinessId, roles: d?.roles ?? null }); })
+      .catch(() => { if (!cancelled) setLoadedUsage({ businessId: selectedBusinessId, roles: null }); });
+    return () => { cancelled = true; };
+  }, [showModal, selectedBusinessId]);
+  // Usage only applies to the company currently selected in an open invite form.
+  const inviteUsage = showModal && loadedUsage?.businessId === selectedBusinessId ? loadedUsage.roles : null;
+
+  const isRoleFull = (role: string) => {
+    const usage = inviteUsage?.find(entry => entry.role === role);
+    return !!usage && usage.maxUsers !== null && usage.activeUsers >= usage.maxUsers;
+  };
+  const selectedRoleUsage = inviteUsage?.find(entry => entry.role === form.role);
 
   function openInviteModal() {
     setError('');
-    setForm(f => ({ ...f, companyName: ownBusinessName }));
+    setForm({ ...EMPTY_INVITE_FORM, businessId: canChooseBusiness ? '' : ownBusinessId });
     setShowModal(true);
+  }
+
+  function companyCreated(business: BusinessSummary) {
+    setShowCompanyModal(false);
+    setDirectory(prev => prev && {
+      ...prev,
+      businesses: [...prev.businesses, business].sort((a, b) => a.name.localeCompare(b.name)),
+    });
+    setSuccess(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.companyCreated, { company: business.name }));
+  }
+
+  function roleLimitsSaved(result: RoleLimitResponse) {
+    setLimitsBusiness(null);
+    setSuccess(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleLimitsSavedForCompany, { company: result.businessName }));
   }
 
   async function createUser(e: React.FormEvent) {
@@ -63,7 +103,7 @@ export default function UsersPage() {
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, companyName: canChooseBusiness ? typedCompany : ownBusinessName }),
+      body: JSON.stringify({ ...form, businessId: selectedBusinessId }),
     });
     const d = await res.json();
     if (!res.ok) { setError(d.error); return; }
@@ -71,11 +111,8 @@ export default function UsersPage() {
       ? interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedInCompany, { email: d.email, company: d.tenant.name })
       : interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedSuccessfully, { "email": d.email }));
     setShowModal(false);
-    setForm({ email: '', name: '', role: 'PROJECT_USER', password: '', companyName: '' });
+    setForm({ ...EMPTY_INVITE_FORM });
     load();
-    if (d.tenant?.id && canChooseBusiness && !directory?.businesses.some(b => b.id === d.tenant.id)) {
-      setDirectory(prev => prev && { ...prev, businesses: [...prev.businesses, { id: d.tenant.id, name: d.tenant.name }] });
-    }
   }
 
   async function toggleStatus(u: any) {
@@ -104,13 +141,23 @@ export default function UsersPage() {
           { label: UI_STRINGS.common.users },
         ]}
         actions={
-          activeTab === 'users' ? (
-            <button
-              type="button"
-              className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
-              onClick={openInviteModal}
-            >
-              <Plus size={16} />{UI_STRINGS.appAppAdminUsersPage.inviteUser}</button>
+          activeTab !== 'roles' ? (
+            <div className="inline-flex items-center gap-2">
+              {canChooseBusiness && (
+                <button
+                  type="button"
+                  className="btn btn-secondary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                  onClick={() => setShowCompanyModal(true)}
+                >
+                  <Building2 size={16} />{UI_STRINGS.appAppAdminUsersPage.createCompany}</button>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                onClick={openInviteModal}
+              >
+                <Plus size={16} />{UI_STRINGS.appAppAdminUsersPage.inviteUser}</button>
+            </div>
           ) : undefined
         }
       />
@@ -137,6 +184,17 @@ export default function UsersPage() {
           }`}
           onClick={() => setActiveTab('users')}
         >{UI_STRINGS.appAppAdminUsersPage.tenantUsers}{total}{UI_STRINGS.common.copyc7zu6c}</button>
+        {canChooseBusiness && (
+          <button
+            type="button"
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'companies'
+                ? 'border-[#0f52ba] text-[#0f52ba] bg-blue-50/40 rounded-t-lg'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+            }`}
+            onClick={() => setActiveTab('companies')}
+          >{UI_STRINGS.appAppAdminUsersPage.companies}</button>
+        )}
         <button
           type="button"
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -224,6 +282,51 @@ export default function UsersPage() {
             </div>
           )}
         </div>
+      ) : activeTab === 'companies' ? (
+        <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs mb-6">
+          {(directory?.businesses.length ?? 0) === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon"><Building2 size={36} color="#94a3b8" strokeWidth={1.5} /></div>
+              <div className="empty-title">{UI_STRINGS.appAppAdminUsersPage.noCompaniesFound}</div>
+            </div>
+          ) : (
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.company}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.gst}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.industry}</th>
+                    <th>{UI_STRINGS.appAppAdminUsersPage.contact}</th>
+                    <th className="col-actions">{UI_STRINGS.common.actions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {directory?.businesses.map(b => (
+                    <tr key={b.id}>
+                      <td style={{ fontWeight: 600 }}>{b.name}</td>
+                      <td className="text-muted font-mono">{b.gstNumber || UI_STRINGS.common.copy4s9bsz}</td>
+                      <td className="text-muted">{industryLabel(b.industry) || UI_STRINGS.common.copy4s9bsz}</td>
+                      <td className="text-muted" style={{ whiteSpace: 'nowrap' }}>
+                        <div>{b.contactPersonName || UI_STRINGS.common.copy4s9bsz}</div>
+                        {b.contactPhone && <div style={{ fontSize: 11 }}>{b.contactPhone}</div>}
+                      </td>
+                      <td className="col-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary inline-flex items-center gap-1"
+                          style={{ padding: '3px 8px', fontSize: 11 }}
+                          onClick={() => setLimitsBusiness(b)}
+                        >
+                          <SlidersHorizontal size={12} />{UI_STRINGS.appAppAdminUsersPage.roleLimits}</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="card">
           <div className="card-header">
@@ -264,7 +367,7 @@ export default function UsersPage() {
           <div className="modal modal-sm">
             <div className="modal-header">
               <span className="modal-title">{UI_STRINGS.appAppAdminUsersPage.inviteNewUser}</span>
-              <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}>
+              <button type="button" className="btn btn-ghost btn-icon" aria-label={UI_STRINGS.common.close} onClick={() => setShowModal(false)}>
                 <X size={16} />
               </button>
             </div>
@@ -288,28 +391,17 @@ export default function UsersPage() {
                   <label className="form-label" htmlFor="invite-company">{UI_STRINGS.appAppAdminUsersPage.companyBusinessName}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
                   {canChooseBusiness ? (
                     <>
-                      <input
+                      <select
                         id="invite-company"
                         className="form-control"
-                        list="invite-company-options"
-                        value={form.companyName}
-                        maxLength={COMPANY_NAME_MAX_LENGTH}
-                        placeholder={UI_STRINGS.appAppAdminUsersPage.companyNamePlaceholder}
-                        onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+                        value={form.businessId}
+                        onChange={e => setForm(f => ({ ...f, businessId: e.target.value }))}
                         required
-                      />
-                      <datalist id="invite-company-options">
-                        {directory?.businesses.map(b => <option key={b.id} value={b.name} />)}
-                      </datalist>
+                      >
+                        <option value="">{UI_STRINGS.appAppAdminUsersPage.selectCompany}</option>
+                        {directory?.businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
                       <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{UI_STRINGS.appAppAdminUsersPage.companyHelpSuperAdmin}</p>
-                      {typedCompany && (
-                        <p data-testid="invite-company-outcome" style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: matchedBusiness ? '#047857' : '#b45309' }}>
-                          <Building2 size={12} />
-                          {matchedBusiness
-                            ? interpolateUiString(UI_STRINGS.appAppAdminUsersPage.existingBusinessWillBeUsed, { name: matchedBusiness.name })
-                            : interpolateUiString(UI_STRINGS.appAppAdminUsersPage.newBusinessWillBeCreated, { name: typedCompany })}
-                        </p>
-                      )}
                     </>
                   ) : (
                     <>
@@ -319,10 +411,23 @@ export default function UsersPage() {
                   )}
                 </div>
                 <div className="form-group">
-                  <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.role2}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
-                  <select className="form-control" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                    {ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
+                  <label className="form-label" htmlFor="invite-role">{UI_STRINGS.appAppAdminUsersPage.role2}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
+                  <select id="invite-role" className="form-control" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                    {ROLES.map(r => (
+                      <option key={r} value={r} disabled={isRoleFull(r)}>
+                        {isRoleFull(r)
+                          ? interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleOptionFull, { role: r.replace(/_/g, ' ') })
+                          : r.replace(/_/g, ' ')}
+                      </option>
+                    ))}
                   </select>
+                  {selectedRoleUsage && (
+                    <p data-testid="invite-role-usage" className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      {selectedRoleUsage.maxUsers === null
+                        ? interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleLimitUsageUnlimited, { active: selectedRoleUsage.activeUsers })
+                        : interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleLimitUsage, { active: selectedRoleUsage.activeUsers, max: selectedRoleUsage.maxUsers })}
+                    </p>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">{UI_STRINGS.appAppAdminUsersPage.temporaryPassword}<span className="required">{UI_STRINGS.common.copyd1yn99}</span></label>
@@ -336,6 +441,14 @@ export default function UsersPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {showCompanyModal && (
+        <CreateCompanyModal onClose={() => setShowCompanyModal(false)} onCreated={companyCreated} />
+      )}
+
+      {limitsBusiness && (
+        <RoleLimitsModal business={limitsBusiness} onClose={() => setLimitsBusiness(null)} onSaved={roleLimitsSaved} />
       )}
     </div>
   );

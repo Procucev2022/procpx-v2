@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (testUserId) {
     const user = await prisma.user.findUnique({
       where: { id: testUserId },
-      include: { tenant: true },
+      include: { tenant: { select: { name: true } } },
     });
     if (user) {
       return apiSuccess({

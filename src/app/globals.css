@@ -1181,7 +1181,8 @@ td.text-left {
 }
 
 /* ── Modal Dialogs ────────────────────────────────────────── */
-.modal-backdrop {
+.modal-backdrop,
+.modal-overlay {
   position: fixed;
   inset: 0;
   background-color: rgba(15, 23, 42, 0.5);
@@ -1200,10 +1201,26 @@ td.text-left {
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 580px;
+  max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: modalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal.modal-sm {
+  max-width: 480px;
+}
+
+.modal.modal-lg {
+  max-width: 820px;
+}
+
+/* A <form> between the dialog and its body/footer keeps the body scrollable. */
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 @keyframes modalIn {

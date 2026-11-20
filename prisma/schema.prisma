@@ -29,6 +29,13 @@ model Tenant {
   slug        String   @unique
   status      String   @default("ACTIVE") // ACTIVE, SUSPENDED, INACTIVE
   config      String?  // JSON config
+  gstNumber   String?
+  address     String?
+  pincode     String?
+  panNumber   String?
+  industry    String?
+  contactPersonName String?
+  contactPhone      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -52,8 +59,26 @@ model Tenant {
   rateCards           VendorRateCard[]
   notifications       Notification[]
   notificationOutbox  NotificationOutbox[]
+  roleLimits          TenantRoleLimit[]
 
   @@map("tenants")
+}
+
+// Maximum number of active users a company may hold per role; set by the Super Admin.
+// A role without a row is unlimited.
+model TenantRoleLimit {
+  id        String   @id @default(uuid())
+  tenantId  String
+  role      String
+  maxUsers  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, role])
+  @@map("tenant_role_limits")
 }
 
 // ============================================================

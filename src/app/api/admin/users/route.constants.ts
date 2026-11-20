@@ -1,4 +1,4 @@
-/* Application constants for the admin users API: assignable roles, business linking and D1 writes. */
+/* Application constants for the admin users API: assignable roles, company linking, role limits and D1 writes. */
 
 // Roles an administrator may assign from the Users screen. SUPER_ADMIN and VENDOR are
 // provisioned outside this screen, so they can never be granted through the invite form.
@@ -12,26 +12,15 @@ export const ASSIGNABLE_USER_ROLES: readonly string[] = Object.freeze([
   'VIEWER',
 ]);
 
-export const BUSINESS_STATUS_ACTIVE = 'ACTIVE';
 export const NEW_USER_STATUS = 'ACTIVE';
 
 export const ADMIN_USERS_ROUTE = '/api/admin/users';
 export const USER_AUDIT_ENTITY_TYPE = 'USER';
 export const USER_AUDIT_CREATE_ACTION = 'CREATE';
-export const BUSINESS_AUDIT_ENTITY_TYPE = 'TENANT';
-export const BUSINESS_AUDIT_CREATE_ACTION = 'CREATE';
 
-// Creates a business only when no business already uses the same normalized name or slug.
-export const BUSINESS_INSERT_IF_NAME_AVAILABLE_SQL = `
-  INSERT INTO "tenants" ("id", "name", "slug", "status", "config", "createdAt", "updatedAt")
-  SELECT ?, ?, ?, ?, NULL, ?, ?
-  WHERE NOT EXISTS (
-    SELECT 1 FROM "tenants" WHERE lower(trim("name")) = lower(trim(?)) OR "slug" = ?
-  )
-`;
-
-// Creates the user only inside an existing business and only when the email is unused in
-// every business, because sign-in rejects an email that maps to more than one account.
+// Creates the user only inside an existing company, only when the email is unused in every
+// company (sign-in rejects an email that maps to more than one account), and only while the
+// company's limit for the role, if any, still has a free seat among ACTIVE users.
 export const USER_INSERT_IF_EMAIL_AVAILABLE_SQL = `
   INSERT INTO "users" (
     "id", "tenantId", "email", "name", "passwordHash", "role", "status",
@@ -40,4 +29,12 @@ export const USER_INSERT_IF_EMAIL_AVAILABLE_SQL = `
   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
   WHERE EXISTS (SELECT 1 FROM "tenants" WHERE "id" = ?)
     AND NOT EXISTS (SELECT 1 FROM "users" WHERE lower(trim("email")) = lower(trim(?)))
+    AND NOT EXISTS (
+      SELECT 1 FROM "tenant_role_limits" AS "l"
+      WHERE "l"."tenantId" = ? AND "l"."role" = ?
+        AND "l"."maxUsers" <= (
+          SELECT COUNT(*) FROM "users" AS "u"
+          WHERE "u"."tenantId" = "l"."tenantId" AND "u"."role" = "l"."role" AND "u"."status" = 'ACTIVE'
+        )
+    )
 `;

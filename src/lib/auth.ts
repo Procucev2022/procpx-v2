@@ -30,7 +30,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             email: cleanEmail,
             status: 'ACTIVE',
           },
-          include: { tenant: true },
+          include: { tenant: { select: { name: true, slug: true } } },
           take: 2,
         });
         const emailIsAmbiguous = emailMatches.length > 1;
@@ -51,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               status: 'ACTIVE',
               vendorId: { not: null },
             },
-            include: { tenant: true, vendor: { select: { name: true, code: true } } },
+            include: { tenant: { select: { name: true, slug: true } }, vendor: { select: { name: true, code: true } } },
             take: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1,
           });
           if (candidateUsers.length > AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT) {

@@ -42,7 +42,7 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
     const { prisma } = await import('./prisma');
     const user = await prisma.user.findFirst({
       where: currentTestContext.userId ? { id: currentTestContext.userId } : { tenantId: currentTestContext.tenantId! },
-      include: { tenant: true },
+      include: { tenant: { select: { name: true } } },
     });
     if (user) {
       if (permission && !hasPermission(user.role as UserRole, permission)) {
@@ -79,7 +79,7 @@ export async function requireAuth(permission?: Permission): Promise<ApiContext |
           const { prisma } = await import('./prisma');
           const user = await prisma.user.findFirst({
             where: testUserId ? { id: testUserId } : { tenantId: testTenantId! },
-            include: { tenant: true },
+            include: { tenant: { select: { name: true } } },
           });
           if (user) {
             if (permission && !hasPermission(user.role as UserRole, permission)) {
