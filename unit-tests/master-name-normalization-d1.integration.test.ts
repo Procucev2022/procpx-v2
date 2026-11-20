@@ -18,7 +18,7 @@ const { DatabaseSync } = createRequire(`${process.cwd()}/package.json`)('node:sq
   DatabaseSync: new (path: string) => LocalSQLiteDatabase;
 };
 const migrationSql = readFileSync(
-  join(process.cwd(), 'migrations', '0035_master_normalized_name_uniqueness.sql'),
+  join(process.cwd(), 'migrations-postponed', '0035_master_normalized_name_uniqueness.sql'),
   'utf8',
 );
 

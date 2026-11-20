@@ -216,6 +216,8 @@ describe('admin users API', () => {
       const [statements] = batch.mock.calls[0];
       expect(statements).toHaveLength(2);
       expect(statements[0].values[1]).toBe('tenant-2');
+      // Audited under the Super Admin's own business so the actor reference never crosses tenants.
+      expect(statements[1].values[1]).toBe(superCtx.tenantId);
     });
 
     it('blocks the user when the company has used every seat for the role', async () => {

@@ -200,6 +200,8 @@ describe('POST /api/admin/businesses', () => {
     ]);
     expect(statements[1].values).toEqual(expect.arrayContaining([id, 'TENANT', 'CREATE',
       interpolateUiString(MESSAGES.companyCompanyCreated, { company: 'Acme Interiors' })]));
+    // The audit row stays in the Super Admin's own business, not the new company.
+    expect(statements[1].values[1]).toBe(SUPER.tenantId);
     expect(statements[2].values).toEqual([expect.any(String), id, 'CLIENT_ADMIN', 1, expect.any(Date), expect.any(Date), 'root-1', id]);
     expect(response).toEqual({ ok: true, status: 201, data: expect.objectContaining({ id, name: 'Acme Interiors', gstNumber: GSTIN }) });
     expect(logger).toHaveBeenCalledWith('info', 'admin.business_created', expect.objectContaining({ businessId: id, roleLimitCount: 1 }));
@@ -283,6 +285,7 @@ describe('/api/admin/businesses/[id]/role-limits', () => {
     expect(statements[1].values).toEqual(['tenant-9', 'FINANCE_USER']);
     expect(statements[3].values).toEqual(expect.arrayContaining(['TENANT', 'UPDATE',
       interpolateUiString(MESSAGES.roleLimitsUpdatedForCompany, { company: ACME.name })]));
+    expect(statements[3].values[1]).toBe(SUPER.tenantId);
     expect(result).toEqual({ ok: true, status: 200, data: expect.objectContaining({ businessName: ACME.name }) });
     expect(logger).toHaveBeenCalledWith('info', 'admin.business_role_limits_updated', expect.objectContaining({ changedRoleCount: 2 }));
   });

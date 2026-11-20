@@ -76,7 +76,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     {
       sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
       values: [
-        crypto.randomUUID(), id, ctx.userId, null, BUSINESS_AUDIT_ENTITY_TYPE, id, BUSINESS_AUDIT_ROLE_LIMITS_ACTION,
+        crypto.randomUUID(), ctx.tenantId, ctx.userId, null, BUSINESS_AUDIT_ENTITY_TYPE, id, BUSINESS_AUDIT_ROLE_LIMITS_ACTION,
         interpolateUiString(MESSAGES.roleLimitsUpdatedForCompany, { company: business.name }),
         null, JSON.stringify({ roleLimits: parsed.value }), null, null, now,
       ],
