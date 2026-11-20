@@ -2,7 +2,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from './password';
-import { AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from './auth.constants';
+import { AUTH_BASE_PATH, AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from './auth.constants';
 import { logEvent } from './observability/server-logger';
 import { prisma } from './prisma';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -10,6 +10,9 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
+  // Pinned so a NEXTAUTH_URL that carries a path (e.g. ".../login") cannot move the
+  // Auth.js routes away from /api/auth and make every auth request a "Bad request.".
+  basePath: AUTH_BASE_PATH,
   providers: [
     Credentials({
       name: 'credentials',

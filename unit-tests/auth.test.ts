@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/lib/prisma';
 import { handlers, signIn, signOut, auth } from '../src/lib/auth';
-import { AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from '../src/lib/auth.constants';
+import { AUTH_BASE_PATH, AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT } from '../src/lib/auth.constants';
 import { logEvent } from '../src/lib/observability/server-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
@@ -66,6 +66,7 @@ describe('NextAuth credentials provider', () => {
     expect(signIn).toBeDefined();
     expect(signOut).toBeDefined();
     expect(authOptions.trustHost).toBe(true);
+    expect(authOptions.basePath).toBe(AUTH_BASE_PATH);
     expect(authOptions.session).toEqual({ strategy: 'jwt' });
     expect(authOptions.pages).toEqual({ signIn: UI_STRINGS.libAuth.login, error: UI_STRINGS.libAuth.login });
   });
