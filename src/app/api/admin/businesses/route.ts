@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
     {
       sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
       values: [
-        crypto.randomUUID(), id, ctx.userId, null, BUSINESS_AUDIT_ENTITY_TYPE, id, BUSINESS_AUDIT_CREATE_ACTION,
+        // Audited under the Super Admin's own business so the actor reference stays within one tenant.
+        crypto.randomUUID(), ctx.tenantId, ctx.userId, null, BUSINESS_AUDIT_ENTITY_TYPE, id, BUSINESS_AUDIT_CREATE_ACTION,
         interpolateUiString(MESSAGES.companyCompanyCreated, { company: profile.name }),
         null, JSON.stringify({ ...profile, slug, status: BUSINESS_STATUS_ACTIVE, roleLimits: Object.fromEntries(limitEntries) }),
         null, null, now,

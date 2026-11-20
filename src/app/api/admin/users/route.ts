@@ -121,7 +121,8 @@ export async function POST(req: NextRequest) {
     {
       sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
       values: [
-        crypto.randomUUID(), target.id, ctx.userId, null, USER_AUDIT_ENTITY_TYPE, userId, USER_AUDIT_CREATE_ACTION,
+        // Audited under the actor's business: a Super Admin's user row lives in their own business.
+        crypto.randomUUID(), ctx.tenantId, ctx.userId, null, USER_AUDIT_ENTITY_TYPE, userId, USER_AUDIT_CREATE_ACTION,
         interpolateUiString(UI_STRINGS.appApiAdminUsersRoute.userEmailCreatedInBusinessCompanyAsRole, { email, company: target.name, role }),
         null, JSON.stringify({ email, role, status: NEW_USER_STATUS, businessId: target.id }), null, null, now,
       ],
