@@ -51,7 +51,11 @@ export async function GET(request: Request) {
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
         skip,
         take: pageSize,
-        include: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true,
           _count: { select: { projects: true, users: true } },
         },
       }),
@@ -90,7 +94,7 @@ export async function GET(request: Request) {
         take: 10,
         include: { user: { select: { name: true, email: true } } },
       }),
-      prisma.tenant.findUnique({ where: { id: tenantId } }),
+      prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true, name: true, slug: true, status: true } }),
     ]);
     return apiSuccess({
       role: ctx.role,

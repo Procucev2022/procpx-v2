@@ -7,10 +7,8 @@ import bcrypt from 'bcryptjs';
 import { PASSWORD_HASH_ROUNDS } from '../src/lib/password.constants';
 import { GET as listUsers, POST as createUser } from '../src/app/api/admin/users/route';
 import { PUT } from '../src/app/api/admin/users/[id]/route';
-import {
-  BUSINESS_INSERT_IF_NAME_AVAILABLE_SQL,
-  USER_INSERT_IF_EMAIL_AVAILABLE_SQL,
-} from '../src/app/api/admin/users/route.constants';
+import { USER_INSERT_IF_EMAIL_AVAILABLE_SQL } from '../src/app/api/admin/users/route.constants';
+import { checkRoleCapacity } from '../src/lib/tenant-role-limits';
 import { AUDIT_LOG_INSERT_AFTER_CHANGE_SQL } from '../src/lib/d1-batch.constants';
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
@@ -21,9 +19,10 @@ import { writeStructuredLog } from '../src/lib/observability/server-logger';
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     user: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
-    tenant: { findMany: jest.fn() },
+    tenant: { findFirst: jest.fn() },
   },
 }));
+jest.mock('../src/lib/tenant-role-limits', () => ({ checkRoleCapacity: jest.fn() }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/audited-update', () => ({ runAuditedD1UpdateAtomically: jest.fn() }));
@@ -46,7 +45,8 @@ jest.mock('../src/lib/api-utils', () => ({
 const userDb = prisma.user as unknown as {
   count: jest.Mock; findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock; create: jest.Mock;
 };
-const tenantDb = prisma.tenant as unknown as { findMany: jest.Mock };
+const tenantDb = prisma.tenant as unknown as { findFirst: jest.Mock };
+const capacity = checkRoleCapacity as jest.Mock;
 const batch = writeD1BatchAtomically as jest.Mock;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
@@ -76,9 +76,10 @@ describe('admin users API', () => {
     auditedUpdate.mockResolvedValue(undefined);
     passwordHash.mockResolvedValue('hashed-secret');
     userDb.findFirst.mockResolvedValue(null);
-    tenantDb.findMany.mockImplementation(({ where }: { where: { id?: string } }) => Promise.resolve(
-      where.id ? [RETAIL, HOSPITALITY].filter((tenant) => tenant.id === where.id) : [HOSPITALITY, RETAIL],
+    tenantDb.findFirst.mockImplementation(({ where }: { where: { id: string } }) => Promise.resolve(
+      [RETAIL, HOSPITALITY].find((tenant) => tenant.id === where.id) ?? null,
     ));
+    capacity.mockResolvedValue({ allowed: true, maxUsers: null, activeUsers: 0 });
     batch.mockResolvedValue([changed(1), changed(1)]);
   });
 
@@ -150,9 +151,6 @@ describe('admin users API', () => {
       await expect(create({ ...VALID, role: 'VENDOR' })).resolves.toEqual(bad(UI_STRINGS.appApiAdminUsersRoute.roleIsInvalid));
       await expect(create({ ...VALID, password: 'short' })).resolves.toEqual(bad(UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters));
       await expect(create({ ...VALID, password: undefined })).resolves.toEqual(bad(UI_STRINGS.appApiAdminUsersRoute.passwordMustBeAtLeast8Characters));
-      await expect(create({ ...VALID, companyName: 'x'.repeat(121) })).resolves.toEqual(bad(
-        interpolateUiString(UI_STRINGS.appApiAdminUsersRoute.companyNameMustBeAtMostMaxCharacters, { max: 120 }),
-      ));
       expect(batch).not.toHaveBeenCalled();
     });
 
@@ -166,7 +164,7 @@ describe('admin users API', () => {
     });
 
     it('creates the user in the admin\'s own business with a hashed password and an audit row', async () => {
-      const response = await create({ ...VALID, companyName: '  procucev   retail demo ' });
+      const response = await create({ ...VALID, businessId: 'tenant-1' });
       expect(response).toEqual({
         ok: true, status: 201,
         data: expect.objectContaining({
@@ -174,72 +172,68 @@ describe('admin users API', () => {
         }),
       });
       expect(passwordHash).toHaveBeenCalledWith('long-password', PASSWORD_HASH_ROUNDS);
-      expect(tenantDb.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'tenant-1' } }));
+      expect(tenantDb.findFirst).toHaveBeenCalledWith({ where: { id: 'tenant-1' }, select: { id: true, name: true } });
+      expect(capacity).toHaveBeenCalledWith('tenant-1', 'FINANCE_USER');
       const [statements] = batch.mock.calls[0];
       expect(statements.map((s: { sql: string }) => s.sql)).toEqual([USER_INSERT_IF_EMAIL_AVAILABLE_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL]);
       expect(statements[0].values).toEqual([
         expect.any(String), 'tenant-1', 'ada@example.test', 'Ada Lovelace', 'hashed-secret', 'FINANCE_USER', 'ACTIVE',
-        expect.any(Date), expect.any(Date), 'editor-1', 'tenant-1', 'ada@example.test',
+        expect.any(Date), expect.any(Date), 'editor-1', 'tenant-1', 'ada@example.test', 'tenant-1', 'FINANCE_USER',
       ]);
       expect(statements[1].values[1]).toBe('tenant-1');
       expect(statements[1].values[4]).toBe('USER');
-      expect(logger).toHaveBeenCalledWith('info', 'admin.user_created', expect.objectContaining({ targetBusinessId: 'tenant-1', createsBusiness: false }));
+      expect(logger).toHaveBeenCalledWith('info', 'admin.user_created', expect.objectContaining({ targetBusinessId: 'tenant-1' }));
     });
 
-    it('defaults to the admin\'s own business when no company name is sent', async () => {
+    it('auto-selects the Client Admin\'s own business when no company is sent', async () => {
       await create(VALID);
       expect(batch.mock.calls[0][0][0].values[1]).toBe('tenant-1');
     });
 
-    it('stops a Client Admin from adding users to another or a new business', async () => {
-      for (const companyName of ['Procucev Hospitality Demo', 'Brand New Co']) {
-        await expect(create({ ...VALID, companyName })).resolves.toEqual({
-          ok: false, error: UI_STRINGS.appApiAdminUsersRoute.youCanOnlyAddUsersToYourOwnBusiness, status: 403,
-        });
-      }
+    it('stops a Client Admin from adding users to another business', async () => {
+      await expect(create({ ...VALID, businessId: 'tenant-2' })).resolves.toEqual({
+        ok: false, error: UI_STRINGS.appApiAdminUsersRoute.youCanOnlyAddUsersToYourOwnBusiness, status: 403,
+      });
       expect(batch).not.toHaveBeenCalled();
     });
 
-    it('lets a Super Admin link the user to an existing business by name', async () => {
+    it('requires a Super Admin to pick an existing company from the dropdown', async () => {
       auth.mockResolvedValue(superCtx);
-      const response = await create({ ...VALID, companyName: 'procucev HOSPITALITY demo' });
+      await expect(create(VALID)).resolves.toEqual({
+        ok: false, error: UI_STRINGS.appApiAdminUsersRoute.companyIsRequired, status: 400,
+      });
+      await expect(create({ ...VALID, businessId: 42 })).resolves.toEqual(expect.objectContaining({ status: 400 }));
+      await expect(create({ ...VALID, businessId: 'gone' })).resolves.toEqual({
+        ok: false, error: UI_STRINGS.appApiAdminUsersRoute.companyNotFound, status: 404,
+      });
+      expect(batch).not.toHaveBeenCalled();
+    });
+
+    it('lets a Super Admin link the user to any existing company', async () => {
+      auth.mockResolvedValue(superCtx);
+      const response = await create({ ...VALID, businessId: ' tenant-2 ' });
       expect(response).toEqual(expect.objectContaining({ ok: true, status: 201, data: expect.objectContaining({ tenant: HOSPITALITY }) }));
-      expect(tenantDb.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
       const [statements] = batch.mock.calls[0];
       expect(statements).toHaveLength(2);
       expect(statements[0].values[1]).toBe('tenant-2');
     });
 
-    it('lets a Super Admin create a new business together with its first user atomically', async () => {
-      auth.mockResolvedValue(superCtx);
-      batch.mockResolvedValueOnce([changed(1), changed(1), changed(1), changed(1)]);
-      const response = await create({ ...VALID, companyName: '  Acme   Interiors ' });
-      const [statements] = batch.mock.calls[0];
-      expect(statements.map((s: { sql: string }) => s.sql)).toEqual([
-        BUSINESS_INSERT_IF_NAME_AVAILABLE_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
-        USER_INSERT_IF_EMAIL_AVAILABLE_SQL, AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
-      ]);
-      const businessId = statements[0].values[0];
-      expect(statements[0].values[1]).toBe('Acme Interiors');
-      expect(statements[0].values[2]).toMatch(/^acme-interiors-[a-z0-9]{8}$/);
-      expect(statements[0].values[3]).toBe('ACTIVE');
-      expect(statements[1].values).toEqual(expect.arrayContaining([businessId, 'TENANT', 'CREATE']));
-      expect(statements[2].values[1]).toBe(businessId);
-      expect(response).toEqual(expect.objectContaining({
-        ok: true, status: 201, data: expect.objectContaining({ tenant: { id: businessId, name: 'Acme Interiors' } }),
-      }));
-      expect(logger).toHaveBeenCalledWith('info', 'admin.user_created', expect.objectContaining({ createsBusiness: true }));
+    it('blocks the user when the company has used every seat for the role', async () => {
+      capacity.mockResolvedValueOnce({ allowed: false, maxUsers: 2, activeUsers: 2 });
+      await expect(create(VALID)).resolves.toEqual({
+        ok: false, status: 409,
+        error: interpolateUiString(UI_STRINGS.appApiAdminUsersRoute.roleLimitReachedForCompany, {
+          company: RETAIL.name, count: 2, role: 'FINANCE_USER', max: 2,
+        }),
+      });
+      expect(batch).not.toHaveBeenCalled();
     });
 
-    it('reports a conflict when the email or business was taken by a concurrent request', async () => {
+    it('reports a conflict when the email or last seat was taken by a concurrent request', async () => {
       batch.mockResolvedValueOnce([changed(0), changed(0)]);
       await expect(create(VALID)).resolves.toEqual({
-        ok: false, error: UI_STRINGS.appApiAdminUsersRoute.emailOrBusinessWasJustTakenPleaseRefreshAndTryAgain, status: 409,
+        ok: false, error: UI_STRINGS.appApiAdminUsersRoute.emailOrRoleLimitChangedPleaseRefreshAndTryAgain, status: 409,
       });
-
-      auth.mockResolvedValue(superCtx);
-      batch.mockResolvedValueOnce([changed(0), changed(0), changed(0), changed(0)]);
-      await expect(create({ ...VALID, companyName: 'Acme' })).resolves.toEqual(expect.objectContaining({ status: 409 }));
 
       batch.mockResolvedValueOnce([{}, {}]);
       await expect(create(VALID)).resolves.toEqual(expect.objectContaining({ status: 409 }));
@@ -257,12 +251,6 @@ describe('admin users API', () => {
       batch.mockRejectedValueOnce('opaque');
       await create(VALID);
       expect(logger).toHaveBeenLastCalledWith('error', 'admin.user_create_failed', expect.objectContaining({ error: { type: 'string' } }));
-    });
-
-    it('falls back to an empty business name when the admin\'s business record is missing', async () => {
-      tenantDb.findMany.mockResolvedValueOnce([]);
-      const response = await create(VALID);
-      expect(response).toEqual(expect.objectContaining({ data: expect.objectContaining({ tenant: { id: 'tenant-1', name: '' } }) }));
     });
   });
 
@@ -332,6 +320,41 @@ describe('admin users API', () => {
         ok: false, error: UI_STRINGS.appApiAdminUsersIdRoute.superAdminAccountsCanOnlyBeChangedByASuperAdmin, status: 403,
       });
       expect(auditedUpdate).not.toHaveBeenCalled();
+    });
+
+    it('enforces the company role limit when a user changes role or is re-activated', async () => {
+      const member = { id: 'user-1', tenantId: 'tenant-1', email: 'member@example.test', name: 'Member', role: 'PROJECT_USER', status: 'ACTIVE' };
+      userDb.findFirst.mockResolvedValue(member);
+      capacity.mockResolvedValue({ allowed: false, maxUsers: 1, activeUsers: 1 });
+
+      await expect(PUT(makeRequest({ role: 'FINANCE_USER' }), params)).resolves.toEqual({
+        ok: false, status: 409,
+        error: interpolateUiString(UI_STRINGS.appApiAdminUsersIdRoute.roleLimitReachedForCompany, {
+          company: RETAIL.name, count: 1, role: 'FINANCE_USER', max: 1,
+        }),
+      });
+      expect(capacity).toHaveBeenLastCalledWith('tenant-1', 'FINANCE_USER', 'user-1');
+
+      userDb.findFirst.mockResolvedValue({ ...member, tenantId: 'missing', status: 'INACTIVE' });
+      await expect(PUT(makeRequest({ status: 'ACTIVE' }), params)).resolves.toEqual(expect.objectContaining({
+        status: 409,
+        error: interpolateUiString(UI_STRINGS.appApiAdminUsersIdRoute.roleLimitReachedForCompany, {
+          company: 'missing', count: 1, role: 'PROJECT_USER', max: 1,
+        }),
+      }));
+      expect(auditedUpdate).not.toHaveBeenCalled();
+
+      // Disabling, or keeping the same active role, never needs a free seat.
+      capacity.mockClear();
+      userDb.findFirst.mockResolvedValue(member);
+      await PUT(makeRequest({ status: 'INACTIVE', role: 'FINANCE_USER' }), params);
+      await PUT(makeRequest({ name: 'Renamed' }), params);
+      expect(capacity).not.toHaveBeenCalled();
+      expect(auditedUpdate).toHaveBeenCalledTimes(2);
+
+      capacity.mockResolvedValue({ allowed: true, maxUsers: 3, activeUsers: 1 });
+      await PUT(makeRequest({ role: 'FINANCE_USER' }), params);
+      expect(auditedUpdate).toHaveBeenCalledTimes(3);
     });
 
     it('lets a Super Admin edit users in another business under that business', async () => {

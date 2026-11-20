@@ -7,6 +7,26 @@ import UsersPage from '../src/app/(app)/admin/users/page';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
+// The company and role-limit dialogs have their own tests; here they only report back.
+jest.mock('../src/components/admin/CreateCompanyModal', () => ({
+  __esModule: true,
+  default: ({ onClose, onCreated }: { onClose: () => void; onCreated: (b: { id: string; name: string }) => void }) => (
+    <div data-testid="create-company-modal">
+      <button type="button" onClick={() => onCreated({ id: 'tenant-0', name: 'Acme Interiors' })}>mock-create</button>
+      <button type="button" onClick={onClose}>mock-close</button>
+    </div>
+  ),
+}));
+jest.mock('../src/components/admin/RoleLimitsModal', () => ({
+  __esModule: true,
+  default: ({ business, onClose, onSaved }: { business: { id: string; name: string }; onClose: () => void; onSaved: (r: unknown) => void }) => (
+    <div data-testid="role-limits-modal" data-business={business.id}>
+      <button type="button" onClick={() => onSaved({ businessId: business.id, businessName: business.name, roles: [] })}>mock-save</button>
+      <button type="button" onClick={onClose}>mock-close</button>
+    </div>
+  ),
+}));
+
 jest.mock('../src/components/ui/PageHeader', () => ({
   __esModule: true,
   default: ({ title, subtitle, actions }: { title: string; subtitle: string; actions?: React.ReactNode }) => (
@@ -20,7 +40,10 @@ const originalFetch = global.fetch;
 const originalConfirm = window.confirm;
 const response = (body: unknown, ok = true): MockResponse => ({ ok, json: jest.fn().mockResolvedValue(body) });
 const RETAIL = { id: 'tenant-1', name: 'Procucev Retail Demo' };
-const HOSPITALITY = { id: 'tenant-2', name: 'Procucev Hospitality Demo' };
+const HOSPITALITY = {
+  id: 'tenant-2', name: 'Procucev Hospitality Demo', gstNumber: '29ABCDE1234F1Z5', industry: 'HOSPITALITY',
+  contactPersonName: 'Asha Rao', contactPhone: '+919845012345',
+};
 const CLIENT_DIRECTORY = { canChooseBusiness: false, currentBusiness: RETAIL, businesses: [RETAIL] };
 const SUPER_DIRECTORY = { canChooseBusiness: true, currentBusiness: RETAIL, businesses: [HOSPITALITY, RETAIL] };
 const users = [
@@ -33,6 +56,9 @@ const users = [
 let directoryResult: Promise<MockResponse>;
 let listQueue: Array<MockResponse | Promise<MockResponse>>;
 let writeQueue: MockResponse[];
+let limitsResult: () => Promise<MockResponse>;
+const limitCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/role-limits'));
+const usage = (role: string, maxUsers: number | null, activeUsers: number) => ({ role, maxUsers, activeUsers });
 const listCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/admin/users?'));
 const writeCalls = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT');
 
@@ -45,7 +71,7 @@ function fillInvite(modal: HTMLElement) {
   const inputs = modal.querySelectorAll<HTMLInputElement>('input');
   fireEvent.change(inputs[0], { target: { value: 'Casey Creator' } });
   fireEvent.change(inputs[1], { target: { value: 'casey@example.test' } });
-  fireEvent.change(modal.querySelector('select')!, { target: { value: 'FINANCE_USER' } });
+  fireEvent.change(modal.querySelector('#invite-role')!, { target: { value: 'FINANCE_USER' } });
   fireEvent.change(modal.querySelector('input[type="password"]')!, { target: { value: 'temporary-password' } });
 }
 
@@ -55,8 +81,10 @@ describe('admin users page', () => {
     directoryResult = Promise.resolve(response(CLIENT_DIRECTORY));
     listQueue = [];
     writeQueue = [];
+    limitsResult = () => Promise.resolve(response({ roles: [] }));
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url === '/api/admin/businesses') return directoryResult;
+      if (url.includes('/role-limits')) return limitsResult();
       if (init?.method === 'POST' || init?.method === 'PUT') return Promise.resolve(writeQueue.shift() ?? response({}));
       return Promise.resolve(listQueue.shift() ?? response({ data: [], total: 0 }));
     });
@@ -111,19 +139,22 @@ describe('admin users page', () => {
 
   it('locks a Client Admin\'s invites to their own business and sends it with the user', async () => {
     render(<UsersPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/businesses'));
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createCompany) })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.companies) })).not.toBeInTheDocument();
     const modal = await openInvite();
     const company = modal.querySelector<HTMLInputElement>('#invite-company')!;
-    await waitFor(() => expect(company.value).toBe('Procucev Retail Demo'));
+    expect(company.value).toBe('Procucev Retail Demo');
     expect(company.readOnly).toBe(true);
     expect(screen.getByText(UI_STRINGS.appAppAdminUsersPage.companyHelpLocked)).toBeInTheDocument();
-    expect(modal.querySelector('datalist')).toBeNull();
+    await waitFor(() => expect(limitCalls()[0][0]).toBe('/api/admin/businesses/tenant-1/role-limits'));
 
     fillInvite(modal);
     writeQueue.push(response({ error: 'Email already exists' }, false));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createUser) }));
     expect(await screen.findByText('Email already exists')).toBeInTheDocument();
     expect(JSON.parse(writeCalls()[0][1].body)).toEqual({
-      email: 'casey@example.test', name: 'Casey Creator', role: 'FINANCE_USER', password: 'temporary-password', companyName: 'Procucev Retail Demo',
+      email: 'casey@example.test', name: 'Casey Creator', role: 'FINANCE_USER', password: 'temporary-password', businessId: 'tenant-1',
     });
 
     writeQueue.push(response({ email: 'casey@example.test', tenant: RETAIL }));
@@ -139,58 +170,133 @@ describe('admin users page', () => {
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedInCompany))).not.toBeInTheDocument();
   });
 
-  it('lets a Super Admin pick an existing business or name a new one', async () => {
+  it('shows role seat usage and disables roles whose limit is reached', async () => {
+    limitsResult = () => Promise.resolve(response({ roles: [usage('PROJECT_USER', 5, 2), usage('VIEWER', 1, 1), usage('FINANCE_USER', null, 3)] }));
+    render(<UsersPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/businesses'));
+    const modal = await openInvite();
+    expect(await screen.findByTestId('invite-role-usage')).toHaveTextContent(
+      interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleLimitUsage, { active: 2, max: 5 }),
+    );
+    const viewer = modal.querySelector<HTMLOptionElement>('#invite-role option[value="VIEWER"]')!;
+    expect(viewer.disabled).toBe(true);
+    expect(viewer).toHaveTextContent(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleOptionFull, { role: 'VIEWER' }));
+    fireEvent.change(modal.querySelector('#invite-role')!, { target: { value: 'FINANCE_USER' } });
+    expect(screen.getByTestId('invite-role-usage')).toHaveTextContent(
+      interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleLimitUsageUnlimited, { active: 3 }),
+    );
+    fireEvent.change(modal.querySelector('#invite-role')!, { target: { value: 'CLIENT_ADMIN' } });
+    expect(screen.queryByTestId('invite-role-usage')).not.toBeInTheDocument();
+  });
+
+  it('treats unavailable role usage as unknown and ignores late usage responses', async () => {
+    limitsResult = () => Promise.resolve(response({}, false));
+    render(<UsersPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/businesses'));
+    let modal = await openInvite();
+    await waitFor(() => expect(limitCalls()).toHaveLength(1));
+    expect(screen.queryByTestId('invite-role-usage')).not.toBeInTheDocument();
+    fireEvent.click(modal.querySelector('.modal-header button')!);
+
+    limitsResult = () => Promise.reject(new Error('offline'));
+    modal = await openInvite();
+    await waitFor(() => expect(limitCalls()).toHaveLength(2));
+    expect(screen.queryByTestId('invite-role-usage')).not.toBeInTheDocument();
+    fireEvent.click(modal.querySelector('.modal-header button')!);
+
+    let resolveLate: (value: MockResponse) => void = () => undefined;
+    limitsResult = () => new Promise((resolve) => { resolveLate = resolve; });
+    modal = await openInvite();
+    await waitFor(() => expect(limitCalls()).toHaveLength(3));
+    fireEvent.click(modal.querySelector('.modal-header button')!);
+    resolveLate(response({ roles: [usage('PROJECT_USER', 1, 0)] }));
+
+    let rejectLate: (reason: unknown) => void = () => undefined;
+    limitsResult = () => new Promise((_, reject) => { rejectLate = reject; });
+    modal = await openInvite();
+    await waitFor(() => expect(limitCalls()).toHaveLength(4));
+    fireEvent.click(modal.querySelector('.modal-header button')!);
+    rejectLate(new Error('late'));
+    await Promise.resolve();
+    expect(screen.queryByTestId('invite-role-usage')).not.toBeInTheDocument();
+  });
+
+  it('lets a Super Admin choose the company from a dropdown of existing companies', async () => {
     directoryResult = Promise.resolve(response(SUPER_DIRECTORY));
     render(<UsersPage />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/businesses'));
     const modal = await openInvite();
-    const company = modal.querySelector<HTMLInputElement>('#invite-company')!;
-    await waitFor(() => expect(company.value).toBe('Procucev Retail Demo'));
-    expect(company.readOnly).toBe(false);
-    expect(Array.from(modal.querySelectorAll('datalist option')).map((o) => o.getAttribute('value'))).toEqual([
-      'Procucev Hospitality Demo', 'Procucev Retail Demo',
+    const company = modal.querySelector<HTMLSelectElement>('#invite-company')!;
+    expect(company.tagName).toBe('SELECT');
+    expect(company.value).toBe('');
+    expect(Array.from(company.options).map((o) => o.textContent)).toEqual([
+      UI_STRINGS.appAppAdminUsersPage.selectCompany, 'Procucev Hospitality Demo', 'Procucev Retail Demo',
     ]);
     expect(screen.getByText(UI_STRINGS.appAppAdminUsersPage.companyHelpSuperAdmin)).toBeInTheDocument();
+    expect(limitCalls()).toHaveLength(0);
 
-    fireEvent.change(company, { target: { value: ' procucev hospitality DEMO ' } });
-    expect(screen.getByTestId('invite-company-outcome')).toHaveTextContent(
-      interpolateUiString(UI_STRINGS.appAppAdminUsersPage.existingBusinessWillBeUsed, { name: 'Procucev Hospitality Demo' }),
-    );
-    fireEvent.change(company, { target: { value: '  Acme   Interiors ' } });
-    expect(screen.getByTestId('invite-company-outcome')).toHaveTextContent(
-      interpolateUiString(UI_STRINGS.appAppAdminUsersPage.newBusinessWillBeCreated, { name: 'Acme Interiors' }),
-    );
-    fireEvent.change(company, { target: { value: '   ' } });
-    expect(screen.queryByTestId('invite-company-outcome')).not.toBeInTheDocument();
-    fireEvent.change(company, { target: { value: 'Acme Interiors' } });
-
+    fireEvent.change(company, { target: { value: 'tenant-2' } });
+    await waitFor(() => expect(limitCalls()[0][0]).toBe('/api/admin/businesses/tenant-2/role-limits'));
     fillInvite(modal);
-    writeQueue.push(response({ email: 'casey@example.test', tenant: { id: 'tenant-3', name: 'Acme Interiors' } }));
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createUser) }));
-    expect(await screen.findByText(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedInCompany, {
-      email: 'casey@example.test', company: 'Acme Interiors',
-    }))).toBeInTheDocument();
-    expect(JSON.parse(writeCalls()[0][1].body)).toEqual(expect.objectContaining({ companyName: 'Acme Interiors' }));
-
-    // The newly created business is offered immediately for the next invite.
-    const next = await openInvite();
-    expect(Array.from(next.querySelectorAll('datalist option')).map((o) => o.getAttribute('value'))).toContain('Acme Interiors');
-
-    // Linking to an already-listed business does not duplicate it.
-    fireEvent.change(next.querySelector('#invite-company')!, { target: { value: 'Procucev Hospitality Demo' } });
-    fillInvite(next);
     writeQueue.push(response({ email: 'casey@example.test', tenant: HOSPITALITY }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createUser) }));
     expect(await screen.findByText(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedInCompany, {
       email: 'casey@example.test', company: 'Procucev Hospitality Demo',
     }))).toBeInTheDocument();
-    const last = await openInvite();
-    expect(last.querySelectorAll('datalist option')).toHaveLength(3);
+    expect(JSON.parse(writeCalls()[0][1].body)).toEqual(expect.objectContaining({ businessId: 'tenant-2' }));
+  });
+
+  it('lets a Super Admin create a company and offers it in the invite dropdown', async () => {
+    directoryResult = Promise.resolve(response(SUPER_DIRECTORY));
+    render(<UsersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createCompany) }));
+    fireEvent.click(screen.getByText('mock-close'));
+    expect(screen.queryByTestId('create-company-modal')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createCompany) }));
+    fireEvent.click(screen.getByText('mock-create'));
+    expect(screen.queryByTestId('create-company-modal')).not.toBeInTheDocument();
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.companyCreated, { company: 'Acme Interiors' }))).toBeInTheDocument();
+    const modal = await openInvite();
+    expect(Array.from(modal.querySelectorAll<HTMLOptionElement>('#invite-company option')).map((o) => o.value)).toEqual([
+      '', 'tenant-0', 'tenant-2', 'tenant-1',
+    ]);
+  });
+
+  it('lists companies for a Super Admin and opens their role limits', async () => {
+    directoryResult = Promise.resolve(response(SUPER_DIRECTORY));
+    render(<UsersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.companies) }));
+    expect(screen.getByText('29ABCDE1234F1Z5')).toBeInTheDocument();
+    expect(screen.getByText(UI_STRINGS.companyIndustries.hospitality)).toBeInTheDocument();
+    expect(screen.getByText('Asha Rao')).toBeInTheDocument();
+    expect(screen.getByText('+919845012345')).toBeInTheDocument();
+    expect(screen.getAllByText(UI_STRINGS.common.copy4s9bsz).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.createCompany) })).toBeInTheDocument();
+
+    const limitButtons = screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.roleLimits) });
+    fireEvent.click(limitButtons[0]);
+    expect(screen.getByTestId('role-limits-modal')).toHaveAttribute('data-business', 'tenant-2');
+    fireEvent.click(screen.getByText('mock-close'));
+    expect(screen.queryByTestId('role-limits-modal')).not.toBeInTheDocument();
+
+    fireEvent.click(limitButtons[1]);
+    fireEvent.click(screen.getByText('mock-save'));
+    expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.roleLimitsSavedForCompany, { company: 'Procucev Retail Demo' }))).toBeInTheDocument();
+    expect(screen.queryByTestId('role-limits-modal')).not.toBeInTheDocument();
+  });
+
+  it('shows an empty companies tab when no company is listed', async () => {
+    directoryResult = Promise.resolve(response({ canChooseBusiness: true, currentBusiness: null, businesses: [] }));
+    render(<UsersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: uiStringPattern(UI_STRINGS.appAppAdminUsersPage.companies) }));
+    expect(screen.getByText(UI_STRINGS.appAppAdminUsersPage.noCompaniesFound)).toBeInTheDocument();
   });
 
   it('still invites users when the business directory cannot be loaded', async () => {
     directoryResult = Promise.resolve(response({}, false));
     render(<UsersPage />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/businesses'));
     let modal = await openInvite();
     expect(modal.querySelector<HTMLInputElement>('#invite-company')!.value).toBe('');
     fillInvite(modal);
@@ -199,7 +305,8 @@ describe('admin users page', () => {
     expect(await screen.findByText(interpolateUiString(UI_STRINGS.appAppAdminUsersPage.userEmailCreatedSuccessfully, {
       email: 'casey@example.test',
     }))).toBeInTheDocument();
-    expect(JSON.parse(writeCalls()[0][1].body)).toEqual(expect.objectContaining({ companyName: '' }));
+    expect(JSON.parse(writeCalls()[0][1].body)).toEqual(expect.objectContaining({ businessId: '' }));
+    expect(limitCalls()).toHaveLength(0);
 
     directoryResult = Promise.reject(new Error('offline'));
     const view = render(<UsersPage />);

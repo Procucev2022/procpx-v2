@@ -5,22 +5,23 @@ export interface CreateUserRequestBody {
   name?: unknown;
   role?: unknown;
   password?: unknown;
-  companyName?: unknown;
+  businessId?: unknown;
 }
 
 export interface BusinessSummary {
   id: string;
   name: string;
+  gstNumber?: string | null;
+  address?: string | null;
+  pincode?: string | null;
+  panNumber?: string | null;
+  industry?: string | null;
+  contactPersonName?: string | null;
+  contactPhone?: string | null;
 }
 
 export interface BusinessDirectory {
   canChooseBusiness: boolean;
   currentBusiness: BusinessSummary | null;
   businesses: BusinessSummary[];
-}
-
-export interface ResolvedBusinessTarget {
-  id: string;
-  name: string;
-  isNew: boolean;
 }

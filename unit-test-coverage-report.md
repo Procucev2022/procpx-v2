@@ -2,20 +2,20 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
+Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.29% (100755/101468) |
-| branches | 93.73% (23187/24738) |
-| functions | 98.59% (1961/1989) |
-| lines | 99.29% (100755/101468) |
+| statements | 99.30% (101664/102377) |
+| branches | 93.78% (23419/24970) |
+| functions | 98.61% (1996/2024) |
+| lines | 99.30% (101664/102377) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
 | `src/app/(app)/admin/masters/page.tsx` | 100.00% | 94.33% | 95.23% | 100.00% | PASS |
 | `src/app/(app)/admin/users/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/admin/users/page.tsx` | 100.00% | 97.87% | 95.00% | 100.00% | PASS |
+| `src/app/(app)/admin/users/page.tsx` | 100.00% | 98.49% | 96.42% | 100.00% | PASS |
 | `src/app/(app)/approvals/boq-pr/page.tsx` | 99.85% | 91.77% | 96.66% | 99.85% | PASS |
 | `src/app/(app)/approvals/budget/page.tsx` | 97.99% | 90.27% | 96.15% | 97.99% | PASS |
 | `src/app/(app)/approvals/rate-cards/page.tsx` | 98.47% | 90.28% | 95.65% | 98.47% | PASS |
@@ -82,6 +82,7 @@ Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
 | `src/app/(app)/vendor-portal/rfqs/page.tsx` | 99.70% | 98.30% | 100.00% | 99.70% | PASS |
 | `src/app/api/actual-costs/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/actual-costs/route.ts` | 99.40% | 90.47% | 100.00% | 99.40% | PASS |
+| `src/app/api/admin/businesses/[id]/role-limits/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/admin/businesses/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/admin/users/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/admin/users/route.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -261,6 +262,10 @@ Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
 | `src/app/login/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/login/page.tsx` | 100.00% | 98.24% | 97.36% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/admin/company-form.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/admin/CreateCompanyModal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/admin/RoleLimitFields.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/components/admin/RoleLimitsModal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/ApprovalChatDrawer.tsx` | 100.00% | 98.98% | 100.00% | 100.00% | PASS |
 | `src/components/observability/ErrorFallback.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/PrDetailModal.tsx` | 99.77% | 94.90% | 100.00% | 99.77% | PASS |
@@ -325,6 +330,7 @@ Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
 | `src/lib/business-name.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/category-preview.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/company-profile.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/d1-batch.ts` | 99.13% | 95.32% | 100.00% | 99.13% | PASS |
 | `src/lib/d1-compat.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -370,6 +376,7 @@ Files included: **364**. Files meeting all four 90% thresholds: **364/364**.
 | `src/lib/runtime.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/storage.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/storage.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/lib/tenant-role-limits.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/ui-strings.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/uom-standardise.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/uom-standardise.ts` | 100.00% | 93.75% | 100.00% | 100.00% | PASS |

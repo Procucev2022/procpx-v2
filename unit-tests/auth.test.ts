@@ -93,7 +93,7 @@ describe('NextAuth credentials provider', () => {
       vendorId: null,
     });
     expect(userModel.findMany).toHaveBeenCalledWith({
-      where: { email: 'user@example.test', status: UI_STRINGS.common.aCTIVE }, include: { tenant: true }, take: 2,
+      where: { email: 'user@example.test', status: UI_STRINGS.common.aCTIVE }, include: { tenant: { select: { name: true, slug: true } } }, take: 2,
     });
     expect(compare).toHaveBeenCalledWith('secret', 'hashed-password');
     expect(userModel.update).toHaveBeenCalledWith({
@@ -149,7 +149,7 @@ describe('NextAuth credentials provider', () => {
     });
     expect(userModel.findMany).toHaveBeenNthCalledWith(2, {
       where: { role: UI_STRINGS.common.vENDOR, status: UI_STRINGS.common.aCTIVE, vendorId: { not: null } },
-      include: { tenant: true, vendor: { select: { name: true, code: true } } },
+      include: { tenant: { select: { name: true, slug: true } }, vendor: { select: { name: true, code: true } } },
       take: AUTH_VENDOR_USERNAME_FALLBACK_CANDIDATE_LIMIT + 1,
     });
 
@@ -236,7 +236,7 @@ describe('NextAuth credentials provider', () => {
     await expect(authorize({ email: 'acme services', password: 'secret' })).resolves.toBeNull();
     expect(userModel.findMany).toHaveBeenCalledTimes(1);
     expect(userModel.findMany).toHaveBeenCalledWith({
-      where: { email: 'acme services', status: UI_STRINGS.common.aCTIVE }, include: { tenant: true }, take: 2,
+      where: { email: 'acme services', status: UI_STRINGS.common.aCTIVE }, include: { tenant: { select: { name: true, slug: true } } }, take: 2,
     });
   });
 });
