@@ -1,4 +1,5 @@
 // src/app/api/boq/create-pr/route.ts - Create Procurement Request (PR) from BOQ
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
@@ -10,9 +11,9 @@ import {
   PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
   PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
   PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
-  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL,
 } from '@/lib/d1-batch.constants';
-import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
+import { isD1BatchWithinLimits, toBulkPrLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { isUserAuthorizedForProject } from '@/lib/project-auth';
 import { MAX_D1_QUERY_FILTER_VALUES } from '@/lib/d1-query.constants';
@@ -203,7 +204,7 @@ export async function POST(req: NextRequest) {
     const createdAt = requestedAt.toISOString();
     const prId = crypto.randomUUID();
     const roundedTotal = Math.round(totalEstimatedPRValue * 100) / 100;
-    const batch = [{
+    const batch: D1BatchInputStatement[] = [{
       sql: PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
       values: [
         prId, ctx.tenantId, String(requestedAt.getFullYear()), ctx.tenantId, String(requestedAt.getFullYear()),
@@ -217,11 +218,12 @@ export async function POST(req: NextRequest) {
     }];
 
     // Create PR lines with end-to-end BOQ line traceability in the same D1 batch.
+    const prLineStatements: typeof batch = [];
     for (const [index, l] of targetLines.entries()) {
       const unitRate = l.aiUnitCost || (l as any).benchmarkRate || 100;
       const qty = l.quantity as number;
       const lineVal = l.aiTotalCost || Math.round(unitRate * qty * 100) / 100;
-      batch.push({
+      prLineStatements.push({
         sql: PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
         values: [
           crypto.randomUUID(), ctx.tenantId, prId, targetProjectId, targetCostCentreId,
@@ -233,9 +235,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // JSON bulk PR lines keep PRs from large BOQs inside this one atomic batch.
+    batch.push(...toBulkPrLineInsertStatements(prLineStatements, prId, ctx.tenantId));
     batch.push({
-      sql: PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
-      values: [targetCostCentreId, initialStatus, createdAt, revision.id, ctx.tenantId],
+      sql: PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL,
+      values: [targetCostCentreId, initialStatus, createdAt, revision.id, ctx.tenantId, prId, ctx.tenantId, targetLines.length],
     });
     batch.push({
       sql: PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,

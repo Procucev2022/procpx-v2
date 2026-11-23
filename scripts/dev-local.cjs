@@ -7,14 +7,16 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { parseEnv } = require('node:util');
 
-// `npm run dev`        -> Wrangler local D1/R2 under ignored `.wrangler/` (default, safe).
-// `npm run dev:remote` -> the same `next dev`, but the D1 and R2 bindings connect to the
+// `npm run dev:local`  -> Wrangler local D1/R2 under ignored `.wrangler/`.
+// `npm run dev`        -> (default; alias `npm run dev:remote`) the same `next dev`, but the D1 and R2 bindings connect to the
 //                         deployed Cloudflare resources named in wrangler.jsonc. Every write
 //                         made in the browser lands in the shared server database.
 const REMOTE_FLAG = '--remote';
 const REMOTE_ENV_FLAG = 'PROCPX_DEV_REMOTE';
 const ENV_FILES = ['.env', '.env.local', '.env.development', '.env.development.local'];
 const DEFAULT_PORT = '3000';
+// Keep in sync with REQUIRED_ENV_VARS in src/lib/env.constants.ts (the server re-checks at startup).
+const REQUIRED_ENV_VARS = ['NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'DATABASE_PROVIDER', 'UPLOAD_DIR', 'GEMINI_API_KEY'];
 
 function readEnvFiles(root) {
   const values = {};
@@ -63,16 +65,15 @@ function inspectDevEnvironment({ env, args, envFilesFound, wrangler }) {
     errors.push('proCPX only supports Cloudflare D1. Local development uses Wrangler local D1; SQLite is schema-generation-only. Set DATABASE_PROVIDER="d1" in .env.');
   }
   if (envFilesFound.length === 0) {
-    warnings.push('No .env file found. Copy .env.example to .env and set NEXTAUTH_SECRET.');
+    errors.push('No .env file found. Copy .env.example to .env and fill in every required value.');
   }
-  if (!env.NEXTAUTH_SECRET) {
-    errors.push('NEXTAUTH_SECRET is missing, so sign-in cannot work. Add NEXTAUTH_SECRET="<any long random string>" to .env.');
+  const missing = REQUIRED_ENV_VARS.filter((name) => !env[name] || !String(env[name]).trim());
+  if (missing.length > 0) {
+    errors.push(`Missing required settings: ${missing.join(', ')}. Add them to .env.`);
   }
   const port = readPort(args);
   const expectedUrl = `http://localhost:${port}`;
-  if (!env.NEXTAUTH_URL) {
-    warnings.push(`NEXTAUTH_URL is not set. Add NEXTAUTH_URL="${expectedUrl}" to .env.`);
-  } else if (env.NEXTAUTH_URL.replace(/\/+$/, '') !== expectedUrl) {
+  if (env.NEXTAUTH_URL && env.NEXTAUTH_URL.replace(/\/+$/, '') !== expectedUrl) {
     warnings.push(`NEXTAUTH_URL is "${env.NEXTAUTH_URL}" but the app will run on ${expectedUrl}; sign-in redirects may fail. Set NEXTAUTH_URL="${expectedUrl}".`);
   }
   if (env.DATABASE_URL) {
@@ -116,7 +117,7 @@ function main() {
       + '[dev] Everything you create, edit or approve is written to the shared server database.\n',
     );
   } else {
-    process.stdout.write('[dev] Local mode: Wrangler local D1 under .wrangler/ (run `npm run dev:remote` to use the server database).\n');
+    process.stdout.write('[dev] Local mode: Wrangler local D1 under .wrangler/ (run `npm run dev` to use the procpx-dev server database).\n');
   }
 
   const nextBin = require.resolve('next/dist/bin/next');
@@ -146,4 +147,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { inspectDevEnvironment, readPort, readWranglerTarget, REMOTE_FLAG, REMOTE_ENV_FLAG };
+module.exports = { inspectDevEnvironment, readPort, readWranglerTarget, REMOTE_FLAG, REMOTE_ENV_FLAG, REQUIRED_ENV_VARS };

@@ -15,6 +15,9 @@ function getRuntimeLogger(): RuntimeLogger {
 }
 
 export async function register(): Promise<void> {
+  // Refuse to start without the required settings instead of failing mid-workflow.
+  const { assertRequiredEnv } = await import('./lib/env');
+  assertRequiredEnv();
   const { initializeLogging, installConsoleCapture, writeStructuredLog } = getRuntimeLogger();
   await initializeLogging();
   installConsoleCapture();

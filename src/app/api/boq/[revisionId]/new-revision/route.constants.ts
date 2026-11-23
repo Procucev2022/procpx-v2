@@ -38,7 +38,9 @@ export const BOQ_NEW_REVISION_COPY_LINES_JSON_SQL = `
     json_extract("value", '$.benchmarkEligible'), json_extract("value", '$.createdAt'),
     json_extract("value", '$.updatedAt')
   FROM json_each(?)
-  WHERE changes() = 1 AND EXISTS (
+  -- No changes() guard: large copies are split into several statements. The revision row is inserted
+  -- earlier in the same atomic batch, and the audit statement afterwards verifies the copied line count.
+  WHERE EXISTS (
     SELECT 1 FROM "boq_revisions" revision
     WHERE revision."id" = ? AND revision."tenantId" = ?
   )

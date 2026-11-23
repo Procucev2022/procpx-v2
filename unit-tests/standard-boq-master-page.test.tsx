@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { uiStringPattern } from '@/lib/i18n';
+import { interpolateUiString, uiStringPattern } from '@/lib/i18n';
 
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -18,6 +18,14 @@ let postResponse: any;
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, ...props }: any) => <a {...props}>{children}</a> }));
 jest.mock('../src/components/ui/PageHeader', () => ({ __esModule: true, default: ({ title, subtitle, actions }: any) => <header><h1>{title}</h1><p>{subtitle}</p>{actions}</header> }));
 jest.mock('../src/components/ui/SummaryCard', () => ({ SummaryCardGrid: ({ children }: any) => <div>{children}</div>, SummaryCard: ({ label, value }: any) => <div><span>{label}</span><strong>{value}</strong></div> }));
+
+const showGroupButton = uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.showGroupItems);
+/** Items sit inside collapsed Category + Sub-category rows: open every group, then find the text. */
+async function findInGroups(text: string) {
+  await screen.findAllByRole('button', { name: showGroupButton });
+  for (const button of screen.queryAllByRole('button', { name: showGroupButton })) fireEvent.click(button);
+  return screen.findByText(text);
+}
 
 const items = [
   { id: 'item-1', itemCode: 'STD-EXIST', sector: 'RETAIL', projectType: 'Store Fitout', category: 'Electrical', subcategory: 'Wiring', standardDescription: 'Copper cable', detailedSpecification: 'FRLS copper cable', uom: 'MTR', brandMake: 'North', benchmarkRate: 25, isActive: true, createdAt: '2026-10-01' },
@@ -58,10 +66,64 @@ describe('standard BOQ master page', () => {
   });
   afterAll(() => { global.fetch = originalFetch; });
 
+  it('shows one row per unique category and sub-category, expands its items on click, and adds items to a group', async () => {
+    standardItems = [
+      ...items,
+      { ...items[0], id: 'item-3', itemCode: 'STD-WIRE-2', sector: 'OFFICE', standardDescription: 'Armoured cable', benchmarkRate: 40 },
+      { ...items[1], id: 'item-4', itemCode: 'STD-NOSUB', category: 'Plumbing', subcategory: '', benchmarkRate: null },
+    ];
+    render(<StandardBoqCreationPage />);
+    const groupToggle = (category: string, subcategory: string) => screen.getByRole('button', {
+      name: interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.showGroupItems, { category, subcategory }),
+    });
+
+    // Three unique groups (Electrical/Wiring appears once for its two items), all collapsed.
+    expect(await screen.findByText(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.standardBoqGroupsHeading, { groups: 3, items: 4 }))).toBeInTheDocument();
+    expect(screen.getAllByText(items[0].category, { selector: 'td' })).toHaveLength(1);
+    expect(screen.queryByText('STD-EXIST')).not.toBeInTheDocument();
+    const wiringRow = groupToggle('Electrical', 'Wiring').closest('tr')!;
+    expect(within(wiringRow).getByText(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.groupItemCount, { count: 2 }))).toBeInTheDocument();
+    expect(within(wiringRow).getByText('RETAIL, OFFICE')).toBeInTheDocument();
+    expect(within(wiringRow).getByText(interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.groupRateRange, { min: '25', max: '40' }))).toBeInTheDocument();
+    // Single-rate and unrated groups; a missing sub-category is shown as General.
+    expect(within(groupToggle('Civil', 'Flooring').closest('tr')!).getByText(interpolateUiString(UI_STRINGS.common.toLocaleString, { toLocaleString: '0' }))).toBeInTheDocument();
+    expect(within(groupToggle('Plumbing', 'General').closest('tr')!).getByText(UI_STRINGS.common.copy4s9bsz)).toBeInTheDocument();
+
+    // Clicking the row opens it; clicking again (or the arrow) closes it.
+    fireEvent.click(within(wiringRow).getByText('Wiring'));
+    expect(screen.getByText('STD-EXIST')).toBeInTheDocument();
+    expect(screen.getByText('STD-WIRE-2')).toBeInTheDocument();
+    expect(screen.queryByText('STD-ZERO')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {
+      name: interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.hideGroupItems, { category: 'Electrical', subcategory: 'Wiring' }),
+    }));
+    expect(screen.queryByText('STD-EXIST')).not.toBeInTheDocument();
+
+    // Searching opens every matching group.
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.searchByCodeDescriptionSpecification)), { target: { value: 'tile' } });
+    expect(screen.getByText('STD-ZERO')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.searchByCodeDescriptionSpecification)), { target: { value: '' } });
+
+    // Add Item opens the create form for that group without toggling the row.
+    const addButton = within(groupToggle('Electrical', 'Wiring').closest('tr')!).getByRole('button', { name: UI_STRINGS.appAppMastersStandardBoqPage.addItemToGroup });
+    fireEvent.click(addButton);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQMasterItems))).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Wiring')).toBeInTheDocument();
+    expect((screen.getAllByRole('combobox').find((select) => (select as HTMLSelectElement).value === 'Electrical'))).toBeTruthy();
+    expect(screen.queryByText('STD-EXIST')).not.toBeInTheDocument();
+  });
+
+  it('hides group Add Item buttons from read-only roles', async () => {
+    userRole = 'VIEWER';
+    render(<StandardBoqCreationPage />);
+    await screen.findAllByRole('button', { name: showGroupButton });
+    expect(screen.queryByRole('button', { name: UI_STRINGS.appAppMastersStandardBoqPage.addItemToGroup })).not.toBeInTheDocument();
+  });
+
   it('loads and filters the master, refreshes categories, and exposes administrator actions', async () => {
     render(<StandardBoqCreationPage />);
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.loadingStandardBOQItems))).toBeInTheDocument();
-    expect(await screen.findByText('STD-EXIST')).toBeInTheDocument();
+    expect(await findInGroups('STD-EXIST')).toBeInTheDocument();
     expect(screen.getByText('Copper cable')).toBeInTheDocument();
     expect(screen.queryByText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.noStandardBOQItemsFoundMatchingYourFilters))).not.toBeInTheDocument();
 
@@ -98,17 +160,17 @@ describe('standard BOQ master page', () => {
     });
 
     render(<StandardBoqCreationPage />);
-    expect(await screen.findByText('STD-EXIST')).toBeInTheDocument();
+    expect(await findInGroups('STD-EXIST')).toBeInTheDocument();
     expect(screen.getByText(UI_STRINGS.appAppMastersStandardBoqPage.totalStandardBOQItems).parentElement).toHaveTextContent(String(items.length));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) }));
-    expect(await screen.findByText('STD-ZERO')).toBeInTheDocument();
+    expect(await findInGroups('STD-ZERO')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('page=2'));
     expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.common.loadMore) })).not.toBeInTheDocument();
   });
 
   it('validates editable rows and submits a normalized multi-line standard BOQ', async () => {
     render(<StandardBoqCreationPage />);
-    await screen.findByText('STD-EXIST');
+    await findInGroups('STD-EXIST');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQItems) }));
     await waitFor(() => expect(screen.getAllByRole('combobox')[3]).toHaveValue(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical));
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: '' } });
@@ -153,7 +215,7 @@ describe('standard BOQ master page', () => {
 
   it('reports existing codes, server errors, and network failures on standard item creation', async () => {
     render(<StandardBoqCreationPage />);
-    await screen.findByText('STD-EXIST');
+    await findInGroups('STD-EXIST');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQItems) }));
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: 'std-exist' } });
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGVitrifiedFloorTile600x600)), { target: { value: 'Duplicate existing' } });
@@ -176,7 +238,7 @@ describe('standard BOQ master page', () => {
 
   it('imports a spreadsheet, validates and repairs rows, and reports import failures', async () => {
     render(<StandardBoqCreationPage />);
-    await screen.findByText('STD-EXIST');
+    await findInGroups('STD-EXIST');
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.uploadExcel) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.uploadStandardBOQItemsExcelImport))).toBeInTheDocument();
     await chooseWorkbook([

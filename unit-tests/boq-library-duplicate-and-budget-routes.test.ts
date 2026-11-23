@@ -31,7 +31,7 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/app/api/boq/add-to-budget/route', () => ({ POST: jest.fn() }));
-jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn().mockResolvedValue({}) }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
@@ -189,7 +189,8 @@ describe('BOQ duplication', () => {
     expect(statements[1].values).toEqual(expect.arrayContaining(['R0', 'NOT_ADDED_TO_BUDGET', 'PR_DRAFT', 'MANUAL']));
     expect(statements[2].values).toEqual(expect.arrayContaining(['Original', 'Standard', 'Spec', 'ITEM-1', 'AI spec', 300, 'Keep']));
     expect(statements[2].values).toHaveLength(statements[2].sql.split('?').length - 1);
-    expect(statements[3].values).toEqual([1, 1, expect.any(Date), expect.any(String), 'tenant-1']);
+    // Line counts update only when every copied line exists (safe for bulk copies of large BOQs).
+    expect(statements[3].values).toEqual([1, 1, expect.any(Date), expect.any(String), 'tenant-1', expect.any(String), 'tenant-1', 1]);
     expect(statements[4].sql).toContain('replace(replace(replace');
     expect(statements[4].values).toEqual(expect.arrayContaining(['BOQ_DUPLICATED', UI_STRINGS.appApiBoqDuplicateRoute.duplicatedBOQBoqCodeIntoBoqCode2Title]));
   });

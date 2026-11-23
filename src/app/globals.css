@@ -723,6 +723,142 @@ select.input, select.form-control {
   appearance: none;
 }
 
+/* Shared look for pages that use the input-field / select-field class names. Inline sizes still win. */
+.input-field, .select-field {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: #ffffff;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.input-field::placeholder {
+  color: #94a3b8;
+}
+
+.input-field:hover, .select-field:hover {
+  border-color: #94a3b8;
+}
+
+.input-field:focus, .select-field:focus-visible, select.select-field:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--primary-focus);
+}
+
+.input-field:disabled, .select-field:disabled {
+  background-color: #f1f5f9;
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+select.select-field {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  padding-right: 30px;
+  text-overflow: ellipsis;
+}
+
+textarea.input-field {
+  height: auto;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+
+/* BOQ line table: sticky header while scrolling vertically, sticky S.No while scrolling horizontally. */
+.boq-lines-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+
+.boq-lines-scroll tbody td:first-child,
+.boq-lines-scroll thead th:first-child {
+  position: sticky;
+  left: 0;
+  background: #ffffff;
+  z-index: 1;
+}
+
+.boq-lines-scroll thead th:first-child {
+  z-index: 3;
+  background: #f8fafc;
+}
+
+/* Multi-select dropdown panel (e.g. BOQ Studio categories). */
+.multi-select-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  width: 100%;
+  min-width: 280px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+  animation: multi-select-in 0.12s ease-out;
+}
+
+@keyframes multi-select-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+  transition: background-color 0.12s ease-in-out;
+}
+
+.multi-select-option:hover {
+  background: #f1f5f9;
+}
+
+.multi-select-option[data-checked="true"] {
+  background: #eff6ff;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.multi-select-option input {
+  width: 15px;
+  height: 15px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.multi-select-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 12px;
+  color: #64748b;
+}
+
 textarea.input, textarea.form-control {
   height: auto;
   min-height: 110px;

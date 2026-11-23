@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/dev-local.cjs",
+    "dev": "node scripts/dev-local.cjs --remote",
+    "dev:local": "node scripts/dev-local.cjs",
     "dev:remote": "node scripts/dev-local.cjs --remote",
     "dev:e2e": "npm run cf:build && wrangler dev --config wrangler.jsonc --persist-to .wrangler/e2e-d1 --port 3001",
     "build": "prisma generate && next build",

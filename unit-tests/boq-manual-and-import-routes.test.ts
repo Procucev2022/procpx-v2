@@ -35,7 +35,7 @@ jest.mock('../src/lib/api-utils', () => ({
 jest.mock('../src/lib/uom-standardise', () => ({ standardiseUom: jest.fn() }));
 jest.mock('../src/lib/boq-validate', () => ({ validateBoqLine: jest.fn(), computeQualityScore: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
-jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn(), writeStructuredLog: jest.fn() }));
 jest.mock('fs/promises', () => ({ readFile: jest.fn() }));
 
@@ -77,9 +77,60 @@ describe('manual BOQ workspace API', () => {
     await expect(editManualBoq(request({}))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqManualRoute.projectIDOrBOQIDIsRequired, status: 400 });
     db.project.findFirst.mockResolvedValueOnce(null);
     await expect(editManualBoq(request({ projectId: 'project-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.projectNotFound2, status: 404 });
+    // A BOQ with no revisions in this tenant is still reported as not found.
+    db.boqRevision.findFirst.mockResolvedValueOnce(null);
     await expect(editManualBoq(request({ boqId: 'boq-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.common.bOQRevisionNotFound, status: 404 });
+    expect(db.boqRevision.findFirst).toHaveBeenLastCalledWith({
+      where: { boqId: 'boq-1', tenantId: 'tenant-1' }, orderBy: { revisionNumber: 'desc' }, select: { id: true },
+    });
     db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision({ status: 'APPROVED' }));
     await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1' }))).resolves.toEqual({ ok: false, error: UI_STRINGS.appApiBoqManualRoute.approvedBOQRevisionsAreStrictlyImmutableBranchANewRevisionToEdit, status: 403 });
+  });
+
+  it('opens the latest revision when only a BOQ id is sent (BOQ Studio Manual Entry)', async () => {
+    db.boqRevision.findFirst
+      .mockResolvedValueOnce({ id: 'revision-2' })
+      .mockResolvedValueOnce(editableRevision({ id: 'revision-2', totalLines: 4 }));
+    db.boqLine.groupBy.mockResolvedValueOnce([{ validationStatus: 'VALID', _count: { _all: 4 } }]);
+    makeSuccessfulBatch();
+    // Exactly what BOQ Studio's Manual Entry sends: the BOQ id, no revision id, no lines.
+    const response = await editManualBoq(request({ boqId: 'boq-1', projectId: 'project-1', lines: [], action: 'APPEND' }));
+    expect(response).toMatchObject({ ok: true, data: { totalLines: 4 } });
+    expect(db.boqRevision.findFirst).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: { id: 'revision-2', tenantId: 'tenant-1', boqId: 'boq-1' },
+    }));
+    expect(db.boqLine.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: 'tenant-1', boqRevisionId: 'revision-2' } }));
+  });
+
+  it('appends 300 manual lines with JSON bulk statements and reports short inserts as conflicts', async () => {
+    const bulkAwareBatch = (shortBy: number) => writeBatch.mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) =>
+      statements.map((statement) => ({
+        success: true,
+        meta: { changes: statement.sql.includes('json_each(?)')
+          ? (JSON.parse(statement.values[0] as string) as unknown[]).length - shortBy
+          : 1 },
+        results: [],
+      })));
+    const lines = Array.from({ length: 300 }, (_, index) => ({ description: `Item ${index + 1}`, quantity: index + 1 }));
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision());
+    db.boqLine.groupBy.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    bulkAwareBatch(0);
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', action: 'APPEND', lines })))
+      .resolves.toMatchObject({ ok: true, data: { totalLines: 300 } });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    expect(statements.filter((statement) => statement.sql.includes('json_each(?)'))).toHaveLength(1);
+    expect(statements.length).toBeLessThan(10);
+
+    db.boqRevision.findFirst.mockResolvedValueOnce(editableRevision());
+    db.boqLine.groupBy.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce([]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    bulkAwareBatch(1);
+    await expect(editManualBoq(request({ boqId: 'boq-1', boqRevisionId: 'revision-1', action: 'APPEND', lines })))
+      .resolves.toMatchObject({ ok: false, status: 409 });
   });
 
   it('creates a manual draft and atomically saves validated lines, metrics, and audit history', async () => {
@@ -163,7 +214,7 @@ describe('manual BOQ workspace API', () => {
 
   it('rejects malformed and oversized line input before persistence', async () => {
     await expect(editManualBoq(request({ projectId: 'project-1', lines: [null] }))).resolves.toMatchObject({ status: 400 });
-    await expect(editManualBoq(request({ projectId: 'project-1', lines: Array.from({ length: 451 }, () => ({})) }))).resolves.toMatchObject({ status: 400 });
+    await expect(editManualBoq(request({ projectId: 'project-1', lines: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, () => ({})) }))).resolves.toMatchObject({ status: 400 });
     expect(writeBatch).not.toHaveBeenCalled();
   });
 

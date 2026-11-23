@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { sumD1BatchChanges, toBulkBoqLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
   BOQ_INSERT_NEXT_CODE_SQL,
@@ -193,6 +193,17 @@ export async function POST(req: NextRequest) {
     if (submittedLines) lineCount = submittedLines.length;
     if (isNewBoq && targetRevisionId) return apiError(UI_STRINGS.common.invalidRequestBody, 400);
 
+    // An existing BOQ without an explicit revision (e.g. Manual Entry in BOQ Studio) works
+    // on that BOQ's latest revision in the caller's tenant.
+    if (!isNewBoq && !targetRevisionId) {
+      const latestRevision = await prisma.boqRevision.findFirst({
+        where: { boqId: requestedBoqId, tenantId: ctx.tenantId },
+        orderBy: { revisionNumber: 'desc' },
+        select: { id: true },
+      });
+      targetRevisionId = latestRevision?.id;
+    }
+
     const isReplace = body.action !== 'APPEND';
     const now = new Date();
     const revisionId = targetRevisionId || (isNewBoq ? crypto.randomUUID() : undefined);
@@ -353,9 +364,9 @@ export async function POST(req: NextRequest) {
     }
 
     const lineStartIndex = statements.length;
-    for (const line of preparedResult.lines) {
-      statements.push(lineInsertStatement(line, revisionId, ctx.tenantId, auditId, now));
-    }
+    // JSON bulk statements keep large manual saves inside this one atomic batch.
+    const lineStatements = toBulkBoqLineInsertStatements(preparedResult.lines.map((line) => lineInsertStatement(line, revisionId, ctx.tenantId, auditId, now)));
+    statements.push(...lineStatements);
     statements.push({
       sql: BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
       values: [totalLines, validLines, errorLines, warningLines, qualityScore, metricsUpdatedAt, revisionId, ctx.tenantId, auditId, ctx.tenantId],
@@ -368,7 +379,7 @@ export async function POST(req: NextRequest) {
       ? getChangedCount(results[0]) === 1 && getChangedCount(results[1]) === 1
       : getChangedCount(results[0]) === 1;
     const auditSucceeded = getChangedCount(results[auditIndex]) === 1;
-    const linesSucceeded = preparedResult.lines.every((_, index) => getChangedCount(results[lineStartIndex + index]) === 1);
+    const linesSucceeded = sumD1BatchChanges(results, lineStartIndex, lineStatements.length) === preparedResult.lines.length;
     if (!parentWritesSucceeded || !auditSucceeded || !linesSucceeded || getChangedCount(results[metricsIndex]) !== 1) {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
     }

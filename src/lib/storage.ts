@@ -1,9 +1,10 @@
 // lib/storage.ts - Uploaded file storage
-// Local dev writes to the uploads/ folder and stores the absolute path.
+// Local runs write under the UPLOAD_DIR folder and store the absolute path.
 // On Cloudflare Workers files go to the R2 binding `UPLOADS` and are stored as `r2://<key>`.
 import path from 'path';
 import { isCloudflareWorker } from './runtime';
-import { R2_PREFIX, LOCAL_UPLOADS_DIRECTORY } from './storage.constants';
+import { R2_PREFIX } from './storage.constants';
+import { getRequiredEnv } from './env';
 import { UI_STRINGS } from './ui-strings.constants';
 import type { UploadBucket } from '@app-types/lib/storage.types';
 
@@ -15,7 +16,7 @@ function getBucket(): UploadBucket {
   return bucket;
 }
 
-/** Saves a file under uploads/<segments...>/<fileName> and returns the stored reference. */
+/** Saves a file under <UPLOAD_DIR>/<segments...>/<fileName> and returns the stored reference. */
 export async function saveUpload(segments: string[], fileName: string, data: Buffer): Promise<string> {
   if (isCloudflareWorker()) {
     const key = [...segments, fileName].join('/');
@@ -25,7 +26,7 @@ export async function saveUpload(segments: string[], fileName: string, data: Buf
 
   const { mkdir, writeFile } = await import('fs/promises');
   // Uploads are written at runtime, so keep the folder out of build-time file tracing.
-  const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), LOCAL_UPLOADS_DIRECTORY, ...segments);
+  const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), getRequiredEnv('UPLOAD_DIR'), ...segments);
   await mkdir(dir, { recursive: true });
   const filePath = path.join(dir, fileName);
   await writeFile(filePath, data);
@@ -50,7 +51,7 @@ export async function deleteUpload(ref: string, segments: string[] = []): Promis
   }
 
   if (isCloudflareWorker()) throw new Error(UI_STRINGS.libStorage.thisFileWasUploadedToALocalServerAndIsNotAvailableHere);
-  const uploadsRoot = path.resolve(/*turbopackIgnore: true*/ process.cwd(), LOCAL_UPLOADS_DIRECTORY);
+  const uploadsRoot = path.resolve(/*turbopackIgnore: true*/ process.cwd(), getRequiredEnv('UPLOAD_DIR'));
   const allowedRoot = path.resolve(uploadsRoot, ...segments);
   const resolvedRef = path.resolve(ref);
   const allowedPrefix = `${allowedRoot}${path.sep}`;

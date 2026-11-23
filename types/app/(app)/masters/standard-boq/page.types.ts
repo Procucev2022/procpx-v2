@@ -15,3 +15,21 @@ export interface StandardItem {
   isActive: boolean;
   createdAt: string;
 }
+
+/** One unique Category + Sub-category row of the master, with the items it contains. */
+export interface StandardItemGroup {
+  key: string;
+  category: string;
+  subcategory: string;
+  sectors: string[];
+  items: StandardItem[];
+  minRate: number | null;
+  maxRate: number | null;
+}
+
+/** Category, sub-category and sector used to pre-fill the create modal from a group row. */
+export interface StandardItemGroupPreset {
+  category: string;
+  subcategory: string;
+  sector: string;
+}

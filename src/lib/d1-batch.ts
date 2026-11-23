@@ -21,6 +21,17 @@ import {
   RATE_CARD_APPROVAL_INSERT_AFTER_UPDATE_SQL,
   RATE_CARD_TRANSITION_ASSERT_SQL,
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
+  BOQ_LINE_INSERT_AFTER_AUDIT_SQL,
+  BOQ_LINE_INSERT_AFTER_REVISION_SQL,
+  BOQ_LINE_BULK_INSERT_AFTER_AUDIT_SQL,
+  BOQ_LINE_BULK_INSERT_AFTER_REVISION_SQL,
+  BOQ_LINE_BULK_MAX_JSON_BYTES,
+  BOQ_LINE_BULK_MAX_ROWS,
+  BOQ_LINE_PER_STATEMENT_MAX,
+  BOQ_LINE_INSERT_COLUMN_COUNT,
+  PR_LINE_INSERT_COLUMN_COUNT,
+  PROCUREMENT_REQUEST_LINE_BULK_INSERT_SQL,
+  PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
 } from './d1-batch.constants';
 import { UI_STRINGS } from './ui-strings.constants';
 import { writeStructuredLog } from './observability/server-logger';
@@ -167,6 +178,96 @@ export async function runD1BatchAtomically(
     await logSlowD1Batch(input, durationMs, results);
   }
   return results;
+}
+
+function toBulkJsonValue(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (value === undefined) return null;
+  return value;
+}
+
+/**
+ * Converts per-line BOQ inserts (BOQ_LINE_INSERT_AFTER_AUDIT_SQL or BOQ_LINE_INSERT_AFTER_REVISION_SQL)
+ * into a few JSON bulk statements with the same guards. Large BOQs then stay within D1's statement,
+ * binding and per-request query limits while remaining inside the caller's single atomic batch.
+ */
+export function toBulkBoqLineInsertStatements(lineStatements: D1BatchInputStatement[]): D1BatchInputStatement[] {
+  if (lineStatements.length === 0) return [];
+  const [first] = lineStatements;
+  const bulkSql = first.sql === BOQ_LINE_INSERT_AFTER_AUDIT_SQL
+    ? BOQ_LINE_BULK_INSERT_AFTER_AUDIT_SQL
+    : first.sql === BOQ_LINE_INSERT_AFTER_REVISION_SQL ? BOQ_LINE_BULK_INSERT_AFTER_REVISION_SQL : null;
+  if (!bulkSql) throw new Error(D1_BATCH_STATEMENT_FAILED);
+  return toJsonBulkStatements(lineStatements, BOQ_LINE_INSERT_COLUMN_COUNT, bulkSql, first.values.slice(BOQ_LINE_INSERT_COLUMN_COUNT));
+}
+
+/**
+ * Converts per-line PR inserts (PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL) into JSON bulk statements
+ * guarded by the parent PR row, for PRs created from large BOQs inside one atomic batch.
+ */
+export function toBulkPrLineInsertStatements(lineStatements: D1BatchInputStatement[], prId: string, tenantId: string): D1BatchInputStatement[] {
+  if (lineStatements.some((statement) => statement.sql !== PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL)) {
+    throw new Error(D1_BATCH_STATEMENT_FAILED);
+  }
+  return toJsonBulkStatements(lineStatements, PR_LINE_INSERT_COLUMN_COUNT, PROCUREMENT_REQUEST_LINE_BULK_INSERT_SQL, [prId, tenantId]);
+}
+
+// Each statement's first `columnCount` values become one JSON row; the rest must equal the first
+// statement's guard values, so rows for different parents can never be merged.
+function toJsonBulkStatements(
+  lineStatements: D1BatchInputStatement[],
+  columnCount: number,
+  bulkSql: string,
+  guardValues: unknown[],
+): D1BatchInputStatement[] {
+  if (lineStatements.length <= BOQ_LINE_PER_STATEMENT_MAX) return lineStatements;
+  const guardKey = JSON.stringify(lineStatements[0]?.values.slice(columnCount).map(toBulkJsonValue));
+  const statements: D1BatchInputStatement[] = [];
+  let chunk: string[] = [];
+  let chunkBytes = 2;
+  const flush = () => {
+    if (chunk.length === 0) return;
+    statements.push({ sql: bulkSql, values: [`[${chunk.join(',')}]`, ...guardValues] });
+    chunk = [];
+    chunkBytes = 2;
+  };
+  for (const statement of lineStatements) {
+    if (statement.sql !== lineStatements[0].sql || JSON.stringify(statement.values.slice(columnCount).map(toBulkJsonValue)) !== guardKey) {
+      throw new Error(D1_BATCH_STATEMENT_FAILED);
+    }
+    const row = JSON.stringify(statement.values.slice(0, columnCount).map(toBulkJsonValue));
+    const rowBytes = new TextEncoder().encode(row).byteLength + 1;
+    if (chunk.length >= BOQ_LINE_BULK_MAX_ROWS || (chunk.length > 0 && chunkBytes + rowBytes > BOQ_LINE_BULK_MAX_JSON_BYTES)) flush();
+    chunk.push(row);
+    chunkBytes += rowBytes;
+  }
+  flush();
+  return statements;
+}
+
+/** Splits rows for JSON bulk statements so each JSON value stays within the per-binding byte limit. */
+export function chunkRowsForJsonBinding<T>(rows: T[]): T[][] {
+  const chunks: T[][] = [];
+  let chunk: T[] = [];
+  let chunkBytes = 2;
+  for (const row of rows) {
+    const rowBytes = new TextEncoder().encode(JSON.stringify(row)).byteLength + 1;
+    if (chunk.length >= BOQ_LINE_BULK_MAX_ROWS || (chunk.length > 0 && chunkBytes + rowBytes > BOQ_LINE_BULK_MAX_JSON_BYTES)) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkBytes = 2;
+    }
+    chunk.push(row);
+    chunkBytes += rowBytes;
+  }
+  if (chunk.length > 0) chunks.push(chunk);
+  return chunks;
+}
+
+/** Total rows changed by `count` consecutive batch results starting at `start`. */
+export function sumD1BatchChanges(results: D1BatchResult[], start: number, count: number): number {
+  return results.slice(start, start + count).reduce((total, result) => total + Number(result?.meta?.changes || 0), 0);
 }
 
 export async function writeD1BatchAtomically(input: D1BatchInputStatement[]): Promise<D1BatchResult[]> {

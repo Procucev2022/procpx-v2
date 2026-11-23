@@ -7,7 +7,7 @@ import { readUpload } from '@/lib/storage';
 import type { BoqImportRequest, ColumnMapping } from '@app-types/app/api/boq/import/route.types';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { sumD1BatchChanges, toBulkBoqLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
   BOQ_LINE_DELETE_AFTER_AUDIT_SQL,
@@ -206,6 +206,8 @@ export async function POST(req: NextRequest) {
       length: importedLines.length, validCount, warnCount, errorCount,
     });
     const auditNewValue = JSON.stringify({ totalLines: importedLines.length, validCount, errorCount, warnCount, qualityScore });
+    // JSON bulk statements keep large imports inside this one atomic batch.
+    const lineStatements = toBulkBoqLineInsertStatements(importedLines.map((line) => lineStatement(line, revisionId as string, ctx.tenantId, auditId, now)));
     const statements: D1BatchInputStatement[] = [
       { sql: BOQ_REVISION_TOUCH_IF_CURRENT_SQL, values: [now, revisionId, ctx.tenantId, revision.status, revision.updatedAt] },
       {
@@ -214,7 +216,7 @@ export async function POST(req: NextRequest) {
           null, auditNewValue, null, req.headers.get('user-agent'), now],
       },
       { sql: BOQ_LINE_DELETE_AFTER_AUDIT_SQL, values: [revisionId, ctx.tenantId, auditId, ctx.tenantId] },
-      ...importedLines.map((line) => lineStatement(line, revisionId as string, ctx.tenantId, auditId, now)),
+      ...lineStatements,
       {
         sql: BOQ_REVISION_UPDATE_IMPORT_METRICS_AFTER_AUDIT_SQL,
         values: [JSON.stringify(columnMapping), importedLines.length, validCount, errorCount, warnCount, qualityScore, now,
@@ -222,7 +224,7 @@ export async function POST(req: NextRequest) {
       },
     ];
     const results = await writeD1BatchAtomically(statements);
-    const insertedLines = importedLines.every((_, index) => getChangedCount(results[3 + index]) === 1);
+    const insertedLines = sumD1BatchChanges(results, 3, lineStatements.length) === importedLines.length;
     if (getChangedCount(results[0]) !== 1 || getChangedCount(results[1]) !== 1
       || !insertedLines || getChangedCount(results[results.length - 1]) !== 1) {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);

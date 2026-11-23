@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiError, apiSuccess } from '@/lib/api-utils';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { chunkRowsForJsonBinding, sumD1BatchChanges, writeD1BatchAtomically } from '@/lib/d1-batch';
 import { MAX_BOQ_BATCH_LINES } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
@@ -106,6 +106,11 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
       lines: copiedLines,
     });
 
+    // Large revisions are copied in several JSON statements inside the same atomic batch.
+    const copyStatements = chunkRowsForJsonBinding(lineCopies).map((chunk) => ({
+      sql: BOQ_NEW_REVISION_COPY_LINES_JSON_SQL,
+      values: [ctx.tenantId, newRevisionId, JSON.stringify(chunk), newRevisionId, ctx.tenantId],
+    }));
     const results = await writeD1BatchAtomically([
       {
         sql: BOQ_NEW_REVISION_INSERT_SQL,
@@ -130,10 +135,7 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
           candidateRevisionNumber,
         ],
       },
-      {
-        sql: BOQ_NEW_REVISION_COPY_LINES_JSON_SQL,
-        values: [ctx.tenantId, newRevisionId, JSON.stringify(lineCopies), newRevisionId, ctx.tenantId],
-      },
+      ...copyStatements,
       {
         sql: BOQ_NEW_REVISION_AUDIT_INSERT_SQL,
         values: [
@@ -155,8 +157,8 @@ export async function POST(req: NextRequest, { params }: BoqRevisionLinesRouteCo
     ]);
 
     if (Number(results[0]?.meta?.changes || 0) !== 1
-      || Number(results[1]?.meta?.changes || 0) !== copiedLines
-      || Number(results[2]?.meta?.changes || 0) !== 1) {
+      || sumD1BatchChanges(results, 1, copyStatements.length) !== copiedLines
+      || Number(results[1 + copyStatements.length]?.meta?.changes || 0) !== 1) {
       throw new Error(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh);
     }
 

@@ -12,8 +12,9 @@ import {
   PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
   PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
   PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
-  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL,
   MAX_PR_BATCH_LINES,
+  PROCUREMENT_REQUEST_LINE_BULK_INSERT_SQL,
 } from '../src/lib/d1-batch.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { MAX_D1_QUERY_FILTER_VALUES } from '../src/lib/d1-query.constants';
@@ -29,7 +30,7 @@ jest.mock('../src/lib/prisma', () => ({
 }));
 jest.mock('../src/lib/project-auth', () => ({ isUserAuthorizedForProject: jest.fn() }));
 jest.mock('../src/lib/pr-line-selection', () => ({ readSelectedPrBoqLines: jest.fn() }));
-jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),
@@ -164,6 +165,33 @@ describe('create PR from BOQ route', () => {
     } });
   });
 
+  it('creates a PR from a 1,200-line BOQ with bulk PR lines and a count-checked revision update', async () => {
+    const bigLines = Array.from({ length: 1200 }, (_, index) => ({
+      id: `line-${index}`, lineNumber: String(index + 1), quantity: 2, aiUnitCost: 5, aiTotalCost: 10,
+      standardDescription: `Item ${index + 1}`, category: { name: 'Electrical' }, uom: { code: 'NOS' },
+    }));
+    db.boqRevision.findFirst.mockResolvedValueOnce(validRevision({ lines: bigLines }));
+    writeBatch.mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => statements.map((statement, index) => {
+      if (index === 0) return { results: [{ id: 'pr-1', prNumber: 'PR-2026-000010' }], meta: { changes: 1 } };
+      if (statement.sql === PROCUREMENT_REQUEST_LINE_BULK_INSERT_SQL) {
+        return { meta: { changes: (JSON.parse(statement.values[0] as string) as unknown[]).length } };
+      }
+      return { meta: { changes: 1 } };
+    }));
+
+    await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' }))).resolves.toMatchObject({
+      ok: true, data: { prNumber: 'PR-2026-000010', totalLines: 1200 },
+    });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    const bulk = statements.filter((statement) => statement.sql === PROCUREMENT_REQUEST_LINE_BULK_INSERT_SQL);
+    expect(bulk.length).toBeGreaterThan(1);
+    expect(bulk.every((statement) => statement.values.length === 3)).toBe(true);
+    expect(bulk.reduce((total, statement) => total + (JSON.parse(statement.values[0] as string) as unknown[]).length, 0)).toBe(1200);
+    const revisionUpdate = statements[1 + bulk.length];
+    expect(revisionUpdate.sql).toContain('SELECT COUNT(*) FROM "pr_lines"');
+    expect(revisionUpdate.values.slice(-1)).toEqual([1200]);
+  });
+
   it('creates an auto-submitted PR with calculated values and linked line items', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce(validRevision({ lines: [
       ...validRevision().lines,
@@ -194,7 +222,7 @@ describe('create PR from BOQ route', () => {
       PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
       PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
       PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
-      PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+      PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL,
       PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
       PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
     ]);
@@ -249,12 +277,12 @@ describe('create PR from BOQ route', () => {
     expect(writeBatch).not.toHaveBeenCalled();
 
     db.boqRevision.findFirst.mockResolvedValueOnce(validRevision({
-      lines: Array.from({ length: 497 }, (_, index) => ({
+      lines: Array.from({ length: MAX_PR_BATCH_LINES + 1 }, (_, index) => ({
         id: `line-${index}`, lineNumber: String(index + 1), quantity: 1, aiUnitCost: 1, aiTotalCost: 1,
       })),
     }));
     await expect(POST(request({ boqRevisionId: 'revision-1', costCentreId: 'cc-1' })))
-      .resolves.toMatchObject({ ok: false, status: 400, error: expect.stringContaining('200') });
+      .resolves.toMatchObject({ ok: false, status: 400, error: expect.stringContaining(String(MAX_PR_BATCH_LINES)) });
     expect(writeBatch).not.toHaveBeenCalled();
   });
 

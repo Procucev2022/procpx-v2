@@ -3,13 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { sumD1BatchChanges, toBulkBoqLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
   BOQ_INSERT_NEXT_CODE_SQL,
   BOQ_LINE_INSERT_AFTER_REVISION_SQL,
   BOQ_REVISION_INSERT_AFTER_HEADER_SQL,
-  BOQ_REVISION_UPDATE_LINE_COUNTS_AFTER_LINES_SQL,
+  BOQ_REVISION_UPDATE_LINE_COUNTS_IF_LINES_PRESENT_SQL,
   MAX_BOQ_BATCH_LINES,
 } from '@/lib/d1-batch.constants';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
@@ -92,7 +92,8 @@ export async function POST(req: NextRequest) {
         items.length, items.length, ctx.userId, now, revisionNotes, now, now, boqId, ctx.tenantId, projectId],
     }];
 
-    items.forEach((item, index) => {
+    // JSON bulk statements keep large standard-library BOQs inside this one atomic batch.
+    const lineStatements = toBulkBoqLineInsertStatements(items.map((item, index) => {
       const description = item.standardDescription as string;
       const quantity = optionalNumber(item.quantity);
       const benchmarkRate = optionalNumber(item.benchmarkRate);
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest) {
       const brand = typeof item.brandMake === 'string' && item.brandMake ? item.brandMake : null;
       const itemCode = typeof item.itemCode === 'string' && item.itemCode ? item.itemCode : `STD-ITEM-${index + 1}`;
 
-      statements.push({
+      return {
         sql: BOQ_LINE_INSERT_AFTER_REVISION_SQL,
         values: [
           crypto.randomUUID(), ctx.tenantId, revisionId, String(index + 1), description, description, specification,
@@ -116,12 +117,13 @@ export async function POST(req: NextRequest) {
           JSON.stringify([]), false, null, null, description, specification, null, 0.98, null, null, benchmarkRate,
           totalCost, 0.95, 'Standard Catalogue', null, null, null, now, now, revisionId, ctx.tenantId,
         ],
-      });
-    });
+      };
+    }));
+    statements.push(...lineStatements);
 
     statements.push({
-      sql: BOQ_REVISION_UPDATE_LINE_COUNTS_AFTER_LINES_SQL,
-      values: [items.length, items.length, now, revisionId, ctx.tenantId],
+      sql: BOQ_REVISION_UPDATE_LINE_COUNTS_IF_LINES_PRESENT_SQL,
+      values: [items.length, items.length, now, revisionId, ctx.tenantId, revisionId, ctx.tenantId, items.length],
     });
     statements.push({
       sql: AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
@@ -135,7 +137,8 @@ export async function POST(req: NextRequest) {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
     }
     const boqCode = String(results[0]?.results?.[0]?.boqCode || '');
-    if (!boqCode || Number(results[2 + items.length]?.meta?.changes || 0) !== 1) {
+    if (!boqCode || sumD1BatchChanges(results, 2, lineStatements.length) !== items.length
+      || Number(results[2 + lineStatements.length]?.meta?.changes || 0) !== 1) {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
     }
 

@@ -5,7 +5,7 @@ import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils
 import { deleteUpload, saveUpload } from '@/lib/storage';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { sumD1BatchChanges, toBulkBoqLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
   BOQ_TEMPLATE_ASSERT_COMPLETE_SQL,
@@ -361,7 +361,9 @@ export async function POST(req: NextRequest) {
       statements.push({ sql: BOQ_LINE_DELETE_AFTER_AUDIT_SQL, values: [newRevisionId, ctx.tenantId, auditId, ctx.tenantId] });
     }
     const lineStartIndex = statements.length;
-    for (const line of prepared.lines) statements.push(insertLineStatement(line, newRevisionId, ctx.tenantId, auditId, now));
+    // Lines go in as a few JSON bulk statements so large uploads stay inside this one atomic batch.
+    const lineStatements = toBulkBoqLineInsertStatements(prepared.lines.map((line) => insertLineStatement(line, newRevisionId, ctx.tenantId, auditId, now)));
+    statements.push(...lineStatements);
     const metricsIndex = statements.length;
     statements.push({
       sql: BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
@@ -385,7 +387,7 @@ export async function POST(req: NextRequest) {
     const metadataOk = metadataIndex === null || changed(results[metadataIndex]) === 1;
     const revisionOk = revisionInsertIndex === null || changed(results[revisionInsertIndex]) === 1;
     const auditOk = changed(results[auditIndex]) === 1;
-    const linesOk = prepared.lines.every((_, index) => changed(results[lineStartIndex + index]) === 1);
+    const linesOk = sumD1BatchChanges(results, lineStartIndex, lineStatements.length) === prepared.lines.length;
     const metricsOk = changed(results[metricsIndex]) === 1;
     // A delete may legitimately affect zero rows when replacing an empty draft.
     void deleteIndex;

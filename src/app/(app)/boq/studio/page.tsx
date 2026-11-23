@@ -2,7 +2,7 @@
 // src/app/(app)/boq/studio/page.tsx - Consolidated BOQ Creation, Generation, Edit, AI Cost & Review Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
 import { reportHandledClientFailure } from '@/lib/observability/client-reporter';
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment, type RefObject } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Sparkles,
@@ -27,20 +27,62 @@ import {
   X,
   ExternalLink,
   FolderKanban,
+  SlidersHorizontal,
+  Lock,
+  Eraser,
 } from 'lucide-react';
 import SpecificationCell from '@/components/ui/SpecificationCell';
 import StatusBadge from '@/components/ui/StatusBadge';
 import PageHeader from '@/components/ui/PageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { computeLineCostBreakdown } from '@/lib/boq-cost-breakdown';
-import { SECTOR_PROJECT_TYPES, ALL_STANDARD_CATEGORIES, BOQ_FINANCIAL_CATEGORY_KEYS } from "./page.constants";
+import { PROJECT_TYPE_OPTIONS, ALL_STANDARD_CATEGORIES, BOQ_FINANCIAL_CATEGORY_KEYS, SETUP_FIELD_LABEL_STYLE, MANUAL_LINE_CELL_INPUT_STYLE, MANUAL_LINE_DEFAULT_UOM, MANUAL_LINE_UOM_OPTIONS, BOQ_LINE_COLUMNS, BOQ_LINE_DEFAULT_VISIBLE_COLUMNS, BOQ_LINE_COLUMNS_STORAGE_KEY, BOQ_LINES_TABLE_MAX_HEIGHT, BOQ_LINES_LOAD_MORE_THRESHOLD_PX } from "./page.constants";
 import { BOQ_LINE_DETAIL_PAGE_SIZE, BOQ_LINE_MAX_BATCH_EDITS } from '@/lib/boq-line-pagination.constants';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 import type { CostCentreLookupApiResponse, CostCentreLookupPayload, CostCentreLookupOption } from '@app-types/app/api/cost-centres.types';
 import type { BoqLineSummary } from '@app-types/lib/boq-line-summary.types';
+import { useWindowedRows, WINDOWED_ROW_ATTACHED_CLASS } from '@/lib/use-windowed-rows';
+import type { BoqLineColumn, ManualDraftLine, ManualDraftLineField, StudioBoqRecord, StudioEditableLine } from '@app-types/app/(app)/boq/studio/page.types';
 
 
+
+/** Closes a popover when the user clicks outside `ref` or presses Escape. */
+function useCloseOnOutsideClick(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [ref, open, onClose]);
+}
+
+/** Stable key for a BOQ line row (unsaved rows fall back to their position). */
+function lineRowKey(line: { id?: string } | undefined, index: number): string {
+  return line?.id || `row-${index}`;
+}
+
+/** A blank Manual Line Entry row; the key only identifies the row in React. */
+function createManualDraftLine(category: string): ManualDraftLine {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    description: '',
+    specification: '',
+    category,
+    uom: MANUAL_LINE_DEFAULT_UOM,
+    quantity: '',
+    rate: '',
+  };
+}
 
 export default function BoqStudioPage() {
   const toast = useToast();
@@ -92,8 +134,6 @@ export default function BoqStudioPage() {
   const [lineSummary, setLineSummary] = useState<BoqLineSummary | null>(null);
   const [lineTotal, setLineTotal] = useState(0);
   const [lineNextCursor, setLineNextCursor] = useState<string | null>(null);
-  const [linePageCursors, setLinePageCursors] = useState<string[]>([]);
-  const [linePageIndex, setLinePageIndex] = useState(1);
   const [loadingLines, setLoadingLines] = useState(false);
 
   // BOQ Creation Context / Parameters (Top Setup Bar)
@@ -101,9 +141,7 @@ export default function BoqStudioPage() {
   const [setupCostCentre, setSetupCostCentre] = useState(paramCostCentreId);
   const [setupTitle, setSetupTitle] = useState('');
   const [userEditedTitle, setUserEditedTitle] = useState(false);
-  const [setupDescription, setSetupDescription] = useState('');
   const [setupPurpose, setSetupPurpose] = useState<'BUDGET' | 'PR'>('BUDGET');
-  const [setupSector, setSetupSector] = useState('RETAIL');
   const [setupProjectType, setSetupProjectType] = useState('Retail Store Fitout');
   const [setupArea, setSetupArea] = useState('10,000');
   const [setupCategories, setSetupCategories] = useState<string[]>(['Civil & Interior', 'Electrical']);
@@ -113,7 +151,6 @@ export default function BoqStudioPage() {
   const fileInputMethod1Ref = useRef<HTMLInputElement | null>(null);
 
   // Method 2: Download Standard BOQ
-  const [stdSector, setStdSector] = useState('RETAIL');
   const [stdProjectType, setStdProjectType] = useState('Retail Store Fitout');
   const [stdCategories, setStdCategories] = useState<string[]>(['Civil & Interior', 'Electrical']);
   const [downloadingStd, setDownloadingStd] = useState(false);
@@ -121,6 +158,52 @@ export default function BoqStudioPage() {
   const [uploadingMethod2, setUploadingMethod2] = useState(false);
   const fileInputMethod2Ref = useRef<HTMLInputElement | null>(null);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement | null>(null);
+  const initialActiveBoqLoad = useRef<Promise<StudioBoqRecord | null> | null>(null);
+
+  const closeCategoryDropdown = useCallback(() => setCategoryDropdownOpen(false), []);
+  useCloseOnOutsideClick(categoryDropdownRef, categoryDropdownOpen, closeCategoryDropdown);
+
+  // BOQ Line Items: switchable columns (remembered per browser) and the clear-all confirmation.
+  // The table only renders after a BOQ loads in the browser, so reading storage here cannot cause a hydration mismatch.
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(BOQ_LINE_COLUMNS_STORAGE_KEY) || 'null');
+      return Array.isArray(saved) ? saved.filter((key): key is string => typeof key === 'string') : BOQ_LINE_DEFAULT_VISIBLE_COLUMNS;
+    } catch {
+      // Storage can be unavailable (server render, private mode, blocked site data); defaults apply.
+      return BOQ_LINE_DEFAULT_VISIBLE_COLUMNS;
+    }
+  });
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const columnMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeColumnMenu = useCallback(() => setColumnMenuOpen(false), []);
+  useCloseOnOutsideClick(columnMenuRef, columnMenuOpen, closeColumnMenu);
+  const [clearLinesConfirmOpen, setClearLinesConfirmOpen] = useState(false);
+  const [clearingLines, setClearingLines] = useState(false);
+
+  const updateVisibleColumns = (keys: string[]) => {
+    setVisibleColumnKeys(keys);
+    try {
+      localStorage.setItem(BOQ_LINE_COLUMNS_STORAGE_KEY, JSON.stringify(keys));
+    } catch {
+      // Preference is kept for this visit only when storage is unavailable.
+    }
+  };
+
+  const toggleColumn = (key: string) => {
+    updateVisibleColumns(visibleColumnKeys.includes(key)
+      ? visibleColumnKeys.filter(visibleKey => visibleKey !== key)
+      : [...visibleColumnKeys, key]);
+  };
+
+  // Locked columns always show, whatever an older saved preference contains.
+  const isColumnVisible = (column: BoqLineColumn) => column.locked || visibleColumnKeys.includes(column.key);
+  const visibleColumnCount = BOQ_LINE_COLUMNS.filter(isColumnVisible).length;
+  // Columns are hidden by position, so edit and view rows (same column order) stay aligned.
+  const hiddenColumnCss = BOQ_LINE_COLUMNS
+    .map((column, index) => (isColumnVisible(column) ? '' : `.boq-lines-table th:nth-child(${index + 1}), .boq-lines-table td:nth-child(${index + 1}) { display: none; }`))
+    .join('\n');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
 
   // Expandable Line-Item AI Cost Breakdown
@@ -137,6 +220,7 @@ export default function BoqStudioPage() {
 
   // Method 4: Manual Entry
   const [savingManual, setSavingManual] = useState(false);
+  const [manualDraftLines, setManualDraftLines] = useState<ManualDraftLine[]>(() => [createManualDraftLine(stdCategories[0] || '')]);
 
   // Active Creation Method Card Selection: 1 | 2 | 3 | 4
   const [selectedMethod, setSelectedMethod] = useState<number | null>(2);
@@ -203,6 +287,7 @@ export default function BoqStudioPage() {
 
   // Workspace Ref for smooth auto-scroll
   const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const linesScrollRef = useRef<HTMLDivElement | null>(null);
   const costCentreRequestSequence = useRef(0);
   const boqDetailsRequestSequence = useRef(0);
   const boqLinePageRequestSequence = useRef(0);
@@ -232,10 +317,6 @@ export default function BoqStudioPage() {
       loadCostCentres(setupProject);
       const prj = projects.find(p => p.id === setupProject);
       if (prj) {
-        if (prj.sector) {
-          setSetupSector(prj.sector.toUpperCase());
-          setStdSector(prj.sector.toUpperCase());
-        }
         if (prj.projectType) {
           setSetupProjectType(prj.projectType);
           setStdProjectType(prj.projectType);
@@ -300,6 +381,10 @@ export default function BoqStudioPage() {
 
   const loadInitial = async () => {
     setLoadingBoqs(true);
+    // Actions clicked while the BOQ from the URL/last session is still loading wait for it
+    // (see ensureActiveBoqRecord) instead of creating a duplicate BOQ.
+    let resolveInitialBoq: (boq: StudioBoqRecord | null) => void = () => undefined;
+    initialActiveBoqLoad.current = new Promise((resolve) => { resolveInitialBoq = resolve; });
     try {
       const [pRes, bRes] = await Promise.all([
         fetch('/api/projects'),
@@ -332,12 +417,14 @@ export default function BoqStudioPage() {
         const targetBoqId = paramBoqId || storedBoqId;
 
         if (targetBoqId) {
-          await loadBoqDetails(targetBoqId);
+          resolveInitialBoq(await loadBoqDetails(targetBoqId));
         }
       }
     } catch (e) {
       console.error('Error loading initial data:', e);
     } finally {
+      resolveInitialBoq(null);
+      initialActiveBoqLoad.current = null;
       setLoadingBoqs(false);
     }
   };
@@ -406,7 +493,7 @@ export default function BoqStudioPage() {
     revisionId: string,
     cursor: string | null,
     search: string,
-    transition: 'reset' | 'next' | 'previous',
+    transition: 'reset' | 'next',
   ) => {
     const requestSequence = ++boqLinePageRequestSequence.current;
     setLoadingLines(true);
@@ -430,21 +517,16 @@ export default function BoqStudioPage() {
       const hasResponseTotal = payload.total !== undefined
         && Number.isSafeInteger(responseTotal)
         && responseTotal >= 0;
-      setLines(pageLines);
+      // Later pages are appended (infinite scroll); a reset (new BOQ or search) starts the list again.
+      setLines((current) => {
+        if (transition === 'reset') return pageLines;
+        const loadedIds = new Set(current.map((line) => line.id));
+        return [...current, ...pageLines.filter((line: { id?: string }) => !loadedIds.has(line.id))];
+      });
       setLineTotal((current) => hasResponseTotal
         ? responseTotal
         : transition === 'reset' ? pageLines.length : current);
       setLineNextCursor(nextCursor);
-      if (transition === 'reset') {
-        setLinePageCursors([]);
-        setLinePageIndex(1);
-      } else if (transition === 'next' && cursor) {
-        setLinePageCursors((current) => [...current, cursor]);
-        setLinePageIndex((current) => current + 1);
-      } else if (transition === 'previous') {
-        setLinePageCursors((current) => current.slice(0, -1));
-        setLinePageIndex((current) => Math.max(1, current - 1));
-      }
     } catch (error) {
       if (requestSequence === boqLinePageRequestSequence.current) {
         console.error('Error loading BOQ line page:', error);
@@ -456,16 +538,18 @@ export default function BoqStudioPage() {
     }
   };
 
-  const loadBoqDetails = async (boqId: string) => {
+  /** Loads a BOQ into the workspace and returns it (null when it could not be loaded). */
+  const loadBoqDetails = async (boqId: string): Promise<StudioBoqRecord | null> => {
     const requestSequence = ++boqDetailsRequestSequence.current;
     boqLinePageRequestSequence.current += 1;
     if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
     setLoadingLines(true);
+    let loadedBoq: StudioBoqRecord | null = null;
     try {
       const res = await fetch(`/api/boq/${boqId}`);
       if (res.ok) {
         const d = await res.json();
-        if (requestSequence !== boqDetailsRequestSequence.current) return;
+        if (requestSequence !== boqDetailsRequestSequence.current) return null;
         const boqData = d.boq || d.data?.boq;
         const revData = d.revision || d.data?.revision;
         const lineItems = d.lines || d.data?.lines || [];
@@ -483,10 +567,10 @@ export default function BoqStudioPage() {
           }
           setSetupTitle(boqData.title || '');
           setUserEditedTitle(true); // Preserve existing title in saved records
-          setSetupDescription(boqData.description || '');
           const boqPurpose = (boqData.purpose === 'PR' ? 'PR' : 'BUDGET') as 'BUDGET' | 'PR';
           setSetupPurpose(boqPurpose);
           syncActiveBoqUrl(boqData.id);
+          loadedBoq = boqData;
         }
 
         if (revData) {
@@ -499,8 +583,6 @@ export default function BoqStudioPage() {
         setLineSummary(d.summary ?? d.data?.summary ?? null);
         setLineTotal(Number.isSafeInteger(totalLines) && totalLines >= 0 ? totalLines : lineItems.length);
         setLineNextCursor(typeof nextCursor === 'string' ? nextCursor : null);
-        setLinePageCursors([]);
-        setLinePageIndex(1);
         setLinesSearch('');
 
         // Precompute category breakdown and totals
@@ -514,6 +596,7 @@ export default function BoqStudioPage() {
         setLoadingLines(false);
       }
     }
+    return loadedBoq;
   };
 
   const handleLinesSearchChange = (search: string) => {
@@ -532,12 +615,12 @@ export default function BoqStudioPage() {
     void loadBoqLinePage(activeRevision.id, lineNextCursor, linesSearch, 'next');
   };
 
-  const handlePreviousLinesPage = () => {
-    if (!activeRevision?.id || linePageIndex <= 1 || loadingLines || isEditingBoq) return;
-    if (linesSearchTimer.current) clearTimeout(linesSearchTimer.current);
-    const cursor = linePageIndex > 2 ? linePageCursors[linePageCursors.length - 2] ?? null : null;
-    if (linePageIndex > 2 && !cursor) return;
-    void loadBoqLinePage(activeRevision.id, cursor, linesSearch, 'previous');
+  // Infinite scroll: load the next page when the user scrolls near the bottom of the line table.
+  const handleLinesTableScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    if (container.scrollHeight - container.scrollTop - container.clientHeight <= BOQ_LINES_LOAD_MORE_THRESHOLD_PX) {
+      handleNextLinesPage();
+    }
   };
 
   const handlePurposeChange = (newPurpose: 'BUDGET' | 'PR') => {
@@ -564,7 +647,6 @@ export default function BoqStudioPage() {
           category: stdCategories[0] || 'Standard',
           purpose: setupPurpose,
           title: setupTitle,
-          description: setupDescription,
         }),
       });
       if (!res.ok) {
@@ -588,9 +670,16 @@ export default function BoqStudioPage() {
   // Helper to ensure an active BOQ record exists before generating lines
   const ensureActiveBoqRecord = async (): Promise<any> => {
     if (activeBoq) return activeBoq;
+    // The BOQ being opened from the URL/last session may still be loading (remote D1 is slow):
+    // use it once loaded rather than creating a duplicate BOQ.
+    if (initialActiveBoqLoad.current) {
+      const openingBoq = await initialActiveBoqLoad.current;
+      if (openingBoq) return openingBoq;
+    }
 
     const projId = setupProject || selectedProjectId || projects[0]?.id;
     const ccId = setupCostCentre || selectedCostCentreId || costCentres[0]?.id;
+    if (!projId || !ccId) throw new Error(UI_STRINGS.appAppBoqStudioPage.selectProjectAndCostCentreBeforeCreatingBoq);
     const proj = projects.find(p => p.id === projId);
 
     const title = setupTitle.trim() || interpolateUiString(UI_STRINGS.appAppBoqStudioPage.projectStandardFitoutBoq, {
@@ -604,10 +693,8 @@ export default function BoqStudioPage() {
         projectId: projId,
         costCentreId: ccId,
         title,
-        description: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupDescription.trim() || null }),
         category: setupCategories,
         purpose: setupPurpose,
-        sector: setupSector,
         projectType: setupProjectType,
         areaSqFt: parseFloat(setupArea.replace(/,/g, '')) || 10000,
         remarks: 'Created via BOQ Studio',
@@ -653,7 +740,6 @@ export default function BoqStudioPage() {
       fd.append('purpose', setupPurpose);
       if (setupTitle.trim()) fd.append('title', setupTitle.trim());
       if (stdCategories.length > 0) fd.append('category', stdCategories[0]);
-      if (setupDescription.trim()) fd.append('description', setupDescription.trim());
 
       const res = await fetch('/api/boq/upload-template', { method: 'POST', body: fd });
       if (!res.ok) {
@@ -697,7 +783,6 @@ export default function BoqStudioPage() {
     setStatusMessage('');
     try {
       const q = new URLSearchParams({
-        sector: stdSector,
         projectType: stdProjectType,
         projectId: activeBoq?.projectId || setupProject || selectedProjectId,
         costCentreId: activeBoq?.costCentreId || setupCostCentre || selectedCostCentreId,
@@ -711,7 +796,7 @@ export default function BoqStudioPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Standard_BOQ_${stdSector}_${stdProjectType.replace(/\s+/g, '_')}.xlsx`;
+      a.download = `Standard_BOQ_${stdProjectType.replace(/\s+/g, '_')}.xlsx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -740,7 +825,6 @@ export default function BoqStudioPage() {
       fd.append('file', file);
       fd.append('projectId', currentBoq.projectId);
       fd.append('costCentreId', currentBoq.costCentreId || '');
-      fd.append('sector', stdSector);
       fd.append('projectType', stdProjectType);
       fd.append('purpose', setupPurpose);
 
@@ -794,14 +878,12 @@ export default function BoqStudioPage() {
           boqId: currentBoq.id,
           projectId: currentBoq.projectId,
           costCentreId: currentBoq.costCentreId || null,
-          sector: stdSector,
           projectType: stdProjectType,
           validLines,
           fileName: file.name,
           title: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupTitle.trim() || undefined }),
           purpose: setupPurpose,
           categories: stdCategories,
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupDescription.trim() || undefined }),
         }),
       });
 
@@ -867,7 +949,6 @@ export default function BoqStudioPage() {
       fd.append('drawingNumber', drawingNumber.trim() || 'DWG-A-101');
       fd.append('purpose', setupPurpose);
       if (setupTitle.trim()) fd.append('title', setupTitle.trim());
-      if (setupDescription.trim()) fd.append('description', setupDescription.trim());
 
       const res = await fetch('/api/boq/drawing-extract', { method: 'POST', body: fd });
       const data = await res.json();
@@ -967,7 +1048,6 @@ export default function BoqStudioPage() {
           savedDocumentId: extractedDrawingData.documentId,
           fileSize: extractedDrawingData.fileSize,
           title: computedTitle,
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupDescription.trim() || `Extracted from architectural drawing ${extractedDrawingData.drawingNumber}` }),
           purpose: setupPurpose,
           lines: reviewLines,
         }),
@@ -1004,7 +1084,41 @@ export default function BoqStudioPage() {
   // -------------------------------------------------------------
   // METHOD 4: MANUAL ENTRY
   // -------------------------------------------------------------
+  const addManualDraftLine = () => {
+    setManualDraftLines(prev => [...prev, createManualDraftLine(stdCategories[0] || masterCategories[0] || '')]);
+  };
+
+  const updateManualDraftLine = (index: number, field: ManualDraftLineField, value: string) => {
+    setManualDraftLines(prev => prev.map((line, i) => (i === index ? { ...line, [field]: value } : line)));
+  };
+
+  const removeManualDraftLine = (index: number) => {
+    setManualDraftLines(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Rows left completely empty are ignored; anything typed must be a complete line.
+  const filledManualDraftLines = manualDraftLines.filter(line =>
+    [line.description, line.specification, line.quantity, line.rate].some(value => value.trim() !== ''));
+
   const handleSaveManual = async () => {
+    const incompleteLine = filledManualDraftLines.find(line => !line.description.trim() || !(Number(line.quantity) > 0));
+    if (incompleteLine) {
+      setSelectedMethod(4);
+      setStatusType('error');
+      setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.manualLineNeedsDescriptionAndQuantity, {
+        number: manualDraftLines.indexOf(incompleteLine) + 1,
+      }));
+      return;
+    }
+    const manualLinesPayload = filledManualDraftLines.map(line => ({
+      description: line.description.trim(),
+      specification: line.specification.trim() || undefined,
+      category: line.category || undefined,
+      uom: line.uom,
+      quantity: Number(line.quantity),
+      aiUnitCost: line.rate.trim() ? Number(line.rate) : undefined,
+    }));
+
     setSavingManual(true);
     setStatusMessage('');
 
@@ -1019,8 +1133,7 @@ export default function BoqStudioPage() {
           boqId: currentBoq.id,
           purpose: setupPurpose,
           title: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupTitle.trim() || undefined }),
-          description: interpolateUiString(UI_STRINGS.common.value1, { "value1": setupDescription.trim() || undefined }),
-          lines: [],
+          lines: manualLinesPayload,
           action: 'APPEND',
         }),
       });
@@ -1031,6 +1144,7 @@ export default function BoqStudioPage() {
       }
 
       const data = await res.json();
+      setManualDraftLines([createManualDraftLine(stdCategories[0] || '')]);
       setStatusType('success');
       setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.manualBOQBoqCodeUpdatedWithValue2Lines, { "boqCode": currentBoq.boqCode, "value2": data.totalLines ?? 0 }));
 
@@ -1045,6 +1159,36 @@ export default function BoqStudioPage() {
     }
   };
 
+  // Removes every line of the active revision (server: atomic REPLACE_ALL with an audit entry).
+  const handleClearAllLines = async () => {
+    if (!activeBoq?.id || !activeRevision?.id) return;
+    setClearingLines(true);
+    try {
+      const res = await fetch('/api/boq/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boqId: activeBoq.id, boqRevisionId: activeRevision.id, lines: [], action: 'REPLACE_ALL' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || UI_STRINGS.appAppBoqStudioPage.failedToClearBoqLines);
+      }
+      setIsEditingBoq(false);
+      setEditableLines([]);
+      setImportResult(null);
+      setStatusType('success');
+      setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.allLinesCleared, { boqCode: activeBoq.boqCode }));
+      await loadBoqDetails(activeBoq.id);
+      await loadAllBoqs();
+    } catch (e) {
+      setStatusType('error');
+      setStatusMessage(interpolateUiString(UI_STRINGS.common.errorMessage, { message: (e as Error).message }));
+    } finally {
+      setClearingLines(false);
+      setClearLinesConfirmOpen(false);
+    }
+  };
+
   // -------------------------------------------------------------
   // BOQ EDIT ACTIONS (Section 9)
   // -------------------------------------------------------------
@@ -1055,13 +1199,7 @@ export default function BoqStudioPage() {
         setStatusMessage(UI_STRINGS.appAppBoqStudioPage.approvedBOQRevisionsAreLockedAndCannotBeEditedPleaseCreateANewRevision);
         return;
       }
-      if (lines.length > BOQ_LINE_MAX_BATCH_EDITS) {
-        setStatusType('error');
-        setStatusMessage(interpolateUiString(UI_STRINGS.appApiBoqRevisionIdLinesRoute.batchLineUpdateLimitExceeded, {
-          limit: BOQ_LINE_MAX_BATCH_EDITS,
-        }));
-        return;
-      }
+      // Every loaded line can be edited; saves are split into API-sized chunks (handleSaveEditableChanges).
       setEditableLines(lines.map((l: any) => ({ ...l })));
       setIsEditingBoq(true);
     } else {
@@ -1080,32 +1218,45 @@ export default function BoqStudioPage() {
 
   const handleSaveEditableChanges = async () => {
     if (!activeRevision) return;
+    const toEditPayload = (l: StudioEditableLine) => ({
+      id: l.id,
+      standardDescription: l.standardDescription || l.originalDescription,
+      originalDescription: l.originalDescription,
+      specification: l.specification,
+      quantity: l.quantity,
+      uomRaw: l.uomRaw || l.uom?.code || 'NOS',
+      location: l.location,
+      brand: l.brand,
+      remarks: l.remarks,
+      aiUnitCost: l.aiUnitCost,
+    });
+    // Only lines that actually changed are sent, in chunks the lines API accepts in one atomic write.
+    const originalPayloads = new Map(lines.map((l: any) => [l.id, JSON.stringify(toEditPayload(l))]));
+    const changedLines = editableLines.map(toEditPayload).filter((payload) => originalPayloads.get(payload.id) !== JSON.stringify(payload));
+    if (changedLines.length === 0) {
+      setIsEditingBoq(false);
+      setEditableLines([]);
+      setStatusType('info');
+      setStatusMessage(UI_STRINGS.appAppBoqStudioPage.noLineChangesToSave);
+      return;
+    }
+
     setSavingEditChanges(true);
     setStatusMessage('');
-
+    let savedCount = 0;
     try {
-      const res = await fetch(`/api/boq/${activeRevision.id}/lines`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lines: editableLines.map((l: any) => ({
-            id: l.id,
-            standardDescription: l.standardDescription || l.originalDescription,
-            originalDescription: l.originalDescription,
-            specification: l.specification,
-            quantity: l.quantity,
-            uomRaw: l.uomRaw || l.uom?.code || 'NOS',
-            location: l.location,
-            brand: l.brand,
-            remarks: l.remarks,
-            aiUnitCost: l.aiUnitCost,
-          })),
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSaveChanges }));
+      for (let start = 0; start < changedLines.length; start += BOQ_LINE_MAX_BATCH_EDITS) {
+        const chunk = changedLines.slice(start, start + BOQ_LINE_MAX_BATCH_EDITS);
+        const res = await fetch(`/api/boq/${activeRevision.id}/lines`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lines: chunk }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(interpolateUiString(UI_STRINGS.common.value1, { "value1": err.error || UI_STRINGS.common.userMessages.failedToSaveChanges }));
+        }
+        savedCount += chunk.length;
       }
 
       setIsEditingBoq(false);
@@ -1114,7 +1265,9 @@ export default function BoqStudioPage() {
       if (activeBoq) await loadBoqDetails(activeBoq.id);
     } catch (e: any) {
       setStatusType('error');
-      setStatusMessage(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": e.message }));
+      setStatusMessage(savedCount > 0
+        ? interpolateUiString(UI_STRINGS.appAppBoqStudioPage.editSavePartialFailure, { saved: savedCount, total: changedLines.length, message: e.message })
+        : interpolateUiString(UI_STRINGS.common.errorMessage, { "message": e.message }));
     } finally {
       setSavingEditChanges(false);
     }
@@ -1496,6 +1649,9 @@ export default function BoqStudioPage() {
   const activeCostCentreObj = costCentres.find(cc => cc.id === (activeBoq?.costCentreId || setupCostCentre || selectedCostCentreId));
 
   const filteredLines = isEditingBoq ? editableLines : lines;
+  // Only rows near the visible part of the line table are drawn; heights are remembered per line.
+  const getLineRowKey = useCallback((index: number) => lineRowKey(filteredLines[index], index), [filteredLines]);
+  const lineWindow = useWindowedRows({ count: filteredLines.length, getKey: getLineRowKey, containerRef: linesScrollRef });
 
   // Section 3: Comprehensive integrated financial summary
   const financialSummary = useMemo(() => {
@@ -1598,6 +1754,8 @@ export default function BoqStudioPage() {
   const pendingQuantityCount = financialSummary.missingQuantityLines;
   const totalRevValue = financialSummary.totalAiEstimate;
 
+  const visibleCategoryOptions = masterCategories.filter(cat => cat.toLowerCase().includes(categorySearchQuery.toLowerCase()));
+
   // Filtered BOQs for bottom list
   const filteredExistingBoqs = boqs.filter(b => {
     if (filterSearch) {
@@ -1631,13 +1789,10 @@ export default function BoqStudioPage() {
               setLineSummary(null);
               setLineTotal(0);
               setLineNextCursor(null);
-              setLinePageCursors([]);
-              setLinePageIndex(1);
               setLinesSearch('');
               setEditableLines([]);
               setImportResult(null);
               setSetupTitle('');
-              setSetupDescription('');
               if (typeof window !== 'undefined') {
                 localStorage.removeItem('procpx_active_boq_id');
                 const url = new URL(window.location.href);
@@ -1660,9 +1815,9 @@ export default function BoqStudioPage() {
             <FolderKanban size={16} color="#2563eb" />{UI_STRINGS.appAppBoqStudioPage.projectTargetParameters}</h3>
           <span style={{ fontSize: 11, color: '#64748b' }}>{UI_STRINGS.appAppBoqStudioPage.defineScopeCostCentreAndTargetCategoriesForThisBOQ}</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14, alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(max(220px, calc((100% - 32px) / 3)), 1fr))', gap: '16px', alignItems: 'start' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.appAppBoqStudioPage.project}</label>
+            <label style={SETUP_FIELD_LABEL_STYLE}>{UI_STRINGS.appAppBoqStudioPage.project}</label>
             <select
               className="select-field"
               value={setupProject}
@@ -1672,6 +1827,7 @@ export default function BoqStudioPage() {
               }}
               style={{ width: '100%', height: 36, fontSize: 12 }}
             >
+              <option value="" disabled>{UI_STRINGS.appAppBoqStudioPage.selectProjectPlaceholder}</option>
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name}{UI_STRINGS.common.copy1b3t0c5}{p.projectCode}{UI_STRINGS.common.copyc7zu6c}</option>
               ))}
@@ -1679,13 +1835,14 @@ export default function BoqStudioPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.appAppBoqStudioPage.costCentre}</label>
+            <label style={SETUP_FIELD_LABEL_STYLE}>{UI_STRINGS.appAppBoqStudioPage.costCentre}</label>
             <select
               className="select-field"
               value={setupCostCentre}
               onChange={e => setSetupCostCentre(e.target.value)}
               style={{ width: '100%', height: 36, fontSize: 12 }}
             >
+              <option value="" disabled>{UI_STRINGS.appAppBoqStudioPage.selectCostCentrePlaceholder}</option>
               {costCentres.map(cc => (
                 <option key={cc.id} value={cc.id}>{cc.code}{UI_STRINGS.common.copyq9aflv}{cc.name}</option>
               ))}
@@ -1693,15 +1850,15 @@ export default function BoqStudioPage() {
             <div className="flex gap-2 mt-2">
               <input
                 type="search"
-                className="select-field"
+                className="input-field"
                 value={costCentreSearch}
                 onChange={e => setCostCentreSearch(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void loadCostCentres(setupProject, costCentreSearch, 1); } }}
                 placeholder={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
                 aria-label={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
-                style={{ minWidth: 0, flex: 1 }}
+                style={{ minWidth: 0, flex: 1, height: 34, fontSize: 12 }}
               />
-              <button type="button" className="btn btn-secondary" aria-label={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
+              <button type="button" className="btn btn-secondary" style={{ height: 34, width: 34, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} aria-label={UI_STRINGS.appAppCostCentresPage.searchCostCentreCodeNameZoneOrLocation}
                 onClick={() => void loadCostCentres(setupProject, costCentreSearch, 1)}><Search size={16} /></button>
             </div>
             {costCentreTotal > costCentres.length && (
@@ -1717,11 +1874,13 @@ export default function BoqStudioPage() {
           </div>
 
           {/* Category Selection directly under Project & Target Parameters (Requirement 1) */}
-          <div style={{ position: 'relative' }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.appAppBoqStudioPage.categories}{stdCategories.length}{UI_STRINGS.common.copyc7zu6c}</label>
+          <div ref={categoryDropdownRef} style={{ position: 'relative' }}>
+            <label style={SETUP_FIELD_LABEL_STYLE}>{UI_STRINGS.appAppBoqStudioPage.categories}{stdCategories.length}{UI_STRINGS.common.copyc7zu6c}</label>
             <button
               type="button"
               className="select-field"
+              aria-haspopup="true"
+              aria-expanded={categoryDropdownOpen}
               onClick={() => setCategoryDropdownOpen(prev => !prev)}
               style={{
                 width: '100%',
@@ -1730,12 +1889,12 @@ export default function BoqStudioPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                background: '#ffffff',
+                gap: 8,
                 cursor: 'pointer',
                 textAlign: 'left',
                 padding: '0 10px',
-                border: '1px solid #cbd5e1',
-                borderRadius: 6,
+                borderColor: categoryDropdownOpen ? '#2563eb' : undefined,
+                boxShadow: categoryDropdownOpen ? '0 0 0 3px rgba(37, 99, 235, 0.15)' : undefined,
               }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>
@@ -1749,30 +1908,17 @@ export default function BoqStudioPage() {
             </button>
 
             {categoryDropdownOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 42,
-                  left: 0,
-                  zIndex: 50,
-                  width: 300,
-                  padding: 12,
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: 6,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                }}
-              >
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+              <div className="multi-select-panel">
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ position: 'relative', flex: 1 }}>
-                    <Search size={13} color="#94a3b8" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                    <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }} />
                     <input
                       type="text"
                       className="input-field"
                       value={categorySearchQuery}
                       onChange={e => setCategorySearchQuery(e.target.value)}
                       placeholder={UI_STRINGS.appAppBoqStudioPage.searchCategories}
-                      style={{ width: '100%', height: 28, fontSize: 11, paddingLeft: 26 }}
+                      style={{ width: '100%', height: 32, fontSize: 12, paddingLeft: 28 }}
                     />
                   </div>
                   <button
@@ -1781,7 +1927,7 @@ export default function BoqStudioPage() {
                       setStdCategories([...masterCategories]);
                       setSetupCategories([...masterCategories]);
                     }}
-                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >{UI_STRINGS.appAppBoqStudioPage.all}</button>
                   <span style={{ color: '#cbd5e1' }}>{UI_STRINGS.common.copy1x3o5rv}</span>
                   <button
@@ -1790,31 +1936,19 @@ export default function BoqStudioPage() {
                       setStdCategories([]);
                       setSetupCategories([]);
                     }}
-                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                   >{UI_STRINGS.common.clear}</button>
                 </div>
 
-                <div style={{ maxHeight: 200, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: 4 }}>
-                  {masterCategories
-                    .filter(cat => cat.toLowerCase().includes(categorySearchQuery.toLowerCase()))
+                <div role="group" aria-label={UI_STRINGS.appAppBoqStudioPage.searchCategories} style={{ maxHeight: 240, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: 2 }}>
+                  {visibleCategoryOptions.length === 0 && (
+                    <p style={{ margin: 0, padding: '14px 8px', fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>{UI_STRINGS.appAppBoqStudioPage.noCategoriesMatchSearch}</p>
+                  )}
+                  {visibleCategoryOptions
                     .map(cat => {
                       const checked = stdCategories.includes(cat);
                       return (
-                        <label
-                          key={cat}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontSize: 11,
-                            cursor: 'pointer',
-                            padding: '4px 6px',
-                            borderRadius: 4,
-                            background: checked ? '#eff6ff' : 'transparent',
-                            color: checked ? '#1e40af' : '#475569',
-                            fontWeight: checked ? 600 : 400,
-                          }}
-                        >
+                        <label key={cat} className="multi-select-option" data-checked={checked}>
                           <input
                             type="checkbox"
                             checked={checked}
@@ -1831,53 +1965,40 @@ export default function BoqStudioPage() {
                       );
                     })}
                 </div>
+
+                <div className="multi-select-footer">
+                  <span>{interpolateUiString(UI_STRINGS.appAppBoqStudioPage.categoriesSelectedCount, { selected: stdCategories.length, total: masterCategories.length })}</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setCategoryDropdownOpen(false)}
+                    style={{ height: 30, padding: '0 14px', fontSize: 12, fontWeight: 700 }}
+                  >{UI_STRINGS.appAppBoqStudioPage.doneSelectingCategories}</button>
+                </div>
               </div>
             )}
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.appAppBoqStudioPage.sectorProjectType}</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <select
-                className="select-field"
-                value={setupSector}
-                onChange={e => {
-                  const s = e.target.value;
-                  setSetupSector(s);
-                  setStdSector(s);
-                  const av = SECTOR_PROJECT_TYPES[s] || [];
-                  if (av.length > 0) {
-                    setSetupProjectType(av[0]);
-                    setStdProjectType(av[0]);
-                  }
-                }}
-                style={{ width: '45%', height: 36, fontSize: 12 }}
-              >
-                <option value="RETAIL">{UI_STRINGS.appAppBoqStudioPage.retail}</option>
-                <option value="HOSPITALITY">{UI_STRINGS.appAppBoqStudioPage.hospitality}</option>
-                <option value="BANKING">{UI_STRINGS.appAppBoqStudioPage.banking}</option>
-                <option value="INSURANCE">{UI_STRINGS.appAppBoqStudioPage.insurance}</option>
-                <option value="OFFICE">{UI_STRINGS.appAppBoqStudioPage.office}</option>
-                <option value="SERVICES">{UI_STRINGS.appAppBoqStudioPage.services}</option>
-              </select>
-              <select
-                className="select-field"
-                value={setupProjectType}
-                onChange={e => {
-                  setSetupProjectType(e.target.value);
-                  setStdProjectType(e.target.value);
-                }}
-                style={{ width: '55%', height: 36, fontSize: 12 }}
-              >
-                {(SECTOR_PROJECT_TYPES[setupSector] || ['Retail Store Fitout']).map(pt => (
-                  <option key={pt} value={pt}>{pt}</option>
-                ))}
-              </select>
-            </div>
+            <label style={SETUP_FIELD_LABEL_STYLE}>{UI_STRINGS.appAppBoqStudioPage.projectTypeLabel}</label>
+            <select
+              className="select-field"
+              value={setupProjectType}
+              onChange={e => {
+                setSetupProjectType(e.target.value);
+                setStdProjectType(e.target.value);
+              }}
+              style={{ width: '100%', height: 36, fontSize: 12 }}
+            >
+              {/* Keep the project's own type selectable even when it is not in the standard list. */}
+              {Array.from(new Set([setupProjectType, ...PROJECT_TYPE_OPTIONS])).map(pt => (
+                <option key={pt} value={pt}>{pt}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.appAppBoqStudioPage.areaSqft}</label>
+            <label style={SETUP_FIELD_LABEL_STYLE}>{UI_STRINGS.appAppBoqStudioPage.areaSqft}</label>
             <input
               type="text"
               className="input-field"
@@ -1889,7 +2010,7 @@ export default function BoqStudioPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.appAppBoqStudioPage.bOQPurpose}</label>
+            <label style={SETUP_FIELD_LABEL_STYLE}>{UI_STRINGS.appAppBoqStudioPage.bOQPurpose}</label>
             <select
               className="select-field"
               value={setupPurpose}
@@ -1902,10 +2023,10 @@ export default function BoqStudioPage() {
           </div>
         </div>
 
-        {/* Row 2: BOQ Title and BOQ Description */}
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 14, alignItems: 'flex-start' }}>
+        {/* Row 2: BOQ Title */}
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b' }}>{UI_STRINGS.appAppBoqStudioPage.bOQTitleName}</label>
               <span style={{ fontSize: 10, color: userEditedTitle ? '#475569' : '#2563eb', fontWeight: 600 }}>
                 {userEditedTitle ? UI_STRINGS.appAppBoqStudioPage.customTitle : UI_STRINGS.appAppBoqStudioPage.autoCategoryProject}
@@ -1921,17 +2042,6 @@ export default function BoqStudioPage() {
               }}
               placeholder={UI_STRINGS.appAppBoqStudioPage.eGCivilInteriorKundanahalliProject}
               style={{ width: '100%', height: 36, fontSize: 12 }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>{UI_STRINGS.common.bOQDescription}</label>
-            <textarea
-              className="input-field"
-              rows={2}
-              value={setupDescription}
-              onChange={e => setSetupDescription(e.target.value)}
-              placeholder={UI_STRINGS.appAppBoqStudioPage.describeThePurposeScopeOrSpecificRequirementsOfThisBOQ}
-              style={{ width: '100%', fontSize: 12, padding: '7px 10px', resize: 'vertical' }}
             />
           </div>
         </div>
@@ -2246,7 +2356,7 @@ export default function BoqStudioPage() {
                   setSelectedMethod(4);
                 }}
                 style={{ fontSize: 11, padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, background: '#ffffff' }}
-              >{interpolateUiString(UI_STRINGS.appAppBoqStudioPage.configureLinesCount, { count: editableLines.length })}</button>
+              >{interpolateUiString(UI_STRINGS.appAppBoqStudioPage.configureLinesCount, { count: filledManualDraftLines.length })}</button>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -2263,6 +2373,133 @@ export default function BoqStudioPage() {
             </div>
           </div>
         </div>
+
+        {/* Manual Line Entry: lines typed here are saved by Create Manual BOQ. */}
+        {selectedMethod === 4 && (
+          <div className="card" style={{ marginTop: 16, background: '#ffffff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineEntryTitle}</h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0 0' }}>{UI_STRINGS.appAppBoqStudioPage.manualLineEntryHint}</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={addManualDraftLine}
+                style={{ fontSize: 12, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, background: '#ffffff' }}
+              >
+                <Plus size={13} />{UI_STRINGS.appAppBoqStudioPage.addManualLineRow}</button>
+            </div>
+
+            <div className="table-container" style={{ overflowX: 'auto', width: '100%', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+              <table className="table" style={{ width: '100%', minWidth: 860, fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', height: 36, textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '0 8px', width: 44 }}>{UI_STRINGS.common.sNo2}</th>
+                    <th style={{ padding: '0 6px', minWidth: 220 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineDescriptionHeader}</th>
+                    <th style={{ padding: '0 6px', minWidth: 180 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineSpecificationHeader}</th>
+                    <th style={{ padding: '0 6px', width: 160 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineCategoryHeader}</th>
+                    <th style={{ padding: '0 6px', width: 96 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineUomHeader}</th>
+                    <th style={{ padding: '0 6px', width: 96 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineQuantityHeader}</th>
+                    <th style={{ padding: '0 6px', width: 112 }}>{UI_STRINGS.appAppBoqStudioPage.manualLineRateHeader}</th>
+                    <th style={{ padding: '0 6px', width: 44 }} aria-label={UI_STRINGS.common.actions} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualDraftLines.map((line, index) => (
+                    <tr key={line.key} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '6px 8px', color: '#64748b', fontWeight: 600 }}>{index + 1}</td>
+                      <td style={{ padding: '6px' }}>
+                        <input
+                          type="text"
+                          className="input-field"
+                          value={line.description}
+                          onChange={e => updateManualDraftLine(index, 'description', e.target.value)}
+                          placeholder={UI_STRINGS.appAppBoqStudioPage.manualLineDescriptionPlaceholder}
+                          aria-label={UI_STRINGS.appAppBoqStudioPage.manualLineDescriptionHeader}
+                          style={MANUAL_LINE_CELL_INPUT_STYLE}
+                        />
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        <input
+                          type="text"
+                          className="input-field"
+                          value={line.specification}
+                          onChange={e => updateManualDraftLine(index, 'specification', e.target.value)}
+                          placeholder={UI_STRINGS.appAppBoqStudioPage.manualLineSpecificationPlaceholder}
+                          aria-label={UI_STRINGS.appAppBoqStudioPage.manualLineSpecificationHeader}
+                          style={MANUAL_LINE_CELL_INPUT_STYLE}
+                        />
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        <select
+                          className="select-field"
+                          value={line.category}
+                          onChange={e => updateManualDraftLine(index, 'category', e.target.value)}
+                          aria-label={UI_STRINGS.appAppBoqStudioPage.manualLineCategoryHeader}
+                          style={MANUAL_LINE_CELL_INPUT_STYLE}
+                        >
+                          {Array.from(new Set([line.category, ...masterCategories])).map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        <select
+                          className="select-field"
+                          value={line.uom}
+                          onChange={e => updateManualDraftLine(index, 'uom', e.target.value)}
+                          aria-label={UI_STRINGS.appAppBoqStudioPage.manualLineUomHeader}
+                          style={MANUAL_LINE_CELL_INPUT_STYLE}
+                        >
+                          {MANUAL_LINE_UOM_OPTIONS.map(uom => (
+                            <option key={uom} value={uom}>{uom}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          className="input-field"
+                          value={line.quantity}
+                          onChange={e => updateManualDraftLine(index, 'quantity', e.target.value)}
+                          aria-label={UI_STRINGS.appAppBoqStudioPage.manualLineQuantityHeader}
+                          style={MANUAL_LINE_CELL_INPUT_STYLE}
+                        />
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          className="input-field"
+                          value={line.rate}
+                          onChange={e => updateManualDraftLine(index, 'rate', e.target.value)}
+                          aria-label={UI_STRINGS.appAppBoqStudioPage.manualLineRateHeader}
+                          style={MANUAL_LINE_CELL_INPUT_STYLE}
+                        />
+                      </td>
+                      <td style={{ padding: '6px', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          onClick={() => removeManualDraftLine(index)}
+                          disabled={manualDraftLines.length === 1}
+                          aria-label={interpolateUiString(UI_STRINGS.appAppBoqStudioPage.removeManualLineRow, { number: index + 1 })}
+                          style={{ width: 30, height: 30, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', background: '#ffffff' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -2736,6 +2973,53 @@ export default function BoqStudioPage() {
                       style={{ height: 28, fontSize: 12, width: 200, paddingLeft: 26 }}
                     />
                   </div>
+                  <div ref={columnMenuRef} style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      aria-haspopup="true"
+                      aria-expanded={columnMenuOpen}
+                      onClick={() => setColumnMenuOpen(prev => !prev)}
+                      style={{ fontSize: 11, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, height: 28 }}
+                    >
+                      <SlidersHorizontal size={12} />
+                      {interpolateUiString(UI_STRINGS.appAppBoqStudioPage.tableColumnsButton, { visible: visibleColumnCount, total: BOQ_LINE_COLUMNS.length })}
+                    </button>
+                    {columnMenuOpen && (
+                      <div className="multi-select-panel" style={{ left: 'auto', right: 0, width: 260 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', padding: '2px 4px 8px' }}>{UI_STRINGS.appAppBoqStudioPage.tableColumnsTitle}</div>
+                        <div role="group" aria-label={UI_STRINGS.appAppBoqStudioPage.tableColumnsTitle} style={{ display: 'grid', gap: 2, maxHeight: 280, overflowY: 'auto' }}>
+                          {BOQ_LINE_COLUMNS.map(column => (
+                            <label key={column.key} className="multi-select-option" data-checked={isColumnVisible(column)} style={{ cursor: column.locked ? 'default' : 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={isColumnVisible(column)}
+                                disabled={column.locked}
+                                onChange={() => toggleColumn(column.key)}
+                              />
+                              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{column.label}</span>
+                              {column.locked && (
+                                <span title={UI_STRINGS.appAppBoqStudioPage.tableColumnsLockedHint} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>
+                                  <Lock size={11} />{UI_STRINGS.appAppBoqStudioPage.tableColumnsLockedHint}</span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="multi-select-footer">
+                          <button
+                            type="button"
+                            onClick={() => updateVisibleColumns(BOQ_LINE_COLUMNS.map(column => column.key))}
+                            style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                          >{UI_STRINGS.appAppBoqStudioPage.tableColumnsShowAll}</button>
+                          <button
+                            type="button"
+                            onClick={() => updateVisibleColumns(BOQ_LINE_DEFAULT_VISIBLE_COLUMNS)}
+                            style={{ background: 'none', border: 'none', color: '#475569', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                          >{UI_STRINGS.appAppBoqStudioPage.tableColumnsResetDefault}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {!isEditingBoq && (
                     <button
                       type="button"
@@ -2745,15 +3029,33 @@ export default function BoqStudioPage() {
                     >
                       <Plus size={12} />{UI_STRINGS.appAppBoqStudioPage.addLine}</button>
                   )}
+                  {!isEditingBoq && (
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => setClearLinesConfirmOpen(true)}
+                      disabled={lineTotal === 0 || activeRevision?.status === 'APPROVED'}
+                      title={activeRevision?.status === 'APPROVED' ? UI_STRINGS.appAppBoqStudioPage.approvedRevisionCannotBeCleared : undefined}
+                      style={{ fontSize: 11, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, height: 28, color: '#dc2626', borderColor: '#fecaca', background: '#ffffff' }}
+                    >
+                      <Eraser size={12} />{UI_STRINGS.appAppBoqStudioPage.clearAllLines}</button>
+                  )}
                 </div>
               </div>
 
-              <div className="table-container" style={{ overflowX: 'auto', width: '100%', border: '1px solid #e2e8f0', borderRadius: 6 }}>
-                <table className="table enterprise-table" style={{ width: '100%', fontSize: 12 }}>
+              {/* Column visibility is applied by position so edit and view rows stay aligned. */}
+              <style>{hiddenColumnCss}</style>
+              {/* Scrolls both ways inside a bounded area with a sticky header; only rows near the view are drawn. */}
+              <div
+                ref={linesScrollRef}
+                onScroll={handleLinesTableScroll}
+                className="table-container boq-lines-scroll"
+                style={{ overflow: 'auto', maxHeight: BOQ_LINES_TABLE_MAX_HEIGHT, width: '100%', border: '1px solid #e2e8f0', borderRadius: 6 }}
+              >
+                <table className="table enterprise-table boq-lines-table" style={{ width: '100%', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', height: 38, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                       <th style={{ padding: '0 8px', width: 45 }}>{UI_STRINGS.common.sNo2}</th>
-                      <th style={{ padding: '0 10px', minWidth: 160 }}>{UI_STRINGS.appAppBoqStudioPage.originalDescription}</th>
                       <th style={{ padding: '0 10px', minWidth: 180 }}>{UI_STRINGS.common.itemDescription}</th>
                       <th style={{ padding: '0 10px', minWidth: 180 }}>{UI_STRINGS.common.bOQDescription}</th>
                       <th style={{ padding: '0 8px', width: 70 }}>{UI_STRINGS.common.uOM}</th>
@@ -2767,7 +3069,12 @@ export default function BoqStudioPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLines.map((l, idx) => {
+                    {lineWindow.topPadding > 0 && (
+                      <tr aria-hidden="true" style={{ height: lineWindow.topPadding }}><td colSpan={isEditingBoq ? 10 : 11} style={{ padding: 0, border: 'none' }} /></tr>
+                    )}
+                    {filteredLines.slice(lineWindow.start, lineWindow.end + 1).map((l, windowIndex) => {
+                      const idx = lineWindow.start + windowIndex;
+                      const rowRef = lineWindow.measure(lineRowKey(l, idx));
                       const hasAiSuggestion = l.aiSuggestedDescription && l.aiSuggestedDescription !== l.standardDescription;
                       const unitCost = l.aiUnitCost || 0;
                       const totalCost = (l.quantity !== null && l.quantity !== undefined && l.quantity > 0)
@@ -2776,11 +3083,8 @@ export default function BoqStudioPage() {
 
                       if (isEditingBoq) {
                         return (
-                          <tr key={l.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <tr key={l.id || idx} ref={rowRef} style={{ borderBottom: '1px solid #f1f5f9' }}>
                             <td style={{ padding: '6px 8px', fontWeight: 600 }}>{l.lineNumber || idx + 1}</td>
-                            <td style={{ padding: '6px 10px', color: '#64748b' }}>
-                              {l.originalDescription}
-                            </td>
                             <td style={{ padding: '6px 10px' }}>
                               <input
                                 type="text"
@@ -2864,11 +3168,8 @@ export default function BoqStudioPage() {
 
                       return (
                         <Fragment key={l.id || idx}>
-                          <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <tr ref={rowRef} style={{ borderBottom: '1px solid #f1f5f9' }}>
                           <td style={{ padding: '8px 8px', fontWeight: 600 }}>{l.lineNumber || idx + 1}</td>
-                          <td style={{ padding: '8px 10px', color: '#334155', fontWeight: 600 }}>
-                            {l.originalDescription}
-                          </td>
                           <td style={{ padding: '8px 10px' }}>
                             <div style={{ fontWeight: 600, color: '#0f172a' }}>
                               {l.standardDescription || l.originalDescription}
@@ -3098,8 +3399,8 @@ export default function BoqStudioPage() {
                         {expandedCostLineId === (l.id || String(idx)) && (() => {
                           const bd = l.costBreakdown || computeLineCostBreakdown(l);
                           return (
-                            <tr key={`bd-${l.id || idx}`} style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                              <td colSpan={isEditingBoq ? 11 : 12} style={{ padding: '10px 14px' }}>
+                            <tr key={`bd-${l.id || idx}`} className={WINDOWED_ROW_ATTACHED_CLASS} style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                              <td colSpan={isEditingBoq ? 10 : 11} style={{ padding: '10px 14px' }}>
                                 <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, padding: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3158,35 +3459,33 @@ export default function BoqStudioPage() {
                         </Fragment>
                       );
                     })}
+                    {lineWindow.bottomPadding > 0 && (
+                      <tr aria-hidden="true" style={{ height: lineWindow.bottomPadding }}><td colSpan={isEditingBoq ? 10 : 11} style={{ padding: 0, border: 'none' }} /></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
               {lineTotal > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={handlePreviousLinesPage}
-                    disabled={linePageIndex <= 1 || loadingLines || isEditingBoq}
-                    style={{ fontSize: 11, padding: '4px 9px' }}
-                  >
-                    {UI_STRINGS.common.previousPage}
-                  </button>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>
-                    {interpolateUiString(UI_STRINGS.common.pageValue1OfValue2, {
-                      value1: linePageIndex,
-                      value2: Math.max(1, Math.ceil(lineTotal / BOQ_LINE_DETAIL_PAGE_SIZE)),
-                    })}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                  <span role="status" style={{ fontSize: 11, color: '#64748b' }}>
+                    {loadingLines
+                      ? UI_STRINGS.appAppBoqStudioPage.loadingMoreLines
+                      : interpolateUiString(UI_STRINGS.appAppBoqStudioPage.showingLoadedOfTotalLines, {
+                        loaded: lines.length,
+                        total: Math.max(lineTotal, lines.length),
+                      })}
                   </span>
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={handleNextLinesPage}
-                    disabled={!lineNextCursor || loadingLines || isEditingBoq}
-                    style={{ fontSize: 11, padding: '4px 9px' }}
-                  >
-                    {UI_STRINGS.common.nextPage}
-                  </button>
+                  {lineNextCursor && !isEditingBoq && (
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleNextLinesPage}
+                      disabled={loadingLines}
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                    >
+                      {UI_STRINGS.appAppBoqStudioPage.loadMoreLines}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -3469,8 +3768,9 @@ export default function BoqStudioPage() {
 
       {/* SINGLE LINE EDIT MODAL */}
       {editingLineModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 560, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          {/* Wide enough that long BOQ descriptions read comfortably; shrinks to fit smaller screens. */}
+          <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: '100%', maxWidth: 840, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppBoqStudioPage.editLineItem}{editingLineModal.lineNumber}{UI_STRINGS.common.copyc7zu6c}</h3>
               <button type="button" onClick={() => setEditingLineModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>{UI_STRINGS.common.copy4i33ao}</button>
@@ -3492,10 +3792,10 @@ export default function BoqStudioPage() {
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>{UI_STRINGS.common.bOQDescription}</label>
                 <textarea
                   className="input-field"
-                  rows={2}
+                  rows={4}
                   value={editingLineModal.specification || ''}
                   onChange={e => setEditingLineModal({ ...editingLineModal, specification: e.target.value })}
-                  style={{ width: '100%', padding: 8, fontSize: 12 }}
+                  style={{ width: '100%', padding: '8px 10px', fontSize: 13, lineHeight: 1.5, minHeight: 96, resize: 'vertical' }}
                 />
               </div>
 
@@ -3576,6 +3876,51 @@ export default function BoqStudioPage() {
       )}
 
       {/* ADD LINE MODAL */}
+      {clearLinesConfirmOpen && activeBoq && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-boq-lines-title"
+          onClick={() => { if (!clearingLines) setClearLinesConfirmOpen(false); }}
+          onKeyDown={(e) => { if (e.key === 'Escape' && !clearingLines) setClearLinesConfirmOpen(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', borderRadius: 10, width: '100%', maxWidth: 440, padding: 22, boxShadow: '0 20px 40px rgba(15, 23, 42, 0.25)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ background: '#fef2f2', borderRadius: '50%', padding: 8, display: 'flex' }}>
+                <AlertTriangle size={20} color="#dc2626" />
+              </div>
+              <div>
+                <h3 id="clear-boq-lines-title" style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: '2px 0 6px 0' }}>{UI_STRINGS.appAppBoqStudioPage.clearAllLinesTitle}</h3>
+                <p style={{ fontSize: 13, color: '#475569', margin: 0, lineHeight: 1.5 }}>
+                  {interpolateUiString(UI_STRINGS.appAppBoqStudioPage.clearAllLinesWarning, { count: lineTotal, boqCode: activeBoq.boqCode })}
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                autoFocus
+                disabled={clearingLines}
+                onClick={() => setClearLinesConfirmOpen(false)}
+                style={{ fontSize: 12, padding: '7px 14px', background: '#ffffff' }}
+              >{UI_STRINGS.common.cancel}</button>
+              <button
+                type="button"
+                className="btn"
+                disabled={clearingLines}
+                onClick={handleClearAllLines}
+                style={{ fontSize: 12, padding: '7px 14px', fontWeight: 700, background: '#dc2626', color: '#ffffff', border: '1px solid #dc2626' }}
+              >{clearingLines ? UI_STRINGS.appAppBoqStudioPage.clearingAllLines : UI_STRINGS.appAppBoqStudioPage.confirmClearAllLines}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {addLineModalOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ background: '#ffffff', borderRadius: 8, width: 560, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
