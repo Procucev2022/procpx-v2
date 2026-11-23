@@ -8,8 +8,18 @@ export const MAX_RFQ_WORKFLOW_LINES = 500;
 export const MAX_RATE_CARD_ITEMS = 200;
 export const MAX_PPO_COMPLETION_LINES = 90;
 export const MAX_PPO_CREATE_LINES = 140;
-export const MAX_PR_BATCH_LINES = 200;
-export const MAX_BOQ_BATCH_LINES = 80;
+/** PRs from large BOQs use JSON bulk line inserts (toBulkPrLineInsertStatements), so they match the BOQ limit. */
+export const MAX_PR_BATCH_LINES = 2_000; // same as MAX_BOQ_BATCH_LINES
+/**
+ * Largest BOQ (lines in one revision) any BOQ write supports. Lines are written with JSON bulk
+ * statements (see toBulkBoqLineInsertStatements), so a whole BOQ still fits one atomic D1 batch.
+ */
+export const MAX_BOQ_BATCH_LINES = 2_000;
+/** Rows per JSON bulk line statement, and a byte ceiling that keeps each JSON value under MAX_D1_BINDING_BYTES. */
+export const BOQ_LINE_BULK_MAX_ROWS = 400;
+/** Up to this many lines keep one statement per line (the long-proven path); larger sets use JSON bulk statements. */
+export const BOQ_LINE_PER_STATEMENT_MAX = 80;
+export const BOQ_LINE_BULK_MAX_JSON_BYTES = 1_500_000;
 export const MAX_AUCTION_VENDOR_INVITES = 100;
 export const MAX_AUCTION_ITEMS = 200;
 export const D1_BATCH_BINDING_LIMIT_EXCEEDED = 'D1 batch exceeds the safe bound parameter limit';
@@ -190,6 +200,14 @@ export const BOQ_REVISION_UPDATE_LINE_COUNTS_AFTER_LINES_SQL = `
   WHERE "id" = ? AND "tenantId" = ? AND changes() = 1
 `;
 
+/** Updates line counts only when exactly the expected number of lines exist (safe after bulk inserts). */
+export const BOQ_REVISION_UPDATE_LINE_COUNTS_IF_LINES_PRESENT_SQL = `
+  UPDATE "boq_revisions"
+  SET "totalLines" = ?, "validLines" = ?, "updatedAt" = ?
+  WHERE "id" = ? AND "tenantId" = ?
+    AND (SELECT COUNT(*) FROM "boq_lines" WHERE "boqRevisionId" = ? AND "tenantId" = ? AND "isDeleted" = 0) = ?
+`;
+
 export const BOQ_REVISION_TOUCH_IF_CURRENT_SQL = `
   UPDATE "boq_revisions" SET "updatedAt" = ?
   WHERE "id" = ? AND "tenantId" = ? AND "status" IS ? AND "updatedAt" IS ?
@@ -205,6 +223,23 @@ export const BOQ_LINE_INSERT_AFTER_AUDIT_SQL = BOQ_LINE_INSERT_AFTER_REVISION_SQ
   'WHERE changes() = 1 AND EXISTS (',
   'WHERE EXISTS (SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?) AND EXISTS (',
 );
+
+/** Column count of the per-line BOQ inserts above; their remaining values are guard parameters. */
+export const BOQ_LINE_INSERT_COLUMN_COUNT = 45;
+
+const BOQ_LINE_BULK_INSERT_HEAD = BOQ_LINE_INSERT_AFTER_REVISION_SQL.slice(0, BOQ_LINE_INSERT_AFTER_REVISION_SQL.indexOf('SELECT'));
+const BOQ_LINE_BULK_SELECT = `SELECT ${Array.from({ length: BOQ_LINE_INSERT_COLUMN_COUNT }, (_, index) => `json_extract(line.value, '$[${index}]')`).join(', ')}
+  FROM json_each(?) line`;
+
+/** Many lines in one statement: each JSON array element holds one line's 45 column values. */
+export const BOQ_LINE_BULK_INSERT_AFTER_REVISION_SQL = `${BOQ_LINE_BULK_INSERT_HEAD}${BOQ_LINE_BULK_SELECT}
+  WHERE EXISTS (SELECT 1 FROM "boq_revisions" WHERE "id" = ? AND "tenantId" = ?)
+`;
+
+export const BOQ_LINE_BULK_INSERT_AFTER_AUDIT_SQL = `${BOQ_LINE_BULK_INSERT_HEAD}${BOQ_LINE_BULK_SELECT}
+  WHERE EXISTS (SELECT 1 FROM "audit_logs" WHERE "id" = ? AND "tenantId" = ?)
+    AND EXISTS (SELECT 1 FROM "boq_revisions" WHERE "id" = ? AND "tenantId" = ?)
+`;
 
 export const BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL = `
   UPDATE "boq_revisions"
@@ -702,6 +737,29 @@ export const PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL = `
   )
   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
   WHERE changes() = 1
+`;
+
+/** Column count of PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL. */
+export const PR_LINE_INSERT_COLUMN_COUNT = 21;
+
+/** Many PR lines in one statement: each JSON array element holds one line's 21 column values. */
+export const PROCUREMENT_REQUEST_LINE_BULK_INSERT_SQL = `
+  INSERT INTO "pr_lines" (
+    "id", "tenantId", "prId", "projectId", "costCentreId", "boqId", "boqRevisionId", "boqLineId",
+    "lineNumber", "itemDescription", "specification", "category", "subcategory", "uom", "quantity",
+    "estimatedRate", "estimatedValue", "drawingReference", "requiredDate", "costCentre", "createdAt"
+  )
+  SELECT ${Array.from({ length: 21 }, (_, index) => `json_extract(line.value, '$[${index}]')`).join(', ')}
+  FROM json_each(?) line
+  WHERE EXISTS (SELECT 1 FROM "procurement_requests" WHERE "id" = ? AND "tenantId" = ?)
+`;
+
+/** Marks the BOQ revision only when every PR line exists (safe after bulk PR line inserts). */
+export const PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL = `
+  UPDATE "boq_revisions"
+  SET "costCentreId" = ?, "prStatus" = ?, "updatedAt" = ?
+  WHERE "id" = ? AND "tenantId" = ?
+    AND (SELECT COUNT(*) FROM "pr_lines" WHERE "prId" = ? AND "tenantId" = ?) = ?
 `;
 
 export const PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL = `

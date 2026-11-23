@@ -1,7 +1,14 @@
 import zlib from 'zlib';
 import type { ExtractedDrawingItem, DrawingParseResult } from "@app-types/lib/drawing-parser.types";
 export type { ExtractedDrawingItem, DrawingParseResult };
-import { CATEGORY_RULES, KNOWN_UOMS } from "./drawing-parser.constants";
+import {
+  CATEGORY_RULES,
+  DEFAULT_GEMINI_VISION_MODEL,
+  DEFAULT_OPENAI_VISION_MODEL,
+  GEMINI_API_BASE_URL,
+  KNOWN_UOMS,
+  OPENAI_CHAT_COMPLETIONS_URL,
+} from "./drawing-parser.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
@@ -349,7 +356,7 @@ Return STRICT JSON format adhering to this structure:
 }`;
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        `${GEMINI_API_BASE_URL}/${process.env.GEMINI_MODEL || DEFAULT_GEMINI_VISION_MODEL}:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -416,14 +423,14 @@ Return STRICT JSON format adhering to this structure:
     try {
       const base64Data = fileBuffer.toString('base64');
       const dataUri = `data:${mimeType};base64,${base64Data}`;
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      const res = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openAiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_VISION_MODEL,
           messages: [
             {
               role: 'system',

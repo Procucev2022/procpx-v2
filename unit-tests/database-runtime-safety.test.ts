@@ -17,7 +17,13 @@ const devLocal = require('../scripts/dev-local.cjs') as {
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const WRANGLER = { accountId: 'acct-1', databaseName: 'procpx-dev', databaseId: 'db-1', hasRemoteEnv: true };
-const GOOD_ENV = { NEXTAUTH_SECRET: 'secret', NEXTAUTH_URL: 'http://localhost:3000', DATABASE_PROVIDER: 'd1' };
+const GOOD_ENV = {
+  NEXTAUTH_SECRET: 'secret',
+  NEXTAUTH_URL: 'http://localhost:3000',
+  DATABASE_PROVIDER: 'd1',
+  UPLOAD_DIR: './uploads',
+  GEMINI_API_KEY: 'test-gemini-key',
+};
 
 function inspect(env: Record<string, string | undefined>, args: string[] = [], wrangler: typeof WRANGLER | null = WRANGLER, envFilesFound = ['.env']) {
   return devLocal.inspectDevEnvironment({ env, args, envFilesFound, wrangler });
@@ -38,13 +44,18 @@ describe('database runtime safety', () => {
     expect(inspect(GOOD_ENV)).toEqual({ errors: [], warnings: [], remote: false, port: '3000' });
   });
 
-  it('reports a missing secret, missing env files and a missing NEXTAUTH_URL', () => {
+  it('refuses to start without a .env file or any required setting', () => {
     const result = inspect({}, [], WRANGLER, []);
-    expect(result.errors).toEqual([expect.stringContaining('NEXTAUTH_SECRET is missing')]);
-    expect(result.warnings).toEqual([
+    expect(result.errors).toEqual([
       expect.stringContaining('No .env file found'),
-      expect.stringContaining('NEXTAUTH_URL is not set'),
+      'Missing required settings: NEXTAUTH_SECRET, NEXTAUTH_URL, DATABASE_PROVIDER, UPLOAD_DIR, GEMINI_API_KEY. Add them to .env.',
     ]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('treats blank required settings as missing', () => {
+    const result = inspect({ ...GOOD_ENV, GEMINI_API_KEY: '  ', UPLOAD_DIR: '' });
+    expect(result.errors).toEqual(['Missing required settings: UPLOAD_DIR, GEMINI_API_KEY. Add them to .env.']);
   });
 
   it('warns about a port mismatch and a leftover DATABASE_URL', () => {

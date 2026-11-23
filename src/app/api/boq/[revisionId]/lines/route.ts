@@ -24,6 +24,7 @@ import {
   BOQ_REVISION_RECALCULATE_LINE_COUNTS_AFTER_AUDIT_SQL,
 } from './route.constants';
 import { logEvent, writeStructuredLog } from '@/lib/observability/server-logger';
+import { readOrderedBoqLineIds, sortByIdOrder } from '@/lib/boq-line-order';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -92,34 +93,27 @@ export async function GET(req: NextRequest, { params }: BoqRevisionLinesRouteCon
       { itemCode: { contains: search } },
     ];
   }
-  const pagedWhere = cursor
-    ? {
-      AND: [
-        where,
-        {
-          OR: [
-            { lineNumber: { gt: cursor.lineNumber } },
-            { lineNumber: cursor.lineNumber, id: { gt: cursor.id } },
-          ],
-        },
-      ],
-    }
-    : where;
-
-  const [total, lines] = await Promise.all([
+  // Ids come back in display order (line numbers as numbers); full rows are then loaded by id.
+  const [total, orderedIds] = await Promise.all([
     includeTotal ? prisma.boqLine.count({ where }) : Promise.resolve(null),
-    prisma.boqLine.findMany({
-      where: pagedWhere,
-      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      ...(!cursor ? { skip: (page - 1) * pageSize } : {}),
-      take: pageSize + 1,
-      include: {
-        category: { select: { id: true, name: true } },
-        subcategory: { select: { id: true, name: true } },
-        uom: { select: { id: true, code: true, name: true } },
-      },
+    readOrderedBoqLineIds((query) => prisma.$queryRaw(query), {
+      tenantId: ctx.tenantId,
+      revisionId: revision.id,
+      search,
+      validationStatus,
+      cursor,
+      offset: cursor ? 0 : (page - 1) * pageSize,
+      limit: pageSize + 1,
     }),
   ]);
+  const lines = orderedIds.length === 0 ? [] : sortByIdOrder(await prisma.boqLine.findMany({
+    where: { id: { in: orderedIds }, boqRevisionId: revision.id, tenantId: ctx.tenantId, isDeleted: false },
+    include: {
+      category: { select: { id: true, name: true } },
+      subcategory: { select: { id: true, name: true } },
+      uom: { select: { id: true, code: true, name: true } },
+    },
+  }), orderedIds);
 
   const hasMore = lines.length > pageSize;
   const pageLines = lines.slice(0, pageSize);

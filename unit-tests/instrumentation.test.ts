@@ -6,6 +6,7 @@ import {
   writeStructuredLog as writeEdgeStructuredLog,
 } from '../src/lib/observability/edge-logger';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
+import { interpolateUiString } from "@/lib/i18n";
 
 
 jest.mock('../src/lib/observability/server-logger', () => ({
@@ -20,13 +21,39 @@ jest.mock('../src/lib/observability/edge-logger', () => ({
   writeStructuredLog: jest.fn().mockResolvedValue(undefined),
 }));
 
+const REQUIRED_TEST_ENV: Record<string, string> = {
+  NEXTAUTH_SECRET: 'test-secret',
+  NEXTAUTH_URL: 'http://localhost:3000',
+  DATABASE_PROVIDER: 'd1',
+  UPLOAD_DIR: './uploads',
+  GEMINI_API_KEY: 'test-gemini-key',
+};
+
 describe('Next.js logging instrumentation', () => {
   const originalRuntime = process.env.NEXT_RUNTIME;
+  const originalEnv = Object.fromEntries(Object.keys(REQUIRED_TEST_ENV).map((name) => [name, process.env[name]]));
+
+  beforeEach(() => {
+    Object.assign(process.env, REQUIRED_TEST_ENV);
+  });
 
   afterEach(() => {
     if (originalRuntime === undefined) delete process.env.NEXT_RUNTIME;
     else process.env.NEXT_RUNTIME = originalRuntime;
+    for (const [name, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     jest.clearAllMocks();
+  });
+
+  it('refuses to start when a required setting is missing', async () => {
+    process.env.NEXT_RUNTIME = 'nodejs';
+    delete process.env.GEMINI_API_KEY;
+    await expect(register()).rejects.toThrow(
+      interpolateUiString(UI_STRINGS.libEnv.missingRequiredSettings, { names: 'GEMINI_API_KEY' }),
+    );
+    expect(initializeLogging).not.toHaveBeenCalled();
   });
 
   it('initializes console-only logging in Edge runtime', async () => {

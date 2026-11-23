@@ -26,7 +26,7 @@ jest.mock('../src/lib/prisma', () => ({
     auditLog: { findFirst: jest.fn() },
   },
 }));
-jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
   requireAuth: jest.fn(),

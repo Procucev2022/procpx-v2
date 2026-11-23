@@ -1,3 +1,4 @@
+import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
 import { NextRequest } from 'next/server';
 import { POST } from '../src/app/api/boq/estimate-cost/route';
 import {
@@ -23,7 +24,7 @@ jest.mock('../src/lib/api-utils', () => ({
   apiSuccess: jest.fn((data: unknown, status = 200) => ({ ok: true, data, status })),
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
-jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
@@ -154,7 +155,7 @@ describe('BOQ estimate cost API', () => {
       where: { id: 'revision-1', tenantId: 'tenant-1' },
       include: expect.objectContaining({ lines: expect.objectContaining({
         where: { isDeleted: false },
-        take: 81,
+        take: MAX_BOQ_BATCH_LINES + 1,
         orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
       }) }),
     }));
@@ -196,12 +197,12 @@ describe('BOQ estimate cost API', () => {
   it('rejects malformed and oversized line selections before writing, and rejects unbounded revisions', async () => {
     await expect(POST(request({ boqRevisionId: 'revision-1', lineIds: 'line-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
     await expect(POST(request({ boqRevisionId: 'revision-1', lineIds: [1] }))).resolves.toMatchObject({ ok: false, status: 400 });
-    await expect(POST(request({ boqRevisionId: 'revision-1', lineIds: Array.from({ length: 81 }, (_, index) => `line-${index}`) })))
+    await expect(POST(request({ boqRevisionId: 'revision-1', lineIds: Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, (_, index) => `line-${index}`) })))
       .resolves.toMatchObject({ ok: false, status: 400 });
     expect(db.boqRevision.findFirst).not.toHaveBeenCalled();
     expect(batch).not.toHaveBeenCalled();
 
-    db.boqRevision.findFirst.mockResolvedValueOnce(revision(Array.from({ length: 81 }, (_, index) => line({ id: `line-${index}` }))));
+    db.boqRevision.findFirst.mockResolvedValueOnce(revision(Array.from({ length: MAX_BOQ_BATCH_LINES + 1 }, (_, index) => line({ id: `line-${index}` }))));
     await expect(POST(request({ boqRevisionId: 'revision-1' }))).resolves.toMatchObject({ ok: false, status: 400 });
     expect(batch).not.toHaveBeenCalled();
   });

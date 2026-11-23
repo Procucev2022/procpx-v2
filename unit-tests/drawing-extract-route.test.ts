@@ -36,7 +36,7 @@ jest.mock('../src/lib/api-utils', () => ({
 
 jest.mock('../src/lib/drawing-parser', () => ({ processDrawingFile: jest.fn() }));
 jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn(), deleteUpload: jest.fn() }));
-jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({
   logEvent: jest.fn(),
   writeStructuredLog: jest.fn().mockResolvedValue(undefined),

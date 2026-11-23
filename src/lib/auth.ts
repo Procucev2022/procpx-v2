@@ -147,5 +147,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: UI_STRINGS.libAuth.login,
   },
   session: { strategy: 'jwt' },
-  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'procpx-super-secret-key-change-in-production-2024',
+  // No built-in fallback: a missing secret must stop sign-in instead of signing sessions with a
+  // value that is published in the source code. Set NEXTAUTH_SECRET in .env / as a Worker secret.
+  secret: process.env.NEXTAUTH_SECRET,
 });

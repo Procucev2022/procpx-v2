@@ -6,7 +6,7 @@ import type { DrawingDraftLine, DrawingDraftRequest, PreparedDrawingBoqLine } fr
 import { deleteUpload, saveUpload } from '@/lib/storage';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { toBulkBoqLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   AUDIT_LOG_INSERT_AFTER_CHANGE_SQL,
   BOQ_INSERT_NEXT_CODE_SQL,
@@ -215,7 +215,8 @@ export async function POST(req: NextRequest) {
               warningLines: prepared.warningCount, errorLines: prepared.errorCount, qualityScore }), null,
             req.headers.get('user-agent'), now],
         },
-        ...prepared.lines.map((line) => drawingLineStatement(line, newRevisionId, ctx.tenantId, auditId, now)),
+        // JSON bulk statements keep large drawing BOQs inside this one atomic batch.
+        ...toBulkBoqLineInsertStatements(prepared.lines.map((line) => drawingLineStatement(line, newRevisionId, ctx.tenantId, auditId, now))),
         {
           sql: BOQ_REVISION_UPDATE_MANUAL_METRICS_AFTER_AUDIT_SQL,
           values: [prepared.lines.length, prepared.validCount, prepared.errorCount, prepared.warningCount,

@@ -22,7 +22,7 @@ jest.mock('../src/lib/prisma', () => ({
     auditLog: { create: jest.fn() },
   },
 }));
-jest.mock('../src/lib/d1-batch', () => ({ isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), isD1BatchWithinLimits: (input: Array<{ values: unknown[] }>) => input.reduce((total, item) => total + item.values.length, 0) <= 4500 && input.every((item) => item.values.length <= 100), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/pr-line-selection', () => ({ readSelectedPrBoqLines: jest.fn() }));
 jest.mock('../src/lib/project-auth', () => ({
   getUserProjectAccessFilter: jest.fn(),
@@ -229,7 +229,7 @@ describe('PR list and create API', () => {
     expect(statements[0].values).toEqual(expect.arrayContaining(['tenant-1', 'project-1', 'cc-1', 'boq-1', 'revision-1', 'Urgent cabling']));
     expect(statements[1].values).toEqual(expect.arrayContaining(['line-1', 'Copper wire', '2 core', 'Electrical', 'Cable', 'MTR', 3, 10, 30]));
     expect(statements[2].values).toEqual(expect.arrayContaining(['line-2', 'Panel', 'General', 'NOS', 1, 5, 5]));
-    expect(statements[3].sql).toContain('changes() = 1');
+    expect(statements[3].sql).toContain('SELECT COUNT(*) FROM "pr_lines"');
     expect(statements[4].sql).toContain('changes() = 1');
     expect(statements[5].sql).toContain('CASE WHEN changes() = 1 THEN ? ELSE NULL END');
     expect(db.procurementRequest.create).not.toHaveBeenCalled();

@@ -20,7 +20,6 @@ import { PROJECT_DOCUMENT_MAX_BYTES } from '../src/lib/project-document.constant
 import { MAX_BOQ_BATCH_LINES } from '../src/lib/d1-batch.constants';
 import {
   BOQ_NEW_REVISION_AUDIT_INSERT_SQL,
-  BOQ_NEW_REVISION_COPY_LINES_JSON_SQL,
   BOQ_NEW_REVISION_INSERT_SQL,
 } from '../src/app/api/boq/[revisionId]/new-revision/route.constants';
 
@@ -40,7 +39,7 @@ jest.mock('../src/lib/prisma', () => ({
     auditLog: { create: jest.fn() },
   },
 }));
-jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn(), deleteUpload: jest.fn(), readUpload: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({ writeStructuredLog: jest.fn() }));
 jest.mock('../src/lib/api-utils', () => ({
@@ -333,9 +332,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     };
     db.boqRevision.findFirst.mockResolvedValueOnce(source);
     db.boqRevision.findFirst.mockResolvedValueOnce({ revisionNumber: 1 });
+    // With no source lines there is nothing to copy, so only the revision and audit rows are written.
     (writeD1BatchAtomically as jest.Mock).mockResolvedValueOnce([
       { success: true, meta: { changes: 1 } },
-      { success: true, meta: { changes: 0 } },
       { success: true, meta: { changes: 1 } },
     ]);
     const emptyRevisionResult = await createNewRevision(request(), revisionParams());
@@ -346,11 +345,9 @@ describe('project document, project detail, BOQ revision, rate-card message and 
     const emptyRevisionBatch = (writeD1BatchAtomically as jest.Mock).mock.calls[0][0];
     expect(emptyRevisionBatch.map(({ sql }: { sql: string }) => sql)).toEqual([
       BOQ_NEW_REVISION_INSERT_SQL,
-      BOQ_NEW_REVISION_COPY_LINES_JSON_SQL,
       BOQ_NEW_REVISION_AUDIT_INSERT_SQL,
     ]);
-    expect(JSON.parse(emptyRevisionBatch[1].values[2] as string)).toHaveLength(0);
-    expect(emptyRevisionBatch[2].values[4]).toBe(0);
+    expect(emptyRevisionBatch[1].values[4]).toBe(0);
 
     const sourceLine = {
       lineNumber: '1', originalDescription: 'Cable', standardDescription: 'Copper cable', specification: null, categoryId: null,

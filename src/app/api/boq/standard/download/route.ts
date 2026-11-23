@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   let costCentreId: string | undefined;
   try {
     const { searchParams } = new URL(req.url);
-    const sector = (searchParams.get('sector') || 'RETAIL').toUpperCase();
+    const requestedSector = searchParams.get('sector');
     const projectType = searchParams.get('projectType') || 'Retail Store Fitout';
     projectId = searchParams.get('projectId') || '';
     costCentreId = searchParams.get('costCentreId') || '';
@@ -47,6 +47,10 @@ export async function GET(req: NextRequest) {
         where: { id: costCentreId, tenantId: ctx.tenantId },
       });
     }
+
+    // Sector is optional: BOQ Studio no longer sends it, so use the project's own sector,
+    // and only search every sector when neither is known.
+    const sector = (requestedSector || project?.sector || 'ALL').toUpperCase();
 
     // Query standard items from database for this sector & categories
     const whereClause: Prisma.StandardBoqItemWhereInput = {

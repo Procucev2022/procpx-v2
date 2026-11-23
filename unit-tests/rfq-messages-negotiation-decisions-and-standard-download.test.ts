@@ -360,6 +360,26 @@ describe('standard BOQ download', () => {
     expect(masterRows[0]).toEqual(expect.objectContaining({ 'Approved UOM Code': 'MTR', 'Standard Category': UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, 'Sub-categories': 'Wiring' }));
   });
 
+  it('uses the project sector when no sector is sent, and every sector when the project has none', async () => {
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-2', projectCode: 'H-1', name: 'Harbour Hotel', sector: 'hospitality' });
+    db.standardBoqItem.findMany.mockResolvedValueOnce([{ itemCode: 'HOS-1', standardDescription: 'Bed', detailedSpecification: '', uom: 'NOS', category: 'Furniture', benchmarkRate: null }]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce([]);
+    const fromProject = await downloadStandardBoq(request('http://localhost/api/boq/standard/download?projectType=Hotel&projectId=project-2'));
+    expect(fromProject.status).toBe(200);
+    expect(fromProject.headers.get('Content-Disposition')).toBe('attachment; filename="Standard_BOQ_HOSPITALITY_Hotel.xlsx"');
+    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true, sector: 'HOSPITALITY' } }));
+
+    db.standardBoqItem.findMany.mockClear();
+    db.project.findFirst.mockResolvedValueOnce({ id: 'project-3', projectCode: 'N-1', name: 'No Sector', sector: null });
+    db.standardBoqItem.findMany.mockResolvedValueOnce([{ itemCode: 'GEN-1', standardDescription: 'General', detailedSpecification: '', uom: 'NOS', category: 'General', benchmarkRate: null }]);
+    db.uomMaster.findMany.mockResolvedValueOnce([]);
+    db.category.findMany.mockResolvedValueOnce([]);
+    const allSectors = await downloadStandardBoq(request('http://localhost/api/boq/standard/download?projectId=project-3'));
+    expect(allSectors.status).toBe(200);
+    expect(db.standardBoqItem.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { tenantId: 'tenant-1', isActive: true } }));
+  });
+
   it('uses general active items when there are no category matches and emits blank reference rows', async () => {
     db.standardBoqItem.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     db.uomMaster.findMany.mockResolvedValueOnce([]);
