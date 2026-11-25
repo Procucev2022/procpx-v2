@@ -36,7 +36,9 @@ function baseFetch(url: string, init?: RequestInit) {
 }
 
 function submitModal() {
-  fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.saveCategory) }).closest('form')!);
+  const saveBtn = screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.saveCategory) })
+    || screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.saveSubcategory) });
+  fireEvent.submit(saveBtn.closest('form')!);
 }
 
 describe('category taxonomy page', () => {
@@ -134,6 +136,9 @@ describe('category taxonomy page', () => {
     fireEvent.click(within(civilRow).getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.subcategory) }));
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.addSubcategory))).toBeInTheDocument();
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('cat-civil');
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.subcategoryName))).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.subcategoryCode))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.saveSubcategory) })).toBeInTheDocument();
 
     const name = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersCategoriesPage.eGCivilInteriorHVACSignage));
     const code = screen.getByPlaceholderText(/Auto-generated on creation/);

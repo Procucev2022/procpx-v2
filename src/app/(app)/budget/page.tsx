@@ -1,23 +1,23 @@
 'use client';
 // src/app/(app)/budget/page.tsx - Enterprise Project Budget Workspace
 import { I18N_CONFIG } from '@/lib/i18n.constants';
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, Fragment } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
-  Landmark,
   Scale,
-  History,
   Layers,
   CheckCircle2,
   Clock,
   AlertCircle,
   FileSpreadsheet,
-  TrendingDown,
   RefreshCw,
   Sparkles,
   Check,
   X,
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import PageHeader from '@/components/ui/PageHeader';
@@ -57,6 +57,14 @@ function ProjectBudgetContent() {
   const [rejectModalOpen, setRejectModalOpen] = useState<boolean>(false);
   const [selectedRejectContrib, setSelectedRejectContrib] = useState<any | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('');
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryExpand = (catName: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [catName]: !(prev[catName] ?? true),
+    }));
+  };
 
   // Initial load: fetch projects and current user
   useEffect(() => {
@@ -324,43 +332,6 @@ function ProjectBudgetContent() {
     return `₹ ${Math.round(val || 0).toLocaleString(I18N_CONFIG.defaultLocale)}`;
   };
 
-  const formatStatusText = (status: string) => {
-    if (!status) return '—';
-    const s = status.toUpperCase();
-    if (s === 'UNDER_PROJECT_APPROVAL' || s === 'PENDING_PROJECT_APPROVAL' || s === 'UNDER_APPROVAL' || s === 'UNDER APPROVAL' || s === 'PENDING APPROVAL') return 'Under Project Approval';
-    if (s === 'PENDING_FINANCE_APPROVAL' || s === 'PENDING FINANCE APPROVAL' || s === 'UNDER_FINANCE_APPROVAL' || s === 'UNDER FINANCE APPROVAL') return 'Under Finance Approval';
-    if (s === 'APPROVED') return 'Approved';
-    if (s === 'REJECTED') return 'Rejected';
-    if (s === 'PARTIALLY APPROVED') return 'Partially Approved';
-    return status.replace(/_/g, ' ');
-  };
-
-  const getStatusBadgeStyle = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'APPROVED':
-      case 'FINANCE APPROVED':
-        return { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' };
-      case 'UNDER_APPROVAL':
-      case 'UNDER APPROVAL':
-      case 'UNDER_PROJECT_APPROVAL':
-      case 'PENDING PROJECT APPROVAL':
-      case 'PENDING_PROJECT_APPROVAL':
-      case 'PENDING APPROVAL':
-        return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' };
-      case 'PENDING_FINANCE_APPROVAL':
-      case 'PENDING FINANCE APPROVAL':
-      case 'UNDER_FINANCE_APPROVAL':
-      case 'UNDER FINANCE APPROVAL':
-        return { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' };
-      case 'PARTIALLY APPROVED':
-        return { bg: '#f5f3ff', color: '#6d28d9', border: '#ddd6fe' };
-      case 'REJECTED':
-        return { bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' };
-      default:
-        return { bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' };
-    }
-  };
-
   // Find pending contributions for approver banner
   const pendingContributions = selectedCC?.contributions?.filter(
     (c: any) => c.status === 'UNDER_APPROVAL' || c.status === 'PENDING_PROJECT_APPROVAL' || c.status === 'PENDING_FINANCE_APPROVAL'
@@ -382,12 +353,6 @@ function ProjectBudgetContent() {
               title={UI_STRINGS.appAppBudgetPage.refreshBudget}
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
-            <Link
-              href="/budget/transactions"
-              className="btn btn-secondary btn-sm"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <History size={14} />{UI_STRINGS.common.ledger}</Link>
             <Link
               href="/budget/vs-actual"
               className="btn btn-secondary btn-sm"
@@ -491,32 +456,32 @@ function ProjectBudgetContent() {
       <div className="mb-6">
         <SummaryCardGrid columns={4}>
           <SummaryCard
+            variant="kpi"
             label={UI_STRINGS.appAppBudgetPage.totalBudgetAllocation}
             value={formatCurrency(ccTotalBudget)}
             secondary={interpolateUiString(UI_STRINGS.appAppBudgetPage.approvedValue1PendingValue2, { "value1": formatCurrency(ccApprovedBudget), "value2": formatCurrency(ccPendingBudget) })}
-            icon={<Landmark size={16} />}
-            accent="default"
+            accent="blue"
           />
           <SummaryCard
+            variant="kpi"
             label={UI_STRINGS.appAppBudgetPage.actualSpend}
             value={formatCurrency(ccActual)}
             secondary={interpolateUiString(UI_STRINGS.appAppBudgetPage.utilisationValue1, { "value1": ccTotalBudget > 0 ? ((ccActual / ccTotalBudget) * 100).toFixed(1) : 0 })}
-            icon={<TrendingDown size={16} />}
-            accent="neutral"
+            accent="amber"
           />
           <SummaryCard
+            variant="kpi"
             label={UI_STRINGS.appAppBudgetPage.availableBalance}
             value={formatCurrency(ccBalance)}
             secondary={UI_STRINGS.appAppBudgetPage.uncommittedAllocation}
-            icon={<CheckCircle2 size={16} />}
             accent="emerald"
           />
           <SummaryCard
+            variant="kpi"
             label={UI_STRINGS.appAppBudgetPage.costPerSqft}
             value={ccArea > 0 ? `₹ ${budgetPerSqFt?.toLocaleString(I18N_CONFIG.defaultLocale)}` : '—'}
             secondary={ccArea > 0 ? interpolateUiString(UI_STRINGS.appAppBudgetPage.actualValue1Sqft, { "value1": actualPerSqFt || 0 }) : UI_STRINGS.appAppBudgetPage.areaNotConfigured}
-            icon={<Scale size={16} />}
-            accent="blue"
+            accent="purple"
           />
         </SummaryCardGrid>
       </div>
@@ -585,28 +550,26 @@ function ProjectBudgetContent() {
                 <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.approvedBudget}</th>
                 <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.pendingApproval}</th>
                 <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.sqft}</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.common.actual}</th>
                 <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'right' }}>{UI_STRINGS.appAppBudgetPage.balance}</th>
-                <th style={{ padding: '0 16px', fontWeight: 700, textAlign: 'center' }}>{UI_STRINGS.common.approvalStatus}</th>
               </tr>
             </thead>
             <tbody>
               {categoryLoading && categories.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                       <RefreshCw size={16} className="animate-spin" />{UI_STRINGS.appAppBudgetPage.loadingCategoryBudgetMetrics}</div>
                   </td>
                 </tr>
               ) : categoryError && categories.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
+                  <td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
                     {UI_STRINGS.appAppBudgetPage.failedToLoadCategoryBudgetData}
                   </td>
                 </tr>
               ) : categories.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={5} style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
                     <FileSpreadsheet size={36} color="#cbd5e1" style={{ margin: '0 auto 10px auto' }} />
                     <div style={{ fontWeight: 600, color: '#334155', fontSize: 14 }}>{UI_STRINGS.appAppBudgetPage.noCategoryBudgetAllocated}</div>
                     <p style={{ color: '#64748b', fontSize: 12, margin: '4px 0 16px 0' }}>{UI_STRINGS.appAppBudgetPage.addACompletedBOQWithAICostToAllocateCommercialBudgetTo}{selectedCC?.name || UI_STRINGS.appAppBudgetPage.thisCostCentre}{UI_STRINGS.common.copyby08hd}</p>
@@ -620,46 +583,103 @@ function ProjectBudgetContent() {
                 </tr>
               ) : (
                 categories.map(cat => {
-                  const statusStyle = getStatusBadgeStyle(cat.status);
+                  const subcategories = cat.subcategories || [];
+                  const hasSubcategories = subcategories.length > 0;
+                  const isExpanded = expandedCategories[cat.category] ?? true;
                   return (
-                    <tr key={cat.category} style={{ borderBottom: '1px solid #f1f5f9', height: 48 }}>
-                      <td style={{ padding: '0 16px', fontWeight: 600, color: '#0f172a' }}>
-                        {cat.category}
-                      </td>
-                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: cat.approvedBudget > 0 ? '#047857' : '#64748b' }}>
-                        {formatCurrency(cat.approvedBudget)}
-                      </td>
-                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: cat.pendingBudget > 0 ? '#b45309' : '#94a3b8' }}>
-                        {cat.pendingBudget > 0 ? formatCurrency(cat.pendingBudget) : UI_STRINGS.common.copy4s9bsz}
-                      </td>
-                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: '#1e40af' }}>
-                        {cat.ratePerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": cat.ratePerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (ccArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
-                      </td>
-                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: cat.actual > 0 ? '#0f172a' : '#94a3b8' }}>
-                        {formatCurrency(cat.actual)}
-                      </td>
-                      <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                        {formatCurrency(cat.balance)}
-                      </td>
-                      <td style={{ padding: '0 16px', textAlign: 'center' }}>
-                        <span
-                          style={{
-                            background: statusStyle.bg,
-                            color: statusStyle.color,
-                            border: `1px solid ${statusStyle.border}`,
-                            padding: '3px 8px',
-                            borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.4px',
-                            display: 'inline-block',
-                          }}
-                        >
-                          {formatStatusText(cat.status)}
-                        </span>
-                      </td>
-                    </tr>
+                    <Fragment key={cat.category}>
+                      <tr style={{ borderBottom: hasSubcategories && isExpanded ? 'none' : '1px solid #f1f5f9', height: 48, background: '#ffffff' }}>
+                        <td style={{ padding: '0 16px', fontWeight: 600, color: '#0f172a' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {hasSubcategories ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleCategoryExpand(cat.category)}
+                                aria-label={isExpanded ? interpolateUiString(UI_STRINGS.appAppBudgetPage.collapseCategory, { category: cat.category }) : interpolateUiString(UI_STRINGS.appAppBudgetPage.expandCategory, { category: cat.category })}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: 22,
+                                  height: 22,
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 4,
+                                  background: '#f8fafc',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  color: '#64748b',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                              </button>
+                            ) : (
+                              <span style={{ width: 22, flexShrink: 0 }} />
+                            )}
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{cat.category}</span>
+                            {hasSubcategories && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: '#64748b',
+                                  background: '#f1f5f9',
+                                  padding: '1px 6px',
+                                  borderRadius: 10,
+                                  border: '1px solid #e2e8f0',
+                                }}
+                              >
+                                {subcategories.length}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: cat.approvedBudget > 0 ? '#047857' : '#64748b' }}>
+                          {formatCurrency(cat.approvedBudget)}
+                        </td>
+                        <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: cat.pendingBudget > 0 ? '#b45309' : '#94a3b8' }}>
+                          {cat.pendingBudget > 0 ? formatCurrency(cat.pendingBudget) : UI_STRINGS.common.copy4s9bsz}
+                        </td>
+                        <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 600, color: '#1e40af' }}>
+                          {cat.ratePerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": cat.ratePerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (ccArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
+                        </td>
+                        <td style={{ padding: '0 16px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
+                          {formatCurrency(cat.balance)}
+                        </td>
+                      </tr>
+                      {hasSubcategories && isExpanded && subcategories.map((sub, sIdx) => {
+                        const isLast = sIdx === subcategories.length - 1;
+                        return (
+                          <tr
+                            key={`${cat.category}-${sub.subcategory}-${sIdx}`}
+                            style={{
+                              borderBottom: isLast ? '1px solid #e2e8f0' : '1px dashed #f1f5f9',
+                              height: 40,
+                              background: '#f8fafc',
+                            }}
+                          >
+                            <td style={{ padding: '0 16px 0 46px', fontSize: 12, fontWeight: 500, color: '#475569' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <CornerDownRight size={13} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                                <span>{sub.subcategory}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '0 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: sub.approvedBudget > 0 ? '#047857' : '#94a3b8' }}>
+                              {formatCurrency(sub.approvedBudget)}
+                            </td>
+                            <td style={{ padding: '0 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: sub.pendingBudget > 0 ? '#b45309' : '#94a3b8' }}>
+                              {sub.pendingBudget > 0 ? formatCurrency(sub.pendingBudget) : (sub.budget > 0 ? formatCurrency(sub.budget) : UI_STRINGS.common.copy4s9bsz)}
+                            </td>
+                            <td style={{ padding: '0 16px', textAlign: 'right', fontSize: 12, fontWeight: 500, color: '#64748b' }}>
+                              {sub.ratePerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": sub.ratePerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (ccArea > 0 && sub.approvedBudget > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": Math.round((sub.approvedBudget / ccArea) * 100) / 100 }) : UI_STRINGS.common.copy4s9bsz)}
+                            </td>
+                            <td style={{ padding: '0 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: sub.balance > 0 ? '#047857' : '#94a3b8' }}>
+                              {formatCurrency(sub.balance)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
                   );
                 })
               )}

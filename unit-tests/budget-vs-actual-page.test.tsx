@@ -33,6 +33,7 @@ const report = {
   categoriesSummary: [
     { category: 'Electrical & Controls', budgetAmount: 1_000, actualAmount: 0 },
     { category: 'Mechanical', budgetAmount: 0, actualAmount: 200 },
+    { category: 'Civil', budgetAmount: 500, actualAmount: 800 },
     { category: 'General', budgetAmount: 0, actualAmount: 0 },
   ],
   lineReports: [
@@ -128,13 +129,21 @@ describe('budget versus actual page', () => {
     expect(await screen.findByText('Power conduit')).toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.showingLineReportsOfTotal, { shown: '1', total: '2' })))).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.loadMoreLineReports) }));
+    const scrollContainer = screen.getByTestId('line-items-scroll-container');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { configurable: true, value: 1000 });
+    Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, value: 500 });
+
+    fireEvent.scroll(scrollContainer, { target: { scrollTop: 10 } });
+    expect(screen.queryByText('Pump bearing')).not.toBeInTheDocument();
+
+    fireEvent.scroll(scrollContainer, { target: { scrollTop: 450 } });
     expect(await screen.findByText('Pump bearing')).toBeInTheDocument();
     expect(screen.getByText('Power conduit')).toBeInTheDocument();
     expect(screen.getAllByText(/1,500/).length).toBeGreaterThan(0);
     expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.showingLineReportsOfTotal, { shown: '2', total: '2' })))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith('/api/financial/budget-vs-actual?projectId=project-1&costCentreId=cc-1&page=2&pageSize=50');
-    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetVsActualPage.loadMoreLineReports) })).not.toBeInTheDocument();
+
+    fireEvent.scroll(scrollContainer, { target: { scrollTop: 450 } });
   });
 
   it('uses defaults for empty reports and handles initial selection and request failures', async () => {
@@ -157,6 +166,22 @@ describe('budget versus actual page', () => {
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'project-2' } });
     await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(Error)));
     consoleError.mockRestore();
+  });
+
+  it('handles default initial project selection and category without area metric', async () => {
+    searchParams.mockReturnValue(new URLSearchParams('') as ReturnType<typeof useSearchParams>);
+    mockFetch.mockImplementation((url: string) => url === '/api/projects'
+      ? Promise.resolve(response({ data: projects }))
+      : Promise.resolve(response({
+          data: {
+            costCentresSummary: [{ id: 'cc-0', code: 'CC-0', name: 'No Area', areaSqFt: 0 }],
+            categoriesSummary: [{ category: 'Unallocated', budgetAmount: 100, actualAmount: 50 }],
+            lineReports: [],
+          },
+        })));
+    render(<BudgetVsActualPage />);
+    expect((await screen.findAllByText('Unallocated')).length).toBeGreaterThan(0);
+    expect(mockFetch).toHaveBeenCalledWith('/api/financial/budget-vs-actual?projectId=project-1');
   });
 
   it('keeps a zero project list usable when the projects request fails', async () => {

@@ -1,6 +1,6 @@
 'use client';
 // src/app/(app)/masters/standard-boq/page.tsx - Standard BOQ Creation & Central Master
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import {
@@ -78,6 +78,36 @@ export default function StandardBoqCreationPage() {
   const [projectType, setProjectType] = useState('Store Fitout');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('General');
+
+  const getSubcategoriesForCategory = useCallback((catName: string) => {
+    if (!catName) return ['General'];
+    const currentCat = categories.find(
+      c => c.name?.trim().toLowerCase() === catName.trim().toLowerCase() || c.id === catName
+    );
+    const catSubs = (currentCat?.children || [])
+      .map((ch: { name?: unknown }) => String(ch.name || '').trim())
+      .filter(Boolean);
+    const itemSubs = items
+      .filter(it => it.category?.trim().toLowerCase() === catName.trim().toLowerCase())
+      .map(it => String(it.subcategory || '').trim())
+      .filter(Boolean);
+    const combined = Array.from(new Set([...catSubs, ...itemSubs]));
+    return combined.length > 0 ? combined : ['General'];
+  }, [categories, items]);
+
+  const availableSubcategories = useMemo(() => {
+    const list = getSubcategoriesForCategory(selectedCategory);
+    if (selectedSubcategory && !list.includes(selectedSubcategory)) {
+      return [selectedSubcategory, ...list];
+    }
+    return list;
+  }, [getSubcategoriesForCategory, selectedCategory, selectedSubcategory]);
+
+  const handleCategoryChange = (newCat: string) => {
+    setSelectedCategory(newCat);
+    const subs = getSubcategoriesForCategory(newCat);
+    setSelectedSubcategory(subs[0] || 'General');
+  };
   const [lineItems, setLineItems] = useState<Array<{
     itemCode: string;
     description: string;
@@ -147,7 +177,14 @@ export default function StandardBoqCreationPage() {
         const cats = d.data || d || [];
         setCategories(cats);
         if (cats.length > 0 && !selectedCategory) {
-          setSelectedCategory(cats[0].name);
+          const firstCat = cats[0];
+          setSelectedCategory(firstCat.name);
+          const firstCatSubs = (firstCat.children || [])
+            .map((ch: { name?: unknown }) => String(ch.name || '').trim())
+            .filter(Boolean);
+          if (firstCatSubs.length > 0) {
+            setSelectedSubcategory(firstCatSubs[0]);
+          }
         }
       }
     } catch {
@@ -205,13 +242,21 @@ export default function StandardBoqCreationPage() {
   const handleOpenModal = (preset?: StandardItemGroupPreset) => {
     if (!canEdit) return;
     setFormError(null);
-    const category = preset?.category || selectedCategory;
+    const category = preset?.category || selectedCategory || (categories.length > 0 ? categories[0].name : '');
     if (preset) {
       setSelectedCategory(preset.category);
-      setSelectedSubcategory(preset.subcategory);
+      setSelectedSubcategory(preset.subcategory || 'General');
       setSector(preset.sector);
     } else if (!selectedCategory && categories.length > 0) {
-      setSelectedCategory(categories[0].name);
+      const firstCat = categories[0];
+      setSelectedCategory(firstCat.name);
+      const subs = getSubcategoriesForCategory(firstCat.name);
+      setSelectedSubcategory(subs[0] || 'General');
+    } else if (selectedCategory) {
+      const subs = getSubcategoriesForCategory(selectedCategory);
+      if (!subs.includes(selectedSubcategory)) {
+        setSelectedSubcategory(subs[0] || 'General');
+      }
     }
     // Auto-generate starting code if empty
     const codePrefix = 'STD-' + (category ? category.substring(0, 3).toUpperCase() : 'CIV');
@@ -961,12 +1006,14 @@ export default function StandardBoqCreationPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.appAppMastersStandardBoqPage.category}</label>
+                  <label htmlFor="standard-boq-category" style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.appAppMastersStandardBoqPage.category}</label>
                   <select
+                    id="standard-boq-category"
                     className="select-field"
                     value={selectedCategory}
-                    onChange={e => setSelectedCategory(e.target.value)}
+                    onChange={e => handleCategoryChange(e.target.value)}
                     style={{ width: '100%', height: 34, fontSize: 12 }}
+                    aria-label={UI_STRINGS.appAppMastersStandardBoqPage.category}
                     required
                   >
                     {categories.map(c => (
@@ -976,15 +1023,20 @@ export default function StandardBoqCreationPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.common.subcategory}</label>
-                  <input
-                    type="text"
-                    placeholder={UI_STRINGS.appAppMastersStandardBoqPage.eGFlooringWiring}
+                  <label htmlFor="standard-boq-subcategory" style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{UI_STRINGS.common.subcategory}</label>
+                  <select
+                    id="standard-boq-subcategory"
+                    className="select-field"
                     value={selectedSubcategory}
                     onChange={e => setSelectedSubcategory(e.target.value)}
-                    className="input-field"
                     style={{ width: '100%', height: 34, fontSize: 12 }}
-                  />
+                    aria-label={UI_STRINGS.common.subcategory}
+                    required
+                  >
+                    {availableSubcategories.map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1046,6 +1098,7 @@ export default function StandardBoqCreationPage() {
                             value={line.uom}
                             onChange={e => handleUpdateRow(idx, 'uom', e.target.value)}
                             style={{ width: '100%', height: 32, fontSize: 12 }}
+                            aria-label={UI_STRINGS.common.uOM2}
                             required
                           >
                             {COMMON_UOMS.map(u => (
@@ -1116,7 +1169,7 @@ export default function StandardBoqCreationPage() {
                     disabled={saving}
                     style={{ fontWeight: 700 }}
                   >
-                    {saving ? UI_STRINGS.common.saving : interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster, { "length": lineItems.length, "value2": lineItems.length > 1 ? 's' : '' })}
+                    {saving ? UI_STRINGS.common.saving : UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ}
                   </button>
                 </div>
               </div>

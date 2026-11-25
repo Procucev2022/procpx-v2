@@ -60,7 +60,10 @@ describe('standard BOQ master page', () => {
     jest.clearAllMocks();
     userRole = 'CATEGORY_MANAGER';
     standardItems = items;
-    categories = [{ id: 'cat-1', name: 'Electrical' }, { id: 'cat-2', name: 'Civil' }];
+    categories = [
+      { id: 'cat-1', name: 'Electrical', children: [{ id: 'sub-1', name: 'Wiring' }, { id: 'sub-2', name: 'Flooring' }] },
+      { id: 'cat-2', name: 'Civil', children: [{ id: 'sub-3', name: 'Flooring' }] },
+    ];
     postResponse = response({ data: { count: 1 } });
     configureFetch();
   });
@@ -174,28 +177,28 @@ describe('standard BOQ master page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQItems) }));
     await waitFor(() => expect(screen.getAllByRole('combobox')[3]).toHaveValue(UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical));
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: '' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(/Item Code is required/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: 'STD-NEW-1' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.descriptionIsRequired, '', false))).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGVitrifiedFloorTile600x600)), { target: { value: 'New tile' } });
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.detailedTechnicalSpec)), { target: { value: '' } });
     fireEvent.change(screen.getAllByRole('combobox')[3], { target: { value: '' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.pleaseSelectACategory))).toBeInTheDocument();
     fireEvent.change(screen.getAllByRole('combobox')[3], { target: { value: 'Electrical' } });
-    fireEvent.change(screen.getAllByRole('combobox')[4], { target: { value: '' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.uOM2) }), { target: { value: '' } });
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(/UOM is required/)).toBeInTheDocument();
-    fireEvent.change(screen.getAllByRole('combobox')[4], { target: { value: 'MTR' } });
+    fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.uOM2) }), { target: { value: 'MTR' } });
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.addAnotherStandardItem) }));
     const codes = screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001));
     fireEvent.change(codes[1], { target: { value: 'std-new-1' } });
     fireEvent.change(screen.getAllByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGVitrifiedFloorTile600x600))[1], { target: { value: 'Duplicate tile' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.duplicateItemCodeInTableCode))).toBeInTheDocument();
     fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.removeRow))[1]);
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: 'STD-NEW-1' } });
@@ -204,8 +207,11 @@ describe('standard BOQ master page', () => {
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.common.copywwhtor)), { target: { value: '12.50' } });
     fireEvent.change(screen.getAllByRole('combobox')[2], { target: { value: 'OFFICE' } });
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGStoreFitout)), { target: { value: 'Office Fitout' } });
-    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGFlooringWiring)), { target: { value: 'Flooring' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.category) }), { target: { value: 'Civil' } });
+    expect(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.subcategory) })).toHaveValue('Flooring');
+    fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.category) }), { target: { value: 'Electrical' } });
+    fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.subcategory) }), { target: { value: 'Flooring' } });
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/boq/standard-library', expect.objectContaining({ method: 'POST' })));
     const payload = JSON.parse(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')![1].body as string);
     expect(payload).toMatchObject({ sector: 'OFFICE', projectType: 'Office Fitout', category: 'Electrical', subcategory: 'Flooring', items: [{ itemCode: 'STD-NEW-1', standardDescription: 'New tile', detailedSpecification: 'New tile', uom: 'MTR', benchmarkRate: 12.5 }] });
@@ -219,19 +225,19 @@ describe('standard BOQ master page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQItems) }));
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: 'std-exist' } });
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGVitrifiedFloorTile600x600)), { target: { value: 'Duplicate existing' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(/already exists in the central Standard BOQ Master/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.sTDCIV001)), { target: { value: 'STD-NEW' } });
     postResponse = response({ error: 'Master unavailable' }, false);
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText('Master unavailable')).toBeInTheDocument();
     postResponse = response({}, false);
-    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.eGFlooringWiring)), { target: { value: '' } });
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.change(screen.getByRole('combobox', { name: uiStringPattern(UI_STRINGS.common.subcategory) }), { target: { value: 'Wiring' } });
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.userMessages.failedToSaveStandardBoqItems))).toBeInTheDocument();
     fetchMock.mockImplementation((url: string, init?: RequestInit) => init?.method === 'POST' ? Promise.reject(new Error('offline')) : Promise.resolve(response({ data: standardItems })));
-    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.saveLengthItemValue2ToMaster) }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppMastersStandardBoqPage.standardBOQ, '', true) }).closest('form')!);
     expect(await screen.findByText('offline')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
   });

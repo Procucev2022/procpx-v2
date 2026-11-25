@@ -141,7 +141,7 @@ describe('budget versus actual report route', () => {
       kpis: { totalBudget: 1000, totalCommitted: 800, totalActual: 1200, totalRemaining: -200, totalBudgetVariance: -200 },
     } });
     expect(db.budgetTransaction.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      tenantId: 'tenant-1', projectId: 'project-1', status: { in: [UI_STRINGS.common.aPPROVED, 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
+      tenantId: 'tenant-1', projectId: 'project-1', status: { in: [UI_STRINGS.common.aPPROVED, 'PROJECT_APPROVED', 'BUDGET_APPROVED', 'UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL'] },
       costCentreId: 'cc-1', category: UI_STRINGS.componentsRateCardsInitiateRateCardWorkspace.electrical, boqLineId: { in: ['line-1'] },
     } }));
     expect(db.ppoLine.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: {

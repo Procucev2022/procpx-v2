@@ -101,12 +101,12 @@ describe('budget transaction ledger page', () => {
     expect(screen.getAllByText(uiStringPattern(UI_STRINGS.common.system)).length).toBeGreaterThan(0);
 
     const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[1], { target: { value: 'cc-2' } });
+    fireEvent.change(selects[2], { target: { value: 'cc-2' } });
     expect(screen.queryByText('TX-100')).not.toBeInTheDocument();
-    fireEvent.change(selects[1], { target: { value: '' } });
-    fireEvent.change(selects[2], { target: { value: 'Mechanical' } });
-    expect(screen.getByText('TX-300')).toBeInTheDocument();
     fireEvent.change(selects[2], { target: { value: '' } });
+    fireEvent.change(selects[0], { target: { value: 'Mechanical' } });
+    expect(screen.getByText('TX-300')).toBeInTheDocument();
+    fireEvent.change(selects[0], { target: { value: '' } });
     fireEvent.change(selects[3], { target: { value: 'REVERSAL' } });
     expect(screen.getByText('TX-500')).toBeInTheDocument();
     expect(screen.queryByText('TX-100')).not.toBeInTheDocument();
@@ -134,7 +134,7 @@ describe('budget transaction ledger page', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound))).toBeInTheDocument();
     fireEvent.change(search, { target: { value: '' } });
 
-    fireEvent.change(selects[0], { target: { value: 'project-1' } });
+    fireEvent.change(selects[1], { target: { value: 'project-1' } });
     await waitFor(() => expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/api/budgets/transactions?') && String(url).includes('projectId=project-1'))).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.refresh2) }));
     await waitFor(() => expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('/api/budgets/transactions?') && String(url).includes('projectId=project-1')).length).toBeGreaterThan(1));
@@ -257,7 +257,7 @@ describe('budget transaction ledger page', () => {
     render(<BudgetTransactionsPage />);
 
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppBudgetTransactionsPage.noTransactionsFound))).toBeInTheDocument();
-    expect(screen.getAllByRole('combobox')[0]).toHaveValue('project-1');
+    expect(screen.getAllByRole('combobox')[1]).toHaveValue('project-1');
     expect(mockFetch.mock.calls.some(([url]) => String(url).includes('projectId=project-1'))).toBe(true);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();

@@ -58,7 +58,7 @@ function loadBudgetVsActualSummaryGroups(input: {
       SELECT "boqLineId", SUM("amount") AS "amount"
       FROM "budget_transactions"
       WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
-        AND "status" IN ('APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED')
+        AND "status" IN ('APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED', 'UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL')
         AND "boqLineId" IS NOT NULL
         ${transactionCostCentreFilter}
         ${transactionCategoryFilter}
@@ -81,16 +81,27 @@ function loadBudgetVsActualSummaryGroups(input: {
         ${transactionCostCentreFilter}
         ${transactionCategoryFilter}
       GROUP BY "boqLineId"
+    ),
+    category_transactions AS (
+      SELECT "costCentreId", "category", SUM("amount") AS "amount"
+      FROM "budget_transactions"
+      WHERE "tenantId" = ${input.tenantId} AND "projectId" = ${input.projectId}
+        AND "status" IN ('APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED', 'UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL')
+        AND "boqLineId" IS NULL
+        ${transactionCostCentreFilter}
+        ${transactionCategoryFilter}
+      GROUP BY "costCentreId", "category"
     )
     SELECT line_summary."costCentreId" AS "costCentreId",
       line_summary."category" AS "category",
-      SUM(COALESCE(NULLIF(budget_by_line."amount", 0), line_summary."aiTotalCost", 0)) AS "budgetAmount",
+      SUM(COALESCE(NULLIF(budget_by_line."amount", 0), line_summary."aiTotalCost", 0)) + COALESCE(MAX(category_transactions."amount"), 0) AS "budgetAmount",
       SUM(COALESCE(commitment_by_line."amount", 0)) AS "committedAmount",
       SUM(COALESCE(actual_by_line."amount", 0)) AS "actualAmount"
     FROM line_summary
     LEFT JOIN budget_by_line ON budget_by_line."boqLineId" = line_summary."boqLineId"
     LEFT JOIN commitment_by_line ON commitment_by_line."boqLineId" = line_summary."boqLineId"
     LEFT JOIN actual_by_line ON actual_by_line."boqLineId" = line_summary."boqLineId"
+    LEFT JOIN category_transactions ON category_transactions."costCentreId" = line_summary."costCentreId" AND category_transactions."category" = line_summary."category"
     GROUP BY line_summary."costCentreId", line_summary."category"
     ORDER BY line_summary."category" ASC, line_summary."costCentreId" ASC
   `);
@@ -136,7 +147,7 @@ export async function GET(req: NextRequest) {
     const budgetTxWhere: Prisma.BudgetTransactionWhereInput = {
       tenantId: ctx.tenantId,
       projectId,
-      status: { in: ['APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED'] },
+      status: { in: ['APPROVED', 'PROJECT_APPROVED', 'BUDGET_APPROVED', 'UNDER_APPROVAL', 'PENDING_PROJECT_APPROVAL', 'PENDING_FINANCE_APPROVAL'] },
     };
     if (costCentreId) budgetTxWhere.costCentreId = costCentreId;
     if (categoryFilter) budgetTxWhere.category = categoryFilter;
@@ -179,7 +190,7 @@ export async function GET(req: NextRequest) {
 
     const pageLines = await prisma.boqLine.findMany({
       where: boqLineWhere,
-      orderBy: [{ boqRevisionId: 'asc' }, { lineNumber: 'asc' }, { id: 'asc' }],
+      orderBy: [{ aiTotalCost: 'desc' }, { lineNumber: 'asc' }, { id: 'asc' }],
       skip: pageWindow.skip,
       take: pageWindow.pageSize,
       include: {

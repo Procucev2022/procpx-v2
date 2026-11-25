@@ -2695,65 +2695,6 @@ export default function BoqStudioPage() {
                   {validatingQuality ? UI_STRINGS.common.validating : UI_STRINGS.appAppBoqStudioPage.validate}
                 </button>
               </div>
-
-              {/* Primary Action Right */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {activeBoq.purpose === 'PR' ? (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      if (pendingQuantityCount > 0) {
-                        setStatusType('error');
-                        setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.quantityRequiredForPendingQuantityCountItemValue2BeforeBOQSubmission, { "pendingQuantityCount": pendingQuantityCount, "value2": pendingQuantityCount > 1 ? 's' : '' }));
-                        return;
-                      }
-                      setPrModalOpen(true);
-                    }}
-                    disabled={lines.length === 0}
-                    title={pendingQuantityCount > 0 ? interpolateUiString(UI_STRINGS.appAppBoqStudioPage.quantityRequiredForPendingQuantityCountItemsBeforeBOQSubmission, { "pendingQuantityCount": pendingQuantityCount }) : undefined}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontWeight: 700,
-                      fontSize: 12,
-                      padding: '6px 14px',
-                      background: pendingQuantityCount > 0 ? '#94a3b8' : '#2563eb',
-                      borderColor: pendingQuantityCount > 0 ? '#94a3b8' : '#2563eb',
-                      cursor: pendingQuantityCount > 0 ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    <Send size={13} />{UI_STRINGS.appAppBoqStudioPage.submitBOQ}</button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      if (pendingQuantityCount > 0) {
-                        setStatusType('error');
-                        setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.pendingQuantityCountBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget, { "pendingQuantityCount": pendingQuantityCount, "value2": pendingQuantityCount > 1 ? 's' : '' }));
-                        return;
-                      }
-                      setBudgetModalOpen(true);
-                    }}
-                    disabled={lines.length === 0}
-                    title={pendingQuantityCount > 0 ? interpolateUiString(UI_STRINGS.appAppBoqStudioPage.pendingQuantityCountBOQLinesRequireQuantityBeforeAddingToBudget, { "pendingQuantityCount": pendingQuantityCount }) : undefined}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontWeight: 700,
-                      fontSize: 12,
-                      padding: '6px 14px',
-                      background: pendingQuantityCount > 0 ? '#94a3b8' : '#059669',
-                      borderColor: pendingQuantityCount > 0 ? '#94a3b8' : '#059669',
-                      cursor: pendingQuantityCount > 0 ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    <Landmark size={13} />{UI_STRINGS.appAppBoqStudioPage.addToBudget}</button>
-                )}
-              </div>
             </div>
 
             {/* 3. INTEGRATED FINANCIAL SUMMARY */}
@@ -3465,17 +3406,19 @@ export default function BoqStudioPage() {
                   </tbody>
                 </table>
               </div>
-              {lineTotal > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-                  <span role="status" style={{ fontSize: 11, color: '#64748b' }}>
-                    {loadingLines
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                <span role="status" style={{ fontSize: 11, color: '#64748b' }}>
+                  {lineTotal > 0 && (
+                    loadingLines
                       ? UI_STRINGS.appAppBoqStudioPage.loadingMoreLines
                       : interpolateUiString(UI_STRINGS.appAppBoqStudioPage.showingLoadedOfTotalLines, {
                         loaded: lines.length,
                         total: Math.max(lineTotal, lines.length),
-                      })}
-                  </span>
-                  {lineNextCursor && !isEditingBoq && (
+                      })
+                  )}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {lineTotal > 0 && lineNextCursor && !isEditingBoq && (
                     <button
                       type="button"
                       className="btn btn-outline"
@@ -3486,8 +3429,63 @@ export default function BoqStudioPage() {
                       {UI_STRINGS.appAppBoqStudioPage.loadMoreLines}
                     </button>
                   )}
+                  {activeBoq.purpose === 'PR' ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (pendingQuantityCount > 0) {
+                          setStatusType('error');
+                          setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.quantityRequiredForPendingQuantityCountItemValue2BeforeBOQSubmission, { "pendingQuantityCount": pendingQuantityCount, "value2": pendingQuantityCount > 1 ? 's' : '' }));
+                          return;
+                        }
+                        setPrModalOpen(true);
+                      }}
+                      disabled={lines.length === 0}
+                      title={pendingQuantityCount > 0 ? interpolateUiString(UI_STRINGS.appAppBoqStudioPage.quantityRequiredForPendingQuantityCountItemsBeforeBOQSubmission, { "pendingQuantityCount": pendingQuantityCount }) : undefined}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        padding: '6px 14px',
+                        background: pendingQuantityCount > 0 ? '#94a3b8' : '#2563eb',
+                        borderColor: pendingQuantityCount > 0 ? '#94a3b8' : '#2563eb',
+                        cursor: pendingQuantityCount > 0 ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <Send size={13} />{UI_STRINGS.appAppBoqStudioPage.submitBOQ}</button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (pendingQuantityCount > 0) {
+                          setStatusType('error');
+                          setStatusMessage(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.pendingQuantityCountBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget, { "pendingQuantityCount": pendingQuantityCount, "value2": pendingQuantityCount > 1 ? 's' : '' }));
+                          return;
+                        }
+                        setBudgetModalOpen(true);
+                      }}
+                      disabled={lines.length === 0}
+                      title={pendingQuantityCount > 0 ? interpolateUiString(UI_STRINGS.appAppBoqStudioPage.pendingQuantityCountBOQLinesRequireQuantityBeforeAddingToBudget, { "pendingQuantityCount": pendingQuantityCount }) : undefined}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        padding: '6px 14px',
+                        background: pendingQuantityCount > 0 ? '#94a3b8' : '#059669',
+                        borderColor: pendingQuantityCount > 0 ? '#94a3b8' : '#059669',
+                        cursor: pendingQuantityCount > 0 ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <Landmark size={13} />{UI_STRINGS.appAppBoqStudioPage.addToBudget}</button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}

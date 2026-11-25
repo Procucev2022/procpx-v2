@@ -48,7 +48,23 @@ jest.mock('../src/components/ui/EmptyState', () => ({
 
 const originalFetch = global.fetch;
 const categories: BudgetCategory[] = [
-  { category: 'Electrical', budget: 35000, approvedBudget: 30000, pendingBudget: 5000, ratePerSqFt: 30, actualRatePerSqFt: 12, balanceRatePerSqFt: 18, actual: 12000, balance: 18000, status: 'UNDER_PROJECT_APPROVAL', txCount: 2 },
+  {
+    category: 'Electrical',
+    budget: 35000,
+    approvedBudget: 30000,
+    pendingBudget: 5000,
+    ratePerSqFt: 30,
+    actualRatePerSqFt: 12,
+    balanceRatePerSqFt: 18,
+    actual: 12000,
+    balance: 18000,
+    status: 'UNDER_PROJECT_APPROVAL',
+    txCount: 2,
+    subcategories: [
+      { subcategory: 'Wiring & Cables', budget: 20000, approvedBudget: 18000, pendingBudget: 2000, balance: 18000, ratePerSqFt: 18 },
+      { subcategory: 'Lighting Fixtures', budget: 15000, approvedBudget: 12000, pendingBudget: 3000, balance: 12000, ratePerSqFt: 12 },
+    ],
+  },
   { category: 'Civil', budget: 20000, approvedBudget: 20000, pendingBudget: 0, ratePerSqFt: null, actualRatePerSqFt: null, balanceRatePerSqFt: null, actual: 0, balance: 20000, status: 'PENDING FINANCE APPROVAL', txCount: 1 },
   { category: 'Power', budget: 12000, approvedBudget: 10000, pendingBudget: 2000, ratePerSqFt: 10, actualRatePerSqFt: 3, balanceRatePerSqFt: 7, actual: 3000, balance: 7000, status: 'APPROVED', txCount: 2 },
   { category: 'Rejected', budget: 0, approvedBudget: 0, pendingBudget: 0, ratePerSqFt: 0, actualRatePerSqFt: 0, balanceRatePerSqFt: 0, actual: 0, balance: 0, status: 'REJECTED', txCount: 1 },
@@ -133,11 +149,14 @@ describe('project budget workspace', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBudgetPage.costPerSqft))).toBeInTheDocument();
     expect(screen.getByText('3 Budget Contributions Under Approval for Civil Works')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBudgetPage.approveBudget, '', false) })).toHaveLength(3);
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.underProjectApproval))).toBeInTheDocument();
-    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.underFinanceApproval))).toBeInTheDocument();
-    expect(screen.getByText('Partially Approved')).toBeInTheDocument();
-    expect(screen.getByText('ON HOLD')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.ledger) })).toHaveAttribute('href', '/budget/transactions');
+    expect(screen.getByText('Wiring & Cables')).toBeInTheDocument();
+    expect(screen.getByText('Lighting Fixtures')).toBeInTheDocument();
+    expect(screen.queryByText(uiStringPattern(UI_STRINGS.common.approvalStatus))).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(interpolateUiString(UI_STRINGS.appAppBudgetPage.collapseCategory, { category: 'Electrical' })));
+    expect(screen.queryByText('Wiring & Cables')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(interpolateUiString(UI_STRINGS.appAppBudgetPage.expandCategory, { category: 'Electrical' })));
+    expect(screen.getByText('Wiring & Cables')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.common.ledger) })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.common.budgetVsActual) })).toHaveAttribute('href', '/budget/vs-actual');
 
     fireEvent.click(screen.getByRole('button', { name: /CC-02/ }));

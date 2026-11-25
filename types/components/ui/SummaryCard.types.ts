@@ -14,11 +14,13 @@ export interface SummaryCardProps {
   /** Optional badge or trend indicator */
   badge?: React.ReactNode;
   /** Restrained accent style */
-  accent?: 'default' | 'neutral' | 'blue' | 'emerald' | 'amber' | 'rose' | 'slate';
+  accent?: 'default' | 'neutral' | 'blue' | 'emerald' | 'amber' | 'rose' | 'slate' | 'purple' | 'indigo';
   /** Extra CSS classes */
   className?: string;
   /** Optional subtitle or description (alias for secondary) */
   description?: string;
+  /** Card visual variant: standard KPI metric card with colored left border (default) or legacy boxed card */
+  variant?: 'default' | 'kpi' | 'legacy';
 }
 
 export interface SummaryCardGridProps {

@@ -9,6 +9,7 @@ import QuotesHubPage from '../src/app/(app)/procurement/quotes/page';
 import NegotiationsHubPage from '../src/app/(app)/procurement/negotiations/page';
 import AwardsDeskPage from '../src/app/(app)/procurement/awards/page';
 import ProjectsPage from '../src/app/(app)/projects/page';
+import { STATUS_OPTIONS, SECTOR_OPTIONS, PROJECTS_PAGE_SIZE } from '../src/app/(app)/projects/page.constants';
 
 const mockToastSuccess = jest.fn();
 const mockToastError = jest.fn();
@@ -244,37 +245,105 @@ describe('procurement register pages', () => {
     (global.fetch as jest.Mock).mockResolvedValue({ json: async () => ({ data: [], total: 41 }) });
     const projectsView = render(<ProjectsPage />);
     expect(await screen.findByText('Retail Store')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"New","toLocaleString":"Project"})) })).toHaveAttribute('href', '/projects/new');
+    const newProjectBtn = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) });
+    expect(newProjectBtn).toBeInTheDocument();
     expect(screen.getByText('NEW BUILD')).toBeInTheDocument();
     expect(screen.getByText('Pune')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
 
+    // Open create project modal
+    fireEvent.click(newProjectBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.createNewProject))).toBeInTheDocument();
+
+    // Validation checks
+    fireEvent.submit(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsNewPage.createProject) }).closest('form')!);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.projectNameIsRequired))).toBeInTheDocument();
+
+    const nameInput = screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.eGPremiumRetailStoreBengaluruFlagship));
+    fireEvent.change(nameInput, { target: { value: 'New Test Store' } });
+    fireEvent.submit(nameInput.closest('form')!);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.sectorIsRequired))).toBeInTheDocument();
+
+    const sectorSelect = screen.getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.selectSector));
+    fireEvent.change(sectorSelect, { target: { value: 'RETAIL' } });
+    fireEvent.submit(nameInput.closest('form')!);
+    expect(screen.getByText(uiStringPattern(UI_STRINGS.common.projectTypeIsRequired))).toBeInTheDocument();
+
+    const typeSelect = screen.getByDisplayValue(uiStringPattern(UI_STRINGS.appAppProjectsNewPage.selectType));
+    fireEvent.change(typeSelect, { target: { value: 'FIT_OUT' } });
+
+    // Test API error and network rejection
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: 'Server exploded' }) });
+    fireEvent.submit(nameInput.closest('form')!);
+    expect(await screen.findByText(/Server exploded/)).toBeInTheDocument();
+
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network offline'));
+    fireEvent.submit(nameInput.closest('form')!);
+    expect(await screen.findByText(/Network offline/)).toBeInTheDocument();
+
+    // Test successful submission
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'new-p1' }) });
+    fireEvent.submit(nameInput.closest('form')!);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // Test Escape key, close button, and cancel button
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.closeDialog) }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Test backdrop click
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) }));
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.next, "", false) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=2')));
-    fireEvent.click(screen.getAllByRole('button')[0]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.copy1cahyqy) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=1')));
-    fireEvent.click(screen.getAllByRole('button')[2]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.next, "", false) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=2')));
-    fireEvent.click(screen.getAllByRole('button')[1]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.prev) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=1')));
-    fireEvent.click(screen.getAllByRole('button')[2]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.next, "", false) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=2')));
-    fireEvent.click(screen.getAllByRole('button')[3]);
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.copy1gqblui) }));
     await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=3')));
-    fireEvent.change(screen.getByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProjectsPage.searchByNameCodeCity)), { target: { value: 'Hotel' } });
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('page=1')));
-    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'DRAFT' } });
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('status=DRAFT')));
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'RETAIL' } });
-    await waitFor(() => expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('sector=RETAIL')));
+    expect(screen.queryByPlaceholderText(uiStringPattern(UI_STRINGS.appAppProjectsPage.searchByNameCodeCity))).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+    expect(STATUS_OPTIONS).toContain('DRAFT');
+    expect(SECTOR_OPTIONS).toContain('RETAIL');
+    expect(PROJECTS_PAGE_SIZE).toBe(20);
     projectsView.unmount();
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ json: async () => ({ user: { role: 'PROJECT_USER' } }) })
+      .mockResolvedValueOnce({ json: async () => ({ data: [], total: 0 }) });
+    const emptyView = render(<ProjectsPage />);
+    expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsPage.noProjectsFound))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.createProject) }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    emptyView.unmount();
 
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({ json: async () => ({ user: { role: 'VIEWER' } }) })
       .mockResolvedValueOnce({ json: async () => ({ total: 1 }) });
     render(<ProjectsPage />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsPage.noProjectsFound))).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"New","toLocaleString":"Project"})) })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) })).not.toBeInTheDocument();
     expect(screen.getByText(uiStringPattern(interpolateUiString(UI_STRINGS.appAppProjectsPage.totalCapexProjectValue2InPlatformWorkspace, {"total":"1","value2":""})))).toBeInTheDocument();
     cleanup();
 
@@ -283,7 +352,7 @@ describe('procurement register pages', () => {
       .mockResolvedValueOnce({ json: async () => ({ data: [], total: 0 }) });
     render(<ProjectsPage />);
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppProjectsPage.noProjectsFound))).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"New","toLocaleString":"Project"})) })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: uiStringPattern(UI_STRINGS.appAppProjectsPage.newProject) })).not.toBeInTheDocument();
     cleanup();
 
     (global.fetch as jest.Mock)

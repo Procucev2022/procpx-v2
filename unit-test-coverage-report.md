@@ -6,10 +6,10 @@ Files included: **378**. Files meeting all four 90% thresholds: **378/378**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.32% (103646/104352) |
-| branches | 93.86% (23756/25309) |
-| functions | 98.51% (2062/2093) |
-| lines | 99.32% (103646/104352) |
+| statements | 99.31% (102991/103704) |
+| branches | 93.78% (23644/25211) |
+| functions | 98.60% (2047/2076) |
+| lines | 99.31% (102991/103704) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -32,21 +32,21 @@ Files included: **378**. Files meeting all four 90% thresholds: **378/378**.
 | `src/app/(app)/boq/upload/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/upload/page.tsx` | 100.00% | 94.80% | 90.90% | 100.00% | PASS |
 | `src/app/(app)/budget/cost-centres/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/budget/page.tsx` | 99.73% | 91.63% | 100.00% | 99.73% | PASS |
+| `src/app/(app)/budget/page.tsx` | 99.74% | 90.79% | 100.00% | 99.74% | PASS |
 | `src/app/(app)/budget/project/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/budget/status/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/budget/transactions/page.tsx` | 100.00% | 92.30% | 95.00% | 100.00% | PASS |
-| `src/app/(app)/budget/vs-actual/page.tsx` | 100.00% | 90.40% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/budget/vs-actual/page.tsx` | 100.00% | 92.59% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/cost-centres/page.tsx` | 99.42% | 92.78% | 100.00% | 99.42% | PASS |
-| `src/app/(app)/dashboard/page.tsx` | 98.90% | 90.60% | 100.00% | 98.90% | PASS |
+| `src/app/(app)/dashboard/page.tsx` | 98.97% | 90.84% | 98.57% | 98.97% | PASS |
 | `src/app/(app)/error.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/finance/budget-approvals/page.tsx` | 98.05% | 91.60% | 96.15% | 98.05% | PASS |
 | `src/app/(app)/layout.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/masters/categories/page.tsx` | 100.00% | 96.77% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/masters/categories/page.tsx` | 100.00% | 97.02% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/masters/standard-boq/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/masters/standard-boq/page.tsx` | 99.37% | 94.67% | 98.14% | 99.37% | PASS |
-| `src/app/(app)/pr/new/page.tsx` | 100.00% | 94.31% | 91.66% | 100.00% | PASS |
-| `src/app/(app)/pr/page.tsx` | 100.00% | 98.70% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/masters/standard-boq/page.tsx` | 98.99% | 91.54% | 98.18% | 98.99% | PASS |
+| `src/app/(app)/pr/new/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/pr/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/approved-boqs/page.tsx` | 100.00% | 93.58% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/approved-prs/page.tsx` | 100.00% | 95.71% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/procurement/auctions/[id]/page.tsx` | 99.66% | 92.55% | 100.00% | 99.66% | PASS |
@@ -69,7 +69,7 @@ Files included: **378**. Files meeting all four 90% thresholds: **378/378**.
 | `src/app/(app)/projects/new/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/projects/new/page.tsx` | 100.00% | 96.77% | 95.45% | 100.00% | PASS |
 | `src/app/(app)/projects/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/projects/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/(app)/projects/page.tsx` | 99.71% | 95.77% | 100.00% | 99.71% | PASS |
 | `src/app/(app)/vendor-portal/auctions/[id]/page.tsx` | 99.29% | 90.22% | 100.00% | 99.29% | PASS |
 | `src/app/(app)/vendor-portal/auctions/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/vendor-portal/dashboard/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -145,7 +145,7 @@ Files included: **378**. Files meeting all four 90% thresholds: **378/378**.
 | `src/app/api/budgets/[id]/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/add-boq/route.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/approve/route.ts` | 100.00% | 96.55% | 100.00% | 100.00% | PASS |
-| `src/app/api/budgets/categories/route.ts` | 100.00% | 96.00% | 100.00% | 100.00% | PASS |
+| `src/app/api/budgets/categories/route.ts` | 100.00% | 92.10% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/finance-approve/route.ts` | 100.00% | 95.45% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/finance-reject/route.ts` | 100.00% | 95.23% | 100.00% | 100.00% | PASS |
 | `src/app/api/budgets/reject/route.ts` | 100.00% | 95.65% | 100.00% | 100.00% | PASS |
