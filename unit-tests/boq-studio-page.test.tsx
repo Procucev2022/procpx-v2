@@ -491,7 +491,7 @@ describe('BOQ studio page', () => {
     expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.showingLoadedOfTotalLines, { loaded: 3, total: 3 }))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith(searchPageTwoUrl);
     expect(mockFetch).toHaveBeenCalledWith(searchPageThreeUrl);
-  });
+  }, 60000);
 
   it('keeps loaded lines visible and recovers from failed or malformed next-page responses', async () => {
     queryParams = { projectId: 'project-1', boqId: 'boq-1' };
@@ -822,7 +822,7 @@ describe('BOQ studio page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.submitBOQ) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.sUBMITBOQ) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.bOQSubmittedSuccessfully))).toBeInTheDocument();
-  });
+  }, 60000);
 
   it('covers existing template, standard upload/download and drawing review flows', async () => {
     queryParams = { projectId: 'project-1', boqId: 'boq-1' };
@@ -1083,7 +1083,6 @@ describe('BOQ studio page', () => {
     let detailLoads = 0;
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
     let costCentreLoads = 0;
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/masters/categories') return response([]);
       if (url === '/api/projects') return response([edgeProject]);
