@@ -2,7 +2,7 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
+Files included: **378**. Files meeting all four 90% thresholds: **378/378**.
 
 | Overall | Coverage |
 | --- | ---: |
@@ -28,7 +28,7 @@ Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
 | `src/app/(app)/boq/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/standard-library/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/studio/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/app/(app)/boq/studio/page.tsx` | 98.89% | 91.12% | 97.56% | 98.89% | PASS |
+| `src/app/(app)/boq/studio/page.tsx` | 98.87% | 90.97% | 96.34% | 98.87% | PASS |
 | `src/app/(app)/boq/upload/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/(app)/boq/upload/page.tsx` | 100.00% | 94.80% | 90.90% | 100.00% | PASS |
 | `src/app/(app)/budget/cost-centres/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -262,6 +262,8 @@ Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
 | `src/app/login/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/login/page.tsx` | 100.00% | 98.24% | 97.36% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/vendor-pipeline/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/vendor-pipeline/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/admin/company-form.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/admin/CreateCompanyModal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/admin/RoleLimitFields.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
@@ -356,7 +358,7 @@ Files included: **376**. Files meeting all four 90% thresholds: **376/376**.
 | `src/lib/observability/query-logging.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/runtime-logger.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/server-logger.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
-| `src/lib/observability/server-logger.ts` | 98.18% | 97.59% | 100.00% | 98.18% | PASS |
+| `src/lib/observability/server-logger.ts` | 98.18% | 97.50% | 100.00% | 98.18% | PASS |
 | `src/lib/observability/shared.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/lib/observability/shared.ts` | 100.00% | 98.48% | 100.00% | 100.00% | PASS |
 | `src/lib/password.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
