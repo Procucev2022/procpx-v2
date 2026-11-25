@@ -3,13 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { sumD1BatchChanges, toBulkBoqLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   BOQ_DUPLICATE_AUDIT_INSERT_AFTER_CHANGE_SQL,
   BOQ_DUPLICATE_INSERT_NEXT_CODE_SQL,
   BOQ_LINE_INSERT_AFTER_REVISION_SQL,
   BOQ_REVISION_INSERT_AFTER_HEADER_SQL,
-  BOQ_REVISION_UPDATE_LINE_COUNTS_AFTER_LINES_SQL,
+  BOQ_REVISION_UPDATE_LINE_COUNTS_IF_LINES_PRESENT_SQL,
   MAX_BOQ_BATCH_LINES,
 } from '@/lib/d1-batch.constants';
 import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
         now, now, newBoqId, ctx.tenantId, sourceBoq.projectId],
     }];
 
-    for (const line of sourceLines) {
-      statements.push({
+    // JSON bulk statements copy large BOQs inside this one atomic batch.
+    const lineStatements = toBulkBoqLineInsertStatements(sourceLines.map((line) => ({
         sql: BOQ_LINE_INSERT_AFTER_REVISION_SQL,
         values: [
           crypto.randomUUID(), ctx.tenantId, newRevisionId, line.lineNumber, line.originalDescription,
@@ -111,14 +111,14 @@ export async function POST(req: NextRequest) {
           nullable(line.costMethod), nullable(line.costDate), nullable(line.geography), now, now,
           newRevisionId, ctx.tenantId,
         ],
-      });
-    }
+      })));
+    statements.push(...lineStatements);
 
     if (sourceLines.length > 0) {
       const validLines = Math.min(sourceRevision?.validLines ?? sourceLines.length, sourceLines.length);
       statements.push({
-        sql: BOQ_REVISION_UPDATE_LINE_COUNTS_AFTER_LINES_SQL,
-        values: [sourceLines.length, validLines, now, newRevisionId, ctx.tenantId],
+        sql: BOQ_REVISION_UPDATE_LINE_COUNTS_IF_LINES_PRESENT_SQL,
+        values: [sourceLines.length, validLines, now, newRevisionId, ctx.tenantId, newRevisionId, ctx.tenantId, sourceLines.length],
       });
     }
     statements.push({
@@ -135,7 +135,8 @@ export async function POST(req: NextRequest) {
     }
     const boqCode = String(results[0]?.results?.[0]?.boqCode || '');
     if (!boqCode) return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
-    if (sourceLines.length > 0 && Number(results[2 + sourceLines.length]?.meta?.changes || 0) !== 1) {
+    if (sourceLines.length > 0 && (sumD1BatchChanges(results, 2, lineStatements.length) !== sourceLines.length
+      || Number(results[2 + lineStatements.length]?.meta?.changes || 0) !== 1)) {
       return apiError(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh, 409);
     }
     if (Number(results[results.length - 1]?.meta?.changes || 0) !== 1) {

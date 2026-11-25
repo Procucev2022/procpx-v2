@@ -13,7 +13,7 @@ npm install
 cp .env.example .env
 ```
 
-Cloudflare D1 is the only application database; there is no local SQLite runtime. `npm run dev` uses the ordinary local Wrangler D1 state under ignored `.wrangler/`. Regression fixtures use a separate persistent local D1 at `.wrangler/e2e-d1`, so fixture setup cannot alter the ordinary development database. Remote D1 is accessed only through explicit `:remote` commands after Wrangler credentials are configured.
+Cloudflare D1 is the only application database; there is no local SQLite runtime. `npm run dev` connects to the shared `procpx-dev` D1 database and R2 bucket on Cloudflare (needs `npx wrangler login`); `npm run dev:local` uses a private local Wrangler D1 under ignored `.wrangler/` instead. Regression fixtures use a separate persistent local D1 at `.wrangler/e2e-d1`, so fixture setup cannot alter the development database. Remote migrations and integrity checks still run only through explicit `:remote` commands.
 
 ### 2. Initialize Database Schema
 Local D1 state (under the ignored `.wrangler/` folder, used by the quality checks):
@@ -46,18 +46,15 @@ The command applies ordered Wrangler migrations and uses stable `fx-` IDs with i
 **D1 transaction safety:** Prisma's D1 adapter ignores Prisma transaction boundaries, including callback and array transactions. The Prisma proxy rejects explicit `$transaction` calls. RFQ invitations, vendor quote submission, negotiation round submission, and PPO creation write their related records through native D1 batches, which execute sequentially and roll back together on failure. Additions that require atomic multi-write behavior must use the shared D1 batch helper.
 
 ### 3. Launch Development Server
+The default runs the local app against the **development server data** (the `procpx-dev` D1 database and `procpx-uploads` R2 bucket in `wrangler.jsonc`):
 ```bash
-npm run dev
+npx wrangler login      # once; the account must have access to the account_id in wrangler.jsonc
+npm run dev             # `npm run dev:remote` is an alias
 ```
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-To run the local app against the **deployed server data** (the `procpx-dev` D1 database and `procpx-uploads` R2 bucket in `wrangler.jsonc`):
-```bash
-npx wrangler login      # once; the account must have access to the account_id in wrangler.jsonc
-npm run dev:remote
-```
-Remote mode uses the `remote` Wrangler environment, whose bindings are marked `"remote": true`. Every record you create, edit or approve is written to the shared server database, so follow the D1 persistence rules in `AGENTS.md`. Both `npm run dev` and `npm run dev:remote` first check `.env` and report problems: a missing `NEXTAUTH_SECRET`, an `NEXTAUTH_URL` that doesn't match the port, a leftover `DATABASE_URL`, or a mismatched `CLOUDFLARE_ACCOUNT_ID`.
+This uses the `remote` Wrangler environment, whose bindings are marked `"remote": true`. Every record you create, edit or approve is written to the shared development database, so follow the D1 persistence rules in `AGENTS.md`. To work against a private, empty local D1 under `.wrangler/` instead, run `npm run dev:local`. Every dev command first checks `.env` and refuses to start when the file or a required setting is missing; it also reports an `NEXTAUTH_URL` that doesn't match the port, a leftover `DATABASE_URL`, or a mismatched `CLOUDFLARE_ACCOUNT_ID`.
 
 For a D1-backed workflow regression, seed the isolated test D1 and start the OpenNext Worker against the same state:
 ```bash
@@ -81,7 +78,7 @@ The app runs on Cloudflare Workers through [OpenNext](https://opennext.js.org/cl
 
 **Logs and errors:** every `apiError` response is logged (`http.api_error_response` for 5xx with the caught error, `api.request_rejected` for 4xx), Prisma failures and slow queries are logged as `db.query_failed` / `db.query_slow`, and browser crashes and failed API calls are posted to `/api/observability/client` (`browser.*` events). In Cloudflare, open Workers Logs for the `procpx` worker and filter on these event names; locally use `npm run logs:search -- --level error --since 24h`.
 
-**Database provider:** application runtime always uses D1. `npm run dev` selects Wrangler's local D1 binding; `npm start` runs the Cloudflare Worker preview. Do not configure `DATABASE_URL` or Prisma SQLite for application runtime. Remote D1 migrations and integrity checks require the explicit `npm run db:d1:migrate:remote` and `npm run db:integrity:remote` commands.
+**Database provider:** application runtime always uses D1. `npm run dev` uses the remote `procpx-dev` D1 binding and `npm run dev:local` the local Wrangler binding; `npm start` runs the Cloudflare Worker preview. Do not configure `DATABASE_URL` or Prisma SQLite for application runtime. Remote D1 migrations and integrity checks require the explicit `npm run db:d1:migrate:remote` and `npm run db:integrity:remote` commands.
 
 **Schema changes:** add a numbered SQL file to `migrations/` (generate it with `npx prisma migrate diff`), apply it locally with `npm run db:migrate:safe`, then remotely with `npm run db:d1:migrate:remote` (alias: `npm run cf:migrate`). Never use `prisma db push`.
 

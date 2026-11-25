@@ -66,3 +66,9 @@ export const CATEGORY_RULES: Array<{ category: string; keywords: string[] }> = [
 export const KNOWN_UOMS = [
   'SQFT', 'SQM', 'NOS', 'MTR', 'RFT', 'CUM', 'SET', 'LOT', 'EA', 'KG', 'PAC', 'BAG',
 ];
+
+/** AI vision providers; model names can be overridden per environment without a code change. */
+export const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+export const DEFAULT_GEMINI_VISION_MODEL = 'gemini-2.5-flash';
+export const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
+export const DEFAULT_OPENAI_VISION_MODEL = 'gpt-4o-mini';

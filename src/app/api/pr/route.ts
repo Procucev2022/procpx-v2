@@ -1,3 +1,4 @@
+import type { D1BatchInputStatement } from '@app-types/lib/d1-batch.types';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError, getListPageWindow } from '@/lib/api-utils';
@@ -5,14 +6,14 @@ import { getUserProjectAccessFilter, isUserAuthorizedForProject } from '@/lib/pr
 import { MAX_D1_QUERY_FILTER_VALUES } from '@/lib/d1-query.constants';
 import { readSelectedPrBoqLines } from '@/lib/pr-line-selection';
 import type { SelectedPrBoqLine } from '@app-types/lib/pr-line-selection.types';
-import { isD1BatchWithinLimits, writeD1BatchAtomically } from '@/lib/d1-batch';
+import { isD1BatchWithinLimits, toBulkPrLineInsertStatements, writeD1BatchAtomically } from '@/lib/d1-batch';
 import {
   MAX_PR_BATCH_LINES,
   PROCUREMENT_REQUEST_AUDIT_INSERT_AFTER_BOQ_UPDATE_SQL,
   PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,
   PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
   PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
-  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
+  PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL,
 } from '@/lib/d1-batch.constants';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
 import { interpolateUiString } from '@/lib/i18n';
@@ -224,7 +225,7 @@ export async function POST(req: NextRequest) {
     }
     const roundedTotal = Math.round(totalEstimatedValue * 100) / 100;
     const requiredAtValue = requiredAt?.toISOString() || null;
-    const batch = [{
+    const batch: D1BatchInputStatement[] = [{
       sql: PROCUREMENT_REQUEST_INSERT_IF_VALID_SQL,
       values: [
         prId, ctx.tenantId, String(requestedAt.getFullYear()), ctx.tenantId, String(requestedAt.getFullYear()),
@@ -236,11 +237,12 @@ export async function POST(req: NextRequest) {
         ctx.tenantId, revision.id,
       ],
     }];
+    const prLineStatements: typeof batch = [];
     for (const [index, line] of targetLines.entries()) {
       const rate = line.aiUnitCost || 0;
       const quantity = line.quantity as number;
       const lineValue = line.aiTotalCost || rate * quantity;
-      batch.push({
+      prLineStatements.push({
         sql: PROCUREMENT_REQUEST_LINE_INSERT_AFTER_PARENT_SQL,
         values: [
           crypto.randomUUID(), ctx.tenantId, prId, targetProjectId, targetCostCentreId,
@@ -252,9 +254,11 @@ export async function POST(req: NextRequest) {
         ],
       });
     }
+    // JSON bulk PR lines keep PRs from large BOQs inside this one atomic batch.
+    batch.push(...toBulkPrLineInsertStatements(prLineStatements, prId, ctx.tenantId));
     batch.push({
-      sql: PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_LINES_SQL,
-      values: [targetCostCentreId, initialStatus, createdAt, revision.id, ctx.tenantId],
+      sql: PROCUREMENT_REQUEST_REVISION_UPDATE_AFTER_ALL_LINES_SQL,
+      values: [targetCostCentreId, initialStatus, createdAt, revision.id, ctx.tenantId, prId, ctx.tenantId, targetLines.length],
     });
     batch.push({
       sql: PROCUREMENT_REQUEST_BOQ_UPDATE_AFTER_REVISION_SQL,

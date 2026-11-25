@@ -3,6 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { deleteUpload, readUpload, saveUpload } from '../src/lib/storage';
 import { UI_STRINGS } from '../src/lib/ui-strings.constants';
+import { interpolateUiString } from '../src/lib/i18n';
 import { isCloudflareWorker } from '../src/lib/runtime';
 
 jest.mock('fs/promises', () => ({ mkdir: jest.fn(), writeFile: jest.fn(), readFile: jest.fn(), unlink: jest.fn() }));
@@ -14,8 +15,16 @@ const cloudflareContext = getCloudflareContext as jest.Mock;
 const bucket = { put: jest.fn(), get: jest.fn(), delete: jest.fn() };
 
 describe('upload storage', () => {
+  const originalUploadDir = process.env.UPLOAD_DIR;
+
+  afterAll(() => {
+    if (originalUploadDir === undefined) delete process.env.UPLOAD_DIR;
+    else process.env.UPLOAD_DIR = originalUploadDir;
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.UPLOAD_DIR = './uploads';
     onWorker.mockReturnValue(false);
     cloudflareContext.mockReturnValue({ env: { UPLOADS: bucket } });
   });
@@ -28,6 +37,18 @@ describe('upload storage', () => {
     expect(mkdir).toHaveBeenCalledWith(expectedDir, { recursive: true });
     expect(writeFile).toHaveBeenCalledWith(path.join(expectedDir, 'file.xlsx'), data);
     expect(ref).toBe(path.join(expectedDir, 'file.xlsx'));
+  });
+
+  it('writes local uploads under the configured UPLOAD_DIR', async () => {
+    process.env.UPLOAD_DIR = 'custom-files';
+    const ref = await saveUpload(['tenant-1'], 'file.xlsx', Buffer.from('boq'));
+    expect(ref).toBe(path.join(process.cwd(), 'custom-files', 'tenant-1', 'file.xlsx'));
+  });
+
+  it('refuses local uploads when UPLOAD_DIR is not set', async () => {
+    delete process.env.UPLOAD_DIR;
+    await expect(saveUpload(['tenant-1'], 'file.xlsx', Buffer.from('boq'))).rejects.toThrow(interpolateUiString(UI_STRINGS.libEnv.missingRequiredSettings, { names: 'UPLOAD_DIR' }));
+    expect(writeFile).not.toHaveBeenCalled();
   });
 
   it('reads local uploads from disk', async () => {

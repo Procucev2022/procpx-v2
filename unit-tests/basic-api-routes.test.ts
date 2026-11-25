@@ -259,6 +259,22 @@ describe('basic API routes', () => {
     });
   });
 
+  it('ignores the test-user header in production so no one can read another user\'s identity', async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const previous = env.NODE_ENV;
+    env.NODE_ENV = 'production';
+    try {
+      prismaMock.user.findUnique.mockClear();
+      authMock.mockResolvedValue(null);
+      await expect(getMe(request('/api/auth/me', { headers: { 'x-test-user-id': 'user-1' } }))).resolves.toEqual({
+        ok: false, error: UI_STRINGS.appApiAuthMeRoute.unauthorized, status: 401,
+      });
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    } finally {
+      env.NODE_ENV = previous;
+    }
+  });
+
   it('enforces vendor PPO account mapping and handles listing failures', async () => {
     requireAuthMock.mockResolvedValueOnce({ status: 401 });
     isApiContextMock.mockReturnValueOnce(false);

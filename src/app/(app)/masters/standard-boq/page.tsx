@@ -1,6 +1,6 @@
 'use client';
 // src/app/(app)/masters/standard-boq/page.tsx - Standard BOQ Creation & Central Master
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import {
@@ -20,16 +20,39 @@ import {
   FileUp,
   AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { SummaryCard, SummaryCardGrid } from '@/components/ui/SummaryCard';
 import SpecificationCell from '@/components/ui/SpecificationCell';
-import type { StandardItem } from "@app-types/app/(app)/masters/standard-boq/page.types";
+import type { StandardItem, StandardItemGroup, StandardItemGroupPreset } from "@app-types/app/(app)/masters/standard-boq/page.types";
 import { COMMON_UOMS, SECTORS, STANDARD_BOQ_LIST_PAGE_SIZE } from "./page.constants";
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
 
 
+
+/** One row per unique Category + Sub-category (sorted), holding its items, sectors and rate range. */
+function groupStandardItems(items: StandardItem[]): StandardItemGroup[] {
+  const groups = new Map<string, StandardItemGroup>();
+  for (const item of items) {
+    const subcategory = item.subcategory || 'General';
+    const key = `${item.category}\u0000${subcategory}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, category: item.category, subcategory, sectors: [], items: [], minRate: null, maxRate: null };
+      groups.set(key, group);
+    }
+    group.items.push(item);
+    if (item.sector && !group.sectors.includes(item.sector)) group.sectors.push(item.sector);
+    if (item.benchmarkRate !== null && item.benchmarkRate !== undefined) {
+      group.minRate = group.minRate === null ? item.benchmarkRate : Math.min(group.minRate, item.benchmarkRate);
+      group.maxRate = group.maxRate === null ? item.benchmarkRate : Math.max(group.maxRate, item.benchmarkRate);
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => a.category.localeCompare(b.category) || a.subcategory.localeCompare(b.subcategory));
+}
 
 export default function StandardBoqCreationPage() {
   const [items, setItems] = useState<StandardItem[]>([]);
@@ -47,6 +70,7 @@ export default function StandardBoqCreationPage() {
   const [sectorFilter, setSectorFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 
   // Creation Modal / Form State
   const [modalOpen, setModalOpen] = useState(false);
@@ -177,14 +201,20 @@ export default function StandardBoqCreationPage() {
     }
   };
 
-  const handleOpenModal = () => {
+  // A group row passes its category, sub-category and sector so new items land in that group.
+  const handleOpenModal = (preset?: StandardItemGroupPreset) => {
     if (!canEdit) return;
     setFormError(null);
-    if (!selectedCategory && categories.length > 0) {
+    const category = preset?.category || selectedCategory;
+    if (preset) {
+      setSelectedCategory(preset.category);
+      setSelectedSubcategory(preset.subcategory);
+      setSector(preset.sector);
+    } else if (!selectedCategory && categories.length > 0) {
       setSelectedCategory(categories[0].name);
     }
     // Auto-generate starting code if empty
-    const codePrefix = 'STD-' + (selectedCategory ? selectedCategory.substring(0, 3).toUpperCase() : 'CIV');
+    const codePrefix = 'STD-' + (category ? category.substring(0, 3).toUpperCase() : 'CIV');
     setLineItems([
       {
         itemCode: `${codePrefix}-${String(items.length + 1).padStart(3, '0')}`,
@@ -543,6 +573,17 @@ export default function StandardBoqCreationPage() {
       it.category.toLowerCase().includes(q)
     );
   });
+  const itemGroups = groupStandardItems(filteredItems);
+  // Groups start collapsed; while searching, every matching group opens so results are visible.
+  const isGroupOpen = (key: string) => Boolean(search.trim()) || expandedGroups.has(key);
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   return (
     <div className="w-full">
@@ -588,7 +629,7 @@ export default function StandardBoqCreationPage() {
               <button
                 type="button"
                 className="btn btn-primary h-[40px] px-4 font-semibold inline-flex items-center gap-1.5 shadow-xs"
-                onClick={handleOpenModal}
+                onClick={() => handleOpenModal()}
               >
                 <Plus size={16} />{UI_STRINGS.appAppMastersStandardBoqPage.createStandardBOQItems}</button>
             ) : (
@@ -709,7 +750,12 @@ export default function StandardBoqCreationPage() {
       {/* Items Table */}
       <div className="card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>{UI_STRINGS.appAppMastersStandardBoqPage.standardBOQMasterItems}{filteredItems.length}{UI_STRINGS.common.copyc7zu6c}</h3>
+          <div>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+              {interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.standardBoqGroupsHeading, { groups: itemGroups.length, items: filteredItems.length })}
+            </h3>
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>{UI_STRINGS.appAppMastersStandardBoqPage.standardBoqGroupHint}</span>
+          </div>
           <span style={{ fontSize: 12, color: '#64748b' }}>{UI_STRINGS.appAppMastersStandardBoqPage.downloadedAutomaticallyViaBOQStudio}</span>
         </div>
 
@@ -722,20 +768,93 @@ export default function StandardBoqCreationPage() {
             <table className="table" style={{ width: '100%', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', height: 40, borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                  <th style={{ padding: '0 8px', width: 40 }} aria-label={UI_STRINGS.appAppMastersStandardBoqPage.standardBoqGroupHint} />
                   <th style={{ padding: '0 12px', width: 60 }}>{UI_STRINGS.common.sNo2}</th>
-                  <th style={{ padding: '0 12px', width: 120 }}>{UI_STRINGS.common.itemCode}</th>
-                  <th style={{ padding: '0 12px', minWidth: 200 }}>{UI_STRINGS.common.itemDescription}</th>
-                  <th style={{ padding: '0 12px', minWidth: 220 }}>{UI_STRINGS.common.bOQDescription}</th>
-                  <th style={{ padding: '0 12px', width: 70, textAlign: 'center' }}>{UI_STRINGS.common.uOM}</th>
-                  <th style={{ padding: '0 12px', width: 120, textAlign: 'right' }}>{UI_STRINGS.common.benchmarkRate}</th>
-                  <th style={{ padding: '0 12px', width: 90 }}>{UI_STRINGS.common.sector}</th>
-                  <th style={{ padding: '0 12px', width: 130 }}>{UI_STRINGS.common.category2}</th>
-                  <th style={{ padding: '0 12px', width: 120 }}>{UI_STRINGS.common.subCategory}</th>
-                  <th style={{ padding: '0 12px', width: 80 }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ padding: '0 12px', minWidth: 180 }}>{UI_STRINGS.common.category2}</th>
+                  <th style={{ padding: '0 12px', minWidth: 160 }}>{UI_STRINGS.common.subCategory}</th>
+                  <th style={{ padding: '0 12px', width: 140 }}>{UI_STRINGS.appAppMastersStandardBoqPage.groupSectorsColumn}</th>
+                  <th style={{ padding: '0 12px', width: 100 }}>{UI_STRINGS.appAppMastersStandardBoqPage.groupItemsColumn}</th>
+                  <th style={{ padding: '0 12px', width: 170, textAlign: 'right' }}>{UI_STRINGS.appAppMastersStandardBoqPage.groupRateRangeColumn}</th>
+                  <th style={{ padding: '0 12px', width: 90 }}>{UI_STRINGS.common.status}</th>
+                  <th style={{ padding: '0 12px', width: 120, textAlign: 'right' }}>{UI_STRINGS.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((it, idx) => (
+                {itemGroups.map((group, groupIndex) => {
+                  const open = isGroupOpen(group.key);
+                  const toggleLabel = interpolateUiString(
+                    open ? UI_STRINGS.appAppMastersStandardBoqPage.hideGroupItems : UI_STRINGS.appAppMastersStandardBoqPage.showGroupItems,
+                    { category: group.category, subcategory: group.subcategory },
+                  );
+                  const rateText = group.minRate === null || group.maxRate === null
+                    ? UI_STRINGS.common.copy4s9bsz
+                    : group.minRate === group.maxRate
+                      ? interpolateUiString(UI_STRINGS.common.toLocaleString, { toLocaleString: group.minRate.toLocaleString() })
+                      : interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.groupRateRange, { min: group.minRate.toLocaleString(), max: group.maxRate.toLocaleString() });
+                  return (
+                    <Fragment key={group.key}>
+                      <tr
+                        onClick={() => toggleGroup(group.key)}
+                        style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: open ? '#eff6ff' : '#ffffff' }}
+                      >
+                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            aria-expanded={open}
+                            aria-label={toggleLabel}
+                            title={toggleLabel}
+                            onClick={(event) => { event.stopPropagation(); toggleGroup(group.key); }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', display: 'inline-flex', padding: 2 }}
+                          >
+                            {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </button>
+                        </td>
+                        <td style={{ padding: '12px', color: '#64748b', fontWeight: 600 }}>{groupIndex + 1}</td>
+                        <td style={{ padding: '12px', color: '#0f172a', fontWeight: 700, fontSize: 13 }}>{group.category}</td>
+                        <td style={{ padding: '12px', color: '#334155', fontWeight: 600 }}>{group.subcategory}</td>
+                        <td style={{ padding: '12px', color: '#475569', fontSize: 11, fontWeight: 600 }}>{group.sectors.join(', ')}</td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: '#e0e7ff', color: '#3730a3' }}>
+                            {interpolateUiString(UI_STRINGS.appAppMastersStandardBoqPage.groupItemCount, { count: group.items.length })}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>{rateText}</td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#047857' }}>{UI_STRINGS.common.aCTIVE}</span>
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenModal({ category: group.category, subcategory: group.subcategory, sector: group.sectors[0] || 'RETAIL' });
+                              }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', background: '#ffffff' }}
+                            >
+                              <Plus size={12} />{UI_STRINGS.appAppMastersStandardBoqPage.addItemToGroup}</button>
+                          )}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td colSpan={9} style={{ padding: '8px 12px 14px 48px', background: '#f8fafc' }}>
+                            <table className="table" style={{ width: '100%', fontSize: 12, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+                              <thead>
+                                <tr style={{ background: '#f1f5f9', height: 36, textAlign: 'left' }}>
+                                  <th style={{ padding: '0 12px', width: 60 }}>{UI_STRINGS.common.sNo2}</th>
+                                  <th style={{ padding: '0 12px', width: 120 }}>{UI_STRINGS.common.itemCode}</th>
+                                  <th style={{ padding: '0 12px', minWidth: 200 }}>{UI_STRINGS.common.itemDescription}</th>
+                                  <th style={{ padding: '0 12px', minWidth: 220 }}>{UI_STRINGS.common.bOQDescription}</th>
+                                  <th style={{ padding: '0 12px', width: 70, textAlign: 'center' }}>{UI_STRINGS.common.uOM}</th>
+                                  <th style={{ padding: '0 12px', width: 120, textAlign: 'right' }}>{UI_STRINGS.common.benchmarkRate}</th>
+                                  <th style={{ padding: '0 12px', width: 90 }}>{UI_STRINGS.common.sector}</th>
+                                  <th style={{ padding: '0 12px', width: 80 }}>{UI_STRINGS.common.status}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                {group.items.map((it, idx) => (
                   <tr key={it.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '12px', color: '#64748b', fontWeight: 600 }}>
                       {idx + 1}
@@ -763,17 +882,19 @@ export default function StandardBoqCreationPage() {
                     <td style={{ padding: '12px', color: '#475569', fontSize: 11, fontWeight: 600 }}>
                       {it.sector}
                     </td>
-                    <td style={{ padding: '12px', color: '#0f172a', fontWeight: 600 }}>
-                      {it.category}
-                    </td>
-                    <td style={{ padding: '12px', color: '#64748b', fontSize: 11 }}>
-                      {it.subcategory}
-                    </td>
                     <td style={{ padding: '12px' }}>
                       <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#047857' }}>{UI_STRINGS.common.aCTIVE}</span>
                     </td>
                   </tr>
                 ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

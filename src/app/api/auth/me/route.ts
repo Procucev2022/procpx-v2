@@ -7,8 +7,9 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 
 
 export async function GET(req: NextRequest) {
-  // Support testing header fallback
-  const testUserId = req.headers.get('x-test-user-id');
+  // Test-header impersonation exists only outside production; a deployed app must never
+  // return another user's identity from a client-supplied header.
+  const testUserId = process.env.NODE_ENV !== 'production' ? req.headers.get('x-test-user-id') : null;
   if (testUserId) {
     const user = await prisma.user.findUnique({
       where: { id: testUserId },

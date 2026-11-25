@@ -30,7 +30,7 @@ jest.mock('../src/lib/api-utils', () => ({
 }));
 jest.mock('../src/lib/boq-revision-utils', () => ({ createNextBoqRevision: jest.fn() }));
 jest.mock('../src/lib/storage', () => ({ saveUpload: jest.fn(), deleteUpload: jest.fn() }));
-jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/d1-batch', () => ({ ...jest.requireActual('../src/lib/d1-batch'), writeD1BatchAtomically: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({
   logEvent: jest.fn(),
   writeStructuredLog: jest.fn().mockResolvedValue(undefined),
@@ -150,6 +150,34 @@ describe('fixed template BOQ upload API', () => {
     });
     expect(storeUpload).not.toHaveBeenCalled();
     expect(writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('uploads a 1,500-line workbook in one atomic batch using JSON bulk line statements', async () => {
+    const defaultWrite = writeBatch.getMockImplementation()!;
+    // Bulk statements report one changed row per JSON line, like D1.
+    writeBatch.mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => {
+      const results = await defaultWrite(statements);
+      return statements.map((statement, index) => (statement.sql.includes('json_each(?)')
+        ? { meta: { changes: (JSON.parse(statement.values[0] as string) as unknown[]).length } }
+        : results[index]));
+    });
+    const rows = Array.from({ length: 1500 }, (_, index) => validRow({ 'Line No': String(index + 1), 'Item Description *': `Item ${index + 1}` }));
+
+    const response = await POST(makeRequest(rows, { projectId: 'project-1' }));
+    expect(response).toMatchObject({ ok: true, data: { totalLines: 1500 } });
+    const statements = writeBatch.mock.calls[0][0] as Array<{ sql: string; values: unknown[] }>;
+    const bulkStatements = statements.filter((statement) => statement.sql.includes('json_each(?)'));
+    expect(writeBatch).toHaveBeenCalledTimes(1);
+    expect(bulkStatements.length).toBeGreaterThan(1);
+    expect(statements.length).toBeLessThan(15);
+    expect(bulkStatements.reduce((total, statement) => total + (JSON.parse(statement.values[0] as string) as unknown[]).length, 0)).toBe(1500);
+
+    // If D1 inserts fewer lines than expected, the upload is reported as a conflict, not a success.
+    writeBatch.mockImplementation(async (statements: Array<{ sql: string; values: unknown[] }>) => {
+      const results = await defaultWrite(statements);
+      return statements.map((statement, index) => (statement.sql.includes('json_each(?)') ? { meta: { changes: 1 } } : results[index]));
+    });
+    await expect(POST(makeRequest(rows, { projectId: 'project-1' }))).resolves.toMatchObject({ ok: false, status: 409 });
   });
 
   it('creates a BOQ, maps valid rows, flags warnings and errors, and saves revision statistics', async () => {

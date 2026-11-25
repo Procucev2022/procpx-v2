@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, isApiContext, apiSuccess, apiError } from '@/lib/api-utils';
-import { writeD1BatchAtomically } from '@/lib/d1-batch';
+import { chunkRowsForJsonBinding, sumD1BatchChanges, writeD1BatchAtomically } from '@/lib/d1-batch';
 import { MAX_BOQ_BATCH_LINES, BOQ_TEMPLATE_REVISION_INSERT_NEXT_SQL } from '@/lib/d1-batch.constants';
 import { writeStructuredLog } from '@/lib/observability/server-logger';
 import { UI_STRINGS } from '@/lib/ui-strings.constants';
@@ -126,11 +126,12 @@ function prepareLine(
   };
 }
 
-function lineInsertStatement(tenantId: string, revisionId: string, boqId: string, lines: StandardBoqPreparedLine[], timestamp: string): D1BatchInputStatement {
-  return {
+// Each chunk is guarded by the revision's total line count, so all chunks of one large BOQ share one guard.
+function lineInsertStatements(tenantId: string, revisionId: string, boqId: string, lines: StandardBoqPreparedLine[], timestamp: string): D1BatchInputStatement[] {
+  return chunkRowsForJsonBinding(lines).map((chunk) => ({
     sql: BOQ_STANDARD_GENERATE_INSERT_LINES_JSON_SQL,
-    values: [tenantId, revisionId, JSON.stringify(lines), revisionId, tenantId, boqId, lines.length, timestamp],
-  };
+    values: [tenantId, revisionId, JSON.stringify(chunk), revisionId, tenantId, boqId, lines.length, timestamp],
+  }));
 }
 
 function buildAuditStatement(input: {
@@ -328,7 +329,8 @@ export async function POST(req: NextRequest) {
           validQtyLines, 0, pendingQtyLines, revisionScore, ctx.userId, now, now, now],
       });
     }
-    statements.push(lineInsertStatement(ctx.tenantId, targetRevisionId, targetBoqId, preparedLines, nowIso));
+    const lineStatements = lineInsertStatements(ctx.tenantId, targetRevisionId, targetBoqId, preparedLines, nowIso);
+    statements.push(...lineStatements);
     statements.push(buildAuditStatement({
       tenantId: ctx.tenantId,
       userId: ctx.userId,
@@ -347,7 +349,8 @@ export async function POST(req: NextRequest) {
     batchStarted = true;
     const results = await writeD1BatchAtomically(statements);
     if (getChangedCount(results[0]) !== 1 || getChangedCount(results[1]) !== 1
-      || getChangedCount(results[2]) !== preparedLines.length || getChangedCount(results[3]) !== 1) {
+      || sumD1BatchChanges(results, 2, lineStatements.length) !== preparedLines.length
+      || getChangedCount(results[2 + lineStatements.length]) !== 1) {
       throw new Error(UI_STRINGS.common.workflowRecordChangedRetryAfterRefresh);
     }
 

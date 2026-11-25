@@ -28,7 +28,8 @@
     }
   },
   "vars": {
-    "UPLOAD_DIR": "r2"
+    "UPLOAD_DIR": "r2",
+    "DATABASE_PROVIDER": "d1"
   },
   "d1_databases": [
     {
@@ -54,6 +55,7 @@
       "name": "procpx",
       "vars": {
         "UPLOAD_DIR": "r2",
+        "DATABASE_PROVIDER": "d1",
         "NEXTAUTH_URL": "https://procpx.anshul-goel.workers.dev",
       },
       "d1_databases": [
@@ -77,7 +79,8 @@
     "remote": {
       "account_id": "97a5dd65ad21c0f5dcd8547de147c806",
       "vars": {
-        "UPLOAD_DIR": "r2"
+        "UPLOAD_DIR": "r2",
+        "DATABASE_PROVIDER": "d1"
       },
       "d1_databases": [
         {
@@ -100,6 +103,7 @@
       "name": "procpx-prod",
       "vars": {
         "UPLOAD_DIR": "r2",
+        "DATABASE_PROVIDER": "d1",
         "NEXTAUTH_URL": "https://procpx-prod.srinivas-mukku.workers.dev",
       },
       "d1_databases": [

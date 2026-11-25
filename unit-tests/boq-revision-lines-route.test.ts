@@ -9,12 +9,14 @@ import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { writeD1BatchAtomically } from '../src/lib/d1-batch';
 import { logEvent, writeStructuredLog } from '../src/lib/observability/server-logger';
 import { encodeBoqLineCursor } from '../src/lib/boq-line-pagination';
+import { readOrderedBoqLineIds } from '../src/lib/boq-line-order';
 
 
 jest.mock('../src/lib/prisma', () => ({
   prisma: {
     boqRevision: { findFirst: jest.fn(), update: jest.fn() },
     boq: { findFirst: jest.fn() },
+    $queryRaw: jest.fn(),
     boqLine: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
   },
 }));
@@ -28,6 +30,7 @@ jest.mock('../src/lib/boq-validate', () => ({ validateBoqLine: jest.fn() }));
 jest.mock('../src/lib/audit', () => ({ createAuditLog: jest.fn() }));
 jest.mock('../src/lib/boq-cost-breakdown', () => ({ computeLineCostBreakdown: jest.fn(() => ({ material: 2, labour: 1 })) }));
 jest.mock('../src/lib/d1-batch', () => ({ writeD1BatchAtomically: jest.fn() }));
+jest.mock('../src/lib/boq-line-order', () => ({ ...jest.requireActual('../src/lib/boq-line-order'), readOrderedBoqLineIds: jest.fn() }));
 jest.mock('../src/lib/observability/server-logger', () => ({
   logEvent: jest.fn(), writeStructuredLog: jest.fn().mockResolvedValue(undefined),
 }));
@@ -41,6 +44,12 @@ const computeCost = computeLineCostBreakdown as jest.Mock;
 const writeBatch = writeD1BatchAtomically as jest.Mock;
 const structuredLog = writeStructuredLog as jest.Mock;
 const log = logEvent as jest.Mock;
+const orderIds = readOrderedBoqLineIds as jest.Mock;
+// The route reads ordered ids first (numeric line order), then loads those rows by id.
+function serveLines(rows: Array<{ id: string } & Record<string, unknown>>) {
+  orderIds.mockResolvedValueOnce(rows.map((row) => row.id));
+  db.boqLine.findMany.mockResolvedValueOnce(rows);
+}
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const revision = { id: 'revision-1', status: 'DRAFT', validLines: 4, boq: { projectId: 'project-1' } };
 const existingLine = {
@@ -69,6 +78,8 @@ describe('BOQ revision lines API', () => {
     db.boq.findFirst.mockResolvedValue(null);
     db.boqLine.count.mockResolvedValue(2);
     db.boqLine.findMany.mockResolvedValue([]);
+    orderIds.mockResolvedValue([]);
+    db.$queryRaw.mockResolvedValue([]);
     db.boqLine.findUnique.mockResolvedValue(existingLine);
     db.boqLine.findFirst.mockResolvedValue(existingLine);
     db.boqLine.update.mockResolvedValue({ ...existingLine, id: 'line-1', quantity: 2, aiUnitCost: null, originalDescription: 'Updated description', standardDescription: 'Updated standard', uomRaw: 'EA' });
@@ -108,7 +119,7 @@ describe('BOQ revision lines API', () => {
 
   it('filters and paginates lines while decoding and deriving cost breakdowns', async () => {
     db.boqLine.count.mockResolvedValue(25);
-    db.boqLine.findMany.mockResolvedValue([
+    serveLines([
       { id: 'line-a', aiReason: '{"costBreakdown":{"material":8}}', aiUnitCost: 10, quantity: 2 },
       { id: 'line-b', aiReason: '{invalid', aiUnitCost: 12, quantity: 3, category: { name: 'Electrical' }, originalDescription: 'Wire' },
       { id: 'line-c', aiReason: '{"other":true}', aiUnitCost: 15, quantity: 1, standardDescription: 'Switch' },
@@ -134,11 +145,21 @@ describe('BOQ revision lines API', () => {
         { specification: { contains: 'wire' } },
       ]),
     }) });
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 5, take: 6, orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }] }));
+    expect(orderIds).toHaveBeenCalledWith(expect.any(Function), {
+      tenantId: 'tenant-1', revisionId: 'revision-1', search: 'wire', validationStatus: UI_STRINGS.appAppBoqStudioPage.vALID,
+      cursor: null, offset: 5, limit: 6,
+    });
+    // Rows are loaded by the ordered ids, scoped to the tenant and revision.
+    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { in: ['line-a', 'line-b', 'line-c', 'line-d', 'line-e'] }, boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
+    }));
+    // The ordered-id reader runs through Prisma's raw query.
+    await orderIds.mock.calls[0][0]('ordered-ids-sql');
+    expect(db.$queryRaw).toHaveBeenCalledWith('ordered-ids-sql');
   });
 
   it('returns the default GET page and handles a missing aiReason cost', async () => {
-    db.boqLine.findMany.mockResolvedValue([{ id: 'line', aiReason: null, aiUnitCost: 4, quantity: 1 }]);
+    serveLines([{ id: 'line', aiReason: null, aiUnitCost: 4, quantity: 1 }]);
     const result = await GET(request('/api/boq/revision-1/lines'), params) as any;
     expect(result.data).toMatchObject({ page: 1, pageSize: 50, totalPages: 1 });
     expect(computeCost).toHaveBeenCalledWith(4, 1, undefined, undefined);
@@ -147,14 +168,16 @@ describe('BOQ revision lines API', () => {
 
   it('bounds BOQ line page sizes and normalizes invalid page numbers', async () => {
     await GET(request('/api/boq/revision-1/lines?page=-2&pageSize=10000&search=%20wire%20'), params);
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 91 }));
+    expect(orderIds).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({ search: 'wire', offset: 0, limit: 91 }));
+    // No ids means no row lookup at all.
+    expect(db.boqLine.findMany).not.toHaveBeenCalled();
     expect(db.boqLine.count).toHaveBeenCalledWith({ where: expect.objectContaining({ OR: expect.arrayContaining([{ originalDescription: { contains: 'wire' } }]) }) });
   });
 
   it('continues line reads with a stable line-number and ID cursor', async () => {
     const cursor = encodeBoqLineCursor({ id: 'line-1', lineNumber: '2' });
     db.boqLine.count.mockResolvedValueOnce(5);
-    db.boqLine.findMany.mockResolvedValueOnce([
+    serveLines([
       { id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null },
       { id: 'line-4', lineNumber: '4', aiReason: null, aiUnitCost: null },
       { id: 'line-5', lineNumber: '5', aiReason: null, aiUnitCost: null },
@@ -167,18 +190,9 @@ describe('BOQ revision lines API', () => {
     expect(db.boqLine.count).toHaveBeenCalledWith({
       where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
     });
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        AND: [
-          { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
-          { OR: [
-            { lineNumber: { gt: '2' } },
-            { lineNumber: '2', id: { gt: 'line-1' } },
-          ] },
-        ],
-      },
-      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      take: 3,
+    // Cursor pages continue strictly after the cursor line in numeric line order.
+    expect(orderIds).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
+      tenantId: 'tenant-1', revisionId: 'revision-1', cursor: { id: 'line-1', lineNumber: '2' }, offset: 0, limit: 3,
     }));
     expect(result.data).toMatchObject({
       data: [{ id: 'line-3' }, { id: 'line-4' }],
@@ -195,7 +209,7 @@ describe('BOQ revision lines API', () => {
     expect(db.boqLine.count).not.toHaveBeenCalled();
 
     const cursor = encodeBoqLineCursor({ id: 'line-1', lineNumber: '2' });
-    db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null }]);
+    serveLines([{ id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null }]);
     const result = await GET(request(`/api/boq/revision-1/lines?cursor=${encodeURIComponent(cursor)}&pageSize=2`), params) as unknown as {
       data: { data: Array<{ id: string }>; hasMore: boolean; nextCursor: string | null };
     };
@@ -204,14 +218,14 @@ describe('BOQ revision lines API', () => {
 
   it('skips repeated total counts for cursor pages when requested', async () => {
     const cursor = encodeBoqLineCursor({ id: 'line-1', lineNumber: '2' });
-    db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null }]);
+    serveLines([{ id: 'line-3', lineNumber: '3', aiReason: null, aiUnitCost: null }]);
 
     const result = await GET(request(`/api/boq/revision-1/lines?cursor=${encodeURIComponent(cursor)}&pageSize=2&includeTotal=false`), params) as unknown as {
       data: Record<string, unknown>;
     };
 
     expect(db.boqLine.count).not.toHaveBeenCalled();
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+    expect(orderIds).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({ limit: 3 }));
     expect(result.data).not.toHaveProperty('total');
     expect(result.data).not.toHaveProperty('totalPages');
   });

@@ -5,6 +5,7 @@ import { requireAuth, isApiContext } from '../src/lib/api-utils';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { decodeBoqLineCursor } from '../src/lib/boq-line-pagination';
 import { logEvent } from '../src/lib/observability/server-logger';
+import { readOrderedBoqLineIds } from '../src/lib/boq-line-order';
 
 
 jest.mock('../src/lib/prisma', () => ({
@@ -22,11 +23,18 @@ jest.mock('../src/lib/api-utils', () => ({
   apiError: jest.fn((error: string, status = 400) => ({ ok: false, error, status })),
 }));
 jest.mock('../src/lib/observability/server-logger', () => ({ logEvent: jest.fn() }));
+jest.mock('../src/lib/boq-line-order', () => ({ ...jest.requireActual('../src/lib/boq-line-order'), readOrderedBoqLineIds: jest.fn() }));
 
 const db = prisma as unknown as Record<string, Record<string, jest.Mock>>;
 const auth = requireAuth as jest.Mock;
 const isContext = isApiContext as unknown as jest.Mock;
 const log = logEvent as jest.Mock;
+const orderIds = readOrderedBoqLineIds as jest.Mock;
+// The route reads the first page's ids in numeric line order, then loads those rows by id.
+function serveLines(rows: Array<{ id: string } & Record<string, unknown>>) {
+  orderIds.mockResolvedValueOnce(rows.map((row) => row.id));
+  db.boqLine.findMany.mockResolvedValueOnce(rows);
+}
 const context = { tenantId: 'tenant-1', userId: 'user-1' };
 const emptySummary = {
   totalLines: 0, validQuantityLines: 0, missingQuantityLines: 0, missingRateLines: 0,
@@ -45,6 +53,7 @@ describe('BOQ revision detail API', () => {
     auth.mockResolvedValue(context);
     isContext.mockReturnValue(true);
     db.$queryRaw.mockResolvedValue([emptySummary]);
+    orderIds.mockResolvedValue([]);
   });
 
   it('authenticates GET and PATCH requests before accessing tenant data', async () => {
@@ -68,7 +77,7 @@ describe('BOQ revision detail API', () => {
     db.$queryRaw.mockResolvedValueOnce([{
       ...emptySummary, totalLines: 3, totalAiEstimate: 73,
     }]);
-    db.boqLine.findMany.mockResolvedValueOnce([
+    serveLines([
       { id: 'line-1', aiReason: JSON.stringify({ costBreakdown: { labor: 2 } }), aiUnitCost: null, aiTotalCost: 25 },
       { id: 'line-2', aiReason: '{bad json', aiUnitCost: 12, aiTotalCost: 48, quantity: 4, category: { name: 'Electrical' }, originalDescription: 'Cable' },
       { id: 'line-3', aiReason: null, aiUnitCost: 0, aiTotalCost: null },
@@ -82,12 +91,14 @@ describe('BOQ revision detail API', () => {
         { id: 'line-3', costBreakdown: null },
       ],
     } });
+    expect(orderIds).toHaveBeenCalledWith(expect.any(Function), { tenantId: 'tenant-1', revisionId: 'revision-1', limit: 90 });
     expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false },
-      orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-      take: 90,
+      where: { boqRevisionId: 'revision-1', tenantId: 'tenant-1', isDeleted: false, id: { in: ['line-1', 'line-2', 'line-3'] } },
     }));
+    // Only the line summary uses the raw query directly; ordered ids go through the injected reader.
     expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+    await orderIds.mock.calls[0][0]('ordered-ids-sql');
+    expect(db.$queryRaw).toHaveBeenLastCalledWith('ordered-ids-sql');
     expect(log).toHaveBeenCalledWith('warn', 'boq.cost_breakdown_parse_failed', expect.objectContaining({
       operation: 'parse_saved_cost_breakdown', route: '/api/boq/[revisionId]',
       tenantId: 'tenant-1', revisionId: 'revision-1', durationMs: expect.any(Number), status: 'degraded', malformedLineCount: 1,
@@ -105,7 +116,7 @@ describe('BOQ revision detail API', () => {
       ],
     });
     db.$queryRaw.mockResolvedValueOnce([{ ...emptySummary, totalLines: 1, totalAiEstimate: 10 }]);
-    db.boqLine.findMany.mockResolvedValueOnce([{ id: 'line-1', aiTotalCost: 10, aiUnitCost: null }]);
+    serveLines([{ id: 'line-1', aiTotalCost: 10, aiUnitCost: null }]);
     await expect(GET(getRequest(), params('boq-2'))).resolves.toMatchObject({
       ok: true, data: { boq: { estimatedValue: 10 }, revision: { id: 'revision-latest' }, totalLines: 1, linesTruncated: false, qualityScore: 100 },
     });
@@ -123,7 +134,7 @@ describe('BOQ revision detail API', () => {
   it('bounds the detail line preview while preserving exact totals for the studio continuation request', async () => {
     db.boqRevision.findFirst.mockResolvedValueOnce({ id: 'revision-1', boq: { id: 'boq-1' } });
     db.$queryRaw.mockResolvedValueOnce([{ ...emptySummary, totalLines: 91, totalAiEstimate: 9876 }]);
-    db.boqLine.findMany.mockResolvedValueOnce(Array.from({ length: 90 }, (_, index) => ({
+    serveLines(Array.from({ length: 90 }, (_, index) => ({
       id: `line-${index + 1}`, lineNumber: String(index + 1), aiTotalCost: 10, aiUnitCost: null,
     })));
 
@@ -132,7 +143,7 @@ describe('BOQ revision detail API', () => {
       ok: true,
       data: { boq: { estimatedValue: 9876 }, totalLines: 91, linesTruncated: true, lines: expect.any(Array) },
     });
-    expect(db.boqLine.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 90 }));
+    expect(orderIds).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({ limit: 90 }));
     expect(decodeBoqLineCursor(result.data.nextCursor)).toEqual({ id: 'line-90', lineNumber: '90' });
   });
 

@@ -8,6 +8,7 @@ import { interpolateUiString } from "@/lib/i18n";
 import { BOQ_DETAIL_LATEST_REVISION_LIMIT } from './route.constants';
 import { BOQ_LINE_DETAIL_PAGE_SIZE } from '@/lib/boq-line-pagination.constants';
 import { encodeBoqLineCursor } from '@/lib/boq-line-pagination';
+import { readOrderedBoqLineIds, sortByIdOrder } from '@/lib/boq-line-order';
 import { getBoqLineSummary } from '@/lib/boq-line-summary';
 import { logEvent } from '@/lib/observability/server-logger';
 
@@ -103,16 +104,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ revi
   const [lineSummary, rawLines] = lineWhere
     ? await Promise.all([
       getBoqLineSummary((query) => prisma.$queryRaw(query), revision.id, ctx.tenantId),
-      prisma.boqLine.findMany({
-        where: lineWhere,
-        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-        take: BOQ_LINE_DETAIL_PAGE_SIZE,
+      // First page in display order (line numbers as numbers), matching the lines API cursor.
+      readOrderedBoqLineIds((query) => prisma.$queryRaw(query), {
+        tenantId: ctx.tenantId, revisionId: revision.id, limit: BOQ_LINE_DETAIL_PAGE_SIZE,
+      }).then(async (orderedIds) => (orderedIds.length === 0 ? [] : sortByIdOrder(await prisma.boqLine.findMany({
+        where: { ...lineWhere, id: { in: orderedIds } },
         include: {
           category: { select: { id: true, name: true } },
           subcategory: { select: { id: true, name: true } },
           uom: { select: { id: true, code: true, name: true } },
         },
-      }),
+      }), orderedIds))),
     ])
     : [null, []];
   let malformedCostBreakdownCount = 0;
