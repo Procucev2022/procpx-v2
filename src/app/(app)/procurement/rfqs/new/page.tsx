@@ -2144,26 +2144,26 @@ export default function NewRfqPage() {
               gap: 16,
             }}
           >
-            <div className="kpi-card" style={{ borderLeft: `4px solid ${STEP_THEMES[5].primary}` }}>
+            <div className="kpi-card" style={{ borderLeft: '3px solid #2563eb' }}>
               <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.scopedBOQLines}</div>
-              <div className="kpi-value">{scopedLineCount}{UI_STRINGS.common.items}</div>
+              <div className="kpi-value" style={{ color: '#2563eb' }}>{scopedLineCount}{UI_STRINGS.common.items}</div>
             </div>
-            <div className="kpi-card">
+            <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
               <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.totalQuantity}</div>
-              <div className="kpi-value">{totalQuantitySum.toLocaleString()}{UI_STRINGS.appAppProcurementRfqsNewPage.units}</div>
+              <div className="kpi-value" style={{ color: '#059669' }}>{totalQuantitySum.toLocaleString()}{UI_STRINGS.appAppProcurementRfqsNewPage.units}</div>
             </div>
-            <div className="kpi-card" style={{ borderLeft: `4px solid ${STEP_THEMES[5].primary}` }}>
+            <div className="kpi-card" style={{ borderLeft: '3px solid #4f46e5' }}>
               <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.benchmarkBudgetLocked}</div>
-              <div className="kpi-value" style={{ color: STEP_THEMES[5].primary }}>{UI_STRINGS.common.copy1g8b5tg}{scopedBenchmarkValue.toLocaleString()}
+              <div className="kpi-value" style={{ color: '#4f46e5' }}>{UI_STRINGS.common.copy1g8b5tg}{scopedBenchmarkValue.toLocaleString()}
               </div>
             </div>
-            <div className="kpi-card">
+            <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
               <div className="kpi-label">{UI_STRINGS.appAppProcurementRfqsNewPage.invitedVendors}</div>
-              <div className="kpi-value">{selectedVendorIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.suppliers}</div>
+              <div className="kpi-value" style={{ color: '#d97706' }}>{selectedVendorIds.length}{UI_STRINGS.appAppProcurementRfqsNewPage.suppliers}</div>
             </div>
-            <div className="kpi-card">
+            <div className="kpi-card" style={{ borderLeft: '3px solid #64748b' }}>
               <div className="kpi-label">{UI_STRINGS.common.submissionDeadline}</div>
-              <div className="kpi-value font-mono" style={{ fontSize: 15 }}>
+              <div className="kpi-value font-mono" style={{ fontSize: 15, color: '#64748b' }}>
                 {rfqDetails.submissionDeadline}
               </div>
             </div>

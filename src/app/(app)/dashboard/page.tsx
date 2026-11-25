@@ -36,7 +36,7 @@ import PrDetailModal from '@/components/PrDetailModal';
 import BoqDescriptionCell from '@/components/ui/BoqDescriptionCell';
 import { UI_STRINGS } from "@/lib/ui-strings.constants";
 import { interpolateUiString } from "@/lib/i18n";
-import type { DashboardRegisterRfqLinkItem } from "@app-types/app/(app)/dashboard/page.types";
+import type { DashboardRegisterRfqLinkItem, DashboardPendingAction } from "@app-types/app/(app)/dashboard/page.types";
 
 
 function StatusBadge({ status }: { status: string }) {
@@ -74,6 +74,16 @@ export default function DashboardPage() {
   const [expandedPrs, setExpandedPrs] = useState<Record<string, boolean>>({});
   const [showCategoryGovernance, setShowCategoryGovernance] = useState(false);
   const [loadingMoreTenants, setLoadingMoreTenants] = useState(false);
+  const [pendingActionsModalOpen, setPendingActionsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!pendingActionsModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPendingActionsModalOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pendingActionsModalOpen]);
 
   // PROJECT_APPROVER actions state
   const [approverSelectedPr, setApproverSelectedPr] = useState<any | null>(null);
@@ -109,7 +119,7 @@ export default function DashboardPage() {
 
       setApproverSelectedPr((current: unknown) => {
         if (!current || typeof current !== 'object' || !('id' in current)) return current;
-        const selected = current as { id?: unknown; lines?: unknown[]; [key: string]: unknown };
+        const selected = current as { id?: unknown; lines?: unknown[];[key: string]: unknown };
         if (selected.id !== pr.id) return current;
         return {
           ...selected,
@@ -314,13 +324,13 @@ export default function DashboardPage() {
             <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeTenants}</div>
             <div className="kpi-value" style={{ color: '#6366f1' }}>{data.tenants ?? 0}</div>
           </div>
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderLeft: '3px solid #2563eb' }}>
             <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.platformProjects}</div>
-            <div className="kpi-value">{data.projects ?? 0}</div>
+            <div className="kpi-value" style={{ color: '#2563eb' }}>{data.projects ?? 0}</div>
           </div>
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
             <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalUsers}</div>
-            <div className="kpi-value">{data.users ?? 0}</div>
+            <div className="kpi-value" style={{ color: '#059669' }}>{data.users ?? 0}</div>
           </div>
         </div>
 
@@ -1569,9 +1579,8 @@ export default function DashboardPage() {
                                             {/* Negotiation Stage */}
                                             <td>
                                               <span
-                                                className={`badge ${
-                                                  rfq.negotiationStage !== '—' ? 'badge-review' : 'badge-draft'
-                                                }`}
+                                                className={`badge ${rfq.negotiationStage !== '—' ? 'badge-review' : 'badge-draft'
+                                                  }`}
                                                 style={{ fontSize: 10 }}
                                               >
                                                 {rfq.negotiationStage}
@@ -1581,13 +1590,12 @@ export default function DashboardPage() {
                                             {/* Award Status */}
                                             <td>
                                               <span
-                                                className={`badge ${
-                                                  rfq.awardStatus === 'Approved'
-                                                    ? 'badge-approved'
-                                                    : rfq.awardStatus === 'Pending Approval'
+                                                className={`badge ${rfq.awardStatus === 'Approved'
+                                                  ? 'badge-approved'
+                                                  : rfq.awardStatus === 'Pending Approval'
                                                     ? 'badge-review'
                                                     : 'badge-draft'
-                                                }`}
+                                                  }`}
                                                 style={{ fontSize: 10 }}
                                               >
                                                 {rfq.awardStatus}
@@ -1673,9 +1681,9 @@ export default function DashboardPage() {
             <div className="kpi-value" style={{ color: '#2563eb' }}>{UI_STRINGS.common.copy1g8b5tg}{(data.totalBudget ?? 0).toLocaleString()}
             </div>
           </div>
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
             <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeCapexProjects}</div>
-            <div className="kpi-value">{data.totalProjects ?? 0}</div>
+            <div className="kpi-value" style={{ color: '#d97706' }}>{data.totalProjects ?? 0}</div>
           </div>
           <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}>
             <div className="kpi-label">{UI_STRINGS.appAppDashboardPage.bOQApprovedProjects}</div>
@@ -2375,9 +2383,8 @@ export default function DashboardPage() {
                                             {/* Negotiation Stage */}
                                             <td>
                                               <span
-                                                className={`badge ${
-                                                  rfq.negotiationStage && rfq.negotiationStage !== '—' ? 'badge-review' : 'badge-draft'
-                                                }`}
+                                                className={`badge ${rfq.negotiationStage && rfq.negotiationStage !== '—' ? 'badge-review' : 'badge-draft'
+                                                  }`}
                                                 style={{ fontSize: 10 }}
                                               >
                                                 {rfq.negotiationStage || rfq.negotiationRound || UI_STRINGS.common.copy4s9bsz}
@@ -2411,13 +2418,12 @@ export default function DashboardPage() {
                                             {/* Award Status */}
                                             <td>
                                               <span
-                                                className={`badge ${
-                                                  rfq.awardStatus === 'Approved' || rfq.awardStatus === 'Awarded'
-                                                    ? 'badge-approved'
-                                                    : rfq.awardStatus === 'Pending Approval' || rfq.awardStatus === 'Award Recommended'
+                                                className={`badge ${rfq.awardStatus === 'Approved' || rfq.awardStatus === 'Awarded'
+                                                  ? 'badge-approved'
+                                                  : rfq.awardStatus === 'Pending Approval' || rfq.awardStatus === 'Award Recommended'
                                                     ? 'badge-review'
                                                     : 'badge-draft'
-                                                }`}
+                                                  }`}
                                                 style={{ fontSize: 10 }}
                                               >
                                                 {rfq.awardStatus}
@@ -2613,13 +2619,13 @@ export default function DashboardPage() {
         </div>
 
         <div className="kpi-grid mb-6">
-          <div className="kpi-card"><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalProjects}</div><div className="kpi-value">{data.totalProjects ?? 0}</div></div>
-          <div className="kpi-card"><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeProjects}</div><div className="kpi-value">{data.activeProjects ?? 0}</div></div>
+          <div className="kpi-card" style={{ borderLeft: '3px solid #2563eb' }}><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalProjects}</div><div className="kpi-value" style={{ color: '#2563eb' }}>{data.totalProjects ?? 0}</div></div>
+          <div className="kpi-card" style={{ borderLeft: '3px solid #059669' }}><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.activeProjects}</div><div className="kpi-value" style={{ color: '#059669' }}>{data.activeProjects ?? 0}</div></div>
           <div className="kpi-card" style={{ borderLeft: '3px solid #d97706' }}>
             <div className="kpi-label">{UI_STRINGS.common.pendingApproval}</div>
             <div className="kpi-value" style={{ color: '#d97706' }}>{data.pendingApprovals ?? 0}</div>
           </div>
-          <div className="kpi-card"><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalUsers}</div><div className="kpi-value">{data.totalUsers ?? 0}</div></div>
+          <div className="kpi-card" style={{ borderLeft: '3px solid #4f46e5' }}><div className="kpi-label">{UI_STRINGS.appAppDashboardPage.totalUsers}</div><div className="kpi-value" style={{ color: '#4f46e5' }}>{data.totalUsers ?? 0}</div></div>
         </div>
 
         <div className="card">
@@ -2717,56 +2723,26 @@ export default function DashboardPage() {
   // ============================================================
   return (
     <div className="page-content">
-      <div className="top-header" style={{ margin: '-24px -24px 24px', padding: '0 24px' }}>
+      <div
+        className="top-header"
+        style={{
+          margin: '-24px -24px 24px',
+          padding: '0 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+        }}
+      >
         <div>
           <div className="page-title">{UI_STRINGS.appAppDashboardPage.procurementTransactionDashboard}</div>
           <div className="page-subtitle">{UI_STRINGS.appAppDashboardPage.liveBOQTransactionLedgerApprovalQueueBudgetBaseline}</div>
         </div>
-        <Link href="/boq/studio" className="btn btn-primary">{UI_STRINGS.appAppDashboardPage.createBOQ}</Link>
+        <Link href="/boq/studio" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {UI_STRINGS.appAppDashboardPage.createBOQ}
+        </Link>
       </div>
-
-      {/* Role-based Pending Actions Alert (if any require attention) */}
-      {data.pendingActions && data.pendingActions.length > 0 && (
-        <div
-          className="mb-6"
-          style={{
-            background: '#fffbeb',
-            border: '1px solid #fde68a',
-            borderRadius: 8,
-            padding: '14px 18px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <AlertTriangle size={18} color="#d97706" />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>{UI_STRINGS.appAppDashboardPage.pendingActionsRequiringYourAttention}{data.pendingActions.length}{UI_STRINGS.common.copyc7zu6c}</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {data.pendingActions.slice(0, 3).map((act: any) => (
-              <div
-                key={act.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: '#ffffff',
-                  padding: '8px 12px',
-                  borderRadius: 6,
-                  border: '1px solid #fef3c7',
-                  fontSize: 12,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span className="font-mono font-bold" style={{ color: '#1e40af' }}>{act.boqCode}</span>
-                  <span style={{ color: '#334155', fontWeight: 600 }}>{act.title}</span>
-                  <StatusBadge status={act.status} />
-                  <span style={{ color: '#64748b' }}>{UI_STRINGS.appAppDashboardPage.copyk7zqc9}{act.actionText}</span>
-                </div>
-                <Link href={act.link} className="btn btn-sm btn-secondary" style={{ padding: '3px 10px', fontSize: 11 }}>{UI_STRINGS.appAppDashboardPage.actionNow}</Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 6 Summary Cards */}
       <div
@@ -2832,10 +2808,40 @@ export default function DashboardPage() {
 
       {/* Recent BOQs Table (Max 5 records) */}
       <div className="card">
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <FileText size={18} />{UI_STRINGS.appAppDashboardPage.recentBOQs}</span>
-          <Link href="/boq/studio" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.openBOQStudio}</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {data.pendingActions && data.pendingActions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPendingActionsModalOpen(true)}
+                className="btn btn-sm cursor-pointer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: '#fffbeb',
+                  color: '#92400e',
+                  border: '1px solid #fde68a',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  borderRadius: 6,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease-in-out',
+                }}
+              >
+                <AlertTriangle size={15} color="#d97706" />
+                <span>
+                  {UI_STRINGS.appAppDashboardPage.pendingActionsRequiringYourAttention}
+                  {data.pendingActions.length}
+                  {UI_STRINGS.common.copyc7zu6c}
+                </span>
+              </button>
+            )}
+            <Link href="/boq/studio" className="btn btn-sm btn-secondary">{UI_STRINGS.appAppDashboardPage.openBOQStudio}</Link>
+          </div>
         </div>
 
         {!data.recentBoqs || data.recentBoqs.length === 0 ? (
@@ -2910,6 +2916,214 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Pending Actions Popup Modal */}
+      {pendingActionsModalOpen && data.pendingActions && data.pendingActions.length > 0 && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pending-actions-modal-title"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            zIndex: 1000,
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setPendingActionsModalOpen(false);
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl flex flex-col overflow-hidden"
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxSizing: 'border-box',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 24px',
+                borderBottom: '1px solid #f1f5f9',
+                backgroundColor: '#ffffff',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertTriangle size={18} color="#d97706" />
+                </div>
+                <div>
+                  <h2
+                    id="pending-actions-modal-title"
+                    style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}
+                  >
+                    {UI_STRINGS.appAppDashboardPage.pendingActionsRequiringYourAttention}
+                    {data.pendingActions.length}
+                    {UI_STRINGS.common.copyc7zu6c}
+                  </h2>
+                  <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0 0' }}>
+                    {UI_STRINGS.appAppDashboardPage.reviewPendingActionItemsRequiringAttention}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingActionsModalOpen(false)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: '#94a3b8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                aria-label={UI_STRINGS.common.closeDialog}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body - Scrollable */}
+            <div
+              className="overflow-y-auto p-5 sm:p-6 space-y-3 bg-slate-50/60 flex-1"
+              style={{
+                overflowY: 'auto',
+                padding: '20px 24px',
+                backgroundColor: '#f8fafc',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
+              {data.pendingActions.map((act: DashboardPendingAction) => (
+                <div
+                  key={act.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: '14px 18px',
+                    boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.04)',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span className="font-mono font-bold" style={{ color: '#1e40af', fontSize: 13 }}>
+                        {act.boqCode}
+                      </span>
+                      <StatusBadge status={act.status} />
+                    </div>
+                    <div style={{ color: '#1e293b', fontWeight: 600, fontSize: 13, wordBreak: 'break-word' }}>
+                      {act.title}
+                    </div>
+                    <div style={{ color: '#64748b', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{UI_STRINGS.appAppDashboardPage.copyk7zqc9}</span>
+                      <span>{act.actionText}</span>
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    <Link
+                      href={act.link}
+                      onClick={() => setPendingActionsModalOpen(false)}
+                      className="btn btn-sm btn-primary"
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {UI_STRINGS.appAppDashboardPage.actionNow}
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              className="px-6 py-3.5 bg-white border-t border-slate-100 flex items-center justify-end shrink-0"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                padding: '14px 24px',
+                backgroundColor: '#ffffff',
+                borderTop: '1px solid #f1f5f9',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPendingActionsModalOpen(false)}
+                className="btn btn-secondary"
+                style={{
+                  height: 36,
+                  padding: '0 18px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  color: '#334155',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {UI_STRINGS.common.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

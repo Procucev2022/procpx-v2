@@ -235,6 +235,21 @@ function BudgetTransactionsContent() {
       <div className="card" style={{ background: '#ffffff', borderRadius: 8, border: '1px solid #e2e8f0', padding: '16px 20px', marginBottom: 24 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', flex: 1 }}>
+            {/* Category Filter */}
+            <select
+              className="select-field"
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+              style={{ minWidth: 160, height: 36, fontSize: 13 }}
+            >
+              <option value="">{UI_STRINGS.common.allCategories}</option>
+              {availableCategories.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+
             {/* Project Filter */}
             <select
               className="select-field"
@@ -282,21 +297,6 @@ function BudgetTransactionsContent() {
                 </button>
               )}
             </div>
-
-            {/* Category Filter */}
-            <select
-              className="select-field"
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-              style={{ minWidth: 160, height: 36, fontSize: 13 }}
-            >
-              <option value="">{UI_STRINGS.common.allCategories}</option>
-              {availableCategories.map(cat => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
 
             {/* Transaction Type Filter */}
             <select

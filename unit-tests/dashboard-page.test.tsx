@@ -448,7 +448,36 @@ describe('role-aware dashboard', () => {
 
     renderForData({ role: 'PROJECT_USER', pendingActions: [{ id: 'a1', boqCode: 'BOQ-4', title: 'Review draft', status: 'DRAFT', actionText: 'Submit BOQ', link: '/boq/4' }], totalBoqsRaised: 2, totalProposedBudget: 1500, totalApprovedBudget: 1000, recentBoqs: [{ id: 'b1', boqNumber: 'BOQ-5', boqDescription: 'Electrical work', costCentre: 'CC-2', estimatedValue: 400, status: 'APPROVED', lastUpdated: null }] });
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.appAppDashboardPage.procurementTransactionDashboard))).toBeInTheDocument();
-    expect(screen.getByText('Pending Actions Requiring Your Attention (1)')).toBeInTheDocument();
+    const pendingBtn = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.pendingActionsRequiringYourAttention) });
+    expect(pendingBtn).toBeInTheDocument();
+    fireEvent.click(pendingBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('BOQ-4')).toBeInTheDocument();
+    expect(screen.getByText('Review draft')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.appAppDashboardPage.actionNow) })).toHaveAttribute('href', '/boq/4');
+
+    // Close via close button in footer
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${UI_STRINGS.common.close}$`) }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Reopen and close via 'X' button in header
+    fireEvent.click(pendingBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.closeDialog) }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Reopen and close via Escape key
+    fireEvent.click(pendingBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Reopen and close via backdrop click
+    fireEvent.click(pendingBtn);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(dialog);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
     expect(screen.getByText('Electrical work')).toBeInTheDocument();
   });
 

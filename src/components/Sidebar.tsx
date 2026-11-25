@@ -132,7 +132,6 @@ export default function Sidebar({ user }: SidebarProps) {
             {navItem('/budget', 'Project Budget', Landmark, pathname === '/budget')}
             {navItem('/budget/transactions', 'Budget Transaction Ledger', History, pathname.startsWith('/budget/transactions'))}
             {navItem('/budget/vs-actual', 'Budget vs Actual', Scale, pathname.startsWith('/budget/vs-actual'))}
-            {navItem('/pr', UI_STRINGS.componentsSidebar.procurementRequests, Send, pathname === '/pr' || pathname.startsWith('/pr/'))}
 
             {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.vENDORPERFORMANCE}</div>}
             {navItem('/procurement/ppos', 'PPO Performance', Award, pathname.startsWith('/procurement/ppos'))}
@@ -243,11 +242,9 @@ export default function Sidebar({ user }: SidebarProps) {
             {hasPermission(role, 'BOQ_VIEW') &&
               navItem('/boq', 'BOQs', FileSpreadsheet, pathname === '/boq')}
 
-            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGETPR}</div>}
+            {!collapsed && <div className="nav-section-label">{UI_STRINGS.componentsSidebar.bUDGET}</div>}
             {hasPermission(role, 'BUDGET_VIEW') &&
               navItem('/budget', 'Project Budget', Landmark, pathname.startsWith('/budget'))}
-            {hasPermission(role, 'PR_VIEW') &&
-              navItem('/pr', 'Procurement Requests', Send, pathname === '/pr' || pathname.startsWith('/pr/'))}
             {hasPermission(role, 'BUDGET_APPROVE') &&
               navItem('/approvals/budget', 'Budget Approvals', CheckSquare, pathname.startsWith('/approvals/budget'))}
             {hasPermission(role, 'PR_APPROVE') &&

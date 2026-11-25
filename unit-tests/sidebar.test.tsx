@@ -41,12 +41,14 @@ describe('Sidebar role navigation', () => {
     }
   });
 
-  it('lets project users track their procurement requests', () => {
+  it('does not show procurement requests link for any role', () => {
     pathnameMock.mockReturnValue('/pr/pr-123');
     render(<Sidebar user={user('PROJECT_USER')} />);
-    const link = screen.getByRole('link', { name: uiStringPattern(UI_STRINGS.componentsSidebar.procurementRequests) });
-    expect(link).toHaveAttribute('href', '/pr');
-    expect(link).toHaveClass('active');
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.componentsSidebar.procurementRequests) })).not.toBeInTheDocument();
+
+    cleanup();
+    render(<Sidebar user={user('SUPER_ADMIN')} />);
+    expect(screen.queryByRole('link', { name: uiStringPattern(UI_STRINGS.componentsSidebar.procurementRequests) })).not.toBeInTheDocument();
   });
 
   it('shows award approvals only to finance roles that can approve awards', () => {
@@ -63,7 +65,7 @@ describe('Sidebar role navigation', () => {
 
   it('shows permission-filtered admin links for super admins and hides them for viewers', () => {
     render(<Sidebar user={user('SUPER_ADMIN')} />);
-    for (const label of ['Projects', 'Cost Centres', 'BOQ Studio', 'BOQs', 'Procurement Requests', 'Approved BOQs', 'Vendor Management', 'Rate Card Management', 'Quotes', 'Negotiations', 'Auctions', 'Awards & PPOs', 'Users', 'Masters', 'Audit Trail']) {
+    for (const label of ['Projects', 'Cost Centres', 'BOQ Studio', 'BOQs', 'Approved BOQs', 'Vendor Management', 'Rate Card Management', 'Quotes', 'Negotiations', 'Auctions', 'Awards & PPOs', 'Users', 'Masters', 'Audit Trail']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
 

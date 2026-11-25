@@ -7,7 +7,7 @@ import { useState, useEffect, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
-import Card from '@/components/ui/Card';
+import { SummaryCard } from '@/components/ui/SummaryCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import {
   Layers,
@@ -86,10 +86,11 @@ function BudgetVsActualContent() {
       if (page > 1) url += `&page=${page}&pageSize=${DEFAULT_LIST_PAGE_SIZE}`;
       const res = await fetch(url);
       const json = await res.json();
-      if (json.data && requestId === reportRequestId.current) {
-        setReportData(append
-          ? { ...json.data, lineReports: [...(reportData?.lineReports || []), ...(json.data.lineReports || [])] }
-          : json.data);
+      const payload = json.data || json;
+      if (payload && requestId === reportRequestId.current) {
+        setReportData((prev: Record<string, unknown> | null) => (append
+          ? { ...payload, lineReports: [...((Array.isArray(prev?.lineReports) ? prev.lineReports : [])), ...(payload.lineReports || [])] }
+          : payload));
       }
     } catch (e) {
       if (requestId === reportRequestId.current) console.error(e);
@@ -98,6 +99,19 @@ function BudgetVsActualContent() {
         if (append) setLoadingMoreLines(false);
         else setLoading(false);
       }
+    }
+  };
+
+  const handleTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (
+      scrollHeight - scrollTop - clientHeight < 150 &&
+      reportData?.lineReportsPagination?.hasMore &&
+      !loadingMoreLines &&
+      !loading
+    ) {
+      const nextPage = (reportData.lineReportsPagination.page || 1) + 1;
+      fetchReport(nextPage, true);
     }
   };
 
@@ -148,73 +162,80 @@ function BudgetVsActualContent() {
           { label: UI_STRINGS.common.budgetVsActual },
         ]}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link
               href="/budget"
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <Landmark size={14} />{UI_STRINGS.common.projectBudget}</Link>
+              <Landmark size={14} />{UI_STRINGS.common.projectBudget}
+            </Link>
             <Link
               href="/budget/transactions"
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <History size={14} />{UI_STRINGS.common.ledger}</Link>
+              <History size={14} />{UI_STRINGS.common.ledger}
+            </Link>
             <button
               onClick={() => fetchReport()}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-sm"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}</button>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />{UI_STRINGS.common.refresh2}
+            </button>
           </div>
         }
       />
 
       {/* Filter Bar (Part F.1) */}
-      <div className="card p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3 flex-1">
-            <div className="flex items-center gap-2">
+      <div className="card" style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px', marginBottom: 24, boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', flex: 1 }}>
+            {/* Project Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Building2 size={16} className="text-slate-400" />
-              <span className="text-xs font-semibold text-slate-700">{UI_STRINGS.common.project2}</span>
+              <select
+                className="select-field"
+                value={selectedProjectId}
+                onChange={(e) => {
+                  setSelectedProjectId(e.target.value);
+                  setSelectedCostCentre('');
+                }}
+                style={{ minWidth: 260, height: 36, fontSize: 13 }}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.projectCode}{UI_STRINGS.common.copy13emybb}{p.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => {
-                setSelectedProjectId(e.target.value);
-                setSelectedCostCentre('');
-              }}
-              className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[200px]"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.projectCode}{UI_STRINGS.common.copy13emybb}{p.name}
-                </option>
-              ))}
-            </select>
 
-            <div className="flex items-center gap-2 ml-2">
+            {/* Cost Centre Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Layers size={16} className="text-slate-400" />
-              <span className="text-xs font-semibold text-slate-700">{UI_STRINGS.common.costCentre3}</span>
+              <select
+                className="select-field"
+                value={selectedCostCentre}
+                onChange={(e) => setSelectedCostCentre(e.target.value)}
+                style={{ minWidth: 200, height: 36, fontSize: 13 }}
+              >
+                <option value="">{UI_STRINGS.common.allCostCentres}</option>
+                {costCentresList.map((cc) => (
+                  <option key={cc.id} value={cc.id}>
+                    {cc.code}{UI_STRINGS.common.copy13emybb}{cc.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={selectedCostCentre}
-              onChange={(e) => setSelectedCostCentre(e.target.value)}
-              className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[180px]"
-            >
-              <option value="">{UI_STRINGS.common.allCostCentres}</option>
-              {costCentresList.map((cc) => (
-                <option key={cc.id} value={cc.id}>
-                  {cc.code}{UI_STRINGS.common.copy13emybb}{cc.name}
-                </option>
-              ))}
-            </select>
 
-            <div className="flex items-center gap-2 ml-2">
-              <span className="text-xs font-semibold text-slate-700">{UI_STRINGS.common.category3}</span>
-            </div>
+            {/* Category Filter */}
             <select
+              className="select-field"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[160px]"
+              style={{ minWidth: 180, height: 36, fontSize: 13 }}
             >
               <option value="">{UI_STRINGS.common.allCategories}</option>
               {categoriesSummary.map((cat) => (
@@ -225,7 +246,13 @@ function BudgetVsActualContent() {
             </select>
           </div>
 
-          <div className="text-xs text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.activeArea}<strong className="text-slate-800">{activeArea > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleStringSqft, { "toLocaleString": activeArea.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.notSpecified}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+              {UI_STRINGS.appAppBudgetVsActualPage.activeArea}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', background: '#f1f5f9', padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+              {activeArea > 0 ? interpolateUiString(UI_STRINGS.common.toLocaleStringSqft, { "toLocaleString": activeArea.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.notSpecified}
+            </span>
           </div>
         </div>
       </div>
@@ -233,86 +260,77 @@ function BudgetVsActualContent() {
       {/* SUMMARY CARDS (Part F.3 - Exactly 6 cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         {/* 1. TOTAL BUDGET */}
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.tOTALBUDGET}</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">
-            {formatCurrency(kpis.totalBudget)}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.sanctionedAllocation}</div>
-        </Card>
+        <SummaryCard
+          label={UI_STRINGS.appAppBudgetVsActualPage.tOTALBUDGET}
+          value={formatCurrency(kpis.totalBudget)}
+          description={UI_STRINGS.appAppBudgetVsActualPage.sanctionedAllocation}
+          accent="blue"
+        />
 
         {/* 2. TOTAL ACTUAL */}
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.tOTALACTUAL}</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">
-            {formatCurrency(kpis.totalActual)}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.downstreamInvoicedSpend}</div>
-        </Card>
+        <SummaryCard
+          label={UI_STRINGS.appAppBudgetVsActualPage.tOTALACTUAL}
+          value={formatCurrency(kpis.totalActual)}
+          description={UI_STRINGS.appAppBudgetVsActualPage.downstreamInvoicedSpend}
+          accent="amber"
+        />
 
         {/* 3. BALANCE */}
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.bALANCE}</div>
-          <div className="mt-2 text-2xl font-extrabold text-emerald-700">
-            {formatCurrency(kpis.totalRemaining)}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.budgetActual}</div>
-        </Card>
+        <SummaryCard
+          label={UI_STRINGS.appAppBudgetVsActualPage.bALANCE}
+          value={formatCurrency(kpis.totalRemaining)}
+          description={UI_STRINGS.appAppBudgetVsActualPage.budgetActual}
+          accent="emerald"
+        />
 
         {/* 4. BUDGET UTILISATION */}
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.bUDGETUTILISATION}</div>
-          <div className="mt-2 text-2xl font-extrabold text-blue-700">
-            {budgetUtilisation}{UI_STRINGS.common.copy8w4luo}</div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">{UI_STRINGS.appAppBudgetVsActualPage.actualBudget}</div>
-        </Card>
+        <SummaryCard
+          label={UI_STRINGS.appAppBudgetVsActualPage.bUDGETUTILISATION}
+          value={`${budgetUtilisation}${UI_STRINGS.common.copy8w4luo}`}
+          description={UI_STRINGS.appAppBudgetVsActualPage.actualBudget}
+          accent="purple"
+        />
 
         {/* 5. BUDGET / SQFT */}
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.bUDGETSQFT}</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">
-            {budgetPerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": budgetPerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">
-            {activeArea > 0 ? interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.perToLocaleStringSqft, { "toLocaleString": activeArea.toLocaleString() }) : UI_STRINGS.appAppBudgetVsActualPage.areaMissing}
-          </div>
-        </Card>
+        <SummaryCard
+          label={UI_STRINGS.appAppBudgetVsActualPage.bUDGETSQFT}
+          value={budgetPerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": budgetPerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
+          description={activeArea > 0 ? interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.perToLocaleStringSqft, { "toLocaleString": activeArea.toLocaleString() }) : UI_STRINGS.appAppBudgetVsActualPage.areaMissing}
+          accent="indigo"
+        />
 
         {/* 6. ACTUAL / SQFT */}
-        <Card className="p-4 bg-white border border-slate-200 shadow-sm rounded-lg">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{UI_STRINGS.appAppBudgetVsActualPage.aCTUALSQFT}</div>
-          <div className="mt-2 text-2xl font-extrabold text-slate-900">
-            {actualPerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": actualPerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 font-medium">
-            {activeArea > 0 ? UI_STRINGS.appAppBudgetVsActualPage.actualSpendSqft : UI_STRINGS.appAppBudgetVsActualPage.areaMissing}
-          </div>
-        </Card>
+        <SummaryCard
+          label={UI_STRINGS.appAppBudgetVsActualPage.aCTUALSQFT}
+          value={actualPerSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": actualPerSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : UI_STRINGS.common.copy4s9bsz}
+          description={activeArea > 0 ? UI_STRINGS.appAppBudgetVsActualPage.actualSpendSqft : UI_STRINGS.appAppBudgetVsActualPage.areaMissing}
+          accent="slate"
+        />
       </div>
 
       {/* BUDGET VS ACTUAL TABLE (Part F.2) */}
-      <Card className="border border-slate-200 shadow-sm bg-white rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+      <div className="card" style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24, boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <Scale size={15} className="text-blue-600" />{UI_STRINGS.appAppBudgetVsActualPage.bUDGETVSACTUALANALYSIS}</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">{UI_STRINGS.appAppBudgetVsActualPage.comparisonOfApprovedCommercialBudgetAndVerifiedDownstreamProcurementActuals}</p>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <Scale size={16} className="text-blue-600" />{UI_STRINGS.appAppBudgetVsActualPage.bUDGETVSACTUALANALYSIS}</h3>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0 0' }}>{UI_STRINGS.appAppBudgetVsActualPage.comparisonOfApprovedCommercialBudgetAndVerifiedDownstreamProcurementActuals}</p>
           </div>
-          <span className="text-xs text-slate-600 font-semibold">
-            {categoriesSummary.length}{UI_STRINGS.appAppBudgetVsActualPage.categories}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#1e3a8a', background: '#e0e7ff', padding: '4px 10px', borderRadius: 20 }}>
+            {categoriesSummary.length} {UI_STRINGS.appAppBudgetVsActualPage.categories}</span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div style={{ maxHeight: 360, overflowY: 'auto', overflowX: 'auto' }}>
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider">
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #cbd5e1', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
               <tr>
-                <th className="py-3 px-4">{UI_STRINGS.common.category2}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.common.budget}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.common.actual}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.common.variance}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.variance}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.sqftBudget}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.sqftActual}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{UI_STRINGS.common.category2}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.common.budget}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.common.actual}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.common.variance}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.appAppBudgetVsActualPage.variance}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.appAppBudgetVsActualPage.sqftBudget}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.appAppBudgetVsActualPage.sqftActual}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -327,37 +345,35 @@ function BudgetVsActualContent() {
                   const a = cat.actualAmount || 0;
                   const variance = b - a;
                   const variancePct = b > 0 ? ((b - a) / b) * 100 : 0;
-                  const catBudgetSqFt = activeArea > 0 ? Math.round(b / activeArea) : null;
-                  const catActualSqFt = activeArea > 0 ? Math.round(a / activeArea) : null;
+                  const catBudgetSqFt = activeArea > 0 && b > 0 ? Math.round(b / activeArea) : null;
+                  const catActualSqFt = activeArea > 0 && a > 0 ? Math.round(a / activeArea) : null;
 
                   return (
                     <tr key={cat.category} className="hover:bg-slate-50/75 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-slate-900">
+                      <td style={{ padding: '16px 20px', fontWeight: 600, color: '#0f172a', fontSize: 13 }}>
                         {cat.category}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                      <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
                         {formatCurrency(b)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-slate-800">
+                      <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#1e293b', fontSize: 13 }}>
                         {a > 0 ? formatCurrency(a) : UI_STRINGS.common.copyi1bvs4}
                       </td>
                       <td
-                        className={`py-3 px-4 text-right font-mono font-bold ${
-                          variance >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                        }`}
+                        style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}
+                        className={variance >= 0 ? 'text-emerald-700' : 'text-rose-700'}
                       >
                         {variance >= 0 ? UI_STRINGS.common.copycrz1ka : ''}{formatCurrency(variance)}
                       </td>
                       <td
-                        className={`py-3 px-4 text-right font-mono font-bold ${
-                          variancePct >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                        }`}
+                        style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}
+                        className={variancePct >= 0 ? 'text-emerald-700' : 'text-rose-700'}
                       >
                         {variancePct.toFixed(1)}{UI_STRINGS.common.copy8w4luo}</td>
-                      <td className="py-3 px-4 text-right font-mono text-blue-700 font-semibold">
+                      <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#1d4ed8', fontSize: 13 }}>
                         {catBudgetSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": catBudgetSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (activeArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-700 font-semibold">
+                      <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: '#334155', fontSize: 13 }}>
                         {catActualSqFt !== null ? interpolateUiString(UI_STRINGS.common.toLocaleString, { "toLocaleString": catActualSqFt.toLocaleString(I18N_CONFIG.defaultLocale) }) : (activeArea > 0 ? UI_STRINGS.common.copyi1bvs4 : UI_STRINGS.common.copy4s9bsz)}
                       </td>
                     </tr>
@@ -367,40 +383,41 @@ function BudgetVsActualContent() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
 
       {/* LINE-LEVEL AUDIT TRACEABILITY MATRIX (Part L) */}
-      <Card className="border border-slate-200 shadow-sm bg-white rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+      <div className="card" style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <ListOrdered size={15} className="text-slate-600" />{UI_STRINGS.appAppBudgetVsActualPage.iTEMLEVELTRACEABILITYDOWNSTREAMACTUALS}</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">{UI_STRINGS.appAppBudgetVsActualPage.traceableLinkageBOQLineRarrBudgetRarrPRRarrRFQRarrPPORarrActualSpend}</p>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <ListOrdered size={16} className="text-slate-600" />{UI_STRINGS.appAppBudgetVsActualPage.iTEMLEVELTRACEABILITYDOWNSTREAMACTUALS}</h3>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0 0' }}>{UI_STRINGS.appAppBudgetVsActualPage.traceableLinkageBOQLineRarrBudgetRarrPRRarrRFQRarrPPORarrActualSpend}</p>
           </div>
 
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+          <div style={{ position: 'relative', width: 280 }}>
+            <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: 10, top: 11 }} />
             <input
               type="text"
               placeholder={UI_STRINGS.appAppBudgetVsActualPage.searchDescriptionItemCode}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white shadow-sm"
+              className="input-field"
+              style={{ paddingLeft: 30, height: 36, width: '100%', fontSize: 12, border: '1px solid #cbd5e1', borderRadius: 6 }}
             />
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div data-testid="line-items-scroll-container" onScroll={handleTableScroll} style={{ maxHeight: 540, overflowY: 'auto', overflowX: 'auto' }}>
           <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider">
-                <th className="py-3 px-4">{UI_STRINGS.appAppBudgetVsActualPage.itemDescription}</th>
-                <th className="py-3 px-4">{UI_STRINGS.appAppBudgetVsActualPage.costCentreCategory}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.budgetQtyTimesRate}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.committedPO}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.appAppBudgetVsActualPage.actualCost}</th>
-                <th className="py-3 px-4 text-right">{UI_STRINGS.common.variance}</th>
-                <th className="py-3 px-4 text-center">{UI_STRINGS.common.status}</th>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #cbd5e1', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+              <tr>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{UI_STRINGS.appAppBudgetVsActualPage.itemDescription}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{UI_STRINGS.appAppBudgetVsActualPage.costCentreCategory}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.appAppBudgetVsActualPage.budgetQtyTimesRate}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.appAppBudgetVsActualPage.committedPO}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.appAppBudgetVsActualPage.actualCost}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>{UI_STRINGS.common.variance}</th>
+                <th style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>{UI_STRINGS.common.status}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -411,58 +428,57 @@ function BudgetVsActualContent() {
               ) : (
                 lineReports.map((line: any) => (
                   <tr key={line.boqLineId} className="hover:bg-slate-50/75 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-900">{line.description}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">
+                    <td style={{ padding: '16px 20px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>{line.description}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace', marginTop: 5 }}>
                         {line.boqCode} {line.revisionCode}{UI_STRINGS.common.bull}{line.itemCode || line.lineNumber}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-100 font-medium text-slate-700">
+                    <td style={{ padding: '16px 20px' }}>
+                      <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 4, fontSize: 11, background: '#f1f5f9', fontWeight: 600, color: '#334155' }}>
                         {line.category}
                       </span>
                       {line.costCentre && (
-                        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 5, fontFamily: 'monospace' }}>
                           {line.costCentre.code}
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono">
-                      <div className="font-bold text-slate-900">
+                    <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                         {formatCurrency(line.budgetAmount)}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>
                         {line.budgetQuantity} {line.uom}{UI_STRINGS.appAppBudgetVsActualPage.copycus6yy}{line.budgetRate?.toFixed(0)}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono">
-                      <div className="font-bold text-indigo-700">
+                    <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#4338ca' }}>
                         {formatCurrency(line.committedAmount)}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>
                         {line.committedQuantity || 0} {line.uom}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono">
-                      <div className="font-bold text-slate-900">
+                    <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                         {formatCurrency(line.actualAmount)}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>
                         {line.actualQuantity || 0} {line.uom}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono">
+                    <td style={{ padding: '16px 20px', textAlign: 'right', fontFamily: 'monospace' }}>
                       <div
-                        className={`font-bold ${
-                          line.budgetVariance >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                        }`}
+                        style={{ fontSize: 13, fontWeight: 700 }}
+                        className={line.budgetVariance >= 0 ? 'text-emerald-700' : 'text-rose-700'}
                       >
                         {line.budgetVariance >= 0 ? UI_STRINGS.common.copycrz1ka : ''}{formatCurrency(line.budgetVariance)}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>
                         {line.budgetVariancePercent?.toFixed(1)}{UI_STRINGS.common.copy8w4luo}</div>
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td style={{ padding: '16px 20px', textAlign: 'center' }}>
                       <StatusBadge status={line.status || 'DRAFT'} />
                     </td>
                   </tr>
@@ -472,26 +488,22 @@ function BudgetVsActualContent() {
           </table>
         </div>
         {reportData?.lineReportsPagination && (
-          <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-            <span className="text-xs text-slate-500">
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-3.5 bg-slate-50/75">
+            <span className="text-xs font-semibold text-slate-500">
               {interpolateUiString(UI_STRINGS.appAppBudgetVsActualPage.showingLineReportsOfTotal, {
                 shown: String(reportData.lineReports?.length || 0),
                 total: String(reportData.lineReportsPagination.total),
               })}
             </span>
-            {reportData.lineReportsPagination.hasMore && (
-              <button
-                type="button"
-                onClick={() => fetchReport((reportData.lineReportsPagination.page || 1) + 1, true)}
-                disabled={loadingMoreLines}
-                className="btn btn-secondary btn-sm"
-              >
-                {loadingMoreLines ? UI_STRINGS.appAppBudgetVsActualPage.loadingBudgetVsActual : UI_STRINGS.appAppBudgetVsActualPage.loadMoreLineReports}
-              </button>
+            {loadingMoreLines && (
+              <span className="flex items-center gap-2 text-xs font-semibold text-blue-600">
+                <RefreshCw size={14} className="animate-spin" />
+                {UI_STRINGS.appAppBudgetVsActualPage.loadingBudgetVsActual}
+              </span>
             )}
           </div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

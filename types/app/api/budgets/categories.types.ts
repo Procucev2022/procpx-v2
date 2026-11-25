@@ -13,6 +13,15 @@ export type BudgetCategoryAggregateRow = {
   total: number | bigint | null;
 };
 
+export type BudgetSubcategory = {
+  subcategory: string;
+  budget: number;
+  approvedBudget: number;
+  pendingBudget: number;
+  balance: number;
+  ratePerSqFt: number | null;
+};
+
 export type BudgetCategory = {
   category: string;
   budget: number;
@@ -25,6 +34,7 @@ export type BudgetCategory = {
   balanceRatePerSqFt: number | null;
   status: string;
   txCount: number;
+  subcategories?: BudgetSubcategory[];
 };
 
 export type BudgetCategoryPagination = {

@@ -550,9 +550,9 @@ export default function BoqWorkspacePage() {
                   <div className="kpi-label">{UI_STRINGS.appAppBoqRevisionIdPage.linesModified}</div>
                   <div className="kpi-value" style={{ color: '#d97706' }}>{compareData.summary?.modifiedCount || 0}</div>
                 </div>
-                <div className="kpi-card">
+                <div className="kpi-card" style={{ borderLeft: '3px solid #64748b' }}>
                   <div className="kpi-label">{UI_STRINGS.appAppBoqRevisionIdPage.linesUnchanged}</div>
-                  <div className="kpi-value">{compareData.summary?.unchangedCount || 0}</div>
+                  <div className="kpi-value" style={{ color: '#64748b' }}>{compareData.summary?.unchangedCount || 0}</div>
                 </div>
               </div>
 

@@ -327,7 +327,7 @@ describe('small shared UI components', () => {
   });
 
   it('renders SummaryCard accents, content fallbacks and column grids', () => {
-    const accents = ['default', 'neutral', 'blue', 'emerald', 'amber', 'rose', 'slate', 'unknown'] as const;
+    const accents = ['default', 'neutral', 'blue', 'emerald', 'amber', 'rose', 'slate', 'purple', 'indigo', 'unknown'] as const;
     const expectedClasses = [
       'border-slate-200 bg-white hover:border-slate-300',
       'border-slate-200 bg-slate-50/50 hover:border-slate-300',
@@ -336,6 +336,8 @@ describe('small shared UI components', () => {
       'border-amber-200 bg-amber-50/30 hover:border-amber-300',
       'border-rose-200 bg-rose-50/30 hover:border-rose-300',
       'border-slate-300 bg-slate-50/60 hover:border-slate-400',
+      'border-indigo-200 bg-indigo-50/30 hover:border-indigo-300',
+      'border-indigo-200 bg-indigo-50/30 hover:border-indigo-300',
       'border-slate-200 bg-white hover:border-slate-300',
     ];
     accents.forEach((accent, index) => {
@@ -345,7 +347,7 @@ describe('small shared UI components', () => {
       unmount();
     });
 
-    const { rerender, container } = render(<SummaryCard label="Vendors" value={3} secondary="Preferred" badge={<b>Good</b>} icon={<i>Icon</i>} />);
+    const { rerender, container, unmount } = render(<SummaryCard label="Vendors" value={3} secondary="Preferred" badge={<b>Good</b>} icon={<i>Icon</i>} />);
     expect(screen.getByText('Preferred')).toBeInTheDocument();
     expect(screen.getByText('Good')).toBeInTheDocument();
     expect(screen.getByText('Icon')).toBeInTheDocument();
@@ -354,6 +356,25 @@ describe('small shared UI components', () => {
     expect(screen.getByText('Only icon')).toBeInTheDocument();
     rerender(<SummaryCard label="No detail" value="—" />);
     expect(container.querySelector('.summary-card')?.querySelectorAll('.text-slate-500')).toHaveLength(1);
+    unmount();
+
+    const { unmount: unmountKpi } = render(
+      <SummaryCard variant="kpi" label="Total" value="100" secondary="12 items" accent="blue" className="kpi-custom" />
+    );
+    const kpiCard = document.querySelector('.kpi-custom');
+    expect(kpiCard).toHaveClass('kpi-custom', 'kpi-card');
+    expect(kpiCard).toHaveStyle({ borderLeft: '3px solid #2563eb' });
+    expect(screen.getByText('Total')).toHaveClass('kpi-label');
+    expect(screen.getByText('100')).toHaveClass('kpi-value');
+    expect(screen.getByText('12 items')).toBeInTheDocument();
+    unmountKpi();
+
+    const { unmount: unmountKpi2 } = render(
+      <SummaryCard variant="kpi" label="Budget" value="200" accent="amber" badge={<span>Badge</span>} className="kpi-custom-2" />
+    );
+    expect(document.querySelector('.kpi-custom-2')).toHaveStyle({ borderLeft: '3px solid #d97706' });
+    expect(screen.getByText('Badge')).toBeInTheDocument();
+    unmountKpi2();
 
     const { rerender: rerenderGrid } = render(<SummaryCardGrid><div>Grid child</div></SummaryCardGrid>);
     const grid = screen.getByText('Grid child').parentElement;
