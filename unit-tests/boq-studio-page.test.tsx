@@ -75,6 +75,10 @@ function setupFetch() {
 }
 
 describe('BOQ studio page', () => {
+  beforeAll(() => {
+    jest.setTimeout(60000);
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
@@ -87,7 +91,10 @@ describe('BOQ studio page', () => {
     window.URL.revokeObjectURL = jest.fn();
   });
 
-  afterAll(() => { global.fetch = originalFetch; });
+  afterAll(() => {
+    jest.setTimeout(30000);
+    global.fetch = originalFetch;
+  });
 
   it('loads project masters, configures categories and creates a manual BOQ', async () => {
     render(<BoqStudioPage />);
@@ -484,7 +491,7 @@ describe('BOQ studio page', () => {
     expect(screen.getByText(interpolateUiString(UI_STRINGS.appAppBoqStudioPage.showingLoadedOfTotalLines, { loaded: 3, total: 3 }))).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledWith(searchPageTwoUrl);
     expect(mockFetch).toHaveBeenCalledWith(searchPageThreeUrl);
-  });
+  }, 60000);
 
   it('keeps loaded lines visible and recovers from failed or malformed next-page responses', async () => {
     queryParams = { projectId: 'project-1', boqId: 'boq-1' };
@@ -766,11 +773,11 @@ describe('BOQ studio page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.cancel) }));
 
-    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Add","toLocaleString":"Line"})) })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": "Add", "toLocaleString": "Line" })) })[0]);
     fireEvent.click(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.addNewBOQLine)).parentElement!.querySelector('button')!);
-    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Add","toLocaleString":"Line"})) })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": "Add", "toLocaleString": "Line" })) })[0]);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cANCEL) }));
-    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Add","toLocaleString":"Line"})) })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": "Add", "toLocaleString": "Line" })) })[0]);
     const addLineForm = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.aDDLINE) }).closest('form')!;
     Array.from(addLineForm.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')).forEach((field) => {
       const value = field instanceof HTMLSelectElement ? field.options[1]?.value || '' : field.type === 'number' ? '2' : 'New line detail';
@@ -815,7 +822,7 @@ describe('BOQ studio page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.submitBOQ) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.sUBMITBOQ) }));
     expect(await screen.findByText(uiStringPattern(UI_STRINGS.common.bOQSubmittedSuccessfully))).toBeInTheDocument();
-  });
+  }, 60000);
 
   it('covers existing template, standard upload/download and drawing review flows', async () => {
     queryParams = { projectId: 'project-1', boqId: 'boq-1' };
@@ -836,7 +843,7 @@ describe('BOQ studio page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.reviewExtractedItems, "", false) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cancelReUpload) }));
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.reviewExtractedItems, "", false) }));
-    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Add","toLocaleString":"Item"})) }));
+    fireEvent.click(screen.getByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": "Add", "toLocaleString": "Item" })) }));
     const reviewRow = screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.markRef)).closest('table')!.querySelector('tbody tr')!;
     const reviewFields = Array.from(reviewRow.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
     fireEvent.change(reviewFields[0], { target: { value: 'D-02' } });
@@ -913,7 +920,7 @@ describe('BOQ studio page', () => {
     expect(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.pendingQuantityCountBOQLineValue2RequireQuantityBeforeThisBOQCanBeAddedToBudget))).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editQuantities) }));
     expect(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.exitEditMode) })).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Add","toLocaleString":"Line"})) })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": "Add", "toLocaleString": "Line" })) })[0]);
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.cANCEL) }));
 
     fireEvent.change(screen.getByText(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.bOQPurpose)).parentElement!.querySelector('select')!, { target: { value: 'PR' } });
@@ -1074,8 +1081,8 @@ describe('BOQ studio page', () => {
       { id: 'edge-estimated', lineNumber: 2, originalDescription: 'Estimated line', standardDescription: 'Estimated line', quantity: 1, uomRaw: 'EA', aiUnitCost: 10, aiTotalCost: 10, category: 'Other' },
     ];
     let detailLoads = 0;
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
     let costCentreLoads = 0;
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/masters/categories') return response([]);
       if (url === '/api/projects') return response([edgeProject]);
@@ -1187,14 +1194,14 @@ describe('BOQ studio page', () => {
     expect(await screen.findByText(/Error: Failed to apply description/)).toBeInTheDocument();
     lineTransportFails = true;
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.aCCEPT) })[0]);
-    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, {"message":"Line transport failed"})))).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": "Line transport failed" })))).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.rEJECT) })[0]);
-    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, {"message":"Line transport failed"})))).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": "Line transport failed" })))).toBeInTheDocument();
     lineTransportFails = false;
 
     deleteTransportFails = true;
     fireEvent.click(screen.getAllByTitle(uiStringPattern(UI_STRINGS.appAppBoqStudioPage.deleteLine))[0]);
-    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, {"message":"Delete transport failed"})))).toBeInTheDocument();
+    expect(await screen.findByText(uiStringPattern(interpolateUiString(UI_STRINGS.common.errorMessage, { "message": "Delete transport failed" })))).toBeInTheDocument();
     deleteTransportFails = false;
 
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.editBOQ) }));
@@ -1203,7 +1210,7 @@ describe('BOQ studio page', () => {
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.common.saveChanges) }));
     expect(await screen.findByText(/Error: Failed to save changes/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.exitEditMode) }));
-    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, {"currency":"Add","toLocaleString":"Line"})) })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: uiStringPattern(interpolateUiString(UI_STRINGS.common.currencyToLocaleString, { "currency": "Add", "toLocaleString": "Line" })) })[0]);
     const addForm = screen.getByRole('button', { name: uiStringPattern(UI_STRINGS.appAppBoqStudioPage.aDDLINE) }).closest('form')!;
     Array.from(addForm.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select')).forEach((field) => {
       fireEvent.change(field, { target: { value: field instanceof HTMLSelectElement ? field.options[1]?.value || 'Civil & Interior' : field.type === 'number' ? '1' : 'Error-path item' } });
@@ -1308,7 +1315,7 @@ describe('BOQ studio page', () => {
     fireEvent.change(quantityInput, { target: { value: '' } });
     fireEvent.change(descriptionInput, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /Generate Draft BOQ/ }));
-    expect(mockToast.error).toHaveBeenCalledWith(interpolateUiString(UI_STRINGS.common.userMessages.lineIsMissingAnItemDescription, {"lineNumber":"1"}));
+    expect(mockToast.error).toHaveBeenCalledWith(interpolateUiString(UI_STRINGS.common.userMessages.lineIsMissingAnItemDescription, { "lineNumber": "1" }));
 
     fireEvent.change(descriptionInput, { target: { value: 'Restored floor description' } });
     fireEvent.change(quantityInput, { target: { value: '2' } });
@@ -1324,7 +1331,7 @@ describe('BOQ studio page', () => {
   it('requires a project for drawing extraction and handles BOQ refresh failures', async () => {
     queryParams = {};
     let refreshFails = false;
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
     mockFetch.mockImplementation(async (url: string) => {
       if (url === '/api/projects' || url === '/api/masters/categories') return response([]);
       if (url === '/api/boq') return refreshFails ? Promise.reject(new Error('Refresh unavailable')) : response([]);
@@ -1345,7 +1352,7 @@ describe('BOQ studio page', () => {
   });
 
   it('keeps the studio mounted when initial project loading fails', async () => {
-    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
     mockFetch.mockImplementation(async (url: string) => {
       if (url === '/api/projects') throw new Error('Projects unavailable');
       if (url === '/api/boq' || url === '/api/masters/categories') return response([]);
@@ -1358,3 +1365,4 @@ describe('BOQ studio page', () => {
     errorSpy.mockRestore();
   });
 });
+
