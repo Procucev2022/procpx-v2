@@ -2,14 +2,14 @@
 
 Generated from `coverage/unit/coverage-summary.json` by `npm run coverage:report`.
 
-Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
+Files included: **373**. Files meeting all four 90% thresholds: **373/373**.
 
 | Overall | Coverage |
 | --- | ---: |
-| statements | 99.30% (101670/102383) |
-| branches | 93.78% (23419/24970) |
-| functions | 98.61% (1996/2024) |
-| lines | 99.30% (101670/102383) |
+| statements | 99.31% (102670/103383) |
+| branches | 93.80% (23496/25047) |
+| functions | 98.62% (2007/2035) |
+| lines | 99.31% (102670/103383) |
 
 | File | Statements | Branches | Functions | Lines | Gate |
 | --- | ---: | ---: | ---: | ---: | :---: |
@@ -262,6 +262,8 @@ Files included: **371**. Files meeting all four 90% thresholds: **371/371**.
 | `src/app/login/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/app/login/page.tsx` | 100.00% | 98.24% | 97.36% | 100.00% | PASS |
 | `src/app/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/vendor-pipeline/page.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
+| `src/app/vendor-pipeline/page.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/admin/company-form.constants.ts` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/admin/CreateCompanyModal.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
 | `src/components/admin/RoleLimitFields.tsx` | 100.00% | 100.00% | 100.00% | 100.00% | PASS |
